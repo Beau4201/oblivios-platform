@@ -6,9 +6,11 @@ low-overhead boot renderer.
 
 ## Boundary
 
-Do not apply this package to the Phase 1 unmodified baseline tree. Generate and
-review the assets now; apply them only after the baseline build and boot review
-have been accepted.
+Do not apply this package to a Phase 1 baseline tree without a corresponding
+ADR in `aegisos-foundation/docs/governance/decision-log.md` naming this exact
+patch set (`aegisos-platform/AGENTS.md`'s hard rule). The Phase 1 baseline
+itself is `Accepted (Task 5 waived)` per ADR-018 — that gate alone is not a
+substitute for the per-patch ADR.
 
 ## Generate
 
@@ -22,8 +24,9 @@ The generated files replace:
 - `core/res/assets/images/android-logo-mask.png`
 - `core/res/assets/images/android-logo-shine.png`
 
-Apply `patches/frameworks-base-boot-background.patch` from the
-`frameworks/base` repository root.
+Apply both patches from the `frameworks/base` repository root:
+`patches/frameworks-base-boot-background.patch` (clear color) and
+`patches/frameworks-base-boot-framerate.patch` (redraw cap, see below).
 
 ## Design mapping
 
@@ -34,10 +37,27 @@ target this maps the mask origin to `(316, 800)`, preserving:
 - wordmark line box: top `1379`, `100px`;
 - loading track: `(400, 1564)`, `280x6`.
 
-The moving texture repeats every 384 pixels. The current GrapheneOS fallback
-renderer moves it at 240 pixels per second, so the bar recurs every 1.6 seconds.
-The renderer remains intentionally capped at 12 fps; the browser's cubic easing
-is approximated by linear texture motion to avoid a larger C++ patch.
+The moving texture repeats every 384 pixels. Verified directly against
+`BootAnimation::android()` in the real (unmodified) GrapheneOS source: the
+renderer's position formula (`t = 4.0f * (time/16.667ms) / shine.width`)
+resolves to a constant 240 pixels per second regardless of texture width —
+this is hardcoded, not an asset parameter, so the bar recurs every 1.6
+seconds and cannot be changed from this package. The approved Superdesign
+draft's single sweeping bar uses `cubic-bezier(0.4, 0, 0.2, 1)` easing over
+a fixed 280px track; the renderer's position math is linear in wall-clock
+time with no easing at all, and structurally cannot reproduce a
+non-repeating, clipped, eased sweep — only a constant-speed repeating
+texture. That gap is accepted, not solved, by this package: linear texture
+motion approximates the cubic easing to avoid a much larger C++ patch
+(dynamic per-frame geometry, edge clipping, and an easing-curve evaluator
+in the earliest boot path, before ADB or most safety nets exist).
+
+`patches/frameworks-base-boot-framerate.patch` raises the stock redraw cap
+from 12&nbsp;fps to 60&nbsp;fps (`sleepTime` constant `83333`us &rarr;
+`16667`us — reusing the same 60Hz tick already used elsewhere in this
+function). This does not change the 240px/s motion itself, only how often
+it's resampled; owner-selected over an uncapped redraw to bound the
+extra CPU/battery/thermal cost this adds to every single boot.
 
 ## Typography provenance
 

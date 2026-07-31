@@ -1,0 +1,10 @@
+diff --git a/cmds/bootanimation/BootAnimation.cpp b/cmds/bootanimation/BootAnimation.cpp
+--- a/cmds/bootanimation/BootAnimation.cpp
++++ b/cmds/bootanimation/BootAnimation.cpp
+@@ -842,3 +842,3 @@ bool BootAnimation::android(const Display& display) {
+-        // 12fps: don't animate too fast to preserve CPU
+-        const nsecs_t sleepTime = 83333 - ns2us(systemTime() - now);
++        // 60fps: don't animate too fast to preserve CPU
++        const nsecs_t sleepTime = 16667 - ns2us(systemTime() - now);
+         if (sleepTime > 0)
+             usleep(sleepTime);
