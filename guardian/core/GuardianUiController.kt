@@ -2,7 +2,6 @@ package org.aegisos.guardian.ui
 
 import org.aegisos.guardian.application.GuardianApplicationResult
 import org.aegisos.guardian.overview.GuardianOverviewSnapshot
-import org.aegisos.guardian.reference.GuardianReferenceScenario
 import org.aegisos.guardian.remediation.RemediationOutcome
 
 internal interface GuardianUiScenario {
@@ -16,18 +15,6 @@ internal interface GuardianUiScenario {
 }
 
 class GuardianUiController internal constructor(private val scenario: GuardianUiScenario) {
-    constructor(scenario: GuardianReferenceScenario) : this(
-        object : GuardianUiScenario {
-            override fun detectBackgroundLocation() = scenario.detectBackgroundLocation()
-
-            override fun approve(incidentId: String, actionId: String) = scenario.approve(incidentId, actionId)
-
-            override fun undo(auditId: String) = scenario.undo(auditId)
-
-            override fun overview() = scenario.overview()
-        },
-    )
-
     private var incidentId: String? = null
     private var actionId: String? = null
     private var auditId: String? = null

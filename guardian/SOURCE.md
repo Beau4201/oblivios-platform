@@ -15,6 +15,21 @@
 - Reused as-is: both files are plain Kotlin with no Compose Desktop or
   desktop-windowing dependency.
 
+### Deviation: GuardianUiController.kt secondary constructor removed
+
+- The source file included a secondary `constructor(scenario: GuardianReferenceScenario)`
+  and its import (`org.aegisos.guardian.reference.GuardianReferenceScenario`).
+- `GuardianReferenceScenario` is CLI-only reference scaffolding in the
+  `guardian-reference` module of `aegisos-services`, not part of `guardian-core`,
+  and was not vendored into this repository. The import cannot resolve,
+  causing a hard Kotlin compile error.
+- The secondary constructor is demo-only code (hardcoding fake package names for
+  test scenarios) with no role in real privileged Android integration.
+- **Fix:** the secondary constructor and its import were removed. All other
+  content in both files — the primary constructor, all four methods (`start`,
+  `protect`, `undo`, `overview`), and GuardianUiState.kt in its entirety —
+  remains an unmodified copy of the source.
+
 Re-vendor by repeating Task 1 of
 `docs/superpowers/plans/2026-08-05-guardian-platform-integration.md` against
 a newer `aegisos-services` commit; do not hand-edit any file in this
