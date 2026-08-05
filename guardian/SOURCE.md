@@ -46,9 +46,9 @@ Permission grants are justified in `docs/research/guardian-platform-api-verifica
 - `android.permission.WATCH_APPOPS` — marked `signature|privileged` in AOSP.
   Granted by `privapp-permissions-org.aegisos.guardian.xml` allowlist entry
   via `frameworks/base` auto-grant at installation.
-- `android.permission.GET_APP_OPS_STATS` — marked `signature|privileged` in AOSP.
+- `android.permission.GET_APP_OPS_STATS` — marked `signature|privileged|development` in AOSP.
   Granted by `privapp-permissions-org.aegisos.guardian.xml` allowlist entry
   via `frameworks/base` auto-grant at installation.
-- `android.permission.REVOKE_RUNTIME_PERMISSIONS` — marked `signature` only
-  (no `privileged` flag). Granted by platform-signing the APK; the allowlist
+- `android.permission.REVOKE_RUNTIME_PERMISSIONS` — marked `signature|installer|verifier` in AOSP.
+  Guardian's grant path is platform-signing the APK (signature match); the allowlist
   entry is deliberately omitted (would be a no-op).
