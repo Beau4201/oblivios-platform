@@ -46,6 +46,9 @@ public final class AegisOSPlatformGateway implements GuardianPlatformGateway {
 
     @Override
     public VerificationResult verify(RemediationActionId actionId, String packageName) {
+        if (actionId != RemediationActionId.REVOKE_BACKGROUND_LOCATION) {
+            return new VerificationResult(false, "Unsupported action for this gateway: " + actionId);
+        }
         boolean stillGranted = hasBackgroundLocation(packageName);
         return new VerificationResult(!stillGranted,
             stillGranted ? "Background location is still granted" : "Background location is denied");
@@ -53,15 +56,24 @@ public final class AegisOSPlatformGateway implements GuardianPlatformGateway {
 
     @Override
     public GatewayExecution rollback(RemediationActionId actionId, String packageName, PlatformSnapshot previous) {
+        if (actionId != RemediationActionId.REVOKE_BACKGROUND_LOCATION) {
+            return new GatewayExecution(false, "Unsupported action for this gateway: " + actionId);
+        }
         return restore(packageName, previous);
     }
 
     @Override
     public GatewayExecution undo(RemediationActionId actionId, String packageName, PlatformSnapshot previous) {
+        if (actionId != RemediationActionId.REVOKE_BACKGROUND_LOCATION) {
+            return new GatewayExecution(false, "Unsupported action for this gateway: " + actionId);
+        }
         return restore(packageName, previous);
     }
 
     private GatewayExecution restore(String packageName, PlatformSnapshot previous) {
+        if (previous == null) {
+            return new GatewayExecution(false, "No prior state to restore from");
+        }
         boolean wasGranted = Boolean.parseBoolean(previous.state().get(BACKGROUND_LOCATION_GRANTED_KEY));
         if (!wasGranted) {
             return new GatewayExecution(true, "No prior grant to restore");
@@ -75,7 +87,11 @@ public final class AegisOSPlatformGateway implements GuardianPlatformGateway {
     }
 
     private boolean hasBackgroundLocation(String packageName) {
-        return packageManager.checkPermission(BACKGROUND_LOCATION_PERMISSION, packageName)
-            == PackageManager.PERMISSION_GRANTED;
+        try {
+            return packageManager.checkPermission(BACKGROUND_LOCATION_PERMISSION, packageName)
+                == PackageManager.PERMISSION_GRANTED;
+        } catch (SecurityException | IllegalArgumentException failure) {
+            return false;
+        }
     }
 }

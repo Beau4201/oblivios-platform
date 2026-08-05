@@ -52,3 +52,7 @@ Permission grants are justified in `docs/research/guardian-platform-api-verifica
 - `android.permission.REVOKE_RUNTIME_PERMISSIONS` — marked `signature|installer|verifier` in AOSP.
   Guardian's grant path is platform-signing the APK (signature match); the allowlist
   entry is deliberately omitted (would be a no-op).
+- `android.permission.GRANT_RUNTIME_PERMISSIONS` — marked `signature|installer|verifier` in AOSP
+  (`frameworks/base/core/res/AndroidManifest.xml:7154-7155`), the same protection level as
+  `REVOKE_RUNTIME_PERMISSIONS` above. Guardian's grant path is likewise platform-signing the
+  APK (signature match); the allowlist entry is deliberately omitted (would be a no-op).
