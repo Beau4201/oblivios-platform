@@ -1,0 +1,34 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+java_import {
+    name: "guardian-core-prebuilt",
+    jars: ["../core/guardian-core.jar"],
+}
+
+android_app {
+    name: "GuardianApp",
+    manifest: "AndroidManifest.xml",
+    srcs: [
+        "src/**/*.java",
+        "src/**/*.kt",
+        "../core/GuardianUiController.kt",
+        "../core/GuardianUiState.kt",
+    ],
+    static_libs: [
+        "guardian-core-prebuilt",
+    ],
+    certificate: "platform",
+    privileged: true,
+    platform_apis: true,
+    optimize: {
+        enabled: false,
+    },
+}
+
+prebuilt_etc {
+    name: "privapp-permissions-org.aegisos.guardian.xml",
+    src: "privapp-permissions-org.aegisos.guardian.xml",
+    sub_dir: "permissions",
+}

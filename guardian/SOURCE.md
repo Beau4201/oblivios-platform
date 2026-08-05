@@ -34,3 +34,21 @@ Re-vendor by repeating Task 1 of
 `docs/superpowers/plans/2026-08-05-guardian-platform-integration.md` against
 a newer `aegisos-services` commit; do not hand-edit any file in this
 directory.
+
+## GuardianApp (app module)
+
+The `app/` module (Android manifest, resources, permission allowlist, build
+configuration, and later source code in `app/src/`) is **first-party AegisOS
+code**, not vendored. It is built and deployed as part of the AegisOS platform.
+
+Permission grants are justified in `docs/research/guardian-platform-api-verification.md`:
+
+- `android.permission.WATCH_APPOPS` — marked `signature|privileged` in AOSP.
+  Granted by `privapp-permissions-org.aegisos.guardian.xml` allowlist entry
+  via `frameworks/base` auto-grant at installation.
+- `android.permission.GET_APP_OPS_STATS` — marked `signature|privileged` in AOSP.
+  Granted by `privapp-permissions-org.aegisos.guardian.xml` allowlist entry
+  via `frameworks/base` auto-grant at installation.
+- `android.permission.REVOKE_RUNTIME_PERMISSIONS` — marked `signature` only
+  (no `privileged` flag). Granted by platform-signing the APK; the allowlist
+  entry is deliberately omitted (would be a no-op).
