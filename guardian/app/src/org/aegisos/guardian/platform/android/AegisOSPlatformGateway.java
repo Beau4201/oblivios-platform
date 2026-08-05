@@ -27,8 +27,14 @@ public final class AegisOSPlatformGateway implements GuardianPlatformGateway {
 
     @Override
     public PlatformSnapshot snapshot(String packageName) {
+        boolean granted;
+        try {
+            granted = hasBackgroundLocation(packageName);
+        } catch (SecurityException | IllegalArgumentException failure) {
+            granted = false;
+        }
         return new PlatformSnapshot(packageName, Map.of(
-            BACKGROUND_LOCATION_GRANTED_KEY, String.valueOf(hasBackgroundLocation(packageName))));
+            BACKGROUND_LOCATION_GRANTED_KEY, String.valueOf(granted)));
     }
 
     @Override
@@ -49,7 +55,12 @@ public final class AegisOSPlatformGateway implements GuardianPlatformGateway {
         if (actionId != RemediationActionId.REVOKE_BACKGROUND_LOCATION) {
             return new VerificationResult(false, "Unsupported action for this gateway: " + actionId);
         }
-        boolean stillGranted = hasBackgroundLocation(packageName);
+        boolean stillGranted;
+        try {
+            stillGranted = hasBackgroundLocation(packageName);
+        } catch (SecurityException | IllegalArgumentException failure) {
+            return new VerificationResult(false, "Could not determine permission state: " + failure.getMessage());
+        }
         return new VerificationResult(!stillGranted,
             stillGranted ? "Background location is still granted" : "Background location is denied");
     }
@@ -87,11 +98,7 @@ public final class AegisOSPlatformGateway implements GuardianPlatformGateway {
     }
 
     private boolean hasBackgroundLocation(String packageName) {
-        try {
-            return packageManager.checkPermission(BACKGROUND_LOCATION_PERMISSION, packageName)
-                == PackageManager.PERMISSION_GRANTED;
-        } catch (SecurityException | IllegalArgumentException failure) {
-            return false;
-        }
+        return packageManager.checkPermission(BACKGROUND_LOCATION_PERMISSION, packageName)
+            == PackageManager.PERMISSION_GRANTED;
     }
 }
