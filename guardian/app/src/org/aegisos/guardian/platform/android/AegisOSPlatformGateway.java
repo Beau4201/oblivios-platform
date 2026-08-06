@@ -32,8 +32,10 @@ public final class AegisOSPlatformGateway implements GuardianPlatformGateway {
         try {
             granted = hasBackgroundLocation(packageName);
         } catch (SecurityException | IllegalArgumentException failure) {
+            Log.e("AegisOSPlatformGateway", "snapshot() hasBackgroundLocation threw for " + packageName, failure);
             granted = false;
         }
+        Log.i("AegisOSPlatformGateway", "snapshot() packageName=" + packageName + " granted=" + granted);
         return new PlatformSnapshot(packageName, Map.of(
             BACKGROUND_LOCATION_GRANTED_KEY, String.valueOf(granted)));
     }
