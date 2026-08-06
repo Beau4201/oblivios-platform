@@ -2,19 +2,13 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-java_import {
-    name: "guardian-core-prebuilt",
-    jars: ["../core/guardian-core.jar"],
-}
-
 android_app {
     name: "GuardianApp",
     manifest: "AndroidManifest.xml",
     srcs: [
         "src/**/*.java",
         "src/**/*.kt",
-        "../core/GuardianUiController.kt",
-        "../core/GuardianUiState.kt",
+        ":guardian-ui-controller-sources",
     ],
     static_libs: [
         "guardian-core-prebuilt",
