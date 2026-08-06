@@ -50,6 +50,6 @@ public final class BackgroundLocationWatcher {
     }
 
     private boolean isBackground(int uid) {
-        return activityManager.getUidImportance(uid) > ActivityManager.RUNNING_APP_PROCESS_INFO_IMPORTANCE_FOREGROUND;
+        return activityManager.getUidImportance(uid) > ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND;
     }
 }
