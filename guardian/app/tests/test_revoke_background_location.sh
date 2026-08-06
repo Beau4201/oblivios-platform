@@ -23,15 +23,19 @@ sleep 1
 adb shell input keyevent KEYCODE_HOME
 sleep 12
 
-echo "--- opening Guardian and tapping Protect app ---"
-# Guardian does not auto-remediate -- approval requires the owner's explicit
-# tap (this is the intended design, not a missing feature). Confirmed real
-# tap target against a 1080x1920 emulator display in Task 8; if this script
-# is ever run against a different screen resolution the coordinates below
-# will need to be re-derived (e.g. via `adb shell wm size` and a fresh
-# screenshot), not assumed to still be correct.
-adb shell am start -n "org.aegisos.guardian/.GuardianActivity"
-sleep 4
+echo "--- tapping Protect app (Guardian opens itself on real detection) ---"
+# GuardianActivity is android:exported="false" -- it cannot be launched
+# externally, including via adb (confirmed: `adb shell am start -n` on it
+# fails with a Permission Denial, since shell's uid is not Guardian's own).
+# GuardianWatcherService opens it directly from Guardian's own persistent
+# process the moment a real incident is detected, so by the time this script
+# reaches here the UI should already be on screen. Guardian does not
+# auto-remediate -- approval still requires the owner's explicit tap (this
+# is the intended design, not a missing feature). Confirmed real tap target
+# against a 1080x1920 emulator display in Task 8; if this script is ever run
+# against a different screen resolution the coordinates below will need to
+# be re-derived (e.g. via `adb shell wm size` and a fresh screenshot), not
+# assumed to still be correct.
 adb shell input tap 787 1150
 sleep 3
 

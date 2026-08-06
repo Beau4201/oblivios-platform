@@ -14,7 +14,7 @@ class GuardianActivity : ComponentActivity() {
         val components = app.components()
         val controller = GuardianUiController(
             object : GuardianUiScenario {
-                override fun detectBackgroundLocation() = app.consumeDetection()
+                override fun detectBackgroundLocation() = app.peekDetection()
                 override fun approve(incidentId: String, actionId: String) =
                     components.applicationService().approve(incidentId, actionId)
                 override fun undo(auditId: String) =
@@ -24,7 +24,13 @@ class GuardianActivity : ComponentActivity() {
             },
         )
         setContent {
-            GuardianReferenceScreen(controller = controller, onDone = { finish() })
+            GuardianReferenceScreen(
+                controller = controller,
+                onDone = {
+                    app.clearDetection()
+                    finish()
+                },
+            )
         }
     }
 }

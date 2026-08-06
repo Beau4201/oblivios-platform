@@ -33,11 +33,22 @@ public final class GuardianApplication extends Application {
         lastDetection = result;
     }
 
-    public GuardianApplicationResult consumeDetection() {
+    /**
+     * Non-destructive read, so opening the UI more than once for the same
+     * pending incident (e.g. GuardianActivity re-created on rotation) keeps
+     * showing it rather than silently dropping it. Callers must pair this
+     * with {@link #clearDetection()} once the incident is actually resolved
+     * (protected, undone, or explicitly dismissed by the owner) -- not on
+     * every read.
+     */
+    public GuardianApplicationResult peekDetection() {
         GuardianApplicationResult result = lastDetection;
-        lastDetection = null;
         return result != null
             ? result
             : new GuardianApplicationResult.InvalidEvent("No pending detection");
+    }
+
+    public void clearDetection() {
+        lastDetection = null;
     }
 }
