@@ -2,6 +2,7 @@ package org.aegisos.guardian.platform.android;
 
 import android.content.pm.PackageManager;
 import android.os.UserHandle;
+import android.util.Log;
 
 import org.aegisos.guardian.platform.GatewayExecution;
 import org.aegisos.guardian.platform.GuardianPlatformGateway;
@@ -39,13 +40,17 @@ public final class AegisOSPlatformGateway implements GuardianPlatformGateway {
 
     @Override
     public GatewayExecution apply(RemediationActionId actionId, String packageName) {
+        Log.i("AegisOSPlatformGateway", "apply() called: actionId=" + actionId + " packageName=" + packageName);
         if (actionId != RemediationActionId.REVOKE_BACKGROUND_LOCATION) {
+            Log.w("AegisOSPlatformGateway", "apply() unsupported actionId: " + actionId);
             return new GatewayExecution(false, "Unsupported action for this gateway: " + actionId);
         }
         try {
             packageManager.revokeRuntimePermission(packageName, BACKGROUND_LOCATION_PERMISSION, user);
+            Log.i("AegisOSPlatformGateway", "apply() revokeRuntimePermission succeeded");
             return new GatewayExecution(true, "Revoked " + BACKGROUND_LOCATION_PERMISSION);
         } catch (SecurityException | IllegalArgumentException failure) {
+            Log.e("AegisOSPlatformGateway", "apply() revokeRuntimePermission threw", failure);
             return new GatewayExecution(false, "revokeRuntimePermission failed: " + failure.getMessage());
         }
     }
