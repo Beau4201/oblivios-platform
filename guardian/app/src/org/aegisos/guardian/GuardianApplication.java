@@ -1,6 +1,7 @@
 package org.aegisos.guardian;
 
 import android.app.Application;
+import android.content.Intent;
 
 import org.aegisos.guardian.application.GuardianApplicationResult;
 
@@ -12,6 +13,7 @@ public final class GuardianApplication extends Application {
     public void onCreate() {
         super.onCreate();
         components = GuardianComponents.create(this);
+        startService(new Intent(this, GuardianWatcherService.class));
     }
 
     public GuardianComponents components() {
