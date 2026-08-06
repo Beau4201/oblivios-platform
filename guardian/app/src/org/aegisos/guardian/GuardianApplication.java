@@ -2,10 +2,13 @@ package org.aegisos.guardian;
 
 import android.app.Application;
 import android.content.Intent;
+import android.util.Log;
 
 import org.aegisos.guardian.application.GuardianApplicationResult;
 
 public final class GuardianApplication extends Application {
+    private static final String TAG = "GuardianApplication";
+
     private GuardianComponents components;
     private volatile GuardianApplicationResult lastDetection;
 
@@ -13,7 +16,13 @@ public final class GuardianApplication extends Application {
     public void onCreate() {
         super.onCreate();
         components = GuardianComponents.create(this);
-        startService(new Intent(this, GuardianWatcherService.class));
+        try {
+            startService(new Intent(this, GuardianWatcherService.class));
+        } catch (IllegalStateException | SecurityException failure) {
+            // android:persistent="true" means a throw here would crash-loop a
+            // system process during boot; log and continue rather than crash.
+            Log.e(TAG, "Failed to start GuardianWatcherService", failure);
+        }
     }
 
     public GuardianComponents components() {

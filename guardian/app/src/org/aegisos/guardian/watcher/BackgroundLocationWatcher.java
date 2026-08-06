@@ -2,7 +2,6 @@ package org.aegisos.guardian.watcher;
 
 import android.app.ActivityManager;
 import android.app.AppOpsManager;
-import android.os.Build;
 
 import java.time.Instant;
 import java.util.HashMap;

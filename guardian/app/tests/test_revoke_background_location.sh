@@ -40,7 +40,11 @@ if adb shell dumpsys package "$FIXTURE_PKG" | grep -q "ACCESS_BACKGROUND_LOCATIO
     echo "FAIL: background location still granted"
     exit 1
 fi
-echo "PASS"
 
 echo "--- foreground location permission is untouched ---"
-adb shell dumpsys package "$FIXTURE_PKG" | grep -q "ACCESS_FINE_LOCATION: granted=true"
+if ! adb shell dumpsys package "$FIXTURE_PKG" | grep -q "ACCESS_FINE_LOCATION: granted=true"; then
+    echo "FAIL: foreground location was unexpectedly revoked"
+    exit 1
+fi
+
+echo "PASS"

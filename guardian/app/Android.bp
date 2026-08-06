@@ -30,15 +30,11 @@ android_app {
         "androidx.lifecycle_lifecycle-runtime",
         "androidx.lifecycle_lifecycle-viewmodel",
         "androidx.savedstate_savedstate",
-        // NOT independently SSH-confirmed against the real tree (unlike the list
-        // above) — inferred by the same "<mavenGroupId>_<artifactId>" naming pattern
-        // evidenced by every entry above, because Guardian's ported UI directly
-        // imports androidx.compose.animation(.core) and androidx.compose.ui.text
-        // symbols (button press/hover spring animation, disclosure expand/collapse,
-        // FontWeight/TextAlign/TextDecoration) that EyeDropper's own confirmed list
-        // does not cover. If Task 7's real Soong build reports these module names
-        // wrong, re-run Step 1's grep against a Compose consumer that also animates
-        // and styles text, not just EyeDropper.
+        // Confirmed correct by Task 7's real Soong build and Task 8's real boot
+        // (inferred at Task 6 by the same naming pattern as the list above, since
+        // Guardian's ported UI imports androidx.compose.animation(.core) and
+        // androidx.compose.ui.text symbols EyeDropper's own confirmed list didn't
+        // cover; the build never failed on these names).
         "androidx.compose.animation_animation",
         "androidx.compose.animation_animation-core",
         "androidx.compose.ui_ui-text",
