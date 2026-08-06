@@ -15,14 +15,25 @@ echo "--- triggering Guardian's real ingest -> approve cycle ---"
 # schedules its location request 8 seconds after onCreate() (see
 # guardian/testfixtures/locationfixture/src/org/aegisos/guardian/locationfixture/MainActivity.java)
 # specifically so it fires while backgrounded, since Guardian's watcher only
-# flags background access. The 10-second wait below covers that 8-second
-# delay plus margin. Both delays are a first estimate written without access
-# to a real emulator in this worktree and may need tuning once run for real
-# (Task 8).
+# flags background access. The 12-second wait below covers that 8-second
+# delay plus margin -- confirmed sufficient against a real Task 8 emulator
+# run (detection consistently visible well before 12s).
 adb shell am start -n "$FIXTURE_PKG/.MainActivity"
 sleep 1
 adb shell input keyevent KEYCODE_HOME
-sleep 10
+sleep 12
+
+echo "--- opening Guardian and tapping Protect app ---"
+# Guardian does not auto-remediate -- approval requires the owner's explicit
+# tap (this is the intended design, not a missing feature). Confirmed real
+# tap target against a 1080x1920 emulator display in Task 8; if this script
+# is ever run against a different screen resolution the coordinates below
+# will need to be re-derived (e.g. via `adb shell wm size` and a fresh
+# screenshot), not assumed to still be correct.
+adb shell am start -n "org.aegisos.guardian/.GuardianActivity"
+sleep 4
+adb shell input tap 787 1150
+sleep 3
 
 echo "--- independent post-check: background location is now denied ---"
 if adb shell dumpsys package "$FIXTURE_PKG" | grep -q "ACCESS_BACKGROUND_LOCATION: granted=true"; then
