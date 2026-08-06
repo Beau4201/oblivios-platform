@@ -30,6 +30,24 @@
   `protect`, `undo`, `overview`), and GuardianUiState.kt in its entirety —
   remains an unmodified copy of the source.
 
+### Deviation: GuardianUiController.kt's GuardianUiScenario made public (Task 6)
+
+- The source file declared `internal interface GuardianUiScenario` (line 7).
+- Task 6 wires `GuardianActivity` (package `org.aegisos.guardian`, not
+  `org.aegisos.guardian.ui`) to implement `GuardianUiScenario` with an
+  anonymous object.
+- **Fix:** removed the `internal` modifier only — the interface is now
+  `interface GuardianUiScenario`. No other content in the file changed.
+- Note: under this repository's actual Android.bp layout, `GuardianUiController.kt`
+  and `GuardianUiState.kt` are compiled as `srcs` of the same `GuardianApp`
+  `android_app` Soong module as everything under `app/src/**/*.kt` (see
+  `app/Android.bp`), so they already form a single Kotlin compilation unit —
+  `internal` visibility would likely have been satisfied across packages within
+  that one module regardless. The change is made anyway per the task's explicit
+  instruction: it is a harmless widening (public is a superset of internal) and
+  keeps the interface usable if `core/` is ever split into a separately-compiled
+  module later.
+
 Re-vendor by repeating Task 1 of
 `docs/superpowers/plans/2026-08-05-guardian-platform-integration.md` against
 a newer `aegisos-services` commit; do not hand-edit any file in this

@@ -4,7 +4,7 @@ import org.aegisos.guardian.application.GuardianApplicationResult
 import org.aegisos.guardian.overview.GuardianOverviewSnapshot
 import org.aegisos.guardian.remediation.RemediationOutcome
 
-internal interface GuardianUiScenario {
+interface GuardianUiScenario {
     fun detectBackgroundLocation(): GuardianApplicationResult
 
     fun approve(incidentId: String, actionId: String): GuardianApplicationResult

@@ -16,11 +16,12 @@ public final class GuardianWatcherService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        components = GuardianComponents.create(this);
+        GuardianApplication app = (GuardianApplication) getApplication();
+        components = app.components();
         watcher = new BackgroundLocationWatcher(
             (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE),
             (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE),
-            event -> components.applicationService().ingest(event));
+            event -> app.recordDetection(components.applicationService().ingest(event)));
         watcher.start();
     }
 
