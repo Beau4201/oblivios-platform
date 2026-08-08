@@ -7,7 +7,7 @@ import org.aegisos.guardian.application.GuardianApplicationService;
 import org.aegisos.guardian.audit.FileGuardianAuditStore;
 import org.aegisos.guardian.detection.GuardianDetectionService;
 import org.aegisos.guardian.detection.InMemoryGuardianDetectionCommitStore;
-import org.aegisos.guardian.overview.InMemoryGuardianOverviewStore;
+import org.aegisos.guardian.overview.FileGuardianOverviewStore;
 import org.aegisos.guardian.platform.android.AegisOSPlatformGateway;
 import org.aegisos.guardian.remediation.GuardianRemediationService;
 import org.aegisos.guardian.remediation.RemediationCatalog;
@@ -36,7 +36,8 @@ public final class GuardianComponents {
         // interfaces; this is not a mistake, it is how the existing, working
         // reference wiring does it.
         InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
-        InMemoryGuardianOverviewStore overviewStore = new InMemoryGuardianOverviewStore();
+        FileGuardianOverviewStore overviewStore = new FileGuardianOverviewStore(
+            new File(context.getFilesDir(), "guardian-overview.jsonl").toPath());
         FileGuardianAuditStore auditStore = new FileGuardianAuditStore(
             new File(context.getFilesDir(), "guardian-audit.jsonl").toPath());
         GuardianRemediationService remediation = new GuardianRemediationService(
