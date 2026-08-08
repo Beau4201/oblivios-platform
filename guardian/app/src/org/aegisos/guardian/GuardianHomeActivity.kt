@@ -1,10 +1,13 @@
 package org.aegisos.guardian
 
+import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import org.aegisos.guardian.ui.GuardianApp
 import org.aegisos.guardian.ui.GuardianRoute
 import org.aegisos.guardian.ui.GuardianUiController
@@ -19,8 +22,20 @@ private const val KEY_FIRST_RUN_SEEN = "first_run_seen"
 const val EXTRA_ROUTE = "org.aegisos.guardian.EXTRA_ROUTE"
 
 class GuardianHomeActivity : ComponentActivity() {
+    // POST_NOTIFICATIONS is protectionLevel="dangerous" (confirmed against real
+    // AOSP source -- see this plan's Task 7); declaring it in the manifest alone
+    // never grants it. Without this request, GuardianWatcherService's
+    // notify() calls silently no-op on Android 13+ and detections are never
+    // seen. Registered unconditionally as a field per the Activity Result API's
+    // own requirement (must happen before STARTED), fired once from onCreate.
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         val app = application as GuardianApplication
         val components = app.components()
         val controller = GuardianUiController(
