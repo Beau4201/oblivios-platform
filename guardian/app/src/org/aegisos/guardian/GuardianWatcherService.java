@@ -1,19 +1,35 @@
 package org.aegisos.guardian;
 
-import android.app.AppOpsManager;
 import android.app.ActivityManager;
+import android.app.AppOpsManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.os.IBinder;
 import android.util.Log;
 
 import org.aegisos.guardian.application.GuardianApplicationResult;
+import org.aegisos.guardian.ui.GuardianRoute;
 import org.aegisos.guardian.watcher.BackgroundLocationWatcher;
 
+import static org.aegisos.guardian.GuardianHomeActivityKt.EXTRA_ROUTE;
+
+/**
+ * Watches AppOps for background access and, on a real detection, posts a
+ * notification rather than forcing GuardianHomeActivity open -- the owner
+ * decides whether and when to look, like any other Android app's
+ * notification. ADR-034's background-activity-start exemption
+ * (GuardianWatcherService force-launching the UI from this persistent
+ * process) is retired along with the forced open it existed to justify.
+ */
 public final class GuardianWatcherService extends Service {
     private static final String TAG = "GuardianWatcherService";
+    private static final String CHANNEL_ID = "guardian_detections";
+    private static final int DETECTION_NOTIFICATION_ID = 1;
 
     private GuardianComponents components;
     private BackgroundLocationWatcher watcher;
@@ -22,6 +38,7 @@ public final class GuardianWatcherService extends Service {
     public void onCreate() {
         super.onCreate();
         Log.i(TAG, "onCreate");
+        createNotificationChannel();
         GuardianApplication app = (GuardianApplication) getApplication();
         components = app.components();
         watcher = new BackgroundLocationWatcher(
@@ -35,33 +52,51 @@ public final class GuardianWatcherService extends Service {
         watcher.start();
     }
 
-    // GuardianActivity is android:exported="false" (no external caller may
-    // launch it, see the Task-8-final-review fix), so Guardians own
-    // persistent process opening it here is the only path to the UI.
-    // Verified against real source that this is allowed from the background:
-    // BackgroundActivityStartController grants BAL_ALLOW_ALLOWLISTED_COMPONENT
-    // to any caller whose process state is <= PROCESS_STATE_PERSISTENT_UI,
-    // which android:persistent="true" satisfies.
-    //
-    // Called for every new detection, including ones that arrive while
-    // GuardianActivity is already open for an earlier one -- FLAG_ACTIVITY_NEW_TASK
-    // brings the existing instance to front rather than recreating it, and
-    // GuardianActivity's own onDone callback re-checks the queue after clearing
-    // an item (see GuardianActivity.kt), so it is safe to call this unconditionally.
+    private void createNotificationChannel() {
+        NotificationChannel channel = new NotificationChannel(
+            CHANNEL_ID, "Guardian detections", NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription("Guardian noticed something and wants you to take a look.");
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        manager.createNotificationChannel(channel);
+    }
+
+    // Posts (or updates in place, if a prior detection is still unresolved) a
+    // notification instead of starting GuardianHomeActivity directly. Tapping
+    // it opens GuardianHomeActivity routed straight to incident review.
+    // Called for every new detection, including ones that arrive while an
+    // earlier one is still unresolved -- FLAG_UPDATE_CURRENT on the
+    // PendingIntent and reusing DETECTION_NOTIFICATION_ID means a second
+    // detection updates the same notification's summary text (via
+    // pendingDetectionCount()) instead of posting a new one.
     private void onDetection(GuardianApplication app, GuardianApplicationResult result) {
         if (!(result instanceof GuardianApplicationResult.DetectedIncident)) {
-            Log.i(TAG, "onDetection: not a DetectedIncident, not opening UI");
+            Log.i(TAG, "onDetection: not a DetectedIncident, not notifying");
             return;
         }
         app.recordDetection(result);
-        Intent intent = new Intent(this, GuardianActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try {
-            startActivity(intent);
-            Log.i(TAG, "onDetection: startActivity succeeded");
-        } catch (ActivityNotFoundException | SecurityException failure) {
-            Log.e(TAG, "Failed to open GuardianActivity for a real detection", failure);
-        }
+
+        Intent intent = new Intent(this, GuardianHomeActivity.class);
+        intent.putExtra(EXTRA_ROUTE, GuardianRoute.INCIDENT_REVIEW.name());
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            this, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
+        int pendingCount = app.pendingDetectionCount();
+        String contentText = pendingCount > 1
+            ? pendingCount + " apps flagged -- tap to review"
+            : "Tap to see what Guardian found";
+
+        Notification notification = new Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Guardian noticed something")
+            .setContentText(contentText)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build();
+
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        manager.notify(DETECTION_NOTIFICATION_ID, notification);
+        Log.i(TAG, "onDetection: notification posted, pendingCount=" + pendingCount);
     }
 
     @Override

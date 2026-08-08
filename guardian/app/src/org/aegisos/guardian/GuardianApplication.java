@@ -62,6 +62,11 @@ public final class GuardianApplication extends Application {
         return !pendingDetections.isEmpty();
     }
 
+    /** Count of not-yet-resolved detections, for the notification's summary text. */
+    public int pendingDetectionCount() {
+        return pendingDetections.size();
+    }
+
     public void clearDetection() {
         pendingDetections.pollFirst();
     }
