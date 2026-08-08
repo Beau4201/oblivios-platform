@@ -9,9 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -37,7 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-const val simulationNotice = "AegisOS Guardian — background location access revoked"
+const val simulationNotice = "Local reference simulation — not Android enforcement"
 const val protectLabel = "Protect app"
 const val undoLabel = "Undo"
 const val backToOverviewLabel = "Back to overview"
@@ -104,16 +102,6 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
             primaryUsesAttnColor = true,
         )
     }
-}
-
-/** A screen's content, mobile-first: no phone bezel/notch, just the app surface itself.
- * Ported from guardian-ui-reference's GuardianPhoneFrame.kt; kept private here rather
- * than as its own file because this task's scope only ports GuardianReferenceScreen's
- * own direct dependency chain (Theme/Icons/BrandMark/Buttons), and GuardianScreen has
- * no other consumer yet in this module. */
-@Composable
-private fun GuardianScreen(background: Color, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().background(background), content = content)
 }
 
 @Composable
