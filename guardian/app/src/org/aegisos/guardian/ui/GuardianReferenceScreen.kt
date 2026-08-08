@@ -35,7 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-const val simulationNotice = "Local reference simulation — not Android enforcement"
+const val simulationNotice = "AegisOS Guardian — background location access revoked"
 const val protectLabel = "Protect app"
 const val undoLabel = "Undo"
 const val backToOverviewLabel = "Back to overview"
