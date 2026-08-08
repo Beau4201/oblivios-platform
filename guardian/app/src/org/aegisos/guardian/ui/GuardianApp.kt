@@ -13,7 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
-private enum class GuardianRoute {
+enum class GuardianRoute {
     FIRST_RUN, HOME, GUARDING_NOW, INCIDENT_REVIEW, RECENT_CHANGES, TRUST, CHOICES
 }
 
@@ -28,8 +28,12 @@ private const val NAV_DURATION_MS = 260
  * per-entry detail lookup. Route changes slide/fade like a real mobile push/pop.
  */
 @Composable
-fun GuardianApp(controller: GuardianUiController) {
-    var route by remember(controller) { mutableStateOf(GuardianRoute.FIRST_RUN) }
+fun GuardianApp(
+    controller: GuardianUiController,
+    startRoute: GuardianRoute = GuardianRoute.FIRST_RUN,
+    onFirstRunSeen: () -> Unit = {},
+) {
+    var route by remember(controller) { mutableStateOf(startRoute) }
     var overview by remember(controller) { mutableStateOf(controller.overview()) }
     val model = overview.toUiModel()
 
@@ -49,7 +53,10 @@ fun GuardianApp(controller: GuardianUiController) {
     ) { targetRoute ->
         when (targetRoute) {
             GuardianRoute.FIRST_RUN -> GuardianFirstRunScreen(
-                onGotIt = { route = GuardianRoute.HOME },
+                onGotIt = {
+                    onFirstRunSeen()
+                    route = GuardianRoute.HOME
+                },
             )
             GuardianRoute.HOME -> GuardianHomeScreen(
                 model = model,
