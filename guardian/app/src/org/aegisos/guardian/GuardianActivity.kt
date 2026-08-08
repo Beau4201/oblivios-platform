@@ -28,7 +28,15 @@ class GuardianActivity : ComponentActivity() {
                 controller = controller,
                 onDone = {
                     app.clearDetection()
-                    finish()
+                    if (app.hasPendingDetection()) {
+                        // Another real detection was queued while this one was
+                        // being shown (ADR-034 residual 4) -- stay open and show
+                        // it directly instead of finishing and relying on a new
+                        // GuardianWatcherService-issued startActivity round trip.
+                        recreate()
+                    } else {
+                        finish()
+                    }
                 },
             )
         }

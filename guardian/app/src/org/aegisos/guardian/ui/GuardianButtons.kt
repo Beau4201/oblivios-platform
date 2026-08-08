@@ -1,5 +1,6 @@
 package org.aegisos.guardian.ui
 
+import android.view.MotionEvent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -31,13 +32,37 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/**
+ * Blocks touches from reaching whatever is below this modifier in the chain
+ * whenever the window is fully or partially obscured by another window (the
+ * Compose equivalent of View#setFilterTouchesWhenObscured(true), which has no
+ * direct Modifier equivalent). Applied to Undo specifically: it is the one
+ * Guardian control whose accidental/tapjacked activation reverses a just-
+ * applied protection (ADR-034 residual 5).
+ */
+fun Modifier.filterTouchesWhenObscured(): Modifier = this.pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val motionEvent = event.motionEvent ?: continue
+            val obscured = (motionEvent.flags and MotionEvent.FLAG_WINDOW_IS_OBSCURED) != 0 ||
+                (motionEvent.flags and MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) != 0
+            if (obscured) {
+                event.changes.forEach { it.consume() }
+            }
+        }
+    }
+}
 
 /**
  * A real button: presses settle with a soft spring (scale to 0.96), hovers lift it
@@ -122,6 +147,8 @@ fun GuardianTextLink(
  * A rarely-needed, low-emphasis action (Undo, Change my mind): icon + label with no
  * border at rest, so it reads as quiet, secondary information rather than a second
  * decision. Hovering reveals a soft outline, confirming it's real without shouting.
+ * Guards against tapjacking (ADR-034 residual 5): a touch delivered while another
+ * window obscures Guardian's is dropped before clickable() ever sees it.
  */
 @Composable
 fun GuardianQuietAction(
@@ -150,6 +177,7 @@ fun GuardianQuietAction(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier
+            .filterTouchesWhenObscured()
             .border(BorderStroke(1.dp, color.copy(alpha = borderAlpha)), RoundedCornerShape(999.dp))
             .hoverable(interactionSource)
             .pointerHoverIcon(PointerIcon.Hand)
