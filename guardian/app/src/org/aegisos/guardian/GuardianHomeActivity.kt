@@ -1,0 +1,53 @@
+package org.aegisos.guardian
+
+import android.content.Context
+import android.content.SharedPreferences
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import org.aegisos.guardian.ui.GuardianApp
+import org.aegisos.guardian.ui.GuardianRoute
+import org.aegisos.guardian.ui.GuardianUiController
+import org.aegisos.guardian.ui.GuardianUiScenario
+
+private const val PREFS_NAME = "guardian_prefs"
+private const val KEY_FIRST_RUN_SEEN = "first_run_seen"
+
+/** Extra on the incoming Intent naming a [GuardianRoute] to start on, e.g.
+ * [GuardianRoute.INCIDENT_REVIEW] from [GuardianWatcherService]'s notification
+ * PendingIntent. Falls back to first-run-or-Home when absent. */
+const val EXTRA_ROUTE = "org.aegisos.guardian.EXTRA_ROUTE"
+
+class GuardianHomeActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val app = application as GuardianApplication
+        val components = app.components()
+        val controller = GuardianUiController(
+            object : GuardianUiScenario {
+                override fun detectBackgroundLocation() = app.peekDetection()
+                override fun approve(incidentId: String, actionId: String) =
+                    components.applicationService().approve(incidentId, actionId)
+                override fun undo(auditId: String) =
+                    components.applicationService().undo(auditId)
+                override fun overview() =
+                    components.applicationService().overview()
+            },
+        )
+
+        val prefs: SharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val requestedRoute = intent.getStringExtra(EXTRA_ROUTE)?.let { name ->
+            runCatching { GuardianRoute.valueOf(name) }.getOrNull()
+        }
+        val startRoute = requestedRoute
+            ?: if (prefs.getBoolean(KEY_FIRST_RUN_SEEN, false)) GuardianRoute.HOME else GuardianRoute.FIRST_RUN
+
+        setContent {
+            GuardianApp(
+                controller = controller,
+                startRoute = startRoute,
+                onFirstRunSeen = { prefs.edit().putBoolean(KEY_FIRST_RUN_SEEN, true).apply() },
+            )
+        }
+    }
+}
