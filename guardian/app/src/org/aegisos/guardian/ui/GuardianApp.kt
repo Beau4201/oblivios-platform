@@ -32,6 +32,7 @@ fun GuardianApp(
     controller: GuardianUiController,
     startRoute: GuardianRoute = GuardianRoute.FIRST_RUN,
     onFirstRunSeen: () -> Unit = {},
+    onDetectionHandled: () -> Unit = {},
 ) {
     var route by remember(controller) { mutableStateOf(startRoute) }
     var overview by remember(controller) { mutableStateOf(controller.overview()) }
@@ -84,6 +85,7 @@ fun GuardianApp(
             GuardianRoute.INCIDENT_REVIEW -> GuardianReferenceScreen(
                 controller = controller,
                 onDone = {
+                    onDetectionHandled()
                     overview = controller.overview()
                     route = GuardianRoute.HOME
                 },

@@ -62,6 +62,7 @@ class GuardianHomeActivity : ComponentActivity() {
                 controller = controller,
                 startRoute = startRoute,
                 onFirstRunSeen = { prefs.edit().putBoolean(KEY_FIRST_RUN_SEEN, true).apply() },
+                onDetectionHandled = { app.clearDetection() },
             )
         }
     }
