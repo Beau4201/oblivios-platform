@@ -324,13 +324,35 @@ private class TimelineEntry(
  * Meaningful changes and protection-attention entries, newest first. Both
  * carry an owner-facing reason written by guardian-core, so neither needs a
  * headline invented here.
+ *
+ * Any still-active protection whose own change entry has already been evicted
+ * is added back. guardian-core's overview store keeps only its three most
+ * recent changes, and this design has no separate "everything Guardian is
+ * guarding" screen, so without this a protection could stay in force with no
+ * row anywhere to undo it from — a silent hole in the always-reversible
+ * promise, not merely a missing list item.
  */
 private fun GuardianOverviewSnapshot.timeline(
     zone: ZoneId,
     locale: Locale,
     now: Instant,
 ): List<TimelineEntry> {
-    val entries = changes().map { change ->
+    val representedDestinations = (changes().map { it.destination() } +
+        protectionAttention().map { it.destination() }).toSet()
+    val orphanedProtections = activeProtections()
+        .filterNot { representedDestinations.contains(it.destination()) }
+        .map { protection ->
+            TimelineEntry(
+                key = protection.entryId(),
+                destination = protection.destination(),
+                appLabel = protection.appLabel(),
+                ownerReason = protection.effect(),
+                occurredAt = protection.occurredAt(),
+                timeLabel = timestampLabel(protection.occurredAt(), zone, locale, now),
+                isSafe = true,
+            )
+        }
+    val entries = orphanedProtections + changes().map { change ->
         TimelineEntry(
             key = change.entryId(),
             destination = change.destination(),

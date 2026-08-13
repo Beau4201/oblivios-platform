@@ -199,6 +199,30 @@ class GuardianHomeModelTest {
     }
 
     @Test
+    fun `a protection whose change entry aged out is still undoable`() {
+        // guardian-core's overview store keeps only its three most recent
+        // changes; the protection itself stays active.
+        val model = snapshot(
+            active = listOf(activeProtection()),
+            changes = listOf(
+                verifiedChange(entryId = "other-1", occurredAt = Instant.parse("2026-08-13T10:00:00Z"), destination = "guardian://protections/other"),
+            ),
+        ).home()
+
+        val row = model.state.recentChanges.single { it.key == "protection-1" }
+        assertEquals("Background location is restricted.", row.description)
+        assertTrue(row.isSafe)
+        assertEquals("audit-1", (model.actions.getValue("protection-1") as GuardianHomeRowAction.UndoProtection).auditId)
+    }
+
+    @Test
+    fun `a protection with its own change entry is listed once, not twice`() {
+        val model = snapshot(active = listOf(activeProtection()), changes = listOf(verifiedChange())).home()
+
+        assertEquals(1, model.state.recentChanges.size)
+    }
+
+    @Test
     fun `the timeline is newest first`() {
         val model = snapshot(
             changes = listOf(verifiedChange(occurredAt = Instant.parse("2026-08-13T09:41:00Z"))),
