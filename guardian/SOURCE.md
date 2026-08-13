@@ -148,6 +148,17 @@ reference screen/component/theme tests pass against the ported files.
    (`BackgroundLocationWatcher` fires only on a *new* AppOps event). The label
    and its note are wrapped in a `Column` so they read as one unit; with no
    note — the reference module's only case — the rendered layout is unchanged.
+   That wrapper also carries the `clickable` and the `Role.Button`, which the
+   label `Text` held in the reference, so the label and the note merge into a
+   single semantics node and a screen reader announces the caveat together with
+   the button it qualifies instead of as a separate element reached after it.
+   The clickable has to move for that to work: Compose skips a merging
+   descendant when it merges (`SemanticsNode.mergeConfig`) and `clickable` is
+   one, so marking the wrapper `mergeDescendants` while the label stayed
+   clickable would have merged the note *without* the label. With no note the
+   merged node's bounds, touch target and announcement are unchanged —
+   verified by the reference module's own "Not now" click and 48dp
+   touch-target tests, which still pass unmodified.
 
 ## GuardianApp (app module)
 

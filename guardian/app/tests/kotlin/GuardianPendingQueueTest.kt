@@ -3,6 +3,7 @@ package org.aegisos.guardian.ui
 import androidx.activity.compose.HarnessBackDispatcher
 import androidx.compose.ui.test.filterToOne
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -14,7 +15,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.aegisos.guardian.application.GuardianApplicationResult
 import org.aegisos.guardian.contracts.GuardianIncidentV1
+import org.aegisos.guardian.overview.GuardianOverviewEntry
 import org.aegisos.guardian.overview.GuardianOverviewSnapshot
+import org.aegisos.guardian.overview.GuardianProtectionLifecycle
 import org.aegisos.guardian.remediation.RemediationOutcome
 import org.aegisos.guardianui.screens.GuardianIncidentTone
 import org.junit.Rule
@@ -127,6 +130,17 @@ class GuardianPendingQueueRuleTest {
     }
 
     @org.junit.jupiter.api.Test
+    fun `the deferral caveat names both restarts`() {
+        // "A restart clears it" read as the phone's restart. Guardian's own
+        // process can restart independently of it — a crash, an app update —
+        // despite persistent="true", and that is the likelier of the two.
+        assertTrue(DEFERRAL_NOTE.contains("your phone"), DEFERRAL_NOTE)
+        assertTrue(DEFERRAL_NOTE.contains("Guardian itself"), DEFERRAL_NOTE)
+        // No duration and no likelihood: neither is knowable from this code.
+        assertFalse(DEFERRAL_NOTE.contains("may"), DEFERRAL_NOTE)
+    }
+
+    @org.junit.jupiter.api.Test
     fun `a deferred detection still has a row on Home`() {
         // Models the shell exactly: apply the rule, drop the queue entry only
         // if it says so, then rebuild Home from what is left.
@@ -148,10 +162,10 @@ class GuardianPendingQueueRuleTest {
 // End-to-end through the real navigation shell
 // ---------------------------------------------------------------------------
 
-private fun incident() = GuardianIncidentV1(
+private fun incident(eventId: String = "event-1") = GuardianIncidentV1(
     1,
-    "guardian-v1-background_location_v1-event-1",
-    listOf("event-1"),
+    "guardian-v1-background_location_v1-$eventId",
+    listOf(eventId),
     "SUSPICIOUS",
     80,
     listOf("background precise location allowed"),
@@ -160,13 +174,44 @@ private fun incident() = GuardianIncidentV1(
     "OPEN",
 )
 
+private const val PROTECTION_EFFECT = "Background location is restricted."
+
+/**
+ * An overview holding one applied, still-undoable protection and nothing else,
+ * so Home offers a row that opens an `ActiveProtection` review. Nothing about
+ * it is in the pending queue, which is the point: undoing it reaches a terminal
+ * outcome that must leave the queue alone.
+ */
+private fun overviewWithActiveProtection() = GuardianOverviewSnapshot(
+    listOf(
+        GuardianOverviewEntry.ActiveProtection(
+            "protection-1",
+            "This app",
+            "guardian:application",
+            GuardianProtectionLifecycle.VERIFIED_ACTIVE,
+            Instant.parse("2026-08-13T09:41:00Z"),
+            PROTECTION_EFFECT,
+            "Background navigation can stop.",
+            true,
+            "guardian://protections/protection-1",
+            AUDIT_ID,
+        ),
+    ),
+    emptyList(),
+    emptyList(),
+)
+
 /**
  * Drives a real [GuardianUiController] from a queue the test owns, the same
  * shape `GuardianHomeActivity` wires: `detectBackgroundLocation()` peeks the
  * head non-destructively, and only `GuardianApp`'s `onDetectionHandled`
  * removes anything.
  */
-private class FakeScenario(private val queue: ArrayDeque<GuardianIncidentV1>) : GuardianUiScenario {
+private class FakeScenario(
+    private val queue: ArrayDeque<GuardianIncidentV1>,
+    private val snapshot: GuardianOverviewSnapshot =
+        GuardianOverviewSnapshot(emptyList(), emptyList(), emptyList()),
+) : GuardianUiScenario {
     override fun detectBackgroundLocation(): GuardianApplicationResult =
         queue.firstOrNull()
             ?.let { GuardianApplicationResult.DetectedIncident(it) }
@@ -187,9 +232,7 @@ private class FakeScenario(private val queue: ArrayDeque<GuardianIncidentV1>) : 
         )
 
     override fun overview(): GuardianApplicationResult =
-        GuardianApplicationResult.Overview(
-            GuardianOverviewSnapshot(emptyList(), emptyList(), emptyList()),
-        )
+        GuardianApplicationResult.Overview(snapshot)
 }
 
 class GuardianPendingQueueShellTest {
@@ -198,12 +241,21 @@ class GuardianPendingQueueShellTest {
 
     private val queue = ArrayDeque(listOf(incident()))
 
-    private fun startAtReview() {
+    private fun startAtReview() = start(GuardianRoute.INCIDENT_REVIEW)
+
+    private fun start(
+        route: GuardianRoute,
+        snapshot: GuardianOverviewSnapshot =
+            GuardianOverviewSnapshot(emptyList(), emptyList(), emptyList()),
+    ) {
         HarnessBackDispatcher.reset()
         composeRule.setContent {
             GuardianApp(
-                controller = GuardianUiController(FakeScenario(queue)),
-                startRoute = GuardianRoute.INCIDENT_REVIEW,
+                controller = GuardianUiController(FakeScenario(queue, snapshot)),
+                startRoute = route,
+                // The real drop: GuardianApplication.pollFirst(). It takes
+                // whatever is at the head *now*, which is why dropping twice
+                // destroys an unrelated detection rather than being a no-op.
                 onDetectionHandled = { queue.removeFirstOrNull() },
                 pendingIncident = { queue.firstOrNull() },
                 pendingIncidentCount = { queue.size },
@@ -285,6 +337,108 @@ class GuardianPendingQueueShellTest {
     }
 
     @org.junit.Test
+    fun `a resolved detection is dropped at the outcome, before any exit`() {
+        startAtReview()
+
+        composeRule.onNodeWithText("Restrict background location").performClick()
+
+        // No "Done", no back arrow, no back gesture: the review is still open
+        // and the queue entry is already gone. That is the fix. `review` and
+        // `lifecycle` are composition state, so an Activity teardown that is
+        // not a user-initiated exit — rotation, dark mode, font size, locale,
+        // the system reclaiming a backgrounded Activity — runs no exit handler
+        // at all, and the detection used to survive it as if undecided.
+        composeRule.onNodeWithText("Protected, and double-checked it worked").assertExists()
+        assertEquals(0, queue.size, "the drop must not wait for the screen to close")
+    }
+
+    @org.junit.Test
+    fun `the drop survives the review being destroyed instead of exited`() {
+        startAtReview()
+        composeRule.onNodeWithText("Restrict background location").performClick()
+
+        // Stand-in for `onCreate` re-running against the same notification
+        // intent after a configuration change: the shell is rebuilt from the
+        // Application's queue, with no exit handler having run in between.
+        // Nothing is left to review, so the notification route falls back to
+        // Home — instead of reopening an incident that has been remediated.
+        composeRule.setContent {
+            GuardianApp(
+                controller = GuardianUiController(FakeScenario(queue)),
+                startRoute = GuardianRoute.INCIDENT_REVIEW,
+                onDetectionHandled = { queue.removeFirstOrNull() },
+                pendingIncident = { queue.firstOrNull() },
+                pendingIncidentCount = { queue.size },
+            )
+        }
+
+        composeRule.onNodeWithText("Restrict background location").assertDoesNotExist()
+        composeRule.onNodeWithText("1 app needs a quick look").assertDoesNotExist()
+    }
+
+    @org.junit.Test
+    fun `a second outcome in the same review never drops a second detection`() {
+        // event-2 is queued behind the one under review and nobody has seen it.
+        queue.addLast(incident("event-2"))
+        startAtReview()
+
+        composeRule.onNodeWithText("Restrict background location").performClick()
+        assertEquals(1, queue.size, "exactly one detection may be dropped")
+
+        // Undone is a recorded outcome too. Without the exactly-once guard this
+        // second outcome would poll the queue again and take event-2 — the bug
+        // class this branch has already shipped twice.
+        composeRule.onAllNodesWithText("Undo").filterToOne(hasClickAction()).performClick()
+        composeRule.onNodeWithText("Undone. The earlier change has been reversed").assertExists()
+        assertEquals(1, queue.size, "a second outcome must not drop an unrelated detection")
+
+        // ...and neither may the exit that follows it, which is the double-drop
+        // the outcome-point move could have introduced on its own.
+        pressSystemBack()
+
+        assertEquals(1, queue.size, "leaving after an outcome must drop nothing further")
+        assertEquals(
+            "guardian-v1-background_location_v1-event-2",
+            queue.first().incidentId(),
+            "the surviving detection must be the one nobody has decided on",
+        )
+        composeRule.onNodeWithText("1 app needs a quick look").assertExists()
+    }
+
+    @org.junit.Test
+    fun `an undecided detection is untouched by the outcome path`() {
+        queue.addLast(incident("event-2"))
+        startAtReview()
+
+        // Opening a review calls controller.start(), which reads the queue head
+        // but records nothing. Deferring reaches no outcome either.
+        composeRule.onNodeWithText("Decide later").performClick()
+
+        assertEquals(2, queue.size, "an undecided detection must survive")
+        assertEquals("guardian-v1-background_location_v1-event-1", queue.first().incidentId())
+        composeRule.onNodeWithText("2 apps need a quick look").assertExists()
+    }
+
+    @org.junit.Test
+    fun `undoing an active protection leaves the pending queue alone`() {
+        // A terminal outcome reached from a source that was never in the queue.
+        // The rule's source gate is what stops it, and it now has to hold at
+        // the outcome point rather than on the way out.
+        start(GuardianRoute.HOME, overviewWithActiveProtection())
+
+        composeRule.onNodeWithText(PROTECTION_EFFECT).performClick()
+        composeRule.onAllNodesWithText("Undo").filterToOne(hasClickAction()).performClick()
+        composeRule.onNodeWithText("Undone. The earlier change has been reversed").assertExists()
+
+        assertEquals(1, queue.size, "an active protection must never drop a queued detection")
+
+        pressSystemBack()
+
+        assertEquals(1, queue.size)
+        composeRule.onNodeWithText("1 app needs a quick look").assertExists()
+    }
+
+    @org.junit.Test
     fun `the pending screen states that the deferral is not durable`() {
         startAtReview()
 
@@ -304,5 +458,18 @@ class GuardianPendingQueueShellTest {
         // and misleading at worst — the protection it now describes *is*
         // recorded on disk.
         composeRule.onNodeWithText(DEFERRAL_NOTE).assertDoesNotExist()
+    }
+
+    @org.junit.Test
+    fun `the caveat is announced as part of the deferral button`() {
+        startAtReview()
+
+        // One node carries the click action, the label and the caveat, so a
+        // screen reader touch-exploring the button hears the caveat with it.
+        // Before this the note was a separate, unclickable node reached only
+        // after the button — i.e. after the decision it qualifies.
+        composeRule.onNode(
+            hasClickAction() and hasText("Decide later") and hasText(DEFERRAL_NOTE),
+        ).assertExists()
     }
 }

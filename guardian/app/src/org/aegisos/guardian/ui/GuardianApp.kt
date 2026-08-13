@@ -112,11 +112,12 @@ internal fun GuardianUiState?.hasRecordedOutcome(): Boolean = when (this) {
 }
 
 /**
- * Whether leaving the incident screen must drop the open detection from
- * `GuardianApplication`'s pending queue.
+ * Whether an open detection must be dropped from `GuardianApplication`'s
+ * pending queue.
  *
  * Deliberately keyed on the *outcome*, never on which control the owner used
- * to leave. Both directions of that are real bugs that have shipped here:
+ * to leave, and — since the fix below — never on leaving at all. Both
+ * directions of that are real bugs that have shipped here:
  *
  * - Keyed on the button, a terminal outcome reached and then left via the back
  *   gesture stayed queued. Home then showed the just-applied protection and a
@@ -127,6 +128,11 @@ internal fun GuardianUiState?.hasRecordedOutcome(): Boolean = when (this) {
  *   a particular button. It has no record anywhere else, so every exit path —
  *   "Decide later", the on-screen back arrow, the system back gesture — must
  *   leave it queued.
+ *
+ * Keyed on any *exit* the same first bug survives in a second form: the exit
+ * handlers live in this Activity's composition, and a teardown that is not a
+ * user-initiated exit never runs one. See `recordOutcome()`, which is where
+ * this rule is applied and why it is applied there.
  *
  * An [GuardianReviewSource.ActiveProtection] is never in the queue to begin
  * with, so it never resolves anything.
@@ -189,6 +195,10 @@ fun GuardianApp(
         var lifecycle by remember(controller) {
             mutableStateOf(if (reviewFromNotification) controller.start() else null)
         }
+        // Whether the currently open review has already dropped its detection
+        // from the pending queue. Scoped to one open review; see
+        // recordOutcome(), which is the only thing that sets it.
+        var pendingResolved by remember(controller) { mutableStateOf(false) }
         var route by remember(controller) {
             mutableStateOf(
                 if (startRoute == GuardianRoute.INCIDENT_REVIEW && !reviewFromNotification) {
@@ -206,21 +216,62 @@ fun GuardianApp(
         }
 
         /**
+         * Applies a state guardian-core has just returned, and drops the open
+         * detection from the pending queue at that same moment if the outcome
+         * resolves it ([resolvesPendingDetection]).
+         *
+         * **The drop belongs here and nowhere else.** `review` and [lifecycle]
+         * are `remember`ed in this Activity's composition; the pending queue
+         * lives on the `Application`. Every teardown that is not a
+         * user-initiated screen exit — a rotation, a dark-mode / font-size /
+         * locale change, the system reclaiming the backgrounded Activity —
+         * destroys the first without running any exit handler at all. Keying
+         * the drop on an exit therefore left an already-remediated detection
+         * queued whenever one of those happened before the owner tapped
+         * "Done": `onCreate` re-ran against the same notification intent,
+         * `peekDetection()` still returned the incident, and the review
+         * reopened showing a resolved incident as undecided. Keying it on the
+         * recorded outcome makes it correct by construction for every exit
+         * path, because it no longer depends on there being one.
+         *
+         * [pendingResolved] is what makes it exactly-once. Two terminal
+         * outcomes can follow each other inside one open review — Verified then
+         * Undone, or Failure then a successful retry — and a second
+         * `onDetectionHandled()` would poll the queue again and silently
+         * destroy whatever *next*, unrelated, still-undecided detection had
+         * reached the head by then.
+         */
+        fun recordOutcome(next: GuardianUiState) {
+            lifecycle = next
+            if (pendingResolved || !resolvesPendingDetection(review, next)) return
+            onDetectionHandled()
+            pendingResolved = true
+            // The shell's own view of the queue must not outlive the drop: this
+            // Activity can be torn down before any exit runs, and Home is built
+            // from these values. The open review renders from its own captured
+            // facts, so clearing them here cannot blank the screen.
+            refresh()
+        }
+
+        /**
          * The single exit from incident review, and there is genuinely no
-         * other one: that screen carries no bottom nav bar, so the primary
-         * button, the secondary button, the on-screen back arrow and the
-         * system back gesture are the complete set, and all four arrive here.
-         * The queue decision is therefore made once, from state, by
-         * [resolvesPendingDetection], rather than once per control.
+         * other one *from the owner's side*: that screen carries no bottom nav
+         * bar, so the primary button, the secondary button, the on-screen back
+         * arrow and the system back gesture are the complete set, and all four
+         * arrive here.
+         *
+         * It deliberately does **not** touch the pending queue. That decision
+         * has already been made, by [recordOutcome], at the moment
+         * guardian-core recorded the outcome. Dropping here as well would fire
+         * twice for the same detection, and the second `onDetectionHandled()`
+         * would take the queue's new head — an unrelated detection nobody has
+         * decided on. Resetting [pendingResolved] is safe only because this
+         * also clears `review`: the next review starts from nothing dropped.
          */
         fun leaveReview() {
-            if (resolvesPendingDetection(review, lifecycle)) {
-                onDetectionHandled()
-            }
             review = null
             lifecycle = null
-            // After the drop, never before: refresh() re-reads the queue, and
-            // Home must see its real post-drop size.
+            pendingResolved = false
             refresh()
             route = GuardianRoute.HOME
         }
@@ -228,6 +279,11 @@ fun GuardianApp(
         fun openPendingReview() {
             val facts = pendingFacts ?: return
             review = GuardianReviewSource.PendingDetection(facts)
+            pendingResolved = false
+            // Not routed through recordOutcome(): start() only reads the queue
+            // head, it records nothing. Its one non-Detected result is the
+            // failure it returns when that head is already gone — in which case
+            // there is nothing left in the queue to drop either.
             lifecycle = controller.start()
             route = GuardianRoute.INCIDENT_REVIEW
         }
@@ -235,6 +291,7 @@ fun GuardianApp(
         fun openProtectionReview(action: GuardianHomeRowAction.UndoProtection) {
             review = GuardianReviewSource.ActiveProtection(action.facts, action.auditId)
             lifecycle = null
+            pendingResolved = false
             route = GuardianRoute.INCIDENT_REVIEW
         }
 
@@ -258,11 +315,12 @@ fun GuardianApp(
 
         // Incident review is a screen pushed on top of the tab shell, not its
         // own Activity, so without this the system back gesture finishes the
-        // whole Activity from it — an exit that never reaches leaveReview()
-        // and therefore never drops a detection the owner has already
-        // resolved. Routed to the same single exit as the on-screen back
-        // arrow. Scoped to this route only: back from a tab keeps its default
-        // behaviour.
+        // whole Activity from it instead of returning to Home. Routed to the
+        // same single exit as the on-screen back arrow, so the two agree.
+        // Scoped to this route only: back from a tab keeps its default
+        // behaviour. The pending queue no longer depends on this handler
+        // running — recordOutcome() has already settled that — but the
+        // navigation still does.
         BackHandler(enabled = effectiveRoute == GuardianRoute.INCIDENT_REVIEW) { leaveReview() }
 
         when (effectiveRoute) {
@@ -309,13 +367,18 @@ fun GuardianApp(
                 actions = incidentActions(
                     source = requireNotNull(source),
                     lifecycle = lifecycle,
-                    onProtect = { lifecycle = controller.protect() },
+                    // Both go through recordOutcome(), which is where the queue
+                    // entry is dropped — at the instant guardian-core records
+                    // an outcome, not when the screen is later closed.
+                    onProtect = { recordOutcome(controller.protect()) },
                     onUndo = { auditId ->
-                        lifecycle = if (auditId == null) controller.undo() else controller.undo(auditId)
+                        recordOutcome(
+                            if (auditId == null) controller.undo() else controller.undo(auditId),
+                        )
                     },
                     // One exit for every control, and the same one the back
-                    // gesture uses. leaveReview() decides on its own whether
-                    // the queue entry goes.
+                    // gesture uses. It only navigates; it never touches the
+                    // queue.
                     onFinish = ::leaveReview,
                 ),
                 onBack = ::leaveReview,
@@ -331,12 +394,13 @@ fun GuardianApp(
  * controller outcome is rendered here rather than on separate result screens.
  *
  * [onFinish] is the one way off this screen, shared by both buttons and by the
- * back gesture. This function deliberately does not decide what leaving means
- * for the pending queue — that is [resolvesPendingDetection]'s single
- * responsibility, in the shell, keyed on state rather than on which control
- * was used. An earlier split into `onResolved`/`onDismissed` encoded the same
- * rule per button, which is exactly how the back gesture came to disagree with
- * "Done".
+ * back gesture, and it only navigates. Nothing here decides anything about the
+ * pending queue: that is [resolvesPendingDetection]'s single responsibility,
+ * applied in the shell at the moment [onProtect] / [onUndo] return an outcome.
+ * An earlier split into `onResolved`/`onDismissed` encoded the rule per button,
+ * which is how the back gesture came to disagree with "Done"; keying it on any
+ * exit at all left the same defect for exits that never happen, such as the
+ * Activity being recreated mid-review.
  */
 internal fun incidentActions(
     source: GuardianReviewSource,
@@ -380,10 +444,10 @@ internal fun incidentActions(
                     facts = source.facts,
                     primaryLabel = "Restrict ${source.facts.permissionLabel.replaceFirstChar { it.lowercase() }}",
                     // Nothing has been decided and nothing has been recorded,
-                    // so leaving here must not drop the queue entry — see
-                    // resolvesPendingDetection(), which is what enforces that
-                    // for this and every other exit path. The label says
-                    // "later", not "no", for the same reason.
+                    // so nothing may drop the queue entry from here — see
+                    // resolvesPendingDetection(), which is what enforces that,
+                    // and which no exit consults. The label says "later", not
+                    // "no", for the same reason.
                     secondary = GuardianSecondaryAction.Other(DECIDE_LATER_LABEL, onFinish),
                     onPrimary = onProtect,
                     // ...and the caveat says what "later" is actually worth,
@@ -415,18 +479,24 @@ private const val DECIDE_LATER_LABEL = "Decide later"
  * rarer, not impossible. Nothing re-raises it afterwards either —
  * `BackgroundLocationWatcher` only fires on a *new* AppOps event.
  *
- * Both sentences are limited to what the code actually establishes. In
- * particular it says "a restart", not a duration or a probability: when the
- * process will restart is not knowable from here, and inventing a number
- * would be exactly the kind of claim this UI refuses to make elsewhere.
+ * It names **both** restarts, because they are genuinely independent and the
+ * owner can only anticipate one of them: Guardian's own process can be
+ * restarted (a crash, a system update) while the phone stays on, and an
+ * earlier wording of "a restart" read as if it meant the phone's.
+ *
+ * Everything here is limited to what the code establishes. In particular it
+ * gives no duration and no likelihood: when either restart happens is not
+ * knowable from here, and inventing a number would be exactly the kind of
+ * claim this UI refuses to make elsewhere.
  *
  * The fix for the underlying weakness is a persistent queue, which is a
  * `GuardianApplication`/guardian-core change and is not what this note
  * replaces — it makes the current behaviour visible until then.
  */
 internal const val DEFERRAL_NOTE =
-    "Guardian keeps this reminder in memory only. A restart clears it, and it " +
-        "will not come back unless this happens again."
+    "Guardian keeps this reminder in memory only. It is cleared if your phone " +
+        "restarts, or if Guardian itself does, and it will not come back " +
+        "unless this happens again."
 
 @Composable
 private fun IncidentReview(actions: IncidentActions, onBack: () -> Unit) {

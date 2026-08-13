@@ -141,7 +141,25 @@ fun GuardianIncidentReviewScreen(
                 // unit, so they are wrapped rather than left as two children
                 // of the 16.dp-spaced parent. With no note (the reference
                 // module's only case) the layout is unchanged.
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                //
+                // They are one *semantic* unit too: the click and the button
+                // role sit on this wrapper, so both texts merge into a single
+                // node and a screen reader announces the caveat together with
+                // the button it qualifies, instead of leaving it as a separate
+                // element the owner reaches only after deciding. The clickable
+                // has to be here rather than on the label for that to work at
+                // all — Compose skips a merging descendant when it merges
+                // (SemanticsNode.mergeConfig), and `clickable` is one, so
+                // marking this Column mergeDescendants while the label stayed
+                // clickable would have merged the note *without* the label.
+                // With no note the merged node keeps the same bounds, the same
+                // touch target and the same announcement as before.
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(role = Role.Button, onClick = onNotNow),
+                ) {
                     Text(
                         label,
                         style = MaterialTheme.typography.labelLarge,
@@ -150,7 +168,6 @@ fun GuardianIncidentReviewScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .defaultMinSize(minHeight = 48.dp)
-                            .clickable(role = Role.Button, onClick = onNotNow)
                             .padding(10.dp),
                     )
                     secondaryActionNote?.let { note ->

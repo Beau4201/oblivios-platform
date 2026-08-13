@@ -25,11 +25,16 @@ pulls in `GuardianApp.kt`.
 
 Tests for `resolvesPendingDetection()` — the single rule deciding whether an
 open detection leaves `GuardianApplication`'s pending queue — plus end-to-end
-tests that drive the real `GuardianApp` shell through each exit path, with a
-real `GuardianUiController` over a fake `GuardianUiScenario`. Both directions
-of that rule have been real defects here: an undecided detection destroyed
-because of which button was tapped, and a resolved one left queued because the
-owner used the back gesture. Needs the `BackHandler` stand-in from step 3.
+tests that drive the real `GuardianApp` shell, with a real
+`GuardianUiController` over a fake `GuardianUiScenario`. Three defects in this
+one rule have shipped here: an undecided detection destroyed because of which
+button was tapped; a resolved one left queued because the owner used the back
+gesture; and, once the rule was applied at every *exit*, a resolved one left
+queued again whenever the Activity was torn down without one (a rotation, a
+dark-mode or font-size change, the system reclaiming it). The rule is now
+applied where guardian-core records the outcome, so the tests assert the queue
+state with no exit performed at all, and assert exactly-once when a second
+outcome or a later exit follows. Needs the `BackHandler` stand-in from step 3.
 
 ## `kotlin/GuardianTrustRetentionTest.kt`
 
