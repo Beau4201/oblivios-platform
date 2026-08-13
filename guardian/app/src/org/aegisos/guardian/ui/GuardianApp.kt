@@ -37,7 +37,7 @@ enum class GuardianRoute {
 }
 
 /** What the incident-review screen is currently reviewing. */
-private sealed interface GuardianReviewSource {
+internal sealed interface GuardianReviewSource {
     val facts: GuardianIncidentFacts
 
     /** The head of the pending-detection queue, reviewed through [GuardianUiController]. */
@@ -50,13 +50,45 @@ private sealed interface GuardianReviewSource {
     ) : GuardianReviewSource
 }
 
+/**
+ * The incident screen's secondary action, as a type rather than a label.
+ *
+ * The tapjacking guard (ADR-034 residual 5) has to fire for every path that
+ * reverses an already-applied change, and the same reversal ships under more
+ * than one piece of button copy ("Undo" after a verified protection, "Try
+ * again" after a failed undo). Keying the guard on the displayed string left
+ * the second one unprotected. [Undo] cannot be constructed without the undo
+ * call itself, so the guard and the behaviour cannot drift apart again.
+ */
+internal sealed interface GuardianSecondaryAction {
+    val label: String
+
+    fun perform()
+
+    /** Reverses a change Guardian already applied to the device. Always guarded. */
+    class Undo(
+        override val label: String,
+        private val auditId: String?,
+        private val onUndo: (String?) -> Unit,
+    ) : GuardianSecondaryAction {
+        override fun perform() = onUndo(auditId)
+    }
+
+    /** Anything that does not reverse an applied change. */
+    class Other(
+        override val label: String,
+        private val onClick: () -> Unit,
+    ) : GuardianSecondaryAction {
+        override fun perform() = onClick()
+    }
+}
+
 /** The incident screen's two actions, resolved from the controller's state. */
-private class IncidentActions(
+internal class IncidentActions(
     val facts: GuardianIncidentFacts,
     val primaryLabel: String,
-    val secondaryLabel: String?,
+    val secondary: GuardianSecondaryAction?,
     val onPrimary: () -> Unit,
-    val onSecondary: () -> Unit,
 )
 
 /**
@@ -76,8 +108,10 @@ private class IncidentActions(
  *   `GuardianIncidentV1` itself, which the controller consumes and discards.
  *   Both read the same queue head, so the two cannot disagree.
  * @param pendingIncidentCount size of that queue, for Home's attention line.
- * @param retention the retention period the audit store is really enforcing.
- *   Shown read-only; see `GuardianTrustUiState.retentionChangeable`.
+ * @param retention the retention period the audit store has recorded. Shown
+ *   read-only, and explicitly labelled as not enforced — nothing in this build
+ *   calls `applyRetention()`. See `GuardianTrustUiState.retentionChangeable`
+ *   and `retentionEnforced`.
  */
 @Composable
 fun GuardianApp(
@@ -212,8 +246,11 @@ fun GuardianApp(
                     onUndo = { auditId ->
                         lifecycle = if (auditId == null) controller.undo() else controller.undo(auditId)
                     },
-                    // The owner finished with a pending detection, so it must
-                    // leave the queue.
+                    // The owner reached an outcome on a pending detection —
+                    // protected, undone, or a failure guardian-core recorded —
+                    // so it leaves the queue. Only these paths reach here;
+                    // deferring ("Decide later") and backing out deliberately
+                    // do not.
                     onResolved = {
                         onDetectionHandled()
                         leaveReview()
@@ -236,7 +273,7 @@ fun GuardianApp(
  * Choose -> Enforce -> Verify -> Undo loop on this one screen, so every
  * controller outcome is rendered here rather than on separate result screens.
  */
-private fun incidentActions(
+internal fun incidentActions(
     source: GuardianReviewSource,
     lifecycle: GuardianUiState?,
     onProtect: () -> Unit,
@@ -252,32 +289,43 @@ private fun incidentActions(
         is GuardianUiState.Verified -> IncidentActions(
             facts = source.facts.asProtected(),
             primaryLabel = "Done",
-            secondaryLabel = UNDO_LABEL,
+            secondary = GuardianSecondaryAction.Undo(UNDO_LABEL, undoAuditId, onUndo),
             onPrimary = finish,
-            onSecondary = { onUndo(undoAuditId) },
         )
         is GuardianUiState.Undone -> IncidentActions(
             facts = source.facts.asUndone(),
             primaryLabel = "Done",
-            secondaryLabel = null,
+            secondary = null,
             onPrimary = finish,
-            onSecondary = {},
         )
         is GuardianUiState.Failure -> IncidentActions(
             facts = source.facts.asFailed(lifecycle.detail),
             primaryLabel = "Done",
-            secondaryLabel = "Try again",
+            // "Try again" means retry the protection for a pending detection,
+            // but retry the *undo* for an active protection — the same
+            // reversal the Undo button performs, so it is typed as one.
+            secondary = if (pending) {
+                GuardianSecondaryAction.Other("Try again", onProtect)
+            } else {
+                GuardianSecondaryAction.Undo("Try again", undoAuditId, onUndo)
+            },
             onPrimary = finish,
-            onSecondary = { if (pending) onProtect() else onUndo(undoAuditId) },
         )
         is GuardianUiState.Detected, null ->
             if (pending) {
                 IncidentActions(
                     facts = source.facts,
                     primaryLabel = "Restrict ${source.facts.permissionLabel.replaceFirstChar { it.lowercase() }}",
-                    secondaryLabel = "Not now",
+                    // Deliberately NOT onResolved: nothing was decided and
+                    // nothing was recorded, so the detection must stay in
+                    // GuardianApplication's queue and keep its row on Home.
+                    // Dropping it here would delete the only trace of a
+                    // detection the owner never acted on — the exact opposite
+                    // of this screen's "navigating away is not a decision"
+                    // rule. The label says "later", not "no", for the same
+                    // reason.
+                    secondary = GuardianSecondaryAction.Other(DECIDE_LATER_LABEL, onDismissed),
                     onPrimary = onProtect,
-                    onSecondary = onResolved,
                 )
             } else {
                 // An active protection opened from Home: already applied and
@@ -285,23 +333,27 @@ private fun incidentActions(
                 IncidentActions(
                     facts = source.facts,
                     primaryLabel = "Done",
-                    secondaryLabel = UNDO_LABEL,
+                    secondary = GuardianSecondaryAction.Undo(UNDO_LABEL, undoAuditId, onUndo),
                     onPrimary = onDismissed,
-                    onSecondary = { onUndo(undoAuditId) },
                 )
             }
     }
 }
 
 private const val UNDO_LABEL = "Undo"
+private const val DECIDE_LATER_LABEL = "Decide later"
 
 @Composable
 private fun IncidentReview(actions: IncidentActions, onBack: () -> Unit) {
     // Undo is the one control whose tapjacked activation reverses a
     // just-applied protection (ADR-034 residual 5). Guard the whole screen
-    // whenever it is on offer.
-    val guard =
-        if (actions.secondaryLabel == UNDO_LABEL) Modifier.filterTouchesWhenObscured() else Modifier
+    // whenever it is on offer. Keyed on the action's type, never on its
+    // label: the same reversal ships under two different labels.
+    val guard = if (actions.secondary is GuardianSecondaryAction.Undo) {
+        Modifier.filterTouchesWhenObscured()
+    } else {
+        Modifier
+    }
 
     Box(modifier = guard) {
         GuardianIncidentReviewScreen(
@@ -328,9 +380,9 @@ private fun IncidentReview(actions: IncidentActions, onBack: () -> Unit) {
             ),
             onBack = onBack,
             onRestrict = actions.onPrimary,
-            onNotNow = actions.onSecondary,
+            onNotNow = { actions.secondary?.perform() },
             primaryActionLabel = actions.primaryLabel,
-            secondaryActionLabel = actions.secondaryLabel,
+            secondaryActionLabel = actions.secondary?.label,
         )
     }
 }

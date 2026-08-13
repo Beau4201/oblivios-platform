@@ -11,6 +11,23 @@ Unit tests for `src/org/aegisos/guardian/ui/GuardianScreenModels.kt`, the
 mapping layer between guardian-core's records and the reference screens'
 UI-state types.
 
+## `kotlin/GuardianIncidentActionsTest.kt`
+
+Unit tests for `incidentActions()` in `src/org/aegisos/guardian/ui/GuardianApp.kt`.
+Two of its properties are security-relevant: a deferred detection must not be
+dropped from `GuardianApplication`'s queue, and every secondary action that
+reverses an applied change must be a `GuardianSecondaryAction.Undo`, because
+that type is what the `filterTouchesWhenObscured()` tapjacking guard keys on
+(ADR-034 residual 5). Needs the tapjacking stub from step 3 below, since it
+pulls in `GuardianApp.kt`.
+
+## `kotlin/GuardianTrustRetentionTest.kt`
+
+Compose UI tests for the Trust screen's retention section: the recorded period
+must not be presented as an enforced deletion schedule, since nothing in this
+build calls `applyRetention()`. Separate from the reference module's own
+`GuardianTrustScreenTest`, which stays an unmodified copy.
+
 **There is no in-tree runner.** `guardian/app` is an `android_app` Soong
 module with no test target, and its UI depends on Jetpack Compose, so these
 cannot run under `java_test_host` either. They are written for, and were run
