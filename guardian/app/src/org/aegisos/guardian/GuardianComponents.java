@@ -60,9 +60,17 @@ public final class GuardianComponents {
     }
 
     /**
-     * The retention period the audit store is actually enforcing, so the
-     * Trust screen can state it instead of asserting a default. Exposes the
+     * The retention period the audit store has recorded, so the Trust screen
+     * can state the real value instead of asserting a default. Exposes the
      * value only, not the store -- the UI has no business writing audits.
+     *
+     * Recorded, not enforced: nothing in this app calls applyRetention() or
+     * setRetentionPeriod(), so no audit entry is ever deleted on this
+     * schedule. The Trust screen says so explicitly
+     * (GuardianTrustUiState.retentionEnforced). Wiring enforcement needs an
+     * owner decision first -- applyRetention() deletes audit entries, and
+     * undo(auditId) needs the audit entry, so shortening retention would
+     * silently make an active protection un-undoable.
      */
     public GuardianEvidenceRetentionPeriod retentionPeriod() {
         return auditStore.retentionPeriod();

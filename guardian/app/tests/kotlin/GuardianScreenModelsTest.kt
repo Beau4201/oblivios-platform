@@ -329,6 +329,22 @@ class GuardianTrustAndChoicesTest {
     }
 
     @Test
+    fun `the retention period is never presented as enforced by default`() {
+        // Nothing in this app calls applyRetention() or setRetentionPeriod(),
+        // so the recorded period deletes nothing. The Trust screen must say
+        // so; defaulting this to true would make the screen claim a deletion
+        // schedule the device does not run.
+        val state = snapshot().toTrustUiState(
+            GuardianRetentionOption.ThirtyDays,
+            zone = ZONE,
+            locale = LOCALE,
+            now = NOW,
+        )
+
+        assertEquals(false, state.retentionEnforced)
+    }
+
+    @Test
     fun `every retention period the audit store can hold has a screen option`() {
         assertEquals(
             listOf(

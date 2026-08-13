@@ -245,10 +245,19 @@ fun GuardianOverviewSnapshot.toHomeModel(
  * Trust's activity log is the same overview timeline Home summarises, without
  * the pending queue (nothing has been recorded for a detection nobody has
  * acted on yet) and without a cap beyond the overview store's own retention.
+ *
+ * [retentionEnforced] defaults to false, and the app leaves it there: the
+ * period is read live from the audit store and is therefore a real recorded
+ * value, but nothing in this build ever calls `applyRetention()`, so no record
+ * is ever deleted on that schedule. The screen states the setting and says it
+ * is not enforced, rather than implying a deletion that does not happen — on
+ * the one screen whose header promises every claim points to a real record.
+ * Flip it to true in the same change that wires enforcement, not before.
  */
 fun GuardianOverviewSnapshot.toTrustUiState(
     retention: GuardianRetentionOption,
     retentionChangeable: Boolean = false,
+    retentionEnforced: Boolean = false,
     zone: ZoneId = ZoneId.systemDefault(),
     locale: Locale = Locale.getDefault(),
     now: Instant = Instant.now(),
@@ -263,6 +272,7 @@ fun GuardianOverviewSnapshot.toTrustUiState(
     },
     retention = retention,
     retentionChangeable = retentionChangeable,
+    retentionEnforced = retentionEnforced,
 )
 
 fun GuardianEvidenceRetentionPeriod.toRetentionOption(): GuardianRetentionOption = when (this) {

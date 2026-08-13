@@ -48,6 +48,19 @@ data class GuardianTrustUiState(
      * so the reference module's own call sites are unaffected.
      */
     val retentionChangeable: Boolean = true,
+    /**
+     * AegisOS Android port deviation (see guardian/SOURCE.md). When false,
+     * this screen must not imply the device is deleting anything on the shown
+     * schedule: [retention] is then only the period recorded in the audit
+     * store, and nothing in this build ever applies it. The section is
+     * relabelled and carries an explicit note saying so. Defaults to true, so
+     * the reference module's own call sites are unaffected.
+     *
+     * Separate from [retentionChangeable] on purpose: "the owner cannot change
+     * it" and "the device does not act on it" are two different claims, and
+     * only the second one would make the screen say something untrue.
+     */
+    val retentionEnforced: Boolean = true,
 )
 
 private val DataHandlingClaims = listOf(
@@ -117,7 +130,9 @@ fun GuardianTrustScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GuardianSectionLabel("KEEP HISTORY FOR")
+                GuardianSectionLabel(
+                    if (state.retentionEnforced) "KEEP HISTORY FOR" else "HISTORY RETENTION SETTING",
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -159,6 +174,19 @@ fun GuardianTrustScreen(
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         )
                     }
+                }
+                if (!state.retentionEnforced) {
+                    // AegisOS deviation: this screen's own header promises that
+                    // every claim on it points to a real record. The recorded
+                    // period is real; the deletion it implies is not happening,
+                    // because nothing in this build calls applyRetention(). Say
+                    // so rather than let the pill imply enforcement.
+                    Text(
+                        "This is the recorded setting only. Guardian is not yet deleting " +
+                            "older records on this schedule.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GuardianColor.OnSurfaceVariant,
+                    )
                 }
             }
         }
