@@ -2,18 +2,41 @@
 
 ## guardian-core.jar
 
-- Source: `aegisos-services` commit `3d66a461b7aa9b61f2e6f2db9e4f96cbf380cf43`.
+- Source: `aegisos-services` commit `c9ac0dfc28454824e8c049d9d5222ee79fce28b5`
+  (`master`, after merging `guardian-residuals-hardening` — merge commit
+  message: "merge: guardian-core persistent stores, coarse-location
+  detection, audit hardening"). Supersedes the 2026-08-05 vendoring below.
 - Build command: `./gradlew :guardian-core:jar` (Java 21 toolchain, zero
   runtime dependencies — confirmed via `guardian-core/build.gradle.kts`).
+  Reproduced via `:guardian-core:clean :guardian-core:jar --offline` to rule
+  out a stale Gradle cache; hash matched both times.
+- SHA-256: `a96a00e21ac4a13d5750f3dd00d4fcf86efd1c99c18e0f2da3d443a8f28eac58`.
+- Built: 2026-08-13.
+- Verified present via `unzip -l`/`javap` before use: `FileGuardianAuditStore`,
+  `FileGuardianOverviewStore`, `ActiveProtection#auditId()`,
+  `FileGuardianAuditStore#retentionPeriod()` — the four APIs the "Known
+  staleness" section below previously reported missing.
+
+<details>
+<summary>Previous vendoring (2026-08-05, superseded)</summary>
+
+- Source: `aegisos-services` commit `3d66a461b7aa9b61f2e6f2db9e4f96cbf380cf43`.
 - SHA-256: `6a9517f3ebe783ce0190ef3e1ea56e58c7328b86b040fb5ca9d044707c0e63f6`.
-- Built: 2026-08-05.
+
+</details>
 
 ## GuardianUiController.kt / GuardianUiState.kt
 
-- Copied verbatim from the same commit above,
+- Copied verbatim from the 2026-08-05 commit above (`3d66a461b`),
   `guardian-ui-reference/src/main/kotlin/org/aegisos/guardian/ui/`.
 - Reused as-is: both files are plain Kotlin with no Compose Desktop or
   desktop-windowing dependency.
+- Re-diffed against the new 2026-08-13 source commit (`c9ac0dfc2`) before
+  this re-vendor: `GuardianUiState.kt` is unchanged; `GuardianUiController.kt`
+  gained one upstream method, `fun undo(explicitAuditId: String)` — already
+  present, byte-identical, in this app's copy (added independently here in
+  an earlier session, `35e8ef9`). No re-copy needed; the two files below
+  remain current modulo the two already-documented deviations.
 
 ### Deviation: GuardianUiController.kt secondary constructor removed
 
@@ -53,31 +76,26 @@ Re-vendor by repeating Task 1 of
 a newer `aegisos-services` commit; do not hand-edit any file in this
 directory.
 
-### Known staleness: guardian-core.jar predates this app's sources
+### Resolved staleness (was: guardian-core.jar predates this app's sources)
 
-Four APIs this app's sources call do not exist in the vendored jar above. All
-four were added on `aegisos-services`' unmerged `guardian-residuals-hardening`
-branch. **The jar must be re-vendored from that branch — and that branch
-merged — before `GuardianApp` can build.** This is the first thing a Soong
-build will fail on.
+Historical record — this section described a real, now-fixed blocker; kept
+for context on why the 2026-08-13 re-vendor happened.
 
-Verified against the actual vendored jar (`unzip -l` plus `javap`), not
-inferred:
+Four APIs this app's sources called did not exist in the 2026-08-05 vendored
+jar. All four were added on `aegisos-services`' `guardian-residuals-hardening`
+branch, which was unmerged at the time. That branch's own tests were
+re-verified green (`./gradlew :guardian-core:test --offline`, `BUILD
+SUCCESSFUL`) before merging it to `master` (merge commit, no conflicts — the
+two branches touched disjoint files), then the jar above was re-vendored from
+the merged `master`. All four APIs are now confirmed present in the current
+jar (see the SHA-256 entry above):
 
-| Missing API | Used by | Since |
+| API | Used by | Was |
 | --- | --- | --- |
-| `audit.FileGuardianAuditStore` (whole class; jar has only `InMemoryGuardianAuditStore`) | `app/src/.../GuardianComponents.java` | predates the UI rework |
-| `overview.FileGuardianOverviewStore` (whole class) | `app/src/.../GuardianComponents.java` | predates the UI rework |
-| `overview.GuardianOverviewEntry.ActiveProtection#auditId()` | `app/src/.../ui/GuardianScreenModels.kt` | **introduced by the UI rework** |
-| `audit.FileGuardianAuditStore#retentionPeriod()` | `app/src/.../GuardianComponents.java#retentionPeriod()` | **introduced by the UI rework** |
-
-The last two are new coupling this app took on during the UI rework, not
-pre-existing staleness: the jar's `ActiveProtection` is a nine-component
-record ending at `destination`, with no `auditId` accessor at all, and
-`retentionPeriod()` is a method on a class the jar does not contain. Home's
-row-tap-to-Undo path needs the first; the Trust screen's retention row needs
-the second. A re-vendor that satisfies only the two `File*` store classes will
-still fail to compile.
+| `audit.FileGuardianAuditStore` (jar previously had only `InMemoryGuardianAuditStore`) | `app/src/.../GuardianComponents.java` | predated the UI rework |
+| `overview.FileGuardianOverviewStore` | `app/src/.../GuardianComponents.java` | predated the UI rework |
+| `overview.GuardianOverviewEntry.ActiveProtection#auditId()` | `app/src/.../ui/GuardianScreenModels.kt` | introduced by the UI rework |
+| `audit.FileGuardianAuditStore#retentionPeriod()` | `app/src/.../GuardianComponents.java#retentionPeriod()` | introduced by the UI rework |
 
 ## Reference UI screens (app/src/org/aegisos/guardianui/)
 
