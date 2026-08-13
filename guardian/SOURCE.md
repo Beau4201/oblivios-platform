@@ -138,6 +138,16 @@ reference screen/component/theme tests pass against the ported files.
    Observe -> Explain -> Choose -> Enforce -> Verify -> Undo loop on this one
    screen (as the design spec asks), so its chip and its two actions have to
    express the applied, undone and failed outcomes as well as the initial one.
+7. `screens/GuardianIncidentReviewScreen.kt` — `secondaryActionNote`,
+   defaulting to null: a caveat rendered under the secondary action, for the
+   case where accepting that action promises the owner less than its label
+   implies. The real app sets it on one path only. "Decide later" defers a
+   detection into `GuardianApplication.pendingDetections`, which is an
+   in-memory `ConcurrentLinkedDeque` that nothing persists — the deferral does
+   not survive a process restart, and nothing re-raises it afterwards
+   (`BackgroundLocationWatcher` fires only on a *new* AppOps event). The label
+   and its note are wrapped in a `Column` so they read as one unit; with no
+   note — the reference module's only case — the rendered layout is unchanged.
 
 ## GuardianApp (app module)
 

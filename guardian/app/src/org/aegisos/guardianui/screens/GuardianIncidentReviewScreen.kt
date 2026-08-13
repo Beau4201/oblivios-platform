@@ -48,6 +48,13 @@ data class GuardianIncidentUiState(
  * actions become "Done" plus "Undo"/"Try again" rather than
  * "Restrict ..."/"Not now". The defaults reproduce the reference module's
  * labels exactly; a null [secondaryActionLabel] hides the secondary action.
+ *
+ * [secondaryActionNote] is a further AegisOS deviation: a caveat rendered
+ * directly under the secondary action, for the case where accepting that
+ * action promises the owner less than its label implies. It exists because
+ * deferring a detection is only as durable as the in-memory queue holding it.
+ * Defaults to null, so the reference module's own call sites render exactly
+ * as before.
  */
 @Composable
 fun GuardianIncidentReviewScreen(
@@ -57,6 +64,7 @@ fun GuardianIncidentReviewScreen(
     onNotNow: () -> Unit,
     primaryActionLabel: String = "Restrict ${state.permissionLabel.replaceFirstChar { it.lowercase() }}",
     secondaryActionLabel: String? = "Not now",
+    secondaryActionNote: String? = null,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(GuardianColor.Surface)) {
         Row(
@@ -129,17 +137,32 @@ fun GuardianIncidentReviewScreen(
                 onClick = onRestrict,
             )
             secondaryActionLabel?.let { label ->
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = GuardianColor.Primary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp)
-                        .clickable(role = Role.Button, onClick = onNotNow)
-                        .padding(10.dp),
-                )
+                // AegisOS deviation: the label and its caveat are one visual
+                // unit, so they are wrapped rather than left as two children
+                // of the 16.dp-spaced parent. With no note (the reference
+                // module's only case) the layout is unchanged.
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = GuardianColor.Primary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clickable(role = Role.Button, onClick = onNotNow)
+                            .padding(10.dp),
+                    )
+                    secondaryActionNote?.let { note ->
+                        Text(
+                            note,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = GuardianColor.OnSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        )
+                    }
+                }
             }
         }
     }

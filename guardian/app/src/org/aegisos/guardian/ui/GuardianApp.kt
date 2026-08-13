@@ -1,5 +1,6 @@
 package org.aegisos.guardian.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -89,7 +90,51 @@ internal class IncidentActions(
     val primaryLabel: String,
     val secondary: GuardianSecondaryAction?,
     val onPrimary: () -> Unit,
+    /** Caveat shown under [secondary]; see [DEFERRAL_NOTE]. */
+    val secondaryNote: String? = null,
 )
+
+/**
+ * True once guardian-core has recorded an outcome for whatever the incident
+ * screen is showing — the protection was applied and verified, the undo ran,
+ * or the attempt failed (which guardian-core still records, as an audit entry
+ * plus a `ProtectionAttention` overview entry).
+ *
+ * [GuardianUiState.Detected] and null are the two undecided states: nothing
+ * has run and nothing has been written anywhere.
+ */
+internal fun GuardianUiState?.hasRecordedOutcome(): Boolean = when (this) {
+    is GuardianUiState.Verified,
+    is GuardianUiState.Undone,
+    is GuardianUiState.Failure,
+    -> true
+    is GuardianUiState.Detected, null -> false
+}
+
+/**
+ * Whether leaving the incident screen must drop the open detection from
+ * `GuardianApplication`'s pending queue.
+ *
+ * Deliberately keyed on the *outcome*, never on which control the owner used
+ * to leave. Both directions of that are real bugs that have shipped here:
+ *
+ * - Keyed on the button, a terminal outcome reached and then left via the back
+ *   gesture stayed queued. Home then showed the just-applied protection and a
+ *   "needs a look" line for the same app at the same time, and re-opening it
+ *   re-ran `protect()` on an already-remediated package — a fail-closed but
+ *   alarming state for something that had actually succeeded.
+ * - The mirror image: an undecided detection dropped because the owner tapped
+ *   a particular button. It has no record anywhere else, so every exit path —
+ *   "Decide later", the on-screen back arrow, the system back gesture — must
+ *   leave it queued.
+ *
+ * An [GuardianReviewSource.ActiveProtection] is never in the queue to begin
+ * with, so it never resolves anything.
+ */
+internal fun resolvesPendingDetection(
+    source: GuardianReviewSource?,
+    lifecycle: GuardianUiState?,
+): Boolean = source is GuardianReviewSource.PendingDetection && lifecycle.hasRecordedOutcome()
 
 /**
  * Navigation root. Home / Trust / Choices are bottom-nav tabs, First Run is
@@ -160,9 +205,22 @@ fun GuardianApp(
             pendingCount = pendingIncidentCount()
         }
 
+        /**
+         * The single exit from incident review, and there is genuinely no
+         * other one: that screen carries no bottom nav bar, so the primary
+         * button, the secondary button, the on-screen back arrow and the
+         * system back gesture are the complete set, and all four arrive here.
+         * The queue decision is therefore made once, from state, by
+         * [resolvesPendingDetection], rather than once per control.
+         */
         fun leaveReview() {
+            if (resolvesPendingDetection(review, lifecycle)) {
+                onDetectionHandled()
+            }
             review = null
             lifecycle = null
+            // After the drop, never before: refresh() re-reads the queue, and
+            // Home must see its real post-drop size.
             refresh()
             route = GuardianRoute.HOME
         }
@@ -197,6 +255,15 @@ fun GuardianApp(
         val source = review
         val effectiveRoute =
             if (route == GuardianRoute.INCIDENT_REVIEW && source == null) GuardianRoute.HOME else route
+
+        // Incident review is a screen pushed on top of the tab shell, not its
+        // own Activity, so without this the system back gesture finishes the
+        // whole Activity from it — an exit that never reaches leaveReview()
+        // and therefore never drops a detection the owner has already
+        // resolved. Routed to the same single exit as the on-screen back
+        // arrow. Scoped to this route only: back from a tab keeps its default
+        // behaviour.
+        BackHandler(enabled = effectiveRoute == GuardianRoute.INCIDENT_REVIEW) { leaveReview() }
 
         when (effectiveRoute) {
             GuardianRoute.FIRST_RUN -> GuardianFirstRunScreen(
@@ -246,21 +313,11 @@ fun GuardianApp(
                     onUndo = { auditId ->
                         lifecycle = if (auditId == null) controller.undo() else controller.undo(auditId)
                     },
-                    // The owner reached an outcome on a pending detection —
-                    // protected, undone, or a failure guardian-core recorded —
-                    // so it leaves the queue. Only these paths reach here;
-                    // deferring ("Decide later") and backing out deliberately
-                    // do not.
-                    onResolved = {
-                        onDetectionHandled()
-                        leaveReview()
-                    },
-                    // The owner finished with something already recorded;
-                    // there is no queue entry to drop.
-                    onDismissed = ::leaveReview,
+                    // One exit for every control, and the same one the back
+                    // gesture uses. leaveReview() decides on its own whether
+                    // the queue entry goes.
+                    onFinish = ::leaveReview,
                 ),
-                // Navigating away is not a decision: a pending detection stays
-                // pending and remains reachable from Home.
                 onBack = ::leaveReview,
             )
         }
@@ -272,31 +329,37 @@ fun GuardianApp(
  * state. The visual-identity design puts the whole Observe -> Explain ->
  * Choose -> Enforce -> Verify -> Undo loop on this one screen, so every
  * controller outcome is rendered here rather than on separate result screens.
+ *
+ * [onFinish] is the one way off this screen, shared by both buttons and by the
+ * back gesture. This function deliberately does not decide what leaving means
+ * for the pending queue — that is [resolvesPendingDetection]'s single
+ * responsibility, in the shell, keyed on state rather than on which control
+ * was used. An earlier split into `onResolved`/`onDismissed` encoded the same
+ * rule per button, which is exactly how the back gesture came to disagree with
+ * "Done".
  */
 internal fun incidentActions(
     source: GuardianReviewSource,
     lifecycle: GuardianUiState?,
     onProtect: () -> Unit,
     onUndo: (String?) -> Unit,
-    onResolved: () -> Unit,
-    onDismissed: () -> Unit,
+    onFinish: () -> Unit,
 ): IncidentActions {
     val pending = source is GuardianReviewSource.PendingDetection
     val undoAuditId = (source as? GuardianReviewSource.ActiveProtection)?.auditId
-    val finish = if (pending) onResolved else onDismissed
 
     return when (lifecycle) {
         is GuardianUiState.Verified -> IncidentActions(
             facts = source.facts.asProtected(),
             primaryLabel = "Done",
             secondary = GuardianSecondaryAction.Undo(UNDO_LABEL, undoAuditId, onUndo),
-            onPrimary = finish,
+            onPrimary = onFinish,
         )
         is GuardianUiState.Undone -> IncidentActions(
             facts = source.facts.asUndone(),
             primaryLabel = "Done",
             secondary = null,
-            onPrimary = finish,
+            onPrimary = onFinish,
         )
         is GuardianUiState.Failure -> IncidentActions(
             facts = source.facts.asFailed(lifecycle.detail),
@@ -309,23 +372,23 @@ internal fun incidentActions(
             } else {
                 GuardianSecondaryAction.Undo("Try again", undoAuditId, onUndo)
             },
-            onPrimary = finish,
+            onPrimary = onFinish,
         )
         is GuardianUiState.Detected, null ->
             if (pending) {
                 IncidentActions(
                     facts = source.facts,
                     primaryLabel = "Restrict ${source.facts.permissionLabel.replaceFirstChar { it.lowercase() }}",
-                    // Deliberately NOT onResolved: nothing was decided and
-                    // nothing was recorded, so the detection must stay in
-                    // GuardianApplication's queue and keep its row on Home.
-                    // Dropping it here would delete the only trace of a
-                    // detection the owner never acted on — the exact opposite
-                    // of this screen's "navigating away is not a decision"
-                    // rule. The label says "later", not "no", for the same
-                    // reason.
-                    secondary = GuardianSecondaryAction.Other(DECIDE_LATER_LABEL, onDismissed),
+                    // Nothing has been decided and nothing has been recorded,
+                    // so leaving here must not drop the queue entry — see
+                    // resolvesPendingDetection(), which is what enforces that
+                    // for this and every other exit path. The label says
+                    // "later", not "no", for the same reason.
+                    secondary = GuardianSecondaryAction.Other(DECIDE_LATER_LABEL, onFinish),
                     onPrimary = onProtect,
+                    // ...and the caveat says what "later" is actually worth,
+                    // because the queue holding it is in memory only.
+                    secondaryNote = DEFERRAL_NOTE,
                 )
             } else {
                 // An active protection opened from Home: already applied and
@@ -334,7 +397,7 @@ internal fun incidentActions(
                     facts = source.facts,
                     primaryLabel = "Done",
                     secondary = GuardianSecondaryAction.Undo(UNDO_LABEL, undoAuditId, onUndo),
-                    onPrimary = onDismissed,
+                    onPrimary = onFinish,
                 )
             }
     }
@@ -342,6 +405,28 @@ internal fun incidentActions(
 
 private const val UNDO_LABEL = "Undo"
 private const val DECIDE_LATER_LABEL = "Decide later"
+
+/**
+ * The honest lifetime of a deferral, shown under "Decide later".
+ *
+ * `GuardianApplication.pendingDetections` is a plain in-memory
+ * `ConcurrentLinkedDeque`. Nothing writes it to disk, so a process restart
+ * loses every deferred detection; the app being `persistent="true"` makes that
+ * rarer, not impossible. Nothing re-raises it afterwards either —
+ * `BackgroundLocationWatcher` only fires on a *new* AppOps event.
+ *
+ * Both sentences are limited to what the code actually establishes. In
+ * particular it says "a restart", not a duration or a probability: when the
+ * process will restart is not knowable from here, and inventing a number
+ * would be exactly the kind of claim this UI refuses to make elsewhere.
+ *
+ * The fix for the underlying weakness is a persistent queue, which is a
+ * `GuardianApplication`/guardian-core change and is not what this note
+ * replaces — it makes the current behaviour visible until then.
+ */
+internal const val DEFERRAL_NOTE =
+    "Guardian keeps this reminder in memory only. A restart clears it, and it " +
+        "will not come back unless this happens again."
 
 @Composable
 private fun IncidentReview(actions: IncidentActions, onBack: () -> Unit) {
@@ -383,6 +468,7 @@ private fun IncidentReview(actions: IncidentActions, onBack: () -> Unit) {
             onNotNow = { actions.secondary?.perform() },
             primaryActionLabel = actions.primaryLabel,
             secondaryActionLabel = actions.secondary?.label,
+            secondaryActionNote = actions.secondaryNote,
         )
     }
 }

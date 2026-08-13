@@ -21,6 +21,16 @@ that type is what the `filterTouchesWhenObscured()` tapjacking guard keys on
 (ADR-034 residual 5). Needs the tapjacking stub from step 3 below, since it
 pulls in `GuardianApp.kt`.
 
+## `kotlin/GuardianPendingQueueTest.kt`
+
+Tests for `resolvesPendingDetection()` — the single rule deciding whether an
+open detection leaves `GuardianApplication`'s pending queue — plus end-to-end
+tests that drive the real `GuardianApp` shell through each exit path, with a
+real `GuardianUiController` over a fake `GuardianUiScenario`. Both directions
+of that rule have been real defects here: an undecided detection destroyed
+because of which button was tapped, and a resolved one left queued because the
+owner used the back gesture. Needs the `BackHandler` stand-in from step 3.
+
 ## `kotlin/GuardianTrustRetentionTest.kt`
 
 Compose UI tests for the Trust screen's retention section: the recorded period
@@ -43,14 +53,26 @@ Desktop Gradle setup:
    `compose.desktop.currentOs`, `compose.material3`, `kotlin("test")` and
    JUnit 5.
 3. Copy in `src/org/aegisos/guardianui/**`, `GuardianScreenModels.kt`, and
-   `guardian/core/GuardianUi{Controller,State}.kt`. Two files cannot compile
-   off Android and need stand-ins for the harness only:
+   `guardian/core/GuardianUi{Controller,State}.kt`. Three things cannot
+   compile off Android and need stand-ins for the harness only:
    - `guardianui/components/GuardianMark.kt` — use the reference module's
      Compose Desktop version instead of the `painterResource` one.
    - `ui/GuardianTapjackingGuard.kt` — needs `android.view.MotionEvent`;
      stub `Modifier.filterTouchesWhenObscured()` as a no-op if you also want
      to type-check `GuardianApp.kt`.
+   - `androidx.activity.compose.BackHandler` — an Android artifact with no
+     Compose Desktop equivalent. Declare a stand-in in that package. Make it
+     record the registered handler rather than ignore it (e.g. a
+     `HarnessBackDispatcher` object with `reset()`/`press()`), so
+     `GuardianPendingQueueTest` can fire a back gesture. That verifies
+     `GuardianApp`'s own side of the wiring only — whether Android's real
+     dispatcher delivers a gesture to a registered handler is not verified
+     here.
 4. `./gradlew test`.
+
+The composable tests are JUnit 4 (`createComposeRule`, run through the vintage
+engine); the plain ones are JUnit 5. Both engines are on the test runtime
+classpath, and a single file can hold classes of each kind.
 
 Copying `aegisos-services`' own
 `guardian-ui-reference/src/test/kotlin/org/aegisos/guardianui/**` tests into
