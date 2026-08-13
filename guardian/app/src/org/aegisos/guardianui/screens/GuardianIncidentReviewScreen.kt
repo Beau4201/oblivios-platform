@@ -187,8 +187,21 @@ fun GuardianIncidentReviewScreen(
 
 @Composable
 private fun FactRow(key: String, value: String) {
+    // The value, not the key, is the field that can be long (e.g. a
+    // guardian-core "observed" sentence): un-weighted, it claimed the row's
+    // full measurement pass and squeezed the weighted key down to a few
+    // pixels, wrapping it one character per line. Same defect in the
+    // upstream reference module's copy of this function (verified
+    // byte-identical there before this fix) -- flagged upstream separately.
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Text(key, style = MaterialTheme.typography.bodyMedium, color = GuardianColor.OnSurfaceVariant, modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.titleMedium, color = GuardianColor.OnSurface, textAlign = TextAlign.End)
+        Text(key, style = MaterialTheme.typography.bodyMedium, color = GuardianColor.OnSurfaceVariant)
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            value,
+            style = MaterialTheme.typography.titleMedium,
+            color = GuardianColor.OnSurface,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
     }
 }

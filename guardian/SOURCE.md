@@ -177,6 +177,21 @@ reference screen/component/theme tests pass against the ported files.
    merged node's bounds, touch target and announcement are unchanged —
    verified by the reference module's own "Not now" click and 48dp
    touch-target tests, which still pass unmodified.
+8. `screens/GuardianIncidentReviewScreen.kt` — `FactRow`'s layout, fixed.
+   Confirmed live on the emulator (2026-08-14): a real `Detected` incident's
+   "Observed" row rendered with the key wrapped one character per line and
+   the primary/secondary buttons pushed off-screen, unusable. Root cause:
+   the value `Text` (the one that can be long) had no `weight`, so Row's
+   unweighted-first measurement pass let it claim nearly the row's full
+   width for a short sentence, leaving the weighted key `Text` a few pixels.
+   Fixed by moving the weight from the key to the value and giving them a
+   fixed `Spacer` instead of sharing weight, so the key keeps its natural
+   width and the value wraps within what's left. **Same defect exists,
+   byte-identical, in the upstream reference module's copy of `FactRow`** —
+   confirmed before this fix, not yet reported/fixed there. This was never
+   caught by the offline Compose Desktop harness (wide desktop window,
+   assertion-only tests, no rendered-width screenshot check) or by the
+   `guardian-ui-reference` module's own tests for the same reason.
 
 ## GuardianApp (app module)
 
