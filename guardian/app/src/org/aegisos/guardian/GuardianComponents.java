@@ -7,6 +7,7 @@ import org.aegisos.guardian.application.GuardianApplicationService;
 import org.aegisos.guardian.audit.FileGuardianAuditStore;
 import org.aegisos.guardian.detection.GuardianDetectionService;
 import org.aegisos.guardian.detection.InMemoryGuardianDetectionCommitStore;
+import org.aegisos.guardian.evidence.GuardianEvidenceRetentionPeriod;
 import org.aegisos.guardian.overview.FileGuardianOverviewStore;
 import org.aegisos.guardian.platform.android.AegisOSPlatformGateway;
 import org.aegisos.guardian.remediation.GuardianRemediationService;
@@ -17,9 +18,12 @@ import java.io.File;
 
 public final class GuardianComponents {
     private final GuardianApplicationService applicationService;
+    private final FileGuardianAuditStore auditStore;
 
-    private GuardianComponents(GuardianApplicationService applicationService) {
+    private GuardianComponents(
+            GuardianApplicationService applicationService, FileGuardianAuditStore auditStore) {
         this.applicationService = applicationService;
+        this.auditStore = auditStore;
     }
 
     public static GuardianComponents create(Context context) {
@@ -48,10 +52,19 @@ public final class GuardianComponents {
             overviewStore);
         GuardianApplicationService applicationService = new GuardianApplicationService(
             new GuardianEventParser(), new GuardianDetectionService(incidentStore), remediation, overviewStore);
-        return new GuardianComponents(applicationService);
+        return new GuardianComponents(applicationService, auditStore);
     }
 
     public GuardianApplicationService applicationService() {
         return applicationService;
+    }
+
+    /**
+     * The retention period the audit store is actually enforcing, so the
+     * Trust screen can state it instead of asserting a default. Exposes the
+     * value only, not the store -- the UI has no business writing audits.
+     */
+    public GuardianEvidenceRetentionPeriod retentionPeriod() {
+        return auditStore.retentionPeriod();
     }
 }

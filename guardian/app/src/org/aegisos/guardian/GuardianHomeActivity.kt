@@ -8,10 +8,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import org.aegisos.guardian.application.GuardianApplicationResult
 import org.aegisos.guardian.ui.GuardianApp
 import org.aegisos.guardian.ui.GuardianRoute
 import org.aegisos.guardian.ui.GuardianUiController
 import org.aegisos.guardian.ui.GuardianUiScenario
+import org.aegisos.guardian.ui.toRetentionOption
 
 private const val PREFS_NAME = "guardian_prefs"
 private const val KEY_FIRST_RUN_SEEN = "first_run_seen"
@@ -63,6 +65,16 @@ class GuardianHomeActivity : ComponentActivity() {
                 startRoute = startRoute,
                 onFirstRunSeen = { prefs.edit().putBoolean(KEY_FIRST_RUN_SEEN, true).apply() },
                 onDetectionHandled = { app.clearDetection() },
+                // The incident-review screen shows the detection's own
+                // explanation facts and timestamp, which live on the
+                // GuardianIncidentV1 the controller consumes and discards --
+                // so the UI reads the same queue head directly. peekDetection()
+                // is non-destructive; only onDetectionHandled above removes it.
+                pendingIncident = {
+                    (app.peekDetection() as? GuardianApplicationResult.DetectedIncident)?.incident()
+                },
+                pendingIncidentCount = { app.pendingDetectionCount() },
+                retention = components.retentionPeriod().toRetentionOption(),
             )
         }
     }
