@@ -53,6 +53,71 @@ Re-vendor by repeating Task 1 of
 a newer `aegisos-services` commit; do not hand-edit any file in this
 directory.
 
+### Known staleness: guardian-core.jar predates this app's sources
+
+`app/src/.../GuardianComponents.java` uses `FileGuardianAuditStore` and
+`FileGuardianOverviewStore`, and the UI layer uses
+`GuardianOverviewEntry.ActiveProtection#auditId()`. None of those exist in the
+vendored jar above — they were added on `aegisos-services`' unmerged
+`guardian-residuals-hardening` branch. **The jar must be re-vendored from that
+branch before `GuardianApp` can build.** This predates the UI rework and is
+independent of it; it is recorded here because it is the first thing a Soong
+build will fail on.
+
+## Reference UI screens (app/src/org/aegisos/guardianui/)
+
+- Source: `aegisos-services` `master` at commit `08455a0`,
+  `guardian-ui-reference/src/main/kotlin/org/aegisos/guardianui/`.
+- Copied files: `theme/GuardianColor.kt`, `theme/GuardianType.kt`,
+  `theme/GuardianTheme.kt`, `icons/GuardianIcons.kt`,
+  `components/GuardianMark.kt`, `components/GuardianUiComponents.kt`, and the
+  five `screens/Guardian{FirstRun,Home,Trust,Choices,IncidentReview}Screen.kt`.
+- `GuardianVisualIdentityDemo.kt` is deliberately **not** copied: it is desktop
+  preview wiring, not a navigation shell. The real shell is
+  `app/src/org/aegisos/guardian/ui/GuardianApp.kt`.
+- The package and directory layout are kept identical to the reference module
+  so a future re-vendor is a diff rather than a rewrite. AegisOS-specific glue
+  (navigation, adapters, the tapjacking guard) lives in
+  `org.aegisos.guardian.ui` instead, alongside the vendored UI controller.
+- `app/res/drawable-nodpi/guardian_mark.png` is a byte-identical copy of the
+  reference module's `src/main/resources/guardian_mark.png`.
+
+These files supersede the earlier `org.aegisos.guardian.ui` screens (green,
+Material 2, light theme), which were removed. See
+`docs/superpowers/specs/2026-08-13-guardian-visual-identity-design.md` in
+`aegisos-foundation`.
+
+### Android port deviations
+
+Every deviation is defaulted so the reference module's own call sites and its
+Compose UI tests still pass unchanged against these copies — verified: all 40
+reference screen/component/theme tests pass against the ported files.
+
+1. `components/GuardianMark.kt` — rewritten. The reference decodes the PNG
+   with `androidx.compose.ui.res.useResource` and `org.jetbrains.skia.Image`,
+   both Compose Desktop-only. Android loads the same bytes from the
+   `guardian_mark` drawable via `painterResource`.
+2. `components/GuardianUiComponents.kt` — `GuardianSwitch` gained
+   `enabled: Boolean = true`.
+3. `screens/GuardianChoicesScreen.kt` — `GuardianWatchToggle.changeable` and
+   `GuardianChoicesUiState.notifyImmediatelyChangeable`, both defaulting to
+   true. The real app sets them false: every switch on that screen reports a
+   fixed property of this build, and a live-looking switch would claim control
+   that does not exist.
+4. `screens/GuardianTrustScreen.kt` — `GuardianTrustUiState.retentionChangeable`,
+   defaulting to true. The real app sets it false and renders the period
+   actually in force as a single static pill, because shortening retention
+   prunes the audit entry an active protection's Undo depends on — a real
+   interaction that needs a design decision before it is exposed.
+5. `screens/GuardianHomeScreen.kt` — `GuardianRecentChange.key`, an opaque
+   nullable row identity so a tap can be resolved back to a domain action.
+6. `screens/GuardianIncidentReviewScreen.kt` — `GuardianIncidentTone` plus
+   `GuardianIncidentUiState.tone`, and `primaryActionLabel` /
+   `secondaryActionLabel` parameters. The real app resolves the whole
+   Observe -> Explain -> Choose -> Enforce -> Verify -> Undo loop on this one
+   screen (as the design spec asks), so its chip and its two actions have to
+   express the applied, undone and failed outcomes as well as the initial one.
+
 ## GuardianApp (app module)
 
 The `app/` module (Android manifest, resources, permission allowlist, build
