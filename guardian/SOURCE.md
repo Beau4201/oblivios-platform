@@ -55,14 +55,29 @@ directory.
 
 ### Known staleness: guardian-core.jar predates this app's sources
 
-`app/src/.../GuardianComponents.java` uses `FileGuardianAuditStore` and
-`FileGuardianOverviewStore`, and the UI layer uses
-`GuardianOverviewEntry.ActiveProtection#auditId()`. None of those exist in the
-vendored jar above — they were added on `aegisos-services`' unmerged
-`guardian-residuals-hardening` branch. **The jar must be re-vendored from that
-branch before `GuardianApp` can build.** This predates the UI rework and is
-independent of it; it is recorded here because it is the first thing a Soong
+Four APIs this app's sources call do not exist in the vendored jar above. All
+four were added on `aegisos-services`' unmerged `guardian-residuals-hardening`
+branch. **The jar must be re-vendored from that branch — and that branch
+merged — before `GuardianApp` can build.** This is the first thing a Soong
 build will fail on.
+
+Verified against the actual vendored jar (`unzip -l` plus `javap`), not
+inferred:
+
+| Missing API | Used by | Since |
+| --- | --- | --- |
+| `audit.FileGuardianAuditStore` (whole class; jar has only `InMemoryGuardianAuditStore`) | `app/src/.../GuardianComponents.java` | predates the UI rework |
+| `overview.FileGuardianOverviewStore` (whole class) | `app/src/.../GuardianComponents.java` | predates the UI rework |
+| `overview.GuardianOverviewEntry.ActiveProtection#auditId()` | `app/src/.../ui/GuardianScreenModels.kt` | **introduced by the UI rework** |
+| `audit.FileGuardianAuditStore#retentionPeriod()` | `app/src/.../GuardianComponents.java#retentionPeriod()` | **introduced by the UI rework** |
+
+The last two are new coupling this app took on during the UI rework, not
+pre-existing staleness: the jar's `ActiveProtection` is a nine-component
+record ending at `destination`, with no `auditId` accessor at all, and
+`retentionPeriod()` is a method on a class the jar does not contain. Home's
+row-tap-to-Undo path needs the first; the Trust screen's retention row needs
+the second. A re-vendor that satisfies only the two `File*` store classes will
+still fail to compile.
 
 ## Reference UI screens (app/src/org/aegisos/guardianui/)
 
@@ -104,11 +119,17 @@ reference screen/component/theme tests pass against the ported files.
    true. The real app sets them false: every switch on that screen reports a
    fixed property of this build, and a live-looking switch would claim control
    that does not exist.
-4. `screens/GuardianTrustScreen.kt` — `GuardianTrustUiState.retentionChangeable`,
-   defaulting to true. The real app sets it false and renders the period
-   actually in force as a single static pill, because shortening retention
-   prunes the audit entry an active protection's Undo depends on — a real
-   interaction that needs a design decision before it is exposed.
+4. `screens/GuardianTrustScreen.kt` — `GuardianTrustUiState.retentionChangeable`
+   and `retentionEnforced`, both defaulting to true. The real app sets both
+   false. `retentionChangeable = false` renders the recorded period as a single
+   static pill instead of four options, because shortening retention prunes the
+   audit entry an active protection's Undo depends on — a real interaction that
+   needs a design decision before it is exposed. `retentionEnforced = false`
+   relabels the section and adds an explicit note that the period is a recorded
+   setting Guardian does not act on, because nothing in this build ever calls
+   `applyRetention()`; without it, the pill would imply a deletion schedule the
+   device does not run, on the one screen that promises every claim points to a
+   real record.
 5. `screens/GuardianHomeScreen.kt` — `GuardianRecentChange.key`, an opaque
    nullable row identity so a tap can be resolved back to a domain action.
 6. `screens/GuardianIncidentReviewScreen.kt` — `GuardianIncidentTone` plus
