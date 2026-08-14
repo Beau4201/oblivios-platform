@@ -1,24 +1,31 @@
 package org.aegisos.guardianui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
@@ -33,6 +40,7 @@ import org.aegisos.guardianui.theme.GuardianColor
 fun GuardianFloatingCard(
     modifier: Modifier = Modifier,
     cornerRadius: Int = 26,
+    contentPadding: PaddingValues = PaddingValues(20.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(cornerRadius.dp)
@@ -46,7 +54,7 @@ fun GuardianFloatingCard(
             )
             .clip(shape)
             .background(GuardianColor.SurfaceContainerLowest)
-            .padding(20.dp),
+            .padding(contentPadding),
         content = content,
     )
 }
@@ -72,7 +80,8 @@ fun GuardianListItem(
             )
             .clip(shape)
             .background(GuardianColor.SurfaceContainerLowest)
-            .padding(14.dp),
+            // .m3-item: padding 12px 14px — was uniform 14dp.
+            .padding(vertical = 12.dp, horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -86,14 +95,19 @@ fun GuardianListItem(
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = GuardianColor.OnSurface)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = GuardianColor.OnSurfaceVariant)
+            // .t: 14px/20px/500 — titleMedium is 16sp/24sp/Medium, visibly
+            // larger. .d: 12px/16px, margin-top 1px — bodyMedium is
+            // 14sp/20sp/Normal with no gap from the title.
+            Text(title, style = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium), color = GuardianColor.OnSurface)
+            Spacer(Modifier.height(1.dp))
+            Text(subtitle, style = TextStyle(fontSize = 12.sp, lineHeight = 16.sp), color = GuardianColor.OnSurfaceVariant)
         }
+        // .m3-item .trailing svg: 16x16 — was 18dp.
         trailing?.invoke() ?: Icon(
             GuardianIcons.ChevronRight,
             contentDescription = null,
             tint = GuardianColor.Outline,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
         )
     }
 }
@@ -108,6 +122,10 @@ fun GuardianTopBar(
     title: String,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    // .m3-topbar: padding 14px 16px 12px — was uniform 16dp. .app-mark: 26x26
+    // dark (#121318) tile, radius 8, a 1px ring at 14% alpha — was the bare
+    // shield mark with no tile. .m3-topbar .title: 20px/26px/500 — titleLarge
+    // is 22sp/28sp/Normal(400), reads bigger and lighter than the design.
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -125,11 +143,7 @@ fun GuardianTopBar(
         Spacer(Modifier.width(10.dp))
         Text(
             title,
-            style = TextStyle(
-                fontSize = 20.sp,
-                lineHeight = 26.sp,
-                fontWeight = FontWeight.Medium,
-            ),
+            style = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium),
             color = GuardianColor.OnSurface,
         )
         if (trailing != null) {
@@ -147,9 +161,11 @@ fun GuardianTopBar(
  */
 @Composable
 fun GuardianSectionLabel(text: String) {
+    // .m3-section-label: 11px/600, letter-spacing 0.08em — labelLarge is
+    // 14sp, noticeably larger than this design's small-caps label.
     Text(
         text,
-        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
         color = GuardianColor.OnSurfaceVariant,
     )
 }
@@ -160,19 +176,43 @@ fun GuardianSectionLabel(text: String) {
  * modifier chains before this extraction.
  */
 @Composable
-fun GuardianPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelLarge,
-        color = GuardianColor.OnPrimary,
-        textAlign = TextAlign.Center,
+fun GuardianPrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    // .m3-btn-filled: font-size 14px/500, letter-spacing 0.01em, padding
+    // 12px. First Run's own CTA overrides this (.fr-cta-wrap .m3-btn-filled)
+    // to padding 15px / font-size 14.5px — was hardcoded to the First-Run
+    // override for every caller, inflating Incident Review's "Restrict ..."
+    // button past its own spec.
+    contentPadding: androidx.compose.ui.unit.Dp = 12.dp,
+    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
+) {
+    // Base padding (12dp) + 14sp text falls under Android's 48dp touch-target
+    // minimum — same tension as the switch/retention-pill/back-button cases,
+    // reconciled the same way: an outer, height-enforced, semantics-merged
+    // Box carries the click target; the exact-sized pill inside carries only
+    // the visual shape/color/padding.
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(999.dp))
-            .background(GuardianColor.Primary)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(15.dp),
-    )
+            .defaultMinSize(minHeight = 48.dp)
+            .semantics(mergeDescendants = true) {}
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Medium, letterSpacing = 0.01.em),
+            color = GuardianColor.OnPrimary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(999.dp))
+                .background(GuardianColor.Primary)
+                .padding(contentPadding),
+        )
+    }
 }
 
 @Composable
@@ -191,30 +231,92 @@ fun GuardianStatusChip(
     ) {
         Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(6.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = contentColor)
+        // .m3-chip: 11.5px/600, vs labelLarge's 14sp/Medium(500).
+        Text(label, style = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold), color = contentColor)
     }
 }
 
 /**
- * AegisOS Android port deviation (see guardian/SOURCE.md): [enabled] was
- * added so a setting that is genuinely fixed in the current build can be
- * shown at its real value without pretending it can be changed. Defaults
- * to true, so the reference module's own call sites are unaffected.
+ * The design's own exact track/thumb geometry (.m3-switch): a 44x25 pill,
+ * not Material 3's stock ~52x32 default, which is why [Switch] was replaced
+ * here rather than just recolored. The size difference is deliberate, not
+ * arbitrary: this is real Material 3 thumb behavior (a smaller, outline-
+ * colored thumb when off; a larger, filled, shadowed thumb when on) at the
+ * design's own smaller track dimensions, not an invented animation.
+ *
+ * .m3-switch { width:44px; height:25px; border-radius:999px }
+ * .on { background: primary } / .off { background: transparent; border: 2px outline }
+ * .thumb { top:3px; width:19px; height:19px }
+ * .on .thumb { left:22px; background:#fff; shadow }
+ * .off .thumb { left:3px; top:3.5px; width:16px; height:16px; background: outline }
+ */
+private val SwitchTrackWidth = 44.dp
+private val SwitchTrackHeight = 25.dp
+private val SwitchThumbOnSize = 19.dp
+private val SwitchThumbOffSize = 16.dp
+private val SwitchThumbOnOffset = 22.dp
+private val SwitchThumbOffOffset = 3.dp
+private val SwitchThumbOnTop = 3.dp
+private val SwitchThumbOffTop = 3.5.dp
+
+/**
+ * AegisOS Android port deviation (see guardian/SOURCE.md): [enabled] gained
+ * a real effect here (dimmed + non-interactive) rather than only existing as
+ * a parameter, because the reference module's stock-Switch predecessor got
+ * this behavior for free from Material3's own `Switch(enabled = ...)` and
+ * the custom replacement has to reproduce it explicitly. Defaults to true,
+ * so the reference module's own call sites are unaffected.
  */
 @Composable
 fun GuardianSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true) {
-    Switch(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        enabled = enabled,
-        colors = SwitchDefaults.colors(
-            checkedThumbColor = Color.White,
-            checkedTrackColor = GuardianColor.Primary,
-            uncheckedThumbColor = GuardianColor.Outline,
-            uncheckedTrackColor = Color.Transparent,
-            uncheckedBorderColor = GuardianColor.Outline,
-        ),
-    )
+    val trackColor by animateColorAsState(if (checked) GuardianColor.Primary else Color.Transparent, label = "switch-track")
+    val thumbColor by animateColorAsState(if (checked) Color.White else GuardianColor.Outline, label = "switch-thumb-color")
+    val thumbSize by animateDpAsState(if (checked) SwitchThumbOnSize else SwitchThumbOffSize, label = "switch-thumb-size")
+    val thumbStart by animateDpAsState(if (checked) SwitchThumbOnOffset else SwitchThumbOffOffset, label = "switch-thumb-start")
+    val thumbTop by animateDpAsState(if (checked) SwitchThumbOnTop else SwitchThumbOffTop, label = "switch-thumb-top")
+
+    Box(
+        // The 44x25 visual track is well under Android's 48dp minimum touch
+        // target; enforced here the same way as the topbar icon buttons and
+        // Trust's retention pills — an invisible minimum-size, semantics-
+        // merged touch area around the exact-sized visual track, rather than
+        // inflating the track itself.
+        modifier = Modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .semantics(mergeDescendants = true) {}
+            .alpha(if (enabled) 1f else 0.38f)
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(SwitchTrackWidth, SwitchTrackHeight)
+                .clip(RoundedCornerShape(999.dp))
+                .background(trackColor)
+                .then(
+                    if (!checked) {
+                        Modifier.border(2.dp, GuardianColor.Outline, RoundedCornerShape(999.dp))
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(start = thumbStart, top = thumbTop)
+                    .size(thumbSize)
+                    .clip(CircleShape)
+                    .background(thumbColor)
+                    .then(
+                        if (checked) {
+                            Modifier.shadow(elevation = 1.dp, shape = CircleShape, clip = false)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            )
+        }
+    }
 }
 
 data class GuardianNavItem(

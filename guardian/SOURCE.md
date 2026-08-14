@@ -99,7 +99,11 @@ jar (see the SHA-256 entry above):
 
 ## Reference UI screens (app/src/org/aegisos/guardianui/)
 
-- Source: `aegisos-services` `master` at commit `08455a0`,
+- Source: `aegisos-services` `master` at commit `bf13c97f7f22`
+  (2026-08-14 re-vendor, superseding the earlier `08455a0`; closed
+  remaining exact-design gaps in the shared topbar, list item, section
+  label, and button components — see that commit's message for the
+  itemized list),
   `guardian-ui-reference/src/main/kotlin/org/aegisos/guardianui/`.
 - Copied files: `theme/GuardianColor.kt`, `theme/GuardianType.kt`,
   `theme/GuardianTheme.kt`, `icons/GuardianIcons.kt`,
@@ -123,8 +127,9 @@ Material 2, light theme), which were removed. See
 ### Android port deviations
 
 Every deviation is defaulted so the reference module's own call sites and its
-Compose UI tests still pass unchanged against these copies — verified: all 40
-reference screen/component/theme tests pass against the ported files.
+Compose UI tests still pass unchanged against these copies — verified: all 56
+reference screen/component/theme tests pass against the ported files (as of
+the 2026-08-14 re-vendor above).
 
 1. `components/GuardianMark.kt` — rewritten. The reference decodes the PNG
    with `androidx.compose.ui.res.useResource` and `org.jetbrains.skia.Image`,
