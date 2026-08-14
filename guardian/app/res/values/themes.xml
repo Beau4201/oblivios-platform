@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      No manifest theme was ever declared for this app, so every Activity
+      ran under the platform default theme, which includes a classic
+      ActionBar showing the raw android:label ("Guardian") in unstyled
+      system chrome, above and independent of the app's own dark,
+      custom-designed GuardianTopBar. Confirmed live via
+      `adb shell uiautomator dump`: android:id/action_bar_container and
+      android:id/action_bar nodes, present on every screen including First
+      Run, which the design spec says has no top bar at all.
+      windowBackground matches GuardianColor.Surface exactly (0xFF121318)
+      so there is no light flash before Compose's own background paints.
+    -->
+    <style name="GuardianTheme" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#FF121318</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
