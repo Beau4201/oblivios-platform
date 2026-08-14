@@ -245,19 +245,8 @@ fun GuardianOverviewSnapshot.toHomeModel(
  * Trust's activity log is the same overview timeline Home summarises, without
  * the pending queue (nothing has been recorded for a detection nobody has
  * acted on yet) and without a cap beyond the overview store's own retention.
- *
- * [retentionEnforced] defaults to false, and the app leaves it there: the
- * period is read live from the audit store and is therefore a real recorded
- * value, but nothing in this build ever calls `applyRetention()`, so no record
- * is ever deleted on that schedule. The screen states the setting and says it
- * is not enforced, rather than implying a deletion that does not happen — on
- * the one screen whose header promises every claim points to a real record.
- * Flip it to true in the same change that wires enforcement, not before.
  */
 fun GuardianOverviewSnapshot.toTrustUiState(
-    retention: GuardianRetentionOption,
-    retentionChangeable: Boolean = false,
-    retentionEnforced: Boolean = false,
     zone: ZoneId = ZoneId.systemDefault(),
     locale: Locale = Locale.getDefault(),
     now: Instant = Instant.now(),
@@ -270,9 +259,6 @@ fun GuardianOverviewSnapshot.toTrustUiState(
             isSafe = entry.isSafe,
         )
     },
-    retention = retention,
-    retentionChangeable = retentionChangeable,
-    retentionEnforced = retentionEnforced,
 )
 
 fun GuardianEvidenceRetentionPeriod.toRetentionOption(): GuardianRetentionOption = when (this) {
@@ -301,8 +287,22 @@ fun GuardianEvidenceRetentionPeriod.toRetentionOption(): GuardianRetentionOption
  *   allowed-apps count is genuinely zero rather than merely unimplemented.
  *
  * Showing these as live switches would claim control that does not exist.
+ *
+ * [retentionEnforced] defaults to false, and the app leaves it there: the
+ * period is read live from the audit store and is therefore a real recorded
+ * value, but nothing in this build ever calls `applyRetention()`, so no record
+ * is ever deleted on that schedule. The screen states the setting and says it
+ * is not enforced, rather than implying a deletion that does not happen — on
+ * this build's one screen whose own header promises every claim points to a
+ * real record (moved here from Trust when the retention control itself
+ * moved). Flip it to true in the same change that wires enforcement, not
+ * before.
  */
-fun guardianChoicesUiState(): GuardianChoicesUiState = GuardianChoicesUiState(
+fun guardianChoicesUiState(
+    retention: GuardianRetentionOption,
+    retentionChangeable: Boolean = false,
+    retentionEnforced: Boolean = false,
+): GuardianChoicesUiState = GuardianChoicesUiState(
     watchToggles = listOf(
         GuardianWatchToggle(
             title = "Background location",
@@ -314,6 +314,9 @@ fun guardianChoicesUiState(): GuardianChoicesUiState = GuardianChoicesUiState(
     notifyImmediately = true,
     allowedAppsCount = 0,
     notifyImmediatelyChangeable = false,
+    retention = retention,
+    retentionChangeable = retentionChangeable,
+    retentionEnforced = retentionEnforced,
 )
 
 // ---------------------------------------------------------------------------

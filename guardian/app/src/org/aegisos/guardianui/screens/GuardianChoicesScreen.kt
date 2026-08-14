@@ -3,13 +3,18 @@ package org.aegisos.guardianui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,6 +24,7 @@ import org.aegisos.guardianui.components.GuardianNavBar
 import org.aegisos.guardianui.components.GuardianSectionLabel
 import org.aegisos.guardianui.components.GuardianSwitch
 import org.aegisos.guardianui.components.GuardianTopBar
+import org.aegisos.guardianui.components.guardianScreenTint
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 import androidx.compose.material3.Icon
@@ -37,12 +43,40 @@ data class GuardianWatchToggle(
     val changeable: Boolean = true,
 )
 
+enum class GuardianRetentionOption(val label: String) {
+    SevenDays("7 days"), ThirtyDays("30 days"), NinetyDays("90 days"), Forever("Forever")
+}
+
 data class GuardianChoicesUiState(
     val watchToggles: List<GuardianWatchToggle>,
     val notifyImmediately: Boolean = true,
     val allowedAppsCount: Int = 0,
     /** See [GuardianWatchToggle.changeable] — same deviation, same reason. */
     val notifyImmediatelyChangeable: Boolean = true,
+    val retention: GuardianRetentionOption = GuardianRetentionOption.ThirtyDays,
+    /**
+     * AegisOS Android port deviation (see guardian/SOURCE.md). When false,
+     * the retention selector renders as a single static pill stating the
+     * period actually in force, instead of four tappable options — the
+     * current build has no reviewed way to change it (changing it prunes the
+     * audit log an active protection's Undo depends on). Defaults to true,
+     * so the reference module's own call sites are unaffected. Moved here
+     * from the Trust screen when the retention control itself moved.
+     */
+    val retentionChangeable: Boolean = true,
+    /**
+     * AegisOS Android port deviation (see guardian/SOURCE.md). When false,
+     * this screen must not imply the device is deleting anything on the shown
+     * schedule: [retention] is then only the period recorded in the audit
+     * store, and nothing in this build ever applies it. The section is
+     * relabelled and carries an explicit note saying so. Defaults to true, so
+     * the reference module's own call sites are unaffected.
+     *
+     * Separate from [retentionChangeable] on purpose: "the owner cannot change
+     * it" and "the device does not act on it" are two different claims, and
+     * only the second one would make the screen say something untrue.
+     */
+    val retentionEnforced: Boolean = true,
 )
 
 @Composable
@@ -50,9 +84,10 @@ fun GuardianChoicesScreen(
     state: GuardianChoicesUiState,
     onWatchToggle: (Int, Boolean) -> Unit,
     onNotifyImmediatelyToggle: (Boolean) -> Unit,
+    onRetentionSelected: (GuardianRetentionOption) -> Unit,
     onNavSelect: (Int) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(GuardianColor.Surface)) {
+    Column(modifier = Modifier.fillMaxSize().background(GuardianColor.Surface).guardianScreenTint(GuardianColor.Glow, 0.16f)) {
         GuardianTopBar(title = "Choices")
 
         Column(
@@ -115,7 +150,7 @@ fun GuardianChoicesScreen(
                 // radius, shadow), not bare centered content — was floating
                 // text with no card at all. .m3-choices .ch-empty overrides
                 // padding to 16px 20px.
-                GuardianFloatingCard(cornerRadius = 22, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
+                GuardianFloatingCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 22, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -128,10 +163,10 @@ fun GuardianChoicesScreen(
                             modifier = Modifier.size(26.dp),
                         )
                         val label = if (state.allowedAppsCount == 0) {
-                            "No exceptions yet. Anything you allow shows up here — and can be revoked anytime."
+                            "No exceptions yet. Anything you allow shows up here, and can be revoked anytime."
                         } else {
                             val plural = if (state.allowedAppsCount == 1) "app" else "apps"
-                            "${state.allowedAppsCount} $plural allowed — manage anytime."
+                            "${state.allowedAppsCount} $plural allowed. Manage anytime."
                         }
                         Text(
                             label,
@@ -141,6 +176,90 @@ fun GuardianChoicesScreen(
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         )
                     }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GuardianSectionLabel(
+                    if (state.retentionEnforced) "KEEP HISTORY FOR" else "HISTORY RETENTION SETTING",
+                )
+                // .tr-retention: gap 6px between segments, padding 4px on the
+                // pill itself. .opt: padding 8px 4px, font-size 11.5px, weight
+                // 600 — was touching segments (no gap), labelLarge (14sp), and
+                // a 48dp min-height forcing every segment much taller than the
+                // ~8+8+16=32px the design's own padding+line-height implies.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(GuardianColor.SurfaceContainerLowest)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    val options = if (state.retentionChangeable) {
+                        GuardianRetentionOption.values().toList()
+                    } else {
+                        // AegisOS deviation: show only the period actually in
+                        // force, with nothing to tap, rather than four options
+                        // of which three would silently do nothing.
+                        listOf(state.retention)
+                    }
+                    options.forEach { option ->
+                        val selected = option == state.retention
+                        // The design's own padding + font-size implies a
+                        // ~32dp-tall visual pill, well under Android's 48dp
+                        // minimum touch target. Compose's
+                        // minimumInteractiveComponentSize() would normally
+                        // reconcile that, but it's a documented no-op on the
+                        // Compose Desktop JVM target this module's tests run
+                        // on. Doing it by hand instead: the selectable click
+                        // target is the outer, height-enforced Box; the small
+                        // visual pill is centered inside it and carries only
+                        // the shape/background/text.
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
+                                .semantics(mergeDescendants = true) {}
+                                .then(
+                                    if (state.retentionChangeable) {
+                                        Modifier.selectable(
+                                            selected = selected,
+                                            role = Role.RadioButton,
+                                            onClick = { onRetentionSelected(option) },
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                option.label,
+                                style = androidx.compose.ui.text.TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
+                                color = if (selected) GuardianColor.OnPrimary else GuardianColor.OnSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(if (selected) GuardianColor.Primary else androidx.compose.ui.graphics.Color.Transparent)
+                                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            )
+                        }
+                    }
+                }
+                if (!state.retentionEnforced) {
+                    // AegisOS deviation: this screen's own header promises that
+                    // every claim on it points to a real record. The recorded
+                    // period is real; the deletion it implies is not happening,
+                    // because nothing in this build calls applyRetention(). Say
+                    // so rather than let the pill imply enforcement.
+                    Text(
+                        "This is the recorded setting only. Guardian is not yet deleting " +
+                            "older records on this schedule.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GuardianColor.OnSurfaceVariant,
+                    )
                 }
             }
         }

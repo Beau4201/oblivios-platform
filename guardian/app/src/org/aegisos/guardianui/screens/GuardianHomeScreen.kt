@@ -26,6 +26,7 @@ import org.aegisos.guardianui.components.GuardianMark
 import org.aegisos.guardianui.components.GuardianNavBar
 import org.aegisos.guardianui.components.GuardianSectionLabel
 import org.aegisos.guardianui.components.GuardianTopBar
+import org.aegisos.guardianui.components.guardianScreenTint
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 
@@ -53,26 +54,16 @@ data class GuardianHomeUiState(
 @Composable
 fun GuardianHomeScreen(
     state: GuardianHomeUiState,
-    onSettingsClick: () -> Unit,
     onRecentChangeClick: (GuardianRecentChange) -> Unit,
     onNavSelect: (Int) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(GuardianColor.Surface),
+            .background(GuardianColor.Surface)
+            .guardianScreenTint(GuardianColor.Success, 0.20f),
     ) {
-        GuardianTopBar(title = "Guardian") {
-            Icon(
-                GuardianIcons.Settings,
-                contentDescription = "Settings",
-                tint = GuardianColor.OnSurfaceVariant,
-                modifier = Modifier
-                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                    .size(22.dp)
-                    .clickable(role = Role.Button, onClick = onSettingsClick),
-            )
-        }
+        GuardianTopBar(title = "Guardian")
 
         Column(
             modifier = Modifier

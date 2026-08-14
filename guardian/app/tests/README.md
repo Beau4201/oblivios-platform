@@ -36,12 +36,14 @@ applied where guardian-core records the outcome, so the tests assert the queue
 state with no exit performed at all, and assert exactly-once when a second
 outcome or a later exit follows. Needs the `BackHandler` stand-in from step 3.
 
-## `kotlin/GuardianTrustRetentionTest.kt`
+## `kotlin/GuardianChoicesRetentionTest.kt`
 
-Compose UI tests for the Trust screen's retention section: the recorded period
-must not be presented as an enforced deletion schedule, since nothing in this
-build calls `applyRetention()`. Separate from the reference module's own
-`GuardianTrustScreenTest`, which stays an unmodified copy.
+Compose UI tests for Choices' retention section: the recorded period must not
+be presented as an enforced deletion schedule, since nothing in this build
+calls `applyRetention()`. Separate from the reference module's own
+`GuardianChoicesScreenTest`, which stays an unmodified copy. Supersedes
+`GuardianTrustRetentionTest.kt` (removed): the retention control itself moved
+from Trust to Choices in the 2026-08-14 visual-identity re-vendor.
 
 **There is no in-tree runner.** `guardian/app` is an `android_app` Soong
 module with no test target, and its UI depends on Jetpack Compose, so these

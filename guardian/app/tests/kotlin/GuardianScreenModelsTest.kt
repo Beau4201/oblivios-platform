@@ -314,9 +314,9 @@ class GuardianIncidentFactsTest {
 
 class GuardianTrustAndChoicesTest {
     @Test
-    fun `the trust log mirrors the overview timeline and is read-only by default`() {
+    fun `the trust log mirrors the overview timeline`() {
         val state = snapshot(changes = listOf(verifiedChange()), attention = listOf(attention()))
-            .toTrustUiState(GuardianRetentionOption.ThirtyDays, zone = ZONE, locale = LOCALE, now = NOW)
+            .toTrustUiState(zone = ZONE, locale = LOCALE, now = NOW)
 
         assertEquals(
             listOf("Guardian could not verify a temporary protection.", "Guardian verified a temporary protection."),
@@ -324,24 +324,6 @@ class GuardianTrustAndChoicesTest {
         )
         assertEquals(listOf("11:00", "09:41"), state.activityLog.map { it.timeLabel })
         assertEquals(listOf(false, true), state.activityLog.map { it.isSafe })
-        assertEquals(GuardianRetentionOption.ThirtyDays, state.retention)
-        assertEquals(false, state.retentionChangeable)
-    }
-
-    @Test
-    fun `the retention period is never presented as enforced by default`() {
-        // Nothing in this app calls applyRetention() or setRetentionPeriod(),
-        // so the recorded period deletes nothing. The Trust screen must say
-        // so; defaulting this to true would make the screen claim a deletion
-        // schedule the device does not run.
-        val state = snapshot().toTrustUiState(
-            GuardianRetentionOption.ThirtyDays,
-            zone = ZONE,
-            locale = LOCALE,
-            now = NOW,
-        )
-
-        assertEquals(false, state.retentionEnforced)
     }
 
     @Test
@@ -359,12 +341,25 @@ class GuardianTrustAndChoicesTest {
 
     @Test
     fun `choices never presents a control this build cannot honour`() {
-        val state = guardianChoicesUiState()
+        val state = guardianChoicesUiState(GuardianRetentionOption.ThirtyDays)
 
         assertEquals(listOf("Background location"), state.watchToggles.map { it.title })
         assertTrue(state.watchToggles.all { it.enabled && !it.changeable })
         assertTrue(state.notifyImmediately)
         assertEquals(false, state.notifyImmediatelyChangeable)
         assertEquals(0, state.allowedAppsCount)
+        assertEquals(GuardianRetentionOption.ThirtyDays, state.retention)
+        assertEquals(false, state.retentionChangeable)
+    }
+
+    @Test
+    fun `the retention period is never presented as enforced by default`() {
+        // Nothing in this app calls applyRetention() or setRetentionPeriod(),
+        // so the recorded period deletes nothing. Choices must say so;
+        // defaulting this to true would make the screen claim a deletion
+        // schedule the device does not run.
+        val state = guardianChoicesUiState(GuardianRetentionOption.ThirtyDays)
+
+        assertEquals(false, state.retentionEnforced)
     }
 }

@@ -162,7 +162,7 @@ internal fun resolvesPendingDetection(
  * @param pendingIncidentCount size of that queue, for Home's attention line.
  * @param retention the retention period the audit store has recorded. Shown
  *   read-only, and explicitly labelled as not enforced — nothing in this build
- *   calls `applyRetention()`. See `GuardianTrustUiState.retentionChangeable`
+ *   calls `applyRetention()`. See `GuardianChoicesUiState.retentionChangeable`
  *   and `retentionEnforced`.
  */
 @Composable
@@ -343,7 +343,6 @@ fun GuardianApp(
 
             GuardianRoute.HOME -> GuardianHomeScreen(
                 state = home.state,
-                onSettingsClick = { route = GuardianRoute.CHOICES },
                 onRecentChangeClick = { change ->
                     when (val action = change.key?.let { home.actions[it] }) {
                         is GuardianHomeRowAction.ReviewPendingIncident -> openPendingReview()
@@ -357,19 +356,19 @@ fun GuardianApp(
             )
 
             GuardianRoute.TRUST -> GuardianTrustScreen(
-                state = overview.toTrustUiState(retention),
-                // Never invoked: the selector is rendered read-only because
-                // this build has no reviewed way to change the period.
-                onRetentionSelected = {},
+                state = overview.toTrustUiState(),
                 onNavSelect = ::selectTab,
             )
 
             GuardianRoute.CHOICES -> GuardianChoicesScreen(
-                state = guardianChoicesUiState(),
+                state = guardianChoicesUiState(retention),
                 // Never invoked: every switch on this screen is disabled
-                // because it reports a fixed property of this build.
+                // because it reports a fixed property of this build, and the
+                // retention selector is rendered read-only because this
+                // build has no reviewed way to change the period.
                 onWatchToggle = { _, _ -> },
                 onNotifyImmediatelyToggle = {},
+                onRetentionSelected = {},
                 onNavSelect = ::selectTab,
             )
 

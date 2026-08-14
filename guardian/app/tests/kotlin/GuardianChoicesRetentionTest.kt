@@ -7,32 +7,37 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * AegisOS-specific tests for the Trust screen's retention section — the one
- * place on a screen headed "Every claim here points to a real record on this
- * device" that used to imply the device enforces a deletion schedule it never
- * runs.
+ * AegisOS-specific tests for Choices' retention section — the one place on
+ * this build that used to imply (on Trust, before the control moved here)
+ * that the device enforces a deletion schedule it never runs.
  *
- * Kept separate from the reference module's own `GuardianTrustScreenTest`,
+ * Kept separate from the reference module's own `GuardianChoicesScreenTest`,
  * which is copied in unchanged and must stay that way. Runner: the JVM
  * harness in `guardian/app/tests/README.md`.
  */
-class GuardianTrustRetentionTest {
+class GuardianChoicesRetentionTest {
     @get:Rule
     val composeRule = createComposeRule()
 
     private val notEnforcedNote =
         "This is the recorded setting only. Guardian is not yet deleting older records on this schedule."
 
+    private val baseState = GuardianChoicesUiState(
+        watchToggles = listOf(GuardianWatchToggle("Background location", "Apps checking where you are while closed", enabled = true)),
+    )
+
     @Test
     fun `an unenforced retention period is labelled a setting and says it is not acted on`() {
         composeRule.setContent {
             GuardianTheme {
-                GuardianTrustScreen(
-                    state = GuardianTrustUiState(
+                GuardianChoicesScreen(
+                    state = baseState.copy(
                         retention = GuardianRetentionOption.ThirtyDays,
                         retentionChangeable = false,
                         retentionEnforced = false,
                     ),
+                    onWatchToggle = { _, _ -> },
+                    onNotifyImmediatelyToggle = {},
                     onRetentionSelected = {},
                     onNavSelect = {},
                 )
@@ -51,8 +56,10 @@ class GuardianTrustRetentionTest {
     fun `an enforced retention period keeps the reference wording and adds no caveat`() {
         composeRule.setContent {
             GuardianTheme {
-                GuardianTrustScreen(
-                    state = GuardianTrustUiState(retention = GuardianRetentionOption.ThirtyDays),
+                GuardianChoicesScreen(
+                    state = baseState.copy(retention = GuardianRetentionOption.ThirtyDays),
+                    onWatchToggle = { _, _ -> },
+                    onNotifyImmediatelyToggle = {},
                     onRetentionSelected = {},
                     onNavSelect = {},
                 )

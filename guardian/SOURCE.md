@@ -99,11 +99,13 @@ jar (see the SHA-256 entry above):
 
 ## Reference UI screens (app/src/org/aegisos/guardianui/)
 
-- Source: `aegisos-services` `master` at commit `bf13c97f7f22`
-  (2026-08-14 re-vendor, superseding the earlier `08455a0`; closed
-  remaining exact-design gaps in the shared topbar, list item, section
-  label, and button components — see that commit's message for the
-  itemized list),
+- Source: `aegisos-services` `master` at commit `7171dbd47e93`
+  (2026-08-14 re-vendor, superseding the earlier `bf13c97`; carries three
+  upstream commits: the sliding-indicator nav bar (dropping Home's settings
+  gear), a dash-free copy pass plus a card-width fix, and moving the
+  "Keep history for" retention control from Trust to Choices while adding a
+  soft radial screen tint to every screen — see those commits' messages for
+  the itemized lists),
   `guardian-ui-reference/src/main/kotlin/org/aegisos/guardianui/`.
 - Copied files: `theme/GuardianColor.kt`, `theme/GuardianType.kt`,
   `theme/GuardianTheme.kt`, `icons/GuardianIcons.kt`,
@@ -127,9 +129,15 @@ Material 2, light theme), which were removed. See
 ### Android port deviations
 
 Every deviation is defaulted so the reference module's own call sites and its
-Compose UI tests still pass unchanged against these copies — verified: all 56
-reference screen/component/theme tests pass against the ported files (as of
-the 2026-08-14 re-vendor above).
+Compose UI tests still pass unchanged against these copies. Confirmed by
+inspection for this re-vendor (all 59 of `aegisos-services`' own
+`guardian-ui-reference` tests passed against the un-vendored source before
+copying, and every default value and call-site signature was diffed by hand
+against the previous vendored copy) — **not** re-run against these platform
+copies through the throwaway JVM harness (`guardian/app/tests/README.md`)
+this round; that step is still outstanding before this can be called
+independently verified rather than hand-checked. The real compile-level check
+happens at the next Soong build.
 
 1. `components/GuardianMark.kt` — rewritten. The reference decodes the PNG
    with `androidx.compose.ui.res.useResource` and `org.jetbrains.skia.Image`,
@@ -141,27 +149,30 @@ the 2026-08-14 re-vendor above).
    `GuardianChoicesUiState.notifyImmediatelyChangeable`, both defaulting to
    true. The real app sets them false: every switch on that screen reports a
    fixed property of this build, and a live-looking switch would claim control
-   that does not exist.
-4. `screens/GuardianTrustScreen.kt` — `GuardianTrustUiState.retentionChangeable`
-   and `retentionEnforced`, both defaulting to true. The real app sets both
-   false. `retentionChangeable = false` renders the recorded period as a single
-   static pill instead of four options, because shortening retention prunes the
-   audit entry an active protection's Undo depends on — a real interaction that
-   needs a design decision before it is exposed. `retentionEnforced = false`
-   relabels the section and adds an explicit note that the period is a recorded
-   setting Guardian does not act on, because nothing in this build ever calls
-   `applyRetention()`; without it, the pill would imply a deletion schedule the
-   device does not run, on the one screen that promises every claim points to a
-   real record.
-5. `screens/GuardianHomeScreen.kt` — `GuardianRecentChange.key`, an opaque
+   that does not exist. This screen also gained
+   `GuardianChoicesUiState.retentionChangeable` and `retentionEnforced`, both
+   defaulting to true — moved here (2026-08-14) from `GuardianTrustScreen.kt`
+   when the upstream reference module moved the "Keep history for" control
+   itself from Trust to Choices; the deviation's own behaviour is unchanged.
+   The real app sets both false. `retentionChangeable = false` renders the
+   recorded period as a single static pill instead of four options, because
+   shortening retention prunes the audit entry an active protection's Undo
+   depends on — a real interaction that needs a design decision before it is
+   exposed. `retentionEnforced = false` relabels the section and adds an
+   explicit note that the period is a recorded setting Guardian does not act
+   on, because nothing in this build ever calls `applyRetention()`; without
+   it, the pill would imply a deletion schedule the device does not run, on
+   the one screen that (since the move) carries this build's own claims about
+   what is and is not a real, acted-on record.
+4. `screens/GuardianHomeScreen.kt` — `GuardianRecentChange.key`, an opaque
    nullable row identity so a tap can be resolved back to a domain action.
-6. `screens/GuardianIncidentReviewScreen.kt` — `GuardianIncidentTone` plus
+5. `screens/GuardianIncidentReviewScreen.kt` — `GuardianIncidentTone` plus
    `GuardianIncidentUiState.tone`, and `primaryActionLabel` /
    `secondaryActionLabel` parameters. The real app resolves the whole
    Observe -> Explain -> Choose -> Enforce -> Verify -> Undo loop on this one
    screen (as the design spec asks), so its chip and its two actions have to
    express the applied, undone and failed outcomes as well as the initial one.
-7. `screens/GuardianIncidentReviewScreen.kt` — `secondaryActionNote`,
+6. `screens/GuardianIncidentReviewScreen.kt` — `secondaryActionNote`,
    defaulting to null: a caveat rendered under the secondary action, for the
    case where accepting that action promises the owner less than its label
    implies. The real app sets it on one path only. "Decide later" defers a
@@ -182,7 +193,7 @@ the 2026-08-14 re-vendor above).
    merged node's bounds, touch target and announcement are unchanged —
    verified by the reference module's own "Not now" click and 48dp
    touch-target tests, which still pass unmodified.
-8. `screens/GuardianIncidentReviewScreen.kt` — `FactRow`'s layout, fixed.
+7. `screens/GuardianIncidentReviewScreen.kt` — `FactRow`'s layout, fixed.
    Confirmed live on the emulator (2026-08-14): a real `Detected` incident's
    "Observed" row rendered with the key wrapped one character per line and
    the primary/secondary buttons pushed off-screen, unusable. Root cause:
@@ -191,12 +202,11 @@ the 2026-08-14 re-vendor above).
    width for a short sentence, leaving the weighted key `Text` a few pixels.
    Fixed by moving the weight from the key to the value and giving them a
    fixed `Spacer` instead of sharing weight, so the key keeps its natural
-   width and the value wraps within what's left. **Same defect exists,
-   byte-identical, in the upstream reference module's copy of `FactRow`** —
-   confirmed before this fix, not yet reported/fixed there. This was never
-   caught by the offline Compose Desktop harness (wide desktop window,
-   assertion-only tests, no rendered-width screenshot check) or by the
-   `guardian-ui-reference` module's own tests for the same reason.
+   width and the value wraps within what's left. This defect existed,
+   byte-identical, in the upstream reference module's copy of `FactRow` too;
+   it has since been fixed there as well (present as of `7171dbd`), so this
+   is no longer a live divergence — kept here as a record of the fix's
+   origin, not an active deviation.
 
 ## GuardianApp (app module)
 

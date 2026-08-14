@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.components.GuardianMark
 import org.aegisos.guardianui.components.GuardianPrimaryButton
+import org.aegisos.guardianui.components.guardianScreenTint
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ fun GuardianFirstRunScreen(onGetStarted: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(GuardianColor.Surface)
+            .guardianScreenTint(GuardianColor.Glow, 0.16f)
             .padding(horizontal = 28.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -80,7 +82,7 @@ fun GuardianFirstRunScreen(onGetStarted: () -> Unit) {
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            "Guardian quietly watches for unusual app behavior — then explains what it found and only acts when you say so.",
+            "Guardian quietly watches for unusual app behavior. It explains what it found, and only acts when you say so.",
             // .fr-body-text: 14.5px/21px, max-width 260px — vs bodyMedium's
             // 14sp/20sp with no width constraint.
             style = androidx.compose.ui.text.TextStyle(fontSize = 14.5.sp, lineHeight = 21.sp),
