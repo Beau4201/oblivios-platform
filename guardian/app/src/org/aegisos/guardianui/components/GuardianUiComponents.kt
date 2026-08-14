@@ -1,6 +1,7 @@
 package org.aegisos.guardianui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -14,6 +15,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -107,12 +109,29 @@ fun GuardianTopBar(
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GuardianMark(modifier = Modifier.size(26.dp))
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(GuardianColor.Surface)
+                .border(1.dp, GuardianColor.OnSurface.copy(alpha = 0.14f), RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            GuardianMark(modifier = Modifier.size(17.dp))
+        }
         Spacer(Modifier.width(10.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge, color = GuardianColor.OnSurface)
+        Text(
+            title,
+            style = TextStyle(
+                fontSize = 20.sp,
+                lineHeight = 26.sp,
+                fontWeight = FontWeight.Medium,
+            ),
+            color = GuardianColor.OnSurface,
+        )
         if (trailing != null) {
             Spacer(Modifier.weight(1f))
             trailing()

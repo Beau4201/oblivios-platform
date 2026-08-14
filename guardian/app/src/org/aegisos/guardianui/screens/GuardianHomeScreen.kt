@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -11,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -59,15 +61,20 @@ fun GuardianHomeScreen(
             .background(GuardianColor.Surface),
     ) {
         GuardianTopBar(title = "Guardian") {
-            Icon(
-                GuardianIcons.Settings,
-                contentDescription = "Settings",
-                tint = GuardianColor.OnSurfaceVariant,
+            Box(
                 modifier = Modifier
-                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                    .size(22.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
                     .clickable(role = Role.Button, onClick = onSettingsClick),
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    GuardianIcons.Settings,
+                    contentDescription = "Settings",
+                    tint = GuardianColor.OnSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
         }
 
         Column(

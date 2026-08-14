@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -323,6 +324,15 @@ fun GuardianApp(
         // navigation still does.
         BackHandler(enabled = effectiveRoute == GuardianRoute.INCIDENT_REVIEW) { leaveReview() }
 
+        // Edge-to-edge is forced on this platform SDK and nothing in this
+        // tree was consuming WindowInsets: content drew directly under the
+        // real status bar with no clearance, which is why the top bar's
+        // own 14dp of breathing room (matched to the design spec's
+        // .m3-topbar padding-top) never actually showed -- the real status
+        // bar icons and Guardian's own top bar were fighting for the same
+        // pixels. statusBarsPadding() reserves the real inset first; each
+        // screen's own top padding starts only after that.
+        Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         when (effectiveRoute) {
             GuardianRoute.FIRST_RUN -> GuardianFirstRunScreen(
                 onGetStarted = {
@@ -383,6 +393,7 @@ fun GuardianApp(
                 ),
                 onBack = ::leaveReview,
             )
+        }
         }
     }
 }
