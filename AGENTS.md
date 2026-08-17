@@ -34,8 +34,11 @@ No patch here may be applied to any Phase 1 (or later) baseline source tree
 until the applicable review record in `aegisos-foundation/docs/reviews/`
 records an `Accepted` decision for that baseline. Check
 `docs/reviews/phase-1-emulator-baseline-review.md` before ever running
-`git apply`/`patch` against a real source tree — as of this writing that
-record is `Pending`, not `Accepted`.
+`git apply`/`patch` against a real source tree — do not trust this file's
+own claim about that record's status without re-checking it yourself, since
+it can go stale (as of 2026-08-16 the record is `Accepted baseline
+(qualified, ADR-025)` — this file previously said `Pending` after that had
+already changed).
 
 ## Provenance requirements
 
