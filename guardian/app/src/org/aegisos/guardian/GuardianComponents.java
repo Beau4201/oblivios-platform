@@ -7,7 +7,8 @@ import org.aegisos.guardian.application.GuardianApplicationService;
 import org.aegisos.guardian.audit.FileGuardianAuditStore;
 import org.aegisos.guardian.detection.GuardianDetectionService;
 import org.aegisos.guardian.detection.InMemoryGuardianDetectionCommitStore;
-import org.aegisos.guardian.overview.InMemoryGuardianOverviewStore;
+import org.aegisos.guardian.evidence.GuardianEvidenceRetentionPeriod;
+import org.aegisos.guardian.overview.FileGuardianOverviewStore;
 import org.aegisos.guardian.platform.android.AegisOSPlatformGateway;
 import org.aegisos.guardian.remediation.GuardianRemediationService;
 import org.aegisos.guardian.remediation.RemediationCatalog;
@@ -17,9 +18,12 @@ import java.io.File;
 
 public final class GuardianComponents {
     private final GuardianApplicationService applicationService;
+    private final FileGuardianAuditStore auditStore;
 
-    private GuardianComponents(GuardianApplicationService applicationService) {
+    private GuardianComponents(
+            GuardianApplicationService applicationService, FileGuardianAuditStore auditStore) {
         this.applicationService = applicationService;
+        this.auditStore = auditStore;
     }
 
     public static GuardianComponents create(Context context) {
@@ -36,7 +40,8 @@ public final class GuardianComponents {
         // interfaces; this is not a mistake, it is how the existing, working
         // reference wiring does it.
         InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
-        InMemoryGuardianOverviewStore overviewStore = new InMemoryGuardianOverviewStore();
+        FileGuardianOverviewStore overviewStore = new FileGuardianOverviewStore(
+            new File(context.getFilesDir(), "guardian-overview.jsonl").toPath());
         FileGuardianAuditStore auditStore = new FileGuardianAuditStore(
             new File(context.getFilesDir(), "guardian-audit.jsonl").toPath());
         GuardianRemediationService remediation = new GuardianRemediationService(
@@ -47,10 +52,27 @@ public final class GuardianComponents {
             overviewStore);
         GuardianApplicationService applicationService = new GuardianApplicationService(
             new GuardianEventParser(), new GuardianDetectionService(incidentStore), remediation, overviewStore);
-        return new GuardianComponents(applicationService);
+        return new GuardianComponents(applicationService, auditStore);
     }
 
     public GuardianApplicationService applicationService() {
         return applicationService;
+    }
+
+    /**
+     * The retention period the audit store has recorded, so the Trust screen
+     * can state the real value instead of asserting a default. Exposes the
+     * value only, not the store -- the UI has no business writing audits.
+     *
+     * Recorded, not enforced: nothing in this app calls applyRetention() or
+     * setRetentionPeriod(), so no audit entry is ever deleted on this
+     * schedule. The Trust screen says so explicitly
+     * (GuardianTrustUiState.retentionEnforced). Wiring enforcement needs an
+     * owner decision first -- applyRetention() deletes audit entries, and
+     * undo(auditId) needs the audit entry, so shortening retention would
+     * silently make an active protection un-undoable.
+     */
+    public GuardianEvidenceRetentionPeriod retentionPeriod() {
+        return auditStore.retentionPeriod();
     }
 }

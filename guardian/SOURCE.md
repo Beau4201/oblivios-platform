@@ -2,18 +2,41 @@
 
 ## guardian-core.jar
 
-- Source: `aegisos-services` commit `3d66a461b7aa9b61f2e6f2db9e4f96cbf380cf43`.
+- Source: `aegisos-services` commit `c9ac0dfc28454824e8c049d9d5222ee79fce28b5`
+  (`master`, after merging `guardian-residuals-hardening` — merge commit
+  message: "merge: guardian-core persistent stores, coarse-location
+  detection, audit hardening"). Supersedes the 2026-08-05 vendoring below.
 - Build command: `./gradlew :guardian-core:jar` (Java 21 toolchain, zero
   runtime dependencies — confirmed via `guardian-core/build.gradle.kts`).
+  Reproduced via `:guardian-core:clean :guardian-core:jar --offline` to rule
+  out a stale Gradle cache; hash matched both times.
+- SHA-256: `a96a00e21ac4a13d5750f3dd00d4fcf86efd1c99c18e0f2da3d443a8f28eac58`.
+- Built: 2026-08-13.
+- Verified present via `unzip -l`/`javap` before use: `FileGuardianAuditStore`,
+  `FileGuardianOverviewStore`, `ActiveProtection#auditId()`,
+  `FileGuardianAuditStore#retentionPeriod()` — the four APIs the "Known
+  staleness" section below previously reported missing.
+
+<details>
+<summary>Previous vendoring (2026-08-05, superseded)</summary>
+
+- Source: `aegisos-services` commit `3d66a461b7aa9b61f2e6f2db9e4f96cbf380cf43`.
 - SHA-256: `6a9517f3ebe783ce0190ef3e1ea56e58c7328b86b040fb5ca9d044707c0e63f6`.
-- Built: 2026-08-05.
+
+</details>
 
 ## GuardianUiController.kt / GuardianUiState.kt
 
-- Copied verbatim from the same commit above,
+- Copied verbatim from the 2026-08-05 commit above (`3d66a461b`),
   `guardian-ui-reference/src/main/kotlin/org/aegisos/guardian/ui/`.
 - Reused as-is: both files are plain Kotlin with no Compose Desktop or
   desktop-windowing dependency.
+- Re-diffed against the new 2026-08-13 source commit (`c9ac0dfc2`) before
+  this re-vendor: `GuardianUiState.kt` is unchanged; `GuardianUiController.kt`
+  gained one upstream method, `fun undo(explicitAuditId: String)` — already
+  present, byte-identical, in this app's copy (added independently here in
+  an earlier session, `35e8ef9`). No re-copy needed; the two files below
+  remain current modulo the two already-documented deviations.
 
 ### Deviation: GuardianUiController.kt secondary constructor removed
 
@@ -52,6 +75,138 @@ Re-vendor by repeating Task 1 of
 `docs/superpowers/plans/2026-08-05-guardian-platform-integration.md` against
 a newer `aegisos-services` commit; do not hand-edit any file in this
 directory.
+
+### Resolved staleness (was: guardian-core.jar predates this app's sources)
+
+Historical record — this section described a real, now-fixed blocker; kept
+for context on why the 2026-08-13 re-vendor happened.
+
+Four APIs this app's sources called did not exist in the 2026-08-05 vendored
+jar. All four were added on `aegisos-services`' `guardian-residuals-hardening`
+branch, which was unmerged at the time. That branch's own tests were
+re-verified green (`./gradlew :guardian-core:test --offline`, `BUILD
+SUCCESSFUL`) before merging it to `master` (merge commit, no conflicts — the
+two branches touched disjoint files), then the jar above was re-vendored from
+the merged `master`. All four APIs are now confirmed present in the current
+jar (see the SHA-256 entry above):
+
+| API | Used by | Was |
+| --- | --- | --- |
+| `audit.FileGuardianAuditStore` (jar previously had only `InMemoryGuardianAuditStore`) | `app/src/.../GuardianComponents.java` | predated the UI rework |
+| `overview.FileGuardianOverviewStore` | `app/src/.../GuardianComponents.java` | predated the UI rework |
+| `overview.GuardianOverviewEntry.ActiveProtection#auditId()` | `app/src/.../ui/GuardianScreenModels.kt` | introduced by the UI rework |
+| `audit.FileGuardianAuditStore#retentionPeriod()` | `app/src/.../GuardianComponents.java#retentionPeriod()` | introduced by the UI rework |
+
+## Reference UI screens (app/src/org/aegisos/guardianui/)
+
+- Source: `aegisos-services` `master` at commit `7171dbd47e93`
+  (2026-08-14 re-vendor, superseding the earlier `bf13c97`; carries three
+  upstream commits: the sliding-indicator nav bar (dropping Home's settings
+  gear), a dash-free copy pass plus a card-width fix, and moving the
+  "Keep history for" retention control from Trust to Choices while adding a
+  soft radial screen tint to every screen — see those commits' messages for
+  the itemized lists),
+  `guardian-ui-reference/src/main/kotlin/org/aegisos/guardianui/`.
+- Copied files: `theme/GuardianColor.kt`, `theme/GuardianType.kt`,
+  `theme/GuardianTheme.kt`, `icons/GuardianIcons.kt`,
+  `components/GuardianMark.kt`, `components/GuardianUiComponents.kt`, and the
+  five `screens/Guardian{FirstRun,Home,Trust,Choices,IncidentReview}Screen.kt`.
+- `GuardianVisualIdentityDemo.kt` is deliberately **not** copied: it is desktop
+  preview wiring, not a navigation shell. The real shell is
+  `app/src/org/aegisos/guardian/ui/GuardianApp.kt`.
+- The package and directory layout are kept identical to the reference module
+  so a future re-vendor is a diff rather than a rewrite. AegisOS-specific glue
+  (navigation, adapters, the tapjacking guard) lives in
+  `org.aegisos.guardian.ui` instead, alongside the vendored UI controller.
+- `app/res/drawable-nodpi/guardian_mark.png` is a byte-identical copy of the
+  reference module's `src/main/resources/guardian_mark.png`.
+
+These files supersede the earlier `org.aegisos.guardian.ui` screens (green,
+Material 2, light theme), which were removed. See
+`docs/superpowers/specs/2026-08-13-guardian-visual-identity-design.md` in
+`aegisos-foundation`.
+
+### Android port deviations
+
+Every deviation is defaulted so the reference module's own call sites and its
+Compose UI tests still pass unchanged against these copies. Confirmed by
+inspection for this re-vendor (all 59 of `aegisos-services`' own
+`guardian-ui-reference` tests passed against the un-vendored source before
+copying, and every default value and call-site signature was diffed by hand
+against the previous vendored copy) — **not** re-run against these platform
+copies through the throwaway JVM harness (`guardian/app/tests/README.md`)
+this round; that step is still outstanding before this can be called
+independently verified rather than hand-checked. The real compile-level check
+happens at the next Soong build.
+
+1. `components/GuardianMark.kt` — rewritten. The reference decodes the PNG
+   with `androidx.compose.ui.res.useResource` and `org.jetbrains.skia.Image`,
+   both Compose Desktop-only. Android loads the same bytes from the
+   `guardian_mark` drawable via `painterResource`.
+2. `components/GuardianUiComponents.kt` — `GuardianSwitch` gained
+   `enabled: Boolean = true`.
+3. `screens/GuardianChoicesScreen.kt` — `GuardianWatchToggle.changeable` and
+   `GuardianChoicesUiState.notifyImmediatelyChangeable`, both defaulting to
+   true. The real app sets them false: every switch on that screen reports a
+   fixed property of this build, and a live-looking switch would claim control
+   that does not exist. This screen also gained
+   `GuardianChoicesUiState.retentionChangeable` and `retentionEnforced`, both
+   defaulting to true — moved here (2026-08-14) from `GuardianTrustScreen.kt`
+   when the upstream reference module moved the "Keep history for" control
+   itself from Trust to Choices; the deviation's own behaviour is unchanged.
+   The real app sets both false. `retentionChangeable = false` renders the
+   recorded period as a single static pill instead of four options, because
+   shortening retention prunes the audit entry an active protection's Undo
+   depends on — a real interaction that needs a design decision before it is
+   exposed. `retentionEnforced = false` relabels the section and adds an
+   explicit note that the period is a recorded setting Guardian does not act
+   on, because nothing in this build ever calls `applyRetention()`; without
+   it, the pill would imply a deletion schedule the device does not run, on
+   the one screen that (since the move) carries this build's own claims about
+   what is and is not a real, acted-on record.
+4. `screens/GuardianHomeScreen.kt` — `GuardianRecentChange.key`, an opaque
+   nullable row identity so a tap can be resolved back to a domain action.
+5. `screens/GuardianIncidentReviewScreen.kt` — `GuardianIncidentTone` plus
+   `GuardianIncidentUiState.tone`, and `primaryActionLabel` /
+   `secondaryActionLabel` parameters. The real app resolves the whole
+   Observe -> Explain -> Choose -> Enforce -> Verify -> Undo loop on this one
+   screen (as the design spec asks), so its chip and its two actions have to
+   express the applied, undone and failed outcomes as well as the initial one.
+6. `screens/GuardianIncidentReviewScreen.kt` — `secondaryActionNote`,
+   defaulting to null: a caveat rendered under the secondary action, for the
+   case where accepting that action promises the owner less than its label
+   implies. The real app sets it on one path only. "Decide later" defers a
+   detection into `GuardianApplication.pendingDetections`, which is an
+   in-memory `ConcurrentLinkedDeque` that nothing persists — the deferral does
+   not survive a process restart, and nothing re-raises it afterwards
+   (`BackgroundLocationWatcher` fires only on a *new* AppOps event). The label
+   and its note are wrapped in a `Column` so they read as one unit; with no
+   note — the reference module's only case — the rendered layout is unchanged.
+   That wrapper also carries the `clickable` and the `Role.Button`, which the
+   label `Text` held in the reference, so the label and the note merge into a
+   single semantics node and a screen reader announces the caveat together with
+   the button it qualifies instead of as a separate element reached after it.
+   The clickable has to move for that to work: Compose skips a merging
+   descendant when it merges (`SemanticsNode.mergeConfig`) and `clickable` is
+   one, so marking the wrapper `mergeDescendants` while the label stayed
+   clickable would have merged the note *without* the label. With no note the
+   merged node's bounds, touch target and announcement are unchanged —
+   verified by the reference module's own "Not now" click and 48dp
+   touch-target tests, which still pass unmodified.
+7. `screens/GuardianIncidentReviewScreen.kt` — `FactRow`'s layout, fixed.
+   Confirmed live on the emulator (2026-08-14): a real `Detected` incident's
+   "Observed" row rendered with the key wrapped one character per line and
+   the primary/secondary buttons pushed off-screen, unusable. Root cause:
+   the value `Text` (the one that can be long) had no `weight`, so Row's
+   unweighted-first measurement pass let it claim nearly the row's full
+   width for a short sentence, leaving the weighted key `Text` a few pixels.
+   Fixed by moving the weight from the key to the value and giving them a
+   fixed `Spacer` instead of sharing weight, so the key keeps its natural
+   width and the value wraps within what's left. This defect existed,
+   byte-identical, in the upstream reference module's copy of `FactRow` too;
+   it has since been fixed there as well (present as of `7171dbd`), so this
+   is no longer a live divergence — kept here as a record of the fix's
+   origin, not an active deviation.
 
 ## GuardianApp (app module)
 
