@@ -6,9 +6,22 @@ and device logs do not belong in this repository.
 
 ## Current packages
 
-- [`branding/boot`](branding/boot/README.md) — approved AegisOS boot identity,
-  reproducible assets and the minimal `frameworks/base` background patch.
+- [`branding/boot`](branding/boot/README.md) — AegisOS boot identity,
+  reproducible assets and the `frameworks/base` background/framerate
+  patches (ADR-019).
+- [`credential/duress-unlock-dummy`](credential/duress-unlock-dummy/README.md) —
+  Duress Unlock Stage 1: the cost-symmetric dummy-credential-check
+  primitive (ADR-040).
+- [`credential/duress-unlock-decoy`](credential/duress-unlock-decoy/README.md) —
+  Duress Unlock Stage 2, Task 1 of 9: the `USER_TYPE_FULL_AEGISOS_DECOY`
+  user type (ADR-053, amending ADR-042). Tasks 2-9 not started.
+- [`guardian`](guardian/README.md) — Guardian's real Android integration
+  (app + core) plus the AOSP-side patches that wire it into the emulator
+  and `lynx` product builds (ADR-033/ADR-035/ADR-051).
+- [`release/ota-server-url`](release/ota-server-url/README.md) — points
+  the Updater app at AegisOS's private lynx OTA server (ADR-052, amending
+  ADR-045).
 
-The boot package is prepared and locally verified, but must not be applied to
-the active Phase 1 unmodified baseline tree. Integration begins only after that
-baseline build and boot review have been accepted.
+All packages are patches layered over the pinned GrapheneOS manifest tag
+recorded in `aegisos-manifest`; none are applied to a baseline tree without
+the ADR their own README cites.
