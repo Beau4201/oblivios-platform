@@ -26,12 +26,42 @@
   under ADR-054's local-first discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-decoy-task3/`, seeded read-only from
   the real branch HEAD `c05c6b25fae8`) and landed on the real branch with
-  `git am --3way` (applied cleanly, no conflicts). Build verification
-  pending — a Task 2 build was still in flight when this patch landed, so
-  its ninja graph was generated before this new file existed and cannot
-  have compiled it; a fresh build after Task 2's finishes is required to
-  actually verify Task 3.
+  `git am --3way` (applied cleanly, no conflicts).
+- `10f858743765` — "aegisos: add DecoyProfileHelper keyguard hook and
+  freeze/switch orchestration" (`patches/frameworks-base/0005`, real
+  build-server SHA) — new `DecoyProfileHelper.java` plus
+  `LockSettingsService.java`/`ILockSettings.aidl`/`LockPatternUtils.java`
+  changes. Diverges from the plan's own literal sample code in two
+  places, both found by checking real source rather than transcribing the
+  brief: added `checkWritePermission()` to `setDecoyProfile`/
+  `clearDecoyProfile` (every sibling `@Override` in the real
+  `LockSettingsService.java` has this call; the plan's sample omitted it —
+  a real gap in the plan, not a style choice), and added a guard rejecting
+  `decoyUserId == UserHandle.USER_SYSTEM` in `setDecoyProfile` (closes an
+  unbounded-recursion path the design's own recursion-prevention
+  — "userId == decoyUserId != USER_SYSTEM" — silently assumed rather than
+  enforced).
+- `ed256ec87fb1` — "aegisos: wire decoy routing into
+  doVerifyCredentialInner" (`patches/frameworks-base/0006`, real
+  build-server SHA) — the `doVerifyCredentialInner` not-matched branch now
+  calls `decoyProfileHelper.maybeRouteToDecoy`, matching the plan exactly.
+- `41aeb66e0893` — "aegisos: add set-decoy-profile/clear-decoy-profile
+  shell commands" (`patches/frameworks-base/0007`, real build-server SHA)
+  — `LockSettingsShellCommand.java` dispatch + two handler methods. An
+  earlier draft of this patch placed the file at the wrong path (repo root
+  instead of `services/core/java/com/android/server/locksettings/`), which
+  would have broken `git am` against the real tree — caught in review
+  before landing, corrected before this SHA was produced.
 - Base commit: `e6e5746502a3ea1b8970210cb9ccbfac979e490d` (`credential/duress-unlock-dummy`'s own HEAD — this branch continues that lineage)
+
+**Build verification: all of Tasks 1-6 (`0001`-`0007`) compile together.**
+Two real builds confirm this: Task 2's own build (`m systemimage`,
+1h51m36s) covered `0001`-`0003` (the only files it could have, since its
+ninja graph was generated before `0004` existed); a second, consolidated
+build launched after `0005`-`0007` landed (1h29m45s) covered all of
+`0001`-`0007` together, `#### build completed successfully ####` both
+times, confirmed via the real build server's own log output, not assumed
+from `git am`/exit codes.
 
 `0001`/`0002` were generated via `git format-patch` from real build-server
 history, author identity rewritten to a generic `AegisOS Build
@@ -76,7 +106,18 @@ cd frameworks/base && git am ../../credential/duress-unlock-decoy/patches/framew
   (int decoyUserId) using `LockSettingsStorage` with fail-closed parsing.
   Provides `maybeGet()`, `create()`, `save()`, `delete()` matching the
   `DuressCredentials` pattern. Task 4 consumes all these methods directly.
-  No caller exists yet; this task only proves the class exists and compiles.
+- `0005`: adds `DecoyProfileHelper` — the keyguard-hook orchestration class
+  (decoy credential check at symmetric cost, freeze the real user, silent
+  switch to the decoy), plus the `ILockSettings`/`LockPatternUtils` plumbing
+  Task 6's shell command needs. No caller in `doVerifyCredentialInner` yet
+  (that's `0006`).
+- `0006`: wires `decoyProfileHelper.maybeRouteToDecoy` into
+  `doVerifyCredentialInner`'s not-matched path, scoped to
+  `UserHandle.USER_SYSTEM`/`LockDomain.Primary` only — the actual real,
+  end-to-end mechanism is live after this patch.
+- `0007`: `set-decoy-profile`/`clear-decoy-profile` shell subcommands — the
+  real setup-flow backend (not test scaffolding), mirroring
+  `set-duress-credentials`'s existing dispatch pattern exactly.
 
 ## Verification trail
 
@@ -87,6 +128,10 @@ cd frameworks/base && git am ../../credential/duress-unlock-decoy/patches/framew
   noting Task 1 of 9 landed.
 - ADR-054 (2026-08-26) — Task 2's citation, plus adoption of the local-first
   patch-authoring discipline this and all future patches now follow.
-- ADR-055 (pending, 2026-08-26) — Task 3's citation; patch applied and
-  staged in aegisos-platform; build verification pending active build server
-  completion.
+- ADR-055 (2026-08-26) — Task 3's citation, plus two process-defect
+  findings (a wrong SHA citation; a patch landed mid-build) folded into
+  `AGENTS.md`.
+- ADR-056 (2026-08-27) — Tasks 4-6's citation, plus both real builds'
+  results (Task 2's and the consolidated one) confirming `0001`-`0007`
+  compile together. Tasks 7-9 (emulator validation, physical hardware
+  validation, findings) remain not started.

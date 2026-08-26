@@ -13,10 +13,10 @@ and device logs do not belong in this repository.
   Duress Unlock Stage 1: the cost-symmetric dummy-credential-check
   primitive (ADR-040).
 - [`credential/duress-unlock-decoy`](credential/duress-unlock-decoy/README.md) —
-  Duress Unlock Stage 2, Tasks 1-3 of 9: the `USER_TYPE_FULL_AEGISOS_DECOY`
-  user type (ADR-053, amending ADR-042), the dialog-free silent user
-  switch (ADR-054), and decoy profile routing state storage (ADR-055 pending).
-  Tasks 4-9 not started.
+  Duress Unlock Stage 2, Tasks 1-6 of 9, code-complete and build-verified:
+  the full real decoy-switch mechanism (user type, silent switch, routing
+  state, keyguard hook, wiring, shell command) (ADR-053/054/055/056).
+  Emulator/hardware validation, Tasks 7-9, not started.
 - [`guardian`](guardian/README.md) — Guardian's real Android integration
   (app + core) plus the AOSP-side patches that wire it into the emulator
   and `lynx` product builds (ADR-033/ADR-035/ADR-051).
