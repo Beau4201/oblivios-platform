@@ -1,0 +1,24 @@
+From 7a0d44da85a709329f4c803ea911e4213be1b6b4 Mon Sep 17 00:00:00 2001
+From: AegisOS Build <build@aegisos.local>
+Date: Mon, 24 Aug 2026 01:19:54 +0200
+Subject: [PATCH] aegisos: point Updater at the private lynx OTA server
+
+---
+ res/values/config.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/res/values/config.xml b/res/values/config.xml
+index b3804bb..fdcd525 100644
+--- a/res/values/config.xml
++++ b/res/values/config.xml
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+-    <string name="url" translatable="false">https://releases.grapheneos.org/</string>
++    <string name="url" translatable="false">https://update.beautenberge.dev/</string>
+     <string name="channel_default" translatable="false">stable</string>
+     <string name="network_type_default" translatable="false">1</string>
+     <string name="battery_not_low_default" translatable="false">true</string>
+-- 
+2.39.5
+
