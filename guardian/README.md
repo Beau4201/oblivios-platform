@@ -12,3 +12,6 @@ in `aegisos-foundation`. Domain logic is vendored from `aegisos-services`
   files. Provenance in `SOURCE.md`.
 - `app/` — the Android app module: manifest, `Android.bp`, real gateway,
   event source, ported UI.
+- `patches/` — AOSP source patches (not vendored app code) that integrate
+  GuardianApp into a product build. Provenance and apply instructions in
+  `SOURCE.md`.

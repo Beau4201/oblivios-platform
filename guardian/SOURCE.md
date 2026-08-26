@@ -229,3 +229,22 @@ Permission grants are justified in `docs/research/guardian-platform-api-verifica
   (`frameworks/base/core/res/AndroidManifest.xml:7154-7155`), the same protection level as
   `REVOKE_RUNTIME_PERMISSIONS` above. Guardian's grant path is likewise platform-signing the
   APK (signature match); the allowlist entry is deliberately omitted (would be a no-op).
+
+## AOSP source patches (`patches/`)
+
+Applied to individual AOSP component checkouts, not vendored app code —
+see each tree's own row for the exact base commit and patch count.
+Generated via `git format-patch`, author identity rewritten to a generic
+`AegisOS Build <build@aegisos.local>` identity before committing here (same
+convention as `credential/duress-unlock-dummy/SOURCE.md`). Real, dated
+commits on the build server's `platform-primary` checkout.
+
+| Tree | Base commit | Patches | Approving ADR |
+| --- | --- | --- | --- |
+| `vendor/adevtool` | `4c9a78e2e7428818291a8c1e620f1e07e33ef185` | `patches/vendor-adevtool/0001` | ADR-035 (names this branch/commit literally: `aegisos-guardian-lynx`, `43b73335`) |
+
+Apply from the tree's own repository root:
+
+```sh
+cd vendor/adevtool && git am ../../guardian/patches/vendor-adevtool/*.patch
+```
