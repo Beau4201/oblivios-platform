@@ -13,10 +13,14 @@ and device logs do not belong in this repository.
   Duress Unlock Stage 1: the cost-symmetric dummy-credential-check
   primitive (ADR-040).
 - [`credential/duress-unlock-decoy`](credential/duress-unlock-decoy/README.md) —
-  Duress Unlock Stage 2, Tasks 1-6 of 9, code-complete and build-verified:
-  the full real decoy-switch mechanism (user type, silent switch, routing
-  state, keyguard hook, wiring, shell command) (ADR-053/054/055/056).
-  Emulator/hardware validation, Tasks 7-9, not started.
+  Duress Unlock Stage 2: the full real decoy-switch mechanism (user type,
+  silent switch, routing state, keyguard hook, wiring, shell command)
+  (ADR-053/054/055/056), plus its real-user quiescing/notification
+  suppression/return-path replacement for the freeze step that was found to
+  always fail for user 0 (ADR-058). Emulator-validated with real evidence
+  (decoy match, freeze, suppression, return path, wipe-PIN non-confusion);
+  two items remain open (dynamic call/media test, post-wipe reboot timing).
+  Physical `lynx` hardware validation and findings not started.
 - [`guardian`](guardian/README.md) — Guardian's real Android integration
   (app + core) plus the AOSP-side patches that wire it into the emulator
   and `lynx` product builds (ADR-033/ADR-035/ADR-051).

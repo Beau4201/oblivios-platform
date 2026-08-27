@@ -135,3 +135,136 @@ cd frameworks/base && git am ../../credential/duress-unlock-decoy/patches/framew
   results (Task 2's and the consolidated one) confirming `0001`-`0007`
   compile together. Tasks 7-9 (emulator validation, physical hardware
   validation, findings) remain not started.
+- ADR-058 (2026-08-27) — the second plan's Tasks 1-8 (see below): Task 7 of
+  the first plan found the freeze mechanism above (`stopUserWithDelayedLocking`)
+  can never succeed for user 0 — a universal AOSP limitation, not a bug in
+  this project's own code — and this second plan replaces it with app-level
+  quiescing plus a new return path, then validates the whole mechanism on a
+  real emulator.
+
+## Second plan: real-user quiescing and return path (`0008`-`0017`)
+
+`docs/superpowers/plans/2026-08-27-duress-real-user-quiescing-and-return.md`
+continues the same `frameworks/base` branch (`aegisos-duress-decoy-switch`)
+from `0007`'s own HEAD (`41aeb66e0893`). All 10 commits below were authored
+under the same local-first discipline (disposable worktrees under
+`aegisos-platform/.worktrees/duress-quiesce-task*/`, landed with
+`git am --3way`) and independently re-verified: patches `0008`-`0017` were
+regenerated fresh via `git format-patch` directly from the real remote
+branch history (rather than trusted from each task's own disposable
+worktree) and confirmed to reproduce the real branch tree byte-for-byte —
+applying all 10 in order onto a fresh worktree seeded at the real base
+commit (`41aeb66e0893`) and diffing the result against the real tip
+(`295f6f9cf610`) produced an empty diff.
+
+- `6ef616c714af` — "aegisos: add RealUserQuiescer for duress decoy
+  freeze/unfreeze" (`0008`) — new `RealUserQuiescer.java`
+  (`com.android.server.am`): freezes/unfreezes a user's app processes via
+  the existing `CachedAppOptimizer`, tracks which users are currently
+  quiesced. No caller yet.
+- `35dee8ebff74` — "aegisos: expose quiesceUserApps/unquiesceUserApps via
+  ActivityManagerInternal" (`0009`) — three new abstract methods on
+  `ActivityManagerInternal` (`quiesceUserApps`, `unquiesceUserApps`,
+  `isUserQuiescedForDuress`), implemented in `ActivityManagerService
+  .LocalService` delegating to a new `mRealUserQuiescer` field. The
+  implementer caught a real bug in the plan's own sample code here: a field
+  initializer for `mRealUserQuiescer` would have captured `mCachedAppOptimizer`
+  as `null` (field initializers run before constructor bodies); fixed by
+  assigning in the constructor body instead, after `mCachedAppOptimizer`
+  itself is constructed.
+- `15162045ce05` — "aegisos: suppress notifications for a duress-quiesced
+  user" (`0010`) — an 8-line addition to `NotificationManagerService
+  .checkDisqualifyingFeatures`, blocking notifications for a quiesced user.
+  A task reviewer found this alone was insufficient (see `0017` below).
+- `834412c4b589` — "aegisos: unquiesce a user automatically when it becomes
+  current" (`0011`) — a one-line hook in `UserController`, immediately after
+  `mCurrentUserId = userId` (outside the `synchronized (mLock)` block),
+  calling `unquiesceUserApps`. Fires for every user that becomes current,
+  not just a return from the decoy — self-healing even against a raw
+  `adb shell am switch-user 0`.
+- `1f4a79aabfa4` — "aegisos: quiesce the real user after switching, not
+  before" (`0012`) — the actual fix for the plan's core problem:
+  `DecoyProfileHelper.freezeAndSwitchToDecoy` now calls
+  `switchToUserSilently` FIRST, then `quiesceUserApps` on the now-backgrounded
+  real user — reversing the original (broken) order, which tried to freeze
+  the real user before switching away from it (impossible for user 0, since
+  `stopUsersLU` also independently refuses to stop the *current* user for
+  any user). Removed the now-unused `IActivityManager` import.
+- `f15c3d86962e` — "aegisos: add verifyPrimaryCredentialNoRouting for the
+  duress return path" (`0013`) — a new package-private method on
+  `LockSettingsService`, replicating `doVerifyCredentialInner`'s
+  rate-limited verify sequence for a non-special user without any of its
+  hook/side-effect logic (no decoy routing, no repair-mode write, no
+  biometric lockout reset) — exists so the return path can check a
+  credential against the real owner without re-entering
+  `doVerifyCredentialInner` and re-triggering the forward decoy hook.
+- `079d5588f483` — "aegisos: zeroize the synthetic password in
+  verifyPrimaryCredentialNoRouting" (`0014`) — a real security-hygiene gap
+  the implementer found and fixed as a separate follow-up commit (not an
+  amend): `doVerifyCredentialInner` always zeroizes
+  `AuthenticationResult.syntheticPassword` (raw decrypted key material)
+  after use; the new method in `0013` didn't. Fixed with a `try/finally`
+  around the return.
+- `62b84f2aa8d1` — "aegisos: add ReturnToRealUserHelper, wire the return
+  path" (`0015`) — new `ReturnToRealUserHelper.java`
+  (`com.android.server.locksettings`), the mirror image of
+  `DecoyProfileHelper`: routes a failed credential check for the
+  currently-registered decoy user back to the real owner if the entered
+  credential matches the real owner's own primary credential (via `0013`'s
+  method, never `doVerifyCredentialInner`), then calls
+  `switchToUserSilently(UserHandle.USER_SYSTEM)`. Wired into
+  `LockSettingsService` (new field/construction mirroring
+  `decoyProfileHelper`'s own, and a new `else if` branch in
+  `doVerifyCredentialInner`'s not-matched path). Deliberately does not call
+  `unquiesceUserApps` itself — `0011`'s generic hook handles it.
+- `c1c367950ab6` — "aegisos: fix ReturnToRealUserHelper.java path (patch
+  0014 misapplied it under frameworks/base/)" (`0016`) — the first attempt
+  at `0015` placed the new file under a spurious extra `frameworks/base/`
+  path prefix (the repo root is already `frameworks/base`), which broke
+  compilation; a task reviewer's diff-stat check (2 files changed, 0
+  deletions) confirmed this follow-up commit cleanly relocated the file
+  rather than leaving a duplicate.
+- `295f6f9cf610` — "aegisos: suppress call and media notifications for a
+  duress-quiesced user" (`0017`) — fixes a real gap a task reviewer found in
+  `0010`: the pre-existing `if (isBlocked && !(n.isMediaNotification() ||
+  isCallNotification(pkg, uid, n)))` gate in `checkDisqualifyingFeatures`
+  unconditionally exempted call/media notifications from suppression,
+  regardless of *why* `isBlocked` became true — so a real incoming call for
+  the quiesced real user would still ring/display. Introduces a local
+  `quiescedForDuress` boolean and changes the gate to
+  `isBlocked && (quiescedForDuress || !(...))`, so only the duress-quiesced
+  case loses the exemption; every other blocking reason (banned app,
+  snoozed, bridged-blocked) keeps its exemption unchanged. Independently
+  truth-table-verified by two different reviewers across all four boolean
+  combinations.
+- Base commit for this second plan: `41aeb66e0893` (the first plan's own
+  Task 6 HEAD, `patches/frameworks-base/0007`).
+
+**Build verification:** a consolidated `m systemimage` build after all 10
+commits landed: `ninja: 1h3m33.34s Build Succeeded: 2444 steps`,
+`#### build completed successfully (01:03:38) ####` — confirms all 17
+patches (`0001`-`0017`) compile together into a complete system image, not
+just individual `m services` checks (each of `0008`-`0017` was also
+independently confirmed via a fast `m services` check immediately after
+landing, before the consolidated build ran).
+
+**Emulator validation (ADR-058):** real, direct evidence gathered against
+this exact build (`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`):
+decoy match (`mCurrentUserId` switch, confirmed twice); real-user freeze
+(32 of 36 user-0 processes `isFrozen=true`, remaining 4 plausibly excluded
+by pre-existing AOSP freezer non-cached rules); notification suppression
+(`dumpsys notification` usage-stats proof with a differential control case:
+the quiesced user's notification blocked, the active user's own notification
+posts normally); the return path (real match against the real owner's
+credential, real switch back, unquiescing proven via a user-0 notification
+posting normally again afterward); wrong-PIN and wipe-PIN both confirmed
+correct and not confused with decoy routing (a real wipe fired, with direct
+`DuressWipe`/storage-key-deletion/device-poweroff evidence). Two items are
+explicitly left open (see `README.md`'s "What this is not" section and
+ADR-058 for the full detail): the call/media-exemption fix (`0017`) lacks a
+successful dynamic trigger against the specific backgrounded-user-0 scenario
+in available emulator tooling; and a post-wipe emulator reboot
+characterization was time-boxed and left inconclusive. A real, unrelated
+infrastructure defect was also found and fixed during validation: the
+emulator's initial cold boot hung 1h46m from loading a stale quickboot
+snapshot against the freshly built image; fixed with `-no-snapshot-load`.
