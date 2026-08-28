@@ -338,6 +338,76 @@ required together — see `0018`'s description above) via a new
 separate git repository with its own patch numbering, landed as its own
 commit.
 
+## Third plan: session indistinguishability, Component B, part 1 (`0019`)
+
+Task 3 of the same plan adds the foundation API for Component B: a new
+`@hide` `UserManager` method, `getUsersForUiDisplay(boolean excludeDying)`,
+that every UI surface listing device users must call instead of
+`getUsers()`/`getAliveUsers()`. It behaves exactly like the existing
+`getUsers(boolean excludeDying)` (same permission check, same AIDL style)
+except that when the calling user is an AegisOS Duress Unlock decoy user
+(`UserManager.USER_TYPE_FULL_AEGISOS_DECOY`), it returns only that user
+instead of the full device user list — preventing every subsequent UI
+migration task (4, 5, 6) from leaking the real hidden owner's identity to
+someone using the decoy session. Internal, non-display callers (e.g.
+`RealUserQuiescer`) keep calling the real, unscoped `getUsers(boolean)`
+directly; this new method is additive, not a replacement of the existing
+one.
+
+- `4e1ba3f10b99b1cacceacd6ce3a38a887ae4cccd` — "aegisos: add
+  UserManager.getUsersForUiDisplay for decoy session UI filtering"
+  (`patches/frameworks-base/0019`, real build-server SHA) — three-file
+  change: `List<UserInfo> getUsersForUiDisplay(boolean excludeDying);`
+  added to `core/java/android/os/IUserManager.aidl` immediately after the
+  existing `getUsers(boolean excludeDying)` declaration;
+  `UserManagerService.getUsersForUiDisplay` added to
+  `services/core/java/com/android/server/pm/UserManagerService.java`
+  immediately after the existing `getUsers(boolean excludeDying)` method,
+  gated by the same `checkCreateUsersPermission("query users...")` call
+  `getUsers` already requires, reading the calling user's `UserInfo` under
+  `mUsersLock` via the existing `getUserInfoLU`, and falling back to the
+  real `getUsers(excludeDying)` for every non-decoy caller; and a public
+  `UserManager.getUsersForUiDisplay` wrapper added to
+  `core/java/android/os/UserManager.java` immediately after the real
+  `getUsers(boolean excludeDying)` wrapper, carrying that wrapper's own
+  actual `@UnsupportedAppUsage` and
+  `@RequiresPermission(anyOf = {MANAGE_USERS, CREATE_USERS})` annotations
+  (confirmed by reading the real method at
+  `core/java/android/os/UserManager.java:5253` before mirroring it, not
+  assumed from the `getEnabledProfiles`/`getProfiles` sample read
+  elsewhere this session) but deliberately **not** that wrapper's
+  `@Deprecated` (this is a new, non-deprecated method) or a `@TestApi`/
+  `@SystemApi` annotation (matching `getEnabledProfiles`/`getProfiles`'s
+  own `@hide`-only precedent instead — no `system-current.txt` entry
+  expected or added). `ArrayList` was already imported in
+  `UserManagerService.java`; no new import was needed. Authored under
+  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task3/`,
+  seeded read-only from the real branch HEAD
+  `ebb58e3ccc2034c2685b889ceecbcd1830b382ef`) and landed on the real
+  branch with `git am --3way` (applied cleanly, no conflicts).
+- Base commit: `ebb58e3ccc2034c2685b889ceecbcd1830b382ef` — `0018`'s own
+  real post-`git am` SHA, the real branch tip at fetch time (unchanged
+  since `0018` landed).
+
+**Build verification:** a fast `m services` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`) after `0019`
+landed: `#### build completed successfully (29 seconds) ####`, confirmed
+by an independent re-run after the first invocation's own real compile
+(polled directly on the build server — no build-completion notification
+was relied on) rather than trusted from a single invocation. This
+confirms the new AIDL method, `UserManagerService` implementation, and
+`UserManager` wrapper all compile together and produce no API-signature
+lint failure (so the `0002`-style `system-current.txt` fallback fix was
+not needed, consistent with this being a plain `@hide` method with no
+`@SystemApi`). It is not a consolidated `m systemimage` build and does
+not by itself validate runtime behavior — no task in this plan currently
+schedules a dynamic exercise of this specific API in isolation; Tasks 4-6
+exercise it indirectly by migrating real UI call sites onto it. Task 3
+touches `frameworks/base` only; it has no `build/release` change of its
+own (unlike `0018`, which required the companion aconfig flag flip
+documented in the `build/release` section below).
+
 ### `build/release`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
