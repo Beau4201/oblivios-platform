@@ -462,6 +462,66 @@ does not by itself validate runtime behavior (e.g. that a decoy session
 genuinely sees only itself in either dialog) — no task in this plan has
 yet scheduled a dynamic exercise of this specific pair of UI surfaces.
 
+## Third plan: session indistinguishability, Component B, part 3 (`0021`, plus `packages/apps/Settings` `0001`)
+
+Task 5 of the same plan closes the last real leak this Component targets:
+Settings ▸ Storage ▸ "Other users" (name, avatar, and per-user storage size)
+listed every device user unscoped, so a decoy session could see the real
+hidden owner's account there too. This task turned out to span **two**
+separate git repositories, not one, correcting the plan brief's own
+framing: the brief's Step 5 ("apply any additional SettingsLib fix Task 1
+Step 5 found") reads as if it might be a minor addendum inside
+`packages/apps/Settings`. It is not — `packages/SettingsLib` is tracked
+inside the `frameworks/base` git repository (confirmed via
+`git -C frameworks/base ls-files packages/SettingsLib/...`), not as a
+separate top-level project, so that one call site needed its own
+`frameworks/base` worktree, its own patch, and its own `git am` onto the
+`frameworks/base` branch — continuing that repository's own existing
+`0001`-`0020` series as `0021` — while the other three call sites landed as
+the first-ever patch to `packages/apps/Settings` (see that repository's own
+section below). All four call sites migrate to the same
+`getUsersForUiDisplay(false /* excludeDying */)` — matching the real
+no-arg `UserManager.getUsers()` wrapper's own body
+(`core/java/android/os/UserManager.java:5218-5220`:
+`public @NonNull List<UserInfo> getUsers() { return getUsers(/* excludeDying= */ false); }`,
+confirmed via direct read before editing) — not `true`; getting this
+backwards would have silently changed which dying users are included
+relative to today's behavior.
+
+- `4167d1df8b4e53c05316e731d41d79f5ef2cfba3` — "aegisos: route SettingsLib
+  storage measurement through getUsersForUiDisplay"
+  (`patches/frameworks-base/0021`, real build-server SHA) — one-line
+  change: `StorageMeasurement.java:148`'s `measureExactStorage()` now calls
+  `mUser.getUsersForUiDisplay(false /* excludeDying */)` instead of
+  `mUser.getUsers()` (`mUser` is the class's own `UserManager` field,
+  confirmed by reading its declaration at line 99 before editing). This is
+  the real, additional unscoped call site Task 1's own research
+  (independently reviewed, no code change) had already identified, consumed
+  by the real Settings app via `StorageItemPreferenceController.java`. The
+  real current line was re-confirmed via `grep -n`/direct read against the
+  actual build-server source (including a byte-for-byte `sha256sum` match
+  between the fetched local copy and the live remote file) before editing.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable local
+  git repo (`aegisos-platform/.worktrees/duress-indistinguishability-task5b/`,
+  a fetch-only worktree seeded read-only from the real branch HEAD
+  `c3a11765d4d61f61c0a753d1b9a4dd5d17b84049` — only the one touched file,
+  not a full checkout) and landed on the real branch with `git am --3way`
+  (applied cleanly, no conflicts).
+- Base commit: `c3a11765d4d61f61c0a753d1b9a4dd5d17b84049` — `0020`'s own
+  real post-`git am` SHA, the real branch tip at fetch time.
+
+**Build verification:** the fast `m Settings` build check described in the
+`packages/apps/Settings` section below (below, this same patch cycle)
+recompiles `//frameworks/base/packages/SettingsLib:SettingsLib` (confirmed
+by grepping the real build log for that exact Soong module target, not
+assumed from `git am`'s own exit code) as a dependency of the `Settings`
+app module — so that single build check covers this patch together with
+`packages/apps/Settings`'s own `0001`, exactly as the task required. It is
+not a consolidated `m systemimage` build and does not by itself validate
+runtime behavior (e.g. that a decoy session's Storage screen genuinely
+shows only itself) — no task in this plan has yet scheduled a dynamic
+exercise of this specific UI surface.
+
 ### `build/release`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
@@ -514,3 +574,79 @@ for the whole product, not just the one resource file. The actual
 functional exercise of this flag together with `0018`'s resource default
 happens in this plan's later consolidated-build and validation tasks, not
 here.
+
+### `packages/apps/Settings`
+
+This is the first AegisOS patch to this repository. Prior to this patch,
+the repository had never received any AegisOS-authored commit; it was on
+detached HEAD at `739dfe1d7bc` (add per-app setting for exec spawning). A
+real, named branch (`aegisos-duress-decoy-switch`, matching
+`frameworks/base`'s and `build/release`'s existing branch name — the same
+convention `build/release`'s own section above already anticipated for
+this repository) was created off that detached HEAD before landing
+anything, so this and future `packages/apps/Settings` commits land on a
+real ref, not an anonymous detached-HEAD history.
+
+Task 5 of the third plan
+(`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`)
+routes the three real Settings call sites that build the Storage screen's
+per-user breakdown onto Task 3's `getUsersForUiDisplay` API
+(`patches/frameworks-base/0019`), closing the leak described in that
+patch's own "Component B, part 3" section above: before this patch, a
+decoy session could open Settings ▸ Storage and see the real hidden
+owner's name, avatar, and per-user storage size under "Other users". All
+three call sites migrate to `getUsersForUiDisplay(false /* excludeDying */)`
+— matching the real no-arg `UserManager.getUsers()` wrapper's own body,
+confirmed against `frameworks/base`'s actual source before editing (see
+the `frameworks/base` `0021` entry above for the exact wrapper body cited).
+
+- `50fe764d7c9a37b343f776d9e2e2d0d4ee2560d3` — "aegisos: route Settings
+  Storage screen through getUsersForUiDisplay"
+  (`patches/packages-apps-settings/0001`, real build-server SHA) —
+  three one-line changes, each re-confirmed via `grep -n`/direct read
+  against the actual build-server source (plus a byte-for-byte
+  `sha256sum` match between each fetched local copy and the live remote
+  file) before editing:
+  `NonCurrentUserController.java:74`'s
+  `getNonCurrentUserControllers(Context, UserManager)` now calls
+  `userManager.getUsersForUiDisplay(false /* excludeDying */)` instead of
+  `userManager.getUsers()`;
+  `UserIconLoader.java:69`'s `loadUserIconsWithContext(Context)` now
+  iterates `um.getUsersForUiDisplay(false /* excludeDying */)` instead of
+  `um.getUsers()`;
+  `StorageAsyncLoader.java:82`'s `getStorageResultsForUsers()` now calls
+  `mUserManager.getUsersForUiDisplay(false /* excludeDying */)` instead of
+  `mUserManager.getUsers()`. Authored under `AGENTS.md`'s local-first
+  discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task5a/`, a
+  fetch-only worktree seeded read-only from the real repository HEAD
+  `739dfe1d7bc` — only the three touched files, not a full checkout) and
+  landed on the real branch with `git am --3way` (applied cleanly, no
+  conflicts).
+- Base commit: `739dfe1d7bc` (this repository's real HEAD at the time —
+  first entry for this repository, so this is also the branch point).
+
+**Build verification:** a fast `m Settings` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`) after both
+this patch and `frameworks/base`'s `0021` landed, launched fully detached
+on the remote side (`nohup ... & disown`) and polled to completion with a
+bounded synchronous loop rather than an async background-task
+notification: `ninja: 6m11.80s Build Succeeded: 165 steps - 0.44/s`,
+`#### build completed successfully (06:17 (mm:ss)) ####`, `EXIT_CODE:0`.
+This one build check confirms both patches together: it needs
+`packages/apps/Settings`'s own three call-site changes to compile at all
+(they reference `getUsersForUiDisplay`), and the real build log confirms
+`//frameworks/base/packages/SettingsLib:SettingsLib` — the module
+containing `StorageMeasurement.java`, `0021`'s own file — was recompiled
+as a dependency in the same build. It is not a consolidated
+`m systemimage` build and does not by itself validate runtime behavior
+(e.g. that a decoy session's Storage screen genuinely shows only itself)
+— no task in this plan has yet scheduled a dynamic exercise of this
+specific UI surface.
+
+## Apply (this section)
+
+```sh
+cd packages/apps/Settings && git checkout -b aegisos-duress-decoy-switch && \
+  git am ../../credential/duress-unlock-decoy/patches/packages-apps-settings/*.patch
+```
