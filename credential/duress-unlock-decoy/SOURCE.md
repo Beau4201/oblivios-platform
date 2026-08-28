@@ -408,6 +408,60 @@ touches `frameworks/base` only; it has no `build/release` change of its
 own (unlike `0018`, which required the companion aconfig flag flip
 documented in the `build/release` section below).
 
+## Third plan: session indistinguishability, Component B, part 2 (`0020`)
+
+Task 4 of the same plan routes the two real SystemUI call sites that list
+device users for on-screen display onto Task 3's `getUsersForUiDisplay`
+API, closing the actual leak: before this patch, a decoy session could open
+either the QS/lock-screen user-switcher dialog or the power-menu's user
+list and see the real hidden owner's account. Task 1's own research
+(independently reviewed, no code change) had already confirmed
+`UserSwitcherFullscreenDialogDelegate.kt` has no enumeration logic of its
+own — it is constructor-injected with `UserSwitcherViewModel` and carries
+no separate `getUsers()`/`aliveUsers` call — so it is fixed automatically
+by this patch's `UserRepositoryImpl.kt` change; no third call site exists
+to migrate.
+
+- `c3a11765d4d61f61c0a753d1b9a4dd5d17b84049` — "aegisos: route SystemUI
+  user-switcher and power-menu through getUsersForUiDisplay"
+  (`patches/frameworks-base/0020`, real build-server SHA) — two one-line
+  changes: `UserRepositoryImpl.kt:267`'s `refreshUsers()` now calls
+  `manager.getUsersForUiDisplay(true)` instead of `manager.aliveUsers`
+  (`manager` is the same `UserManager` instance already used a few lines
+  away for `manager.mainUser`); `GlobalActionsDialogLite.java:1570`'s
+  `addUserActions(List<Action>, UserInfo)` now calls
+  `mUserManager.getUsersForUiDisplay(true)` instead of
+  `mUserManager.getUsers()`. Both real current lines were re-confirmed via
+  `grep -n`/direct read against the actual build-server source before
+  editing — the brief's own quoted line numbers carried a one-line drift
+  (`UserRepositoryImpl.kt:266` in the brief vs. the real `:267`) but the
+  quoted code text itself matched exactly. Authored under `AGENTS.md`'s
+  local-first discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task4/`, a
+  fetch-only worktree seeded read-only from the real branch HEAD
+  `4e1ba3f10b99b1cacceacd6ce3a38a887ae4cccd` — only the two touched files,
+  not a full checkout) and landed on the real branch with `git am --3way`
+  (applied cleanly, no conflicts). The real post-`git am` branch SHA
+  (`c3a11765d4d61f61c0a753d1b9a4dd5d17b84049`) differs from the local
+  worktree's own commit SHA (`7a20a9ad778f34b1b33e8911f3121cf9a712377d`),
+  confirmed via `git log` on the branch rather than assumed, consistent
+  with every prior patch in this package.
+- Base commit: `4e1ba3f10b99b1cacceacd6ce3a38a887ae4cccd` — `0019`'s own
+  real post-`git am` SHA, the real branch tip at fetch time.
+
+**Build verification:** a fast `m SystemUI` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`) after `0020`
+landed, launched fully detached on the remote side (`nohup ... & disown`)
+and polled to completion with a bounded synchronous loop rather than an
+async background-task notification:
+`ninja: 17m46.35s Build Succeeded: 545 steps - 0.51/s`,
+`#### build completed successfully (17:51 (mm:ss)) ####`. This confirms
+the two call-site changes compile against the real `getUsersForUiDisplay`
+API added in `0019`. It is not a consolidated `m systemimage` build and
+does not by itself validate runtime behavior (e.g. that a decoy session
+genuinely sees only itself in either dialog) — no task in this plan has
+yet scheduled a dynamic exercise of this specific pair of UI surfaces.
+
 ### `build/release`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
