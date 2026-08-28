@@ -522,6 +522,61 @@ runtime behavior (e.g. that a decoy session's Storage screen genuinely
 shows only itself) — no task in this plan has yet scheduled a dynamic
 exercise of this specific UI surface.
 
+## Third plan: session indistinguishability, Component C (`0022`)
+
+Task 7 of the same plan closes a different, wider cascade than Components
+A/B: a freshly created decoy user has never run Android's own SetupWizard,
+which — per this plan's own design research
+(`docs/superpowers/specs/2026-08-28-duress-decoy-session-indistinguishability-design.md`
+in `aegisos-foundation`) — gates several unrelated, non-admin-gated
+SystemUI behaviors (screenshot/clipboard overlays, full-screen call/alarm
+intents, the status-bar alarm icon, Material You theming, the QS settings
+gear) purely on the per-user `Settings.Secure.USER_SETUP_COMPLETE` flag.
+Rather than chase each of those six call sites individually, this task
+writes that one flag at the single place a decoy is ever registered.
+
+- `4e10e6a87a4a48e9381f5f46afd65d6765f61dbf` — "aegisos: mark decoy user
+  setup-complete at registration time"
+  (`patches/frameworks-base/0022`, real build-server SHA) — adds a
+  `Context` field/constructor parameter to `DecoyProfileHelper` (new
+  imports: `android.content.Context`, `android.provider.Settings`) and, in
+  `setDecoyProfile()`, one new statement immediately after the existing
+  `decoyUserId == UserHandle.USER_SYSTEM` anti-recursion guard (untouched):
+  `Settings.Secure.putIntForUser(context.getContentResolver(),
+  Settings.Secure.USER_SETUP_COMPLETE, 1, decoyUserId)`, before the
+  existing `DecoyProfileState.create(decoyUserId).save(...)` call.
+  `LockSettingsService.java:813`'s `new DecoyProfileHelper(...)` call site
+  is updated to pass `mContext` (an existing field, confirmed assigned
+  earlier in the same constructor at line 769, before this call site) as
+  the fourth argument. The real current file was re-confirmed via
+  `grep -n`/direct read against the actual build-server source (imports
+  block, `setDecoyProfile` body, and the constructor call site all matched
+  the plan's expected text verbatim, no drift found) before editing.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable local
+  git repo (`aegisos-platform/.worktrees/duress-indistinguishability-task7/`,
+  a fetch-only worktree seeded read-only from the real branch HEAD
+  `4167d1df8b4e53c05316e731d41d79f5ef2cfba3` — only the two touched files,
+  not a full checkout) and landed on the real branch with `git am --3way`
+  (applied cleanly, no conflicts).
+- Base commit: `4167d1df8b4e53c05316e731d41d79f5ef2cfba3` — `0021`'s own
+  real post-`git am` SHA, the real branch tip at fetch time.
+
+**Build verification:** a fast `m services` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side (`nohup ... & disown`) and polled to
+completion with a bounded synchronous loop: `ninja: 4m22.31s Build
+Succeeded: 195 steps - 0.74/s`, `#### build completed successfully (04:28
+(mm:ss)) ####`. `services.core` and every other `services/*` submodule
+(including `locksettings`, part of `services.core`) compiled cleanly; the
+only diagnostics were pre-existing warnings/info notes in unrelated files
+(`AppFunctionAccessPregrant.kt`, `AppIdPermissionUpgrade.kt`,
+`PackageManagerLocal.java`), none touching `DecoyProfileHelper.java` or
+`LockSettingsService.java`. This is not a consolidated `m systemimage`
+build and does not by itself validate runtime behavior (e.g. that a real
+decoy session's SystemUI chrome genuinely reflects
+`USER_SETUP_COMPLETE=1`) — no task in this plan has yet scheduled a
+dynamic exercise of this specific behavior.
+
 ### `build/release`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
