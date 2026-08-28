@@ -650,3 +650,98 @@ specific UI surface.
 cd packages/apps/Settings && git checkout -b aegisos-duress-decoy-switch && \
   git am ../../credential/duress-unlock-decoy/patches/packages-apps-settings/*.patch
 ```
+
+### `packages/apps/Multiuser`
+
+This is the first AegisOS patch to this repository. Prior to this patch,
+the repository had never received any AegisOS-authored commit; it was on
+detached HEAD at `44f89da6503c7af07e70e0f6f0f2e2c7ea287c2f` ("Snap for
+14980854 from b4db28f24cf05e24299542c4f05afeb78b5a146c to 26Q2-release"). A
+real, named branch (`aegisos-duress-decoy-switch`, matching
+`frameworks/base`'s, `build/release`'s, and `packages/apps/Settings`'s own
+existing branch name) was created off that detached HEAD before landing
+anything, so this and future `packages/apps/Multiuser` commits land on a
+real ref, not an anonymous detached-HEAD history.
+
+Task 6 of the third plan
+(`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`)
+closes the last leak in "Component B" (the multiuser widget): the widget's
+"Switch User" action tile was always shown whenever the platform-level
+switcher was otherwise enabled, regardless of how many users the caller
+could actually see — for a decoy session that can only see itself via
+Task 3's `getUsersForUiDisplay`, the tile would still appear and offer to
+switch to a list that only ever resolves to itself. Before writing any
+code, this task also resolved a genuine, previously-unverified ambiguity:
+`MultiuserWidgetLib` (the `android_library` module in
+`packages/apps/Multiuser/Android.bp` that actually compiles
+`UsersRepository.kt`) has neither `sdk_version` nor `platform_apis` set,
+unlike the outer `Multiuser` `android_app` module which does have
+`platform_apis: true` — so it was not knowable by reading the `.bp` file
+alone whether `@hide`/`@SystemApi` framework methods like
+`getUsersForUiDisplay` would even resolve at compile time for that
+library. Resolved empirically, not assumed: the real build check (below)
+compiled `MultiuserWidgetLib`'s `kotlinc` step cleanly with the new call
+present, confirming this module does get platform API visibility (Soong
+default resolution chain for an `android_library` with no `sdk_version`
+in this tree's configuration was not further investigated beyond that
+empirical confirmation).
+
+- `0ab4e9349751ca354cd8cf768cf2db968cb71932` — "aegisos: hide Switch User
+  widget action when nothing else is visible"
+  (`patches/packages-apps-multiuser/0001`, real build-server SHA) — a
+  three-line addition to `UsersRepository.kt`'s
+  `checkUserSwitchRestrictions()`: after the existing
+  `isUserSwitcherEnabled` check and before the final `return
+  UserSwitchRestrictions.NONE`, a new check calls
+  `userManager.getUsersForUiDisplay(true /* excludeDying */).size <= 1` and
+  reuses the existing `UserSwitchRestrictions.DISABLED` case (the same
+  outcome the adjacent `isUserSwitcherEnabled` check already returns for a
+  conceptually similar "can't switch" state) — confirmed against the real
+  current file via `grep -n`/direct read before editing; the real body
+  matched the plan's expected text exactly, no drift found. Authored under
+  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task6/`, a
+  fetch-only worktree seeded read-only from the real repository HEAD
+  `44f89da6503c` — only the one touched file, not a full checkout; the
+  fetched copy's `sha256sum` matched the live remote file byte-for-byte
+  before editing) and landed on the real branch with `git am --3way`
+  (applied cleanly, no conflicts). The exported patch was independently
+  re-verified after landing: the real post-`git am` file's `sha256sum` on
+  the build server matches the disposable worktree's own post-commit
+  file exactly.
+- Base commit: `44f89da6503c7af07e70e0f6f0f2e2c7ea287c2f` (this
+  repository's real HEAD at the time — first entry for this repository,
+  so this is also the branch point).
+
+**Build verification:** a fast `m Multiuser` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side (`nohup ... & disown`) and polled to
+completion with a bounded synchronous loop: `ninja: 1m25.71s Build
+Succeeded: 86 steps - 1.00/s`, `#### build completed successfully (01:31
+(mm:ss)) ####`, `EXIT_CODE:0`. Both `MultiuserWidgetLib` (the module
+containing the edited `UsersRepository.kt`) and the outer `Multiuser` app
+module compiled cleanly through `kotlinc`/`r8`/`signapk`/`dexpreopt`; the
+only compiler diagnostics were three pre-existing warnings in unrelated
+files (`SettingsGlobalJob.kt`, `TextMeasurable.kt`,
+`VerticalPaddingWrapperStack.kt`), none touching the edited code path.
+This directly confirms the API-visibility question raised above:
+`getUsersForUiDisplay` resolved for `MultiuserWidgetLib` at compile time
+with no `@hide`/`@SystemApi` visibility error, so no amendment to Task 3
+was needed. The task's own plan-supplied build command
+(`m com.android.multiuser`) was itself wrong — that string is the app's
+manifest `package=` attribute, not its Soong module name (confirmed via
+`grep` against `AndroidManifest.xml` and `Android.bp`); it failed with
+`Schedule Failure: unknown target "com.android.multiuser"` before any
+compilation occurred, corrected to the real module name (`Multiuser`) per
+`Android.bp`'s own `android_app { name: "Multiuser", ... }` declaration.
+This is not a consolidated `m systemimage` build and does not by itself
+validate runtime behavior (e.g. that a decoy session's widget genuinely
+hides the tile) — no task in this plan has yet scheduled a dynamic
+exercise of this specific UI surface.
+
+## Apply (this section)
+
+```sh
+cd packages/apps/Multiuser && git checkout -b aegisos-duress-decoy-switch && \
+  git am ../../credential/duress-unlock-decoy/patches/packages-apps-multiuser/*.patch
+```
