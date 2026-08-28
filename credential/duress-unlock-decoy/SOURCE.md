@@ -577,6 +577,93 @@ decoy session's SystemUI chrome genuinely reflects
 `USER_SETUP_COMPLETE=1`) — no task in this plan has yet scheduled a
 dynamic exercise of this specific behavior.
 
+### Fix to `0022`: clear calling identity for the setup-complete write (`0023`)
+
+Found during `0022`'s own review, not by any task in the plan itself: the
+`setDecoyProfile` AIDL entry point
+(`LockSettingsService.java:4575-4578`) only enforces `checkWritePermission()`
+(`checkAccessSecureStoragePermission("LockSettingsWrite")`,
+`LockSettingsService.java:1386-1388`) — a different, narrower permission
+than `WRITE_SECURE_SETTINGS`, which `Settings.Secure.putIntForUser`
+actually requires. `0022`'s new call ran under the original Binder
+caller's identity (e.g. the `set-decoy-profile` shell command's own
+caller), which very likely does not hold `WRITE_SECURE_SETTINGS` — so the
+write plausibly threw `SecurityException` or silently failed on every
+real invocation path this project has used so far. Separately, the
+review also flagged that the call's `boolean` return value was discarded
+outright, so even a clean, permission-satisfied failure (e.g. a
+transient Settings-provider issue) would have gone completely unnoticed.
+
+- `3941aa4131fe67eb25767d57dd589f1166c6c18a` — "aegisos: clear calling
+  identity for decoy setup-complete write"
+  (`patches/frameworks-base/0023`, real build-server SHA) — three changes
+  to `DecoyProfileHelper.java`, all confined to `setDecoyProfile()`:
+  1. New import `android.os.Binder` (confirmed not already imported).
+  2. The `Settings.Secure.putIntForUser(...)` call is now wrapped in the
+     standard `final long token = Binder.clearCallingIdentity(); try {
+     ... } finally { Binder.restoreCallingIdentity(token); }` idiom,
+     matching the ~15 existing call sites of this exact pattern elsewhere
+     in `LockSettingsService.java` (e.g. lines 2460, 2473, 2504 — the
+     `Binder.`-qualified form is used explicitly throughout this file and
+     its sibling `RecoverableKeyStoreManager.java`, not an inherited
+     unqualified call, so this fix follows the same style even though
+     `DecoyProfileHelper` is not itself a `Binder` subclass).
+  3. The call's `boolean` return value is now captured; if `false`, a
+     `Slog.w(TAG, ...)` warning is logged identifying the affected decoy
+     user and noting the profile remains distinguishable until retried.
+     The existing anti-recursion `USER_SYSTEM` guard and the rest of
+     `setDecoyProfile`'s control flow are untouched — `DecoyProfileState`
+     is still saved regardless of the flag write's outcome (see the
+     engineering-judgment note below for why this does not also abort).
+  Re-confirmed the real current source (`DecoyProfileHelper.java`'s
+  imports and `setDecoyProfile` body) via SSH before editing — matched
+  `0022`'s own landed content exactly, no drift. Authored under
+  `AGENTS.md`'s local-first discipline in a **new** disposable local git
+  repo (`aegisos-platform/.worktrees/duress-indistinguishability-task7-fix/`,
+  seeded read-only from the real branch HEAD
+  `4e10e6a87a4a48e9381f5f46afd65d6765f61dbf` — i.e. `0022`'s own real
+  post-`git am` SHA, not the earlier task's now-stale worktree) and landed
+  on the real branch with `git am --3way` (applied cleanly, no conflicts).
+  `0022`'s already-landed commit was left untouched — this is a new,
+  separate commit, not an amend/rewrite.
+- Base commit: `4e10e6a87a4a48e9381f5f46afd65d6765f61dbf` — `0022`'s own
+  real post-`git am` SHA, the real branch tip at fetch time.
+
+**Engineering-judgment note (failed write does not abort registration):**
+a failed `USER_SETUP_COMPLETE` write is logged loudly but does not throw
+or prevent `DecoyProfileState` from being saved, for two reasons: (1) the
+security-relevant property this task's earlier `USER_SYSTEM` guard
+protects is completely independent of this write's outcome — a failure
+here cannot leak the real user's identity or credentials, it can only
+leave the decoy somewhat more distinguishable than intended (an already
+documented, already-open gap in this plan's own indistinguishability
+design, alongside the multi-user UI chrome and first-run setup gaps in
+the router's own status record); (2) a duress mechanism that refuses to
+register a decoy at all because of an unrelated, non-security
+Settings-provider write failure is a worse outcome for the person relying
+on it than a decoy that is briefly more distinguishable than intended.
+Changing `setDecoyProfile`'s throw contract was judged a larger
+behavioral decision than this specific fix's scope — a clear, unmissable
+`Slog.w` is the fix's own minimum bar, per this project's "no partial
+implementations presented as done" standard; whether a failed write
+should also abort is left open for explicit owner sign-off rather than
+decided unilaterally here.
+
+**Build verification:** a second fast `m services` build check (same
+target/`OUT_DIR` as `0022`'s own check), launched fully detached on the
+remote side and polled to completion with a bounded synchronous loop:
+`ninja: 2m35.17s Build Succeeded: 19 steps - 0.12/s`, `#### build
+completed successfully (02:41 (mm:ss)) ####` — fewer steps than `0022`'s
+own check because most of the dependency graph was already built and
+cached; only `services.core` (containing the edited
+`DecoyProfileHelper.java`) needed recompiling. No new compiler
+diagnostics beyond the same pre-existing, unrelated ones already noted
+for `0022`. Not a consolidated `m systemimage` build and does not by
+itself validate runtime behavior (e.g. that the write actually succeeds
+under the real `set-decoy-profile` shell caller on physical hardware) —
+no task in this plan has yet scheduled a dynamic exercise of this
+specific behavior.
+
 ### `build/release`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
