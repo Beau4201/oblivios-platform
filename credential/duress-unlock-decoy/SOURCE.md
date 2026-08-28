@@ -90,6 +90,15 @@ cd frameworks/base && git am ../../credential/duress-unlock-dummy/patches/framew
 cd frameworks/base && git am ../../credential/duress-unlock-decoy/patches/frameworks-base/*.patch
 ```
 
+`build/release` has no prerequisite package — apply directly onto its real
+HEAD (`8976d78feac337469081409228886065a4dfefab`, manifest tag
+`2026071500`), on a branch (not detached HEAD):
+
+```sh
+cd build/release && git checkout -b aegisos-duress-decoy-switch && \
+  git am ../../credential/duress-unlock-decoy/patches/build-release/*.patch
+```
+
 ## What the changes do
 
 - `0001`: adds `USER_TYPE_FULL_AEGISOS_DECOY` to `UserManager.java` and a
@@ -268,3 +277,116 @@ characterization was time-boxed and left inconclusive. A real, unrelated
 infrastructure defect was also found and fixed during validation: the
 emulator's initial cold boot hung 1h46m from loading a stale quickboot
 snapshot against the freshly built image; fixed with `-no-snapshot-load`.
+
+## Third plan: session indistinguishability, Component A (`0018`)
+
+`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`
+continues the same `frameworks/base` branch (`aegisos-duress-decoy-switch`).
+The real branch tip at fetch time was `5f3a562a4eefea8a14c2aaf42d14fc9c49cf0c1a`
+— ahead of `0017`'s own recorded HEAD (`295f6f9cf610`) because two
+temporary ADR-059 physical-hardware-validation instrumentation commits were
+added and then reverted on the branch after `0017` landed; neither was
+independently exported as a patch here since both were temporary and are
+already reverted on the real branch. This section covers Task 2 only (the
+plan's first code-touching task); later tasks in this plan will add further
+entries here as they land.
+
+- `ebb58e3ccc2034c2685b889ceecbcd1830b382ef` — "aegisos: enable
+  skip-keyguard-when-switching-to-unlocked-users"
+  (`patches/frameworks-base/0018`, real build-server SHA) — flips
+  `config_multiuserSkipKeyguardWhenSwitchingToUnlockedUsers` in
+  `core/res/res/values/config.xml` from `false` to `true`, with an
+  AegisOS-authored comment explaining why (a Duress Unlock decoy switch's
+  credential was already verified moments earlier by `DecoyProfileHelper`,
+  so re-locking and demanding the same PIN again is spurious). No new
+  AegisOS code — this enables a dormant upstream AOSP mechanism that is
+  otherwise unused. Device-wide effect for any user switch, not
+  decoy-specific: confirmed by reading the real consumers directly
+  (`UserController.java` line ~542, `KeyguardViewMediator.java` line
+  ~712) rather than trusting the plan's own description — both gate on
+  `android.multiuser.Flags.credentialCapture()` AND this resource bool
+  AND `StorageManager.isCeStorageUnlocked(userId)` AND
+  `mLockPatternUtils.isTrustAllowedForUser(userId)`, so the skip only
+  ever applies to a target user whose CE storage is already unlocked and
+  trusted — this task does not by itself relax either of those two
+  additional runtime gates. Authored under `AGENTS.md`'s local-first
+  discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task2a/`,
+  seeded read-only from the real branch HEAD
+  `5f3a562a4eefea8a14c2aaf42d14fc9c49cf0c1a`) and landed on the real
+  branch with `git am --3way` (applied cleanly, no conflicts).
+- Base commit for this third plan's Task 2:
+  `5f3a562a4eefea8a14c2aaf42d14fc9c49cf0c1a` — the real branch tip at
+  fetch time, which sits ahead of `0017`'s own recorded HEAD
+  (`295f6f9cf610`, `patches/frameworks-base/0017`) due to two temporary
+  ADR-059 instrumentation commits added and reverted on the branch after
+  `0017` landed; not independently exported as patches since they were
+  temporary.
+
+**Build verification:** a fast `m services` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`) after `0018`
+landed: `#### build completed successfully (14:23 (mm:ss)) ####`. This
+confirms the resource-only XML change compiles; it is not a consolidated
+`m systemimage` build and does not by itself validate runtime behavior —
+that is later tasks' job (10/11 in this plan check for device-wide keyguard
+regression on ordinary, non-decoy multi-user switches).
+
+**Companion change, different repository:** this same task also enables
+the `android.multiuser.credential_capture` aconfig flag (both switches are
+required together — see `0018`'s description above) via a new
+`build/release` patch. See the `build/release` section below; it is a
+separate git repository with its own patch numbering, landed as its own
+commit.
+
+### `build/release`
+
+This is the first AegisOS patch to this repository. Prior to this patch,
+the repository had never received any AegisOS-authored commit; it was on
+detached HEAD at `8976d78feac337469081409228886065a4dfefab` (manifest tag
+`2026071500`). A real, named branch (`aegisos-duress-decoy-switch`,
+matching `frameworks/base`'s existing branch name — the convention this
+and future patch cycles in `packages/apps/Settings` and
+`packages/apps/Multiuser` will also follow) was created off that detached
+HEAD before landing anything, so this and future `build/release` commits
+land on a real ref, not an anonymous detached-HEAD history.
+
+- `e4722bcb53a3ad8e67aafad21c6540a83f552ee1` — "aegisos: enable
+  credential_capture flag for skip-keyguard-when-switching-to-unlocked-users"
+  (`patches/build-release/0001`, real build-server SHA) — adds
+  `aconfig/trunk_staging/android.multiuser/credential_capture_flag_values.textproto`,
+  setting the `android.multiuser` package's `credential_capture` aconfig
+  flag to `state: ENABLED` / `permission: READ_WRITE`. This flag already
+  existed as a real, declared-but-disabled-by-default AOSP flag
+  (`frameworks/base/core/java/android/content/pm/multiuser.aconfig` line
+  376, namespace `multiuser`, description "Perform authentication in the
+  login app on desktop before switching to a user") — this patch only
+  overrides its release-config value, adding no new flag declaration.
+  Mirrors the existing
+  `aconfig/trunk_staging/com.android.systemui/scene_container_flag_values.textproto`
+  in the same tree structurally byte-for-byte (confirmed by direct `cat`
+  comparison before authoring, not assumed from a prior transcription).
+  Note: the plan brief this task followed expected the
+  `aconfig/trunk_staging/android.multiuser/` directory not to exist yet;
+  in fact it already existed with roughly 90 other, pre-existing AOSP flag
+  override files unrelated to AegisOS — only the specific
+  `credential_capture_flag_values.textproto` file was actually new. This
+  does not change what the patch does (one new file, no conflicts), only
+  the "first flag override for this package" framing in the brief, which
+  was incorrect. Authored under `AGENTS.md`'s local-first discipline in a
+  disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task2b/`, a
+  new-file-only worktree, nothing fetched) and landed on the real branch
+  with `git am --3way` (applied cleanly, no conflicts).
+- Base commit: `8976d78feac337469081409228886065a4dfefab` (this repository's
+  real HEAD at the time, manifest tag `2026071500` — first entry for this
+  repository, so this is also the branch point).
+
+**Build verification:** none required for this repository alone — it holds
+release configuration (aconfig flag value overrides) consumed by other
+repositories' builds, not compiled code. The `frameworks/base` `0018`
+build check above (`m services`, resource-XML-only) does not exercise this
+flag either, since aconfig flag *state* is baked in at Soong analysis time
+for the whole product, not just the one resource file. The actual
+functional exercise of this flag together with `0018`'s resource default
+happens in this plan's later consolidated-build and validation tasks, not
+here.
