@@ -786,6 +786,64 @@ as a dependency in the same build. It is not a consolidated
 — no task in this plan has yet scheduled a dynamic exercise of this
 specific UI surface.
 
+Task 8 of the third plan
+(`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`,
+"Component D — minor P3 fixes") routes the two remaining Settings
+multi-user UI hints — `Utils.hasMultipleUsers(Context)` and
+`WifiConfigController2`'s `mIsMultiUser` field initializer — onto the same
+`getUsersForUiDisplay` API, matching the pattern `0001` above already
+established. The task brief's own quoted code for both sites was marked
+as a paraphrase, not a verbatim citation; both real bodies were read in
+full (`sed -n`) before editing and matched the brief's predicted shape
+closely: `hasMultipleUsers` called the real no-arg `UserManager.getUsers()`
+directly, and `WifiConfigController2` called `UserManager.getUserCount()`,
+which frameworks/base's real `UserManager.java` (line 5197-5199) shows is
+itself implemented as `getUsers().size()`. Both therefore share `0001`'s
+own precedent — the real no-arg `getUsers()` wrapper is `getUsers(/*
+excludeDying=*/ false)` — not the task brief's suggested
+`getUsersForUiDisplay(true)`. Per the task's own instruction to confirm
+against real behavior rather than blindly apply `true` when the source
+clearly implies otherwise, both sites were migrated to
+`getUsersForUiDisplay(false /* excludeDying */)`, preserving each site's
+exact prior semantics (dying users still counted), consistent with `0001`
+above and not a genuinely ambiguous case.
+
+- `229434697ac35133c86de3c7cfaeeda7740e8b47` — "aegisos: route Settings
+  multi-user UI hints through getUsersForUiDisplay"
+  (`patches/packages-apps-settings/0002`, real build-server SHA — the
+  patch file itself was generated from local commit
+  `0787db5109a5d35669e704a75aaa0b185133d4b9` in a disposable worktree;
+  `git am` reconstructs the commit against the real tree, so it gets a
+  genuinely different SHA even for byte-identical content) —
+  `Utils.java:421-423`'s `hasMultipleUsers(Context)` now returns
+  `context.getSystemService(UserManager.class)
+  .getUsersForUiDisplay(false /* excludeDying */).size() > 1` instead of
+  `.getUsers().size() > 1`;
+  `WifiConfigController2.java:290-291`'s constructor now sets
+  `mIsMultiUser = mContext.getSystemService(UserManager.class)
+  .getUsersForUiDisplay(false /* excludeDying */).size() > 1` instead of
+  `.getUserCount() > 1`. Both call sites' pre-edit bodies were confirmed
+  via a byte-for-byte `sha256sum` match between the fetched local copy and
+  the live remote file before editing. Authored under `AGENTS.md`'s
+  local-first discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task8/`, a
+  fetch-only worktree seeded read-only from the real repository HEAD
+  `50fe764d7c9a37b343f776d9e2e2d0d4ee2560d3` — only the two touched files,
+  not a full checkout) and landed on the real branch with `git am --3way`
+  (applied cleanly, no conflicts).
+- Base commit: `50fe764d7c9a37b343f776d9e2e2d0d4ee2560d3` (`0001` above,
+  this repository's real HEAD at the time).
+
+**Build verification:** a fast `m Settings` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side (`nohup ... & disown`) and polled to
+completion with a bounded synchronous loop rather than an async
+background-task notification: `ninja: 5m26.67s Build Succeeded: 22 steps -
+0.07/s`, `#### build completed successfully (05:31 (mm:ss)) ####`. No
+compile errors; unrelated pre-existing Kotlin deprecation warnings only.
+Same caveat as `0001` above: this is not a consolidated `m systemimage`
+build and does not validate runtime behavior.
+
 ## Apply (this section)
 
 ```sh
