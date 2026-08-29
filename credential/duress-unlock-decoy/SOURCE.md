@@ -860,6 +860,92 @@ the first time.** Full evidence: `.superpowers/sdd/task-2-fix-report.md`.
   explicit owner review before Component A can be considered safe, not a
   unilateral code fix.**
 
+### Deliberate revert: disable `credential_capture` again (`0004`)
+
+This is a revert of an owner-approved decision, not a mistake being
+undone. Given the two findings directly above — a confirmed, real
+security regression (an ordinary, non-decoy `am switch-user` to a
+PIN-protected user skipping the keyguard with zero credential check
+performed) and the fact that the mechanism's own original goal
+(single-PIN decoy unlock) still was not achieved by any of `0001`-`0003` —
+the owner decided to revert the flag to inert now and treat "how to fix
+the double-PIN UX bug without a device-wide keyguard bypass" as a future
+redesign problem, not something to solve reactively. `0002` (correct
+`aconfig/cp2a/` directory placement) and `0003` (`READ_ONLY` permission)
+are **kept, unchanged** — both are genuine, correct fixes independent of
+whether the flag itself is enabled or disabled.
+
+- `10209de65d2accda1d7cdb8e178f41f9a20f166f` — "aegisos: disable
+  credential_capture flag, revert to inert pending redesign"
+  (`patches/build-release/0004`, real build-server SHA) — a one-line
+  change, `state: ENABLED` → `state: DISABLED`, in the same file `0002`
+  relocated and `0003` fixed the permission of. No other file touched.
+  Confirmed via a direct read of `frameworks/base/services/core/java/com/
+  android/server/am/UserController.java` (around line 542,
+  `setInitialConfig()`) before authoring this patch that
+  `frameworks/base`'s own `0018` resource override
+  (`config_multiuserSkipKeyguardWhenSwitchingToUnlockedUsers`) is only
+  ever consulted inside `if (android.multiuser.Flags.credentialCapture())
+  { ... }` — with this flag disabled again, that resource value is simply
+  never read, so `0018` does not need a separate revert. Authored under
+  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task2-revert/`,
+  a baseline-fetch-then-edit worktree seeded from the real branch HEAD
+  `952bd37e4bbceda794f3cc823e18f1c0948beeeb` — the fetched file's
+  `sha256sum` matched the live remote file byte-for-byte before editing)
+  and landed on the real branch with `git am --3way` (applied cleanly, no
+  conflicts).
+- Base commit: `952bd37e4bbceda794f3cc823e18f1c0948beeeb` (`0003`'s own
+  real post-`git am` SHA — this repository's real HEAD at the time).
+
+**Build verification:** a full, consolidated `m systemimage` rebuild
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`,
+`OFFICIAL_BUILD=true`), launched fully detached on the remote side and
+polled to completion with a bounded synchronous loop (using `kill -0
+<known PID>` for liveness, not a `pgrep` pattern-match — an earlier launch
+attempt in this same task self-matched its own remote shell's command-line
+text via `pgrep -f "soong_ui --build-mode"`, the identical self-inflicted
+bug class already documented for `0002`/`0003`'s own rebuild; caught before
+it produced a wrong result and switched to `kill -0` against the real PID).
+Result: `ninja: 1h23m05.55s Build Succeeded: 7224 steps - 1.45/s`, `####
+build completed successfully (01:31:39 (hh:mm:ss)) ####`. Fresh
+`system.img`/`super.img` timestamps confirmed inside the build window.
+
+**Re-verification (the decisive non-decoy regression check, re-run against
+the reverted build): PASSES — the bypass is closed.** Booted a fresh
+emulator (`-no-snapshot-load -wipe-data`, ~1m30s to `boot_completed=1`,
+consistent with prior boots). `adb shell aflags list | grep
+credential_capture` returned **no entry at all** (3119 total flags,
+matching the original pre-`0002` baseline count) rather than an explicit
+`disabled` line — an asymmetry between how this build surfaces a
+newly-`ENABLED` vs. newly-`DISABLED` read-only flag that was not further
+root-caused (not needed: the dynamic test below is decisive regardless of
+what `aflags list` shows). Created an ordinary (non-decoy) secondary user
+(`aegisos-task2revert-ordinary`, id 10, confirmed cold — no `running` tag
+— before the switch), set PIN `22222`, cleared logcat, then `adb shell am
+switch-user 10`:
+  - `dumpsys window` immediately showed `isKeyguardShowing=true` (the
+    regression's own fingerprint was `isKeyguardShowing=false`
+    immediately) — the keyguard is genuinely back, blocking the desktop.
+  - Logcat after the switch contained **zero** matches for
+    `credentialCapture|SkipKeyguard|skipKeyguardWhenSwitchingToUnlockedUsers`
+    — neither `KeyguardViewMediator` nor `UserController` fired their skip
+    decisions this time (both had fired for this exact scenario on the
+    `0003` build).
+  - Supplying the real credential (`adb shell cmd lock_settings verify
+    --user 10 --old 22222`) produced `LockSettingsService: Verifying
+    primary lockscreen credential for user 10` /
+    `LockSettingsService: Successfully verified primary lockscreen
+    credential for user 10` — this exact line was **absent entirely** in
+    the regression (proof the credential is actually being checked again,
+    not merely that the keyguard UI is visible).
+
+Both pieces of evidence the task asked for are present, not just one.
+Component A's decoy double-PIN bug is expected and accepted to still
+reproduce on this build (not re-tested here per explicit instruction —
+reverting the flag does not change that code path's outcome, only removes
+the security regression it had introduced alongside it).
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
