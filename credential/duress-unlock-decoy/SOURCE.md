@@ -717,6 +717,149 @@ functional exercise of this flag together with `0018`'s resource default
 happens in this plan's later consolidated-build and validation tasks, not
 here.
 
+### Fix to `0001`: correct release-config directory + permission (`0002`, `0003`)
+
+Task 10's own emulator validation (`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`
+Task 10, `.superpowers/sdd/task-10-report.md`) found `0001` a real, confirmed
+functional defect, not a hypothetical: `sdk_phone64_x86_64-cp2a-userdebug`
+and `lynx-cur-userdebug` both build release config `cp2a`
+(`RELEASE_ACONFIG_VALUE_SETS` ends in `...-cp2a`, confirmed in both trees'
+generated `release_config-*.vars`), and `cp2a`'s own
+`aconfig_value_set-platform_build_release-cp2a` (`aconfig/cp2a/Android.bp`)
+only globs `aconfig/cp2a/*/Android.bp` — it never reads
+`aconfig/trunk_staging/`. `0001`'s value therefore had no on-device aconfig
+storage slot at all (`adb shell aflags list`: zero `credential_capture`
+entries; `aflags enable android.multiuser.credential_capture` errored "no
+aconfig flag ... Does the flag have an .aconfig definition?"), leaving the
+skip-keyguard mechanism permanently inactive and reproducing, end to end on
+a real UI, the exact double-PIN-entry bug this whole plan exists to fix.
+
+This fix landed in two patches, the second found only by the real rebuild
+this fix required (not by inspection):
+
+- `aae51c7d0274f8d610348a04caac7d778af5aac3` — "aegisos: move
+  credential_capture flag override to the release config this product
+  actually reads" (`patches/build-release/0002`, real build-server SHA) —
+  pure rename,
+  `aconfig/trunk_staging/android.multiuser/credential_capture_flag_values.textproto`
+  → `aconfig/cp2a/android.multiuser/credential_capture_flag_values.textproto`,
+  content otherwise unchanged (`permission: READ_WRITE` preserved at this
+  step). No `Android.bp` change needed —
+  `aconfig/cp2a/android.multiuser/Android.bp` already globs
+  `*_flag_values.textproto`. Authored under `AGENTS.md`'s local-first
+  discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task2-fix/`,
+  a baseline-fetch-then-edit worktree — a direct `git fetch` of full branch
+  history from the real branch failed here with "lazy fetching disabled;
+  some objects may not be available" / "aborting due to possible repository
+  corruption on the remote side," consistent with `build/release` being a
+  partial/promisor clone this workstation cannot lazily complete; fell back
+  to fetching only the touched file's content and committing it as an
+  explicit baseline, per `AGENTS.md`'s own "fetch only the touched files"
+  wording) and landed on the real branch with `git am --3way` (applied
+  cleanly, no conflicts).
+- `952bd37e4bbceda794f3cc823e18f1c0948beeeb` — "aegisos: mark
+  credential_capture flag READ_ONLY for cp2a release config"
+  (`patches/build-release/0003`, real build-server SHA) — changes
+  `permission: READ_WRITE` to `permission: READ_ONLY` in the same file
+  `0002` just relocated. Found by a genuine build failure, not anticipated
+  by the original task brief (which called for moving the file with
+  "identical content"): `cp2a` sets
+  `RELEASE_ACONFIG_REQUIRE_ALL_READ_ONLY=true`
+  (`build/release/flag_values/bp1a/RELEASE_ACONFIG_REQUIRE_ALL_READ_ONLY.textproto`,
+  inherited into `cp2a`'s resolved vars), which Soong turns into
+  `--allow-read-write false` on every `aconfig create-cache` invocation for
+  this release config (`build/soong/aconfig/aconfig_declarations.go:189`).
+  A `READ_WRITE` value is rejected outright under that flag:
+  ```
+  Error: failed to create cache
+  Caused by:
+      flag credential_capture has permission READ_WRITE, but
+      allow_read_write is false
+  ```
+  confirmed as a real `m systemimage` failure (11 minutes in, 1 step
+  failed of 68366) before this fix. Every other `*_flag_values.textproto`
+  already checked into `aconfig/cp2a/android.multiuser/` uses
+  `permission: READ_ONLY` — `0001`'s file, carried over unchanged from its
+  original `trunk_staging` placement, was the only outlier. `READ_ONLY` is
+  also correct on the merits: this flag only needs to be permanently baked
+  in as enabled at build time, not toggleable post-build via
+  `aflags`/`device_config`, and `READ_ONLY` cannot be flipped off at
+  runtime by anyone with `device_config` write access. Authored in a
+  second disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-task2-fix2/`,
+  same baseline-fetch-then-edit pattern, seeded from `0002`'s own real
+  post-`git am` SHA) and landed on the real branch with `git am --3way`
+  (applied cleanly, no conflicts).
+- Base commits: `e4722bcb53a3ad8e67aafad21c6540a83f552ee1` (`0001`'s own
+  real post-`git am` SHA) for `0002`; `aae51c7d0274f8d610348a04caac7d778af5aac3`
+  (`0002`'s own real post-`git am` SHA) for `0003`.
+
+**Build verification:** a full, consolidated `m systemimage` rebuild
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side and polled to completion with a bounded
+synchronous loop (self-inflicted false-positive found and fixed mid-poll:
+an earlier `pgrep -fa` diagnostic matched the polling SSH command's own
+command-line text, not the real build). First attempt (with only `0002`
+landed) failed as described above at 11m0s. Second attempt (with `0003`
+also landed) succeeded: `ninja: 1h27m20.99s Build Succeeded: 7036 steps -
+1.34/s`, `#### build completed successfully (01:27:27 (hh:mm:ss)) ####`,
+real `87m26.872s`. Post-boot, `adb shell aflags list` (after `adb root`)
+now shows a real storage slot: `android.multiuser.credential_capture
+enabled - default read-only system` (3120 total flags, vs. Task 10's 3119
+on the unfixed build) — direct, on-device confirmation the release-config
+placement fix actually reaches the running system this time.
+
+**Re-verification (Task 10's exact Component A + non-decoy regression
+tests, re-run against the fresh build): BLOCKED — the release-config fix
+is real and confirmed working at the flag-storage and `UserController`
+decision layers, but the plan's actual functional goal (single-PIN decoy
+unlock) is still not achieved, and a second, more serious, previously
+undetectable problem surfaced now that the flag is genuinely active for
+the first time.** Full evidence: `.superpowers/sdd/task-2-fix-report.md`.
+
+- Component A (decoy switch, single PIN entry): **still FAILS**, but via a
+  *different* code path than `0001`'s original defect. Logcat confirms
+  `UserController: Skipping keyguard due to
+  skipKeyguardWhenSwitchingToUnlockedUsers` genuinely fires for the decoy
+  switch now (proof the flag/resource/CE-storage/trust gates all passed) —
+  but a live PIN bouncer still appears afterward, traced to a *separate*
+  trigger: the decoy's home activity starting while the pre-existing
+  (pre-switch) keyguard instance is still up invokes
+  `LegacyActivityStarterInternalImpl.dismissKeyguardThenExecute`, which
+  itself decides to *show* `PrimaryBouncerInteractor` rather than silently
+  dismiss, because a secure keyguard shown before the switch began is not
+  retroactively torn down by `skipKeyguardWhenSwitchingToUnlockedUsers` —
+  that flag only suppresses a *new* forced lock during the switch itself.
+  Re-entering the decoy PIN a second time via real on-screen taps and
+  tapping the real `key_enter` button (`com.android.systemui:id/key_enter`)
+  does unlock the device (`isKeyguardShowing` false) — i.e. the exact same
+  symptom Task 10 already documented, not a new failure mode, just not
+  fixed by relocating the release-config file.
+- Non-decoy regression: **FAILS, and worse than "the fix didn't work" —
+  a genuine, previously-undetectable security regression.** Creating an
+  ordinary (non-decoy) user with a real PIN and switching to it with a
+  plain `am switch-user <id>` (no credential ever supplied for that user —
+  confirmed by the total absence of any "Verifying primary lockscreen
+  credential for user 11" log line) landed on a **fully unlocked,
+  bouncer-free desktop** (`isKeyguardShowing=false` immediately). Logcat
+  shows both `KeyguardViewMediator: Skipping keyguard due to
+  config_multiuserSkipKeyguardWhenSwitchingToUnlockedUsers` and
+  `UserController: Skipping keyguard due to
+  skipKeyguardWhenSwitchingToUnlockedUsers` fired for this switch. This is
+  exactly the "device-wide effect for any user switch, not decoy-specific"
+  caveat `0018`'s own SOURCE.md entry already flagged as a live risk once
+  the flag became genuinely active — it was never observable before this
+  fix because the flag had no storage slot at all. Task 10's own version of
+  this same regression check reported PASS only because Component A was
+  completely inert on that build; that PASS does not carry over now that
+  the mechanism actually runs. **Not fixed here — out of this task's scope
+  and a real security-relevant design question (should
+  `skipKeyguardWhenSwitchingToUnlockedUsers` apply to any CE-unlocked,
+  trust-allowed target user, or only to a decoy-routed switch?) that needs
+  explicit owner review before Component A can be considered safe, not a
+  unilateral code fix.**
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
