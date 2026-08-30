@@ -1188,6 +1188,67 @@ produced a real regression only visible at runtime) is required before
 this can be considered closed, and has not yet been done as of this
 entry.
 
+### `frameworks/base`: exhaustive leak-audit fixes, part 1 (`0027`, `0028`)
+
+Following ADR-067's exhaustive, owner-requested audit for every
+remaining decoy identity-leak surface
+(`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`,
+21 items found), fixed in the audit's own recommended priority order.
+
+- `dcb6019b1bfa57a046583b386220581e90697ba8` — "aegisos: fix legacy
+  power-menu fallback to use getUsersForUiDisplay"
+  (`patches/frameworks-base/0027`, real build-server SHA) — Critical
+  item 1. `LegacyGlobalActions.addUsersToMenu()` called the raw
+  `UserManager#getUsers()` and rendered every real user's name with a
+  checkmark directly on the lock screen (`showDuringKeyguard()` returns
+  `true`) — confirmed a live fallback path via `GlobalActions.java`
+  (triggered when SystemUI fails to respond to the power-menu request
+  within 5 seconds, or reports `onGlobalActionsAvailableChanged(false)`),
+  not dead code. Fixed with a one-line substitution to
+  `getUsersForUiDisplay(true)`.
+- `12719d2f9393...` — "aegisos: fix uninstall dialogs' single-user
+  check to use getUsersForUiDisplay" (`patches/frameworks-base/0028`,
+  real build-server SHA) — High item 4. Three sibling call sites, each
+  with their own `isSingleUser()`/`isSingleUserOnDevice()` helper keyed
+  off the raw `UserManager#getUserCount()`/`.userCount`, picking
+  between single-user and multi-user uninstall confirmation text:
+  `packages/PackageInstaller/src/com/android/packageinstaller/handheld/UninstallAlertDialogFragment.java`,
+  `.../television/UninstallAlertFragment.java`, and
+  `.../v2/model/UninstallRepository.kt`. Confirmed `getUserCount()`'s
+  own real implementation (`getUsers().size()`, with a null-safety
+  fallback to 1) before substituting `getUsersForUiDisplay(true).size()`
+  at all three, matching `getAliveUsers()`-based fixes elsewhere in this
+  patch set.
+  Both authored under `AGENTS.md`'s local-first discipline in disposable
+  local git repos
+  (`aegisos-platform/.worktrees/duress-legacyglobalactions-fix/`,
+  `aegisos-platform/.worktrees/duress-uninstall-usercount-fix/`, each a
+  fetch-only worktree seeded read-only from the real branch HEAD at
+  fetch time — `c09efcc32293ea20e09ef4d5545c361060643183` and
+  `dcb6019b1bfa57a046583b386220581e90697ba8` respectively — with every
+  fetched file's `sha256sum` confirmed byte-identical to the live remote
+  file before editing) and landed on the real branch with `git am`
+  (applied cleanly, no conflicts, confirmed no build was already in
+  flight beforehand each time). Both patch files were regenerated fresh
+  via `git format-patch` directly from the real post-`git am` branch
+  history, not exported from either disposable worktree's own commit.
+- Base commits: `c09efcc32293ea20e09ef4d5545c361060643183` (`0026`'s own
+  real post-`git am` SHA) for `0027`; `dcb6019b1bfa57a046583b386220581e90697ba8`
+  (`0027`'s own real post-`git am` SHA) for `0028`.
+
+**Build verification:** `0027` confirmed via a fast `m services` build
+check (`Build Succeeded: 18 steps`, incremental) with no diagnostics
+attached to the edited file. `0028` confirmed via a fast `m
+PackageInstaller` build check (`Build Succeeded: 28 steps`) with no
+diagnostics attached to any of the three edited files (Java and
+Kotlin both compiled cleanly). Both are compile-time verification
+only; runtime confirmation is deferred to a later consolidated
+hardware-validation round for this whole audit-fix batch, per the
+same reasoning `0026`'s own entry already recorded, since interactive
+UI automation for this exact class of surface proved unreliable on
+this session's emulator attempt (see ADR-068 for the specific
+tooling-limitation record).
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
@@ -1350,6 +1411,87 @@ session — a real ownership-based multi-user tell.
 above (both repositories' final patches were landed and rebuilt together)
 — `ninja: 53m09.68s Build Succeeded: 3775 steps`, clean, no compile errors
 in `WifiUtils.java` or any file in this repository.
+
+### Exhaustive leak-audit fixes, part 1 (`0004`, `0005`, `0006`)
+
+Following ADR-067's exhaustive, owner-requested audit for every
+remaining decoy identity-leak surface
+(`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`,
+21 items found), fixed in the audit's own recommended priority order.
+
+- `ab4b0a932a049f5a3c484c72139dd81ff5661e4b` — "aegisos: fix Settings
+  Users screen to use getUsersForUiDisplay" (`patches/packages-apps-settings/0004`,
+  real build-server SHA) — Critical item 2.
+  `UserSettings.updateUserList()` called the raw
+  `UserManager#getAliveUsers()`, gated only on
+  `UserManager.supportsMultipleUsers()`, not admin status — reachable
+  from a non-admin AegisOS Duress Unlock decoy session, listing the
+  real owner's name as a switchable preference. Confirmed
+  `getAliveUsers()`'s own real implementation
+  (`return getUsers(/* excludeDying= */ true)`) is exactly
+  `getUsersForUiDisplay(true)`'s own non-decoy-branch semantics before
+  substituting it.
+- `fcbfa430a14b79b01fdea0aeaaaa449670950fc5` — "aegisos: don't name
+  another real user in storage move/migrate dialogs"
+  (`patches/packages-apps-settings/0005`, real build-server SHA) —
+  Critical item 3. `StorageWizardMigrateConfirm` and
+  `StorageWizardMoveConfirm` both iterate every real user via raw
+  `getUsers()` to unlock their CE storage before a move/migrate can
+  proceed — that enumeration is left unchanged, it's a genuine
+  functional requirement, not a display list. But the credential dialog
+  shown for an already-secured, currently-locked user named that user
+  directly (`storage_wizard_move_unlock`'s `^1` template), reachable
+  from within the decoy's own Settings if the real owner's storage
+  happens to be locked. Fixed by adding a new string
+  (`storage_wizard_move_unlock_generic`, no name) and a small
+  `isDecoySession()` helper in each class (the same
+  `getUsersForUiDisplay(true).size()==1 && userType==DECOY` pattern used
+  throughout this feature), shown instead of the real templated string
+  only when the current session is the decoy — the unlock loop itself
+  is untouched.
+- `195738a1ca6...` — "aegisos: fix Wi-Fi shared badge/dialog and
+  factory-reset warning to use getUsersForUiDisplay"
+  (`patches/packages-apps-settings/0006`, real build-server SHA) — High
+  items 5, 6, 7. Three more raw-`getUserCount()` sibling call sites of
+  the already-fixed `WifiUtils`/`WifiConfigController2`/uninstall-dialog
+  pattern: `WifiEntryPreference.displaySharedIcon()`'s "shared" badge,
+  `WifiDetailPreferenceController2`'s "forget shared network"
+  confirmation dialog, and `MainClear`'s "other users present on this
+  device" factory-reset warning (the latter combined with the existing
+  `profilesSize` subtraction, unchanged). All three fixed with
+  `getUsersForUiDisplay(true).size()`.
+  All three authored under `AGENTS.md`'s local-first discipline in
+  disposable local git repos
+  (`aegisos-platform/.worktrees/duress-usersettings-fix/`,
+  `aegisos-platform/.worktrees/duress-storagewizard-fix/`,
+  `aegisos-platform/.worktrees/duress-wifi-factoryreset-fix/`, each a
+  fetch-only worktree seeded read-only from the real branch HEAD at
+  fetch time — `b9b6d301e5a8386d25142ea1c047f88011629acc`,
+  `ab4b0a932a049f5a3c484c72139dd81ff5661e4b`, and
+  `fcbfa430a14b79b01fdea0aeaaaa449670950fc5` respectively — with every
+  fetched file's `sha256sum` confirmed byte-identical to the live remote
+  file before editing) and each landed on the real branch with `git am`
+  (applied cleanly, no conflicts, confirmed no build was already in
+  flight beforehand every time). All three patch files were regenerated
+  fresh via `git format-patch` directly from the real post-`git am`
+  branch history, not exported from any disposable worktree's own
+  commit.
+- Base commits: `b9b6d301e5a8386d25142ea1c047f88011629acc` (`0003`'s own
+  real post-`git am` SHA) for `0004`;
+  `ab4b0a932a049f5a3c484c72139dd81ff5661e4b` (`0004`'s own real
+  post-`git am` SHA) for `0005`;
+  `fcbfa430a14b79b01fdea0aeaaaa449670950fc5` (`0005`'s own real
+  post-`git am` SHA) for `0006`.
+
+**Build verification:** `0004` confirmed via a fast `m Settings` build
+check (`Build Succeeded: 160 steps`), `0005` via another (`Build
+Succeeded: 89 steps` — this run also confirms the new
+`storage_wizard_move_unlock_generic` string resource resolved cleanly,
+no missing-resource error), `0006` via another (`Build Succeeded: 24
+steps`). No diagnostics attached to any edited file in any of the
+three runs. All three are compile-time verification only; runtime
+confirmation is deferred to a later consolidated hardware-validation
+round for this whole audit-fix batch (see ADR-068).
 
 ## Apply (this section)
 

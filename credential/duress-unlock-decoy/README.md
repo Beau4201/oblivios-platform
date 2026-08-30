@@ -53,10 +53,17 @@ whole-branch review's own fixes (`frameworks-base` `0024`,
 `packages-apps-settings` `0003`), **ADR-065** (2026-08-30) for the
 Wallet QS tile decoy exemption (`frameworks-base` `0025`), a follow-up
 product decision closing one of the items the third plan had left
-open, and **ADR-066** (2026-08-30) for a real, hardware-discovered
+open, **ADR-066** (2026-08-30) for a real, hardware-discovered
 Critical identity-leak fix to the shared `getUsersForUiDisplay`
-primitive (`frameworks-base` `0026`) — see `SOURCE.md` for exactly what
-each patch does and why.
+primitive (`frameworks-base` `0026`), **ADR-067** (2026-08-30)
+commissioning an exhaustive, owner-requested audit for every remaining
+leak surface (21 found;
+`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`),
+and **ADR-068** (2026-08-30) for the first batch of fixes from that
+audit — three Critical items (`frameworks-base` `0027`,
+`packages-apps-settings` `0004`/`0005`) and four High items
+(`frameworks-base` `0028`, `packages-apps-settings` `0006`) — see
+`SOURCE.md` for exactly what each patch does and why.
 
 ## What this is not
 
