@@ -1118,6 +1118,76 @@ actually renders for a real decoy session on hardware; that is deferred
 to this feature's ongoing UI verification sweep, not yet run for this
 specific patch.
 
+### `frameworks/base`: fix `getUsersForUiDisplay` to key off current user, not caller (`0026`)
+
+Found during the owner-requested UI verification sweep against the
+physical `lynx` device that is already running `0025`'s own base
+candidate (the `aegisos-test-decoy` user, id 10): the QS footer's "Select
+user" dialog (`UserSwitchDialogDelegate` → `UserDetailView.Adapter` →
+`BaseUserSwitcherAdapter` → `UserSwitcherController` →
+`UserSwitcherInteractor` → `UserRepositoryImpl` →
+`getUsersForUiDisplay`) showed the real Owner identity alongside the
+decoy's own — a live, reproducible identity leak, not a hypothetical
+one, directly contradicting ADR-063's claim that this exact surface was
+confirmed leak-free. Root-caused with hard evidence, not guesswork:
+`dumpsys window` showed `mCurrentFocus=Window{... u0 Select user}` while
+`mFocusedApp` correctly showed `u10 com.android.launcher3` — SystemUI's
+floating windows (this dialog, and the power menu's
+`GlobalActionsDialogLite`, independently confirmed to share the same
+`u0`-owned pattern) always render under user 0's Binder/window context,
+regardless of which user is actually current. `getUsersForUiDisplay`'s
+decoy special-case checked `UserHandle.getCallingUserId()`, which is
+`0` for these callers no matter which user is foregrounded, so the
+filter silently never applied to them. By contrast, Settings ▸ Storage
+was independently confirmed architecturally safe: launching it as user
+10 produces a genuine `u10_system` process and a `u10`-owned window
+(`dumpsys window`'s `mCurrentFocus` confirmed this directly), so its own
+call to the same API already received the correct calling identity —
+consistent with ADR-063's claim holding for that one specific surface.
+
+- `c09efcc32293ea20e09ef4d5545c361060643183` — "aegisos: fix
+  getUsersForUiDisplay to key off current user, not caller"
+  (`patches/frameworks-base/0026`, real build-server SHA) — replaces the
+  `UserHandle.getCallingUserId()` check with the existing
+  `getCurrentUserId()` helper already present in this same class
+  (`UserManagerService.java`, `ActivityManagerInternal`-backed, already
+  used by the neighboring `getCurrentAndTargetUserIds()`), confirmed via
+  a real source read before reusing it rather than adding a new,
+  unverified cross-service call. This is a fix to the shared primitive
+  itself, not a per-call-site patch: it covers every present and future
+  caller regardless of which process renders it, rather than requiring
+  every new UI surface to somehow run in a per-user process to get
+  correct filtering. Authored under `AGENTS.md`'s local-first discipline
+  in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-getusersforuidisplay-fix/`, a
+  fetch-only worktree seeded read-only from the real branch HEAD
+  `6740d16784cbcb7fbb9490523276e178e6aeb653` — only the one touched file,
+  its `sha256sum` confirmed byte-identical to the live remote file before
+  editing) and landed on the real branch with `git am` (applied cleanly,
+  no conflicts, confirmed no build was already in flight beforehand).
+  This patch file was regenerated fresh via `git format-patch` directly
+  from the real post-`git am` branch history, not exported from the
+  disposable worktree's own commit.
+- Base commit: `6740d16784cbcb7fbb9490523276e178e6aeb653` (`0025`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Build verification:** a fast `m services` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side, confirmed no build was already in
+flight beforehand: `ninja: 4m17.33s Build Succeeded: 333 steps -
+1.29/s`, `#### build completed successfully (04:23 (mm:ss)) ####`. No
+diagnostics attached to `UserManagerService.java`; `services.jar` was
+confirmed freshly rebuilt (fresh mtime matching this run) with `0026`'s
+commit as the file's own tip. **This is compile-time verification
+only** — it does not confirm the fix actually closes the leak at
+runtime. Given this touches `system_server` identity-filtering code
+shared by every Component B call site, not an isolated app APK, dynamic
+re-validation (ideally emulator-first, given ADR-061's own precedent for
+how a compiles-cleanly change to identity/keyguard-adjacent code
+produced a real regression only visible at runtime) is required before
+this can be considered closed, and has not yet been done as of this
+entry.
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,

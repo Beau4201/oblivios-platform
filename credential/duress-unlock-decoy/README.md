@@ -50,10 +50,13 @@ found it caused a device-wide keyguard-bypass regression, **ADR-062**/
 **ADR-063** (2026-08-30) for physical `lynx` hardware validation of the
 third plan's Components B/C/D, **ADR-064** (2026-08-30) for the closing
 whole-branch review's own fixes (`frameworks-base` `0024`,
-`packages-apps-settings` `0003`), and **ADR-065** (2026-08-30) for the
+`packages-apps-settings` `0003`), **ADR-065** (2026-08-30) for the
 Wallet QS tile decoy exemption (`frameworks-base` `0025`), a follow-up
 product decision closing one of the items the third plan had left
-open — see `SOURCE.md` for exactly what each patch does and why.
+open, and **ADR-066** (2026-08-30) for a real, hardware-discovered
+Critical identity-leak fix to the shared `getUsersForUiDisplay`
+primitive (`frameworks-base` `0026`) — see `SOURCE.md` for exactly what
+each patch does and why.
 
 ## What this is not
 
@@ -79,7 +82,21 @@ Wallet QS tile exemption (`0025`, ADR-065) — all environment-limitation
 UNCHECKED or simply not yet run, not fails — see ADR-063/064/065 for the
 specific reasoning behind each. The Mobile-Data/Internet tile has no
 per-user gate in this source tree at all (ADR-065), so it is not an open
-item — there is nothing there to check. Component A (the double-PIN-prompt fix)
+item — there is nothing there to check.
+
+**A real, Critical identity leak was found and fixed during that same
+verification sweep, not merely a theoretical gap** (ADR-066,
+`frameworks-base` `0026`): the QS footer's "Select user" dialog showed
+the real Owner identity during a live, unlocked decoy session on
+physical `lynx` hardware, directly contradicting ADR-063's claim that
+this surface was leak-free. Root cause: `getUsersForUiDisplay`'s decoy
+filter keyed off the Binder calling user, which is always user 0 for
+SystemUI's floating windows regardless of which user is actually
+current. Fixed in the shared primitive itself (keys off the device's
+actual current user instead) so every present and future caller is
+covered, not just this one call site. **Build-verified only as of this
+entry** — dynamic (emulator or hardware) re-validation that the leak is
+actually closed at runtime has not yet been done. Component A (the double-PIN-prompt fix)
 ships as inert by deliberate design (ADR-061) — its own resource flip
 (`0018`) is real platform content but harmless only in combination with
 `build/release`'s own `DISABLED` flag override (`0002`-`0004`) *and*
