@@ -1249,6 +1249,47 @@ UI automation for this exact class of surface proved unreliable on
 this session's emulator attempt (see ADR-068 for the specific
 tooling-limitation record).
 
+### `frameworks/base`: exhaustive leak-audit fixes, part 2 (`0029`)
+
+- `57239cc4c696...` — "aegisos: route areThereMultipleUiSwitchableUsers
+  through getUsersForUiDisplay" (`patches/frameworks-base/0029`, real
+  build-server SHA) — High item 8, a dormant landmine rather than a
+  currently-live leak. `UserManagerService#areThereMultipleUiSwitchableUsers()`
+  (a private helper gating `isUserSwitcherEnabled()`, which in turn
+  controls the status bar's `mMultiUserAvatar` icon —
+  `KeyguardStatusBarView.java:77`, directly observed on the physical
+  device's lock screen during this session's own earlier hardware
+  testing) called the raw `getUsers(excludeDying=true)`. Confirmed via
+  source that this is currently masked only as a side effect of the
+  AegisOS decoy user type's own default restriction set
+  (`UserTypeFactory.java`) not setting `DISALLOW_ADD_USER` — the
+  sibling `isUserSwitcherEnabled()` check
+  (`!hasUserRestriction(DISALLOW_ADD_USER)`) short-circuits before ever
+  reaching this method for the decoy today, but a future restriction
+  default change could silently reactivate the leak with no code change
+  of its own. Fixed with a one-line substitution to
+  `getUsersForUiDisplay(/* excludeDying= */ true)`, reusing this same
+  class's own already-fixed (ADR-066) primitive.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  local git repo (`aegisos-platform/.worktrees/duress-multiuser-icon-fix/`,
+  a fetch-only worktree seeded read-only from the real branch HEAD
+  `12719d2f93938762de6384999d21bd25d4ec857e` — only the one touched
+  file, its `sha256sum` confirmed byte-identical to the live remote file
+  before editing) and landed on the real branch with `git am` (applied
+  cleanly, no conflicts, confirmed no build was already in flight
+  beforehand). This patch file was regenerated fresh via `git
+  format-patch` directly from the real post-`git am` branch history, not
+  exported from the disposable worktree's own commit.
+- Base commit: `12719d2f93938762de6384999d21bd25d4ec857e` (`0028`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Build verification:** a fast `m services` build check
+(`Build Succeeded: 18 steps`, incremental) confirmed no diagnostics
+attached to the edited file. Compile-time verification only; runtime
+confirmation deferred to the same consolidated hardware-validation
+round as `0026`-`0029` and the `packages-apps-settings`/
+`packages-apps-multiuser` fixes below.
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
@@ -1587,6 +1628,45 @@ This is not a consolidated `m systemimage` build and does not by itself
 validate runtime behavior (e.g. that a decoy session's widget genuinely
 hides the tile) — no task in this plan has yet scheduled a dynamic
 exercise of this specific UI surface.
+
+### Exhaustive leak-audit fix (`0002`)
+
+- `13340a1...` — "aegisos: route UsersRepository#getUsers() through
+  getUsersForUiDisplay" (`patches/packages-apps-multiuser/0002`, real
+  build-server SHA) — Medium item 12. This widget's own data layer
+  (`UsersRepository.kt`'s `getUsers()`) called the raw
+  `UserManager#getAliveUsers()`, three lines away from its own sibling
+  `checkUserSwitchRestrictions()` in the same file, which was already
+  migrated to `getUsersForUiDisplay(true)` back in `0001`. Every real
+  user's name/avatar loaded into memory on every widget refresh,
+  currently withheld from rendering only by an incidental filter
+  elsewhere in this widget (`CurrentUserStateUseCase.kt`) — access
+  control by accident, not design; found during an exhaustive audit of
+  every `getUsers()`-style call site. Fixed by matching the sibling
+  method's own already-correct pattern.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  local git repo
+  (`aegisos-platform/.worktrees/duress-multiuser-widget-datalayer-fix/`,
+  a fetch-only worktree seeded read-only from the real branch HEAD
+  `0ab4e9349751ca354cd8cf768cf2db968cb71932` — only the one touched
+  file, its `sha256sum` confirmed byte-identical to the live remote file
+  before editing) and landed on the real branch with `git am` (applied
+  cleanly, no conflicts, confirmed no build was already in flight
+  beforehand). This patch file was regenerated fresh via `git
+  format-patch` directly from the real post-`git am` branch history, not
+  exported from the disposable worktree's own commit.
+- Base commit: `0ab4e9349751ca354cd8cf768cf2db968cb71932` (`0001`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Build verification:** a fast `m Multiuser` build check
+(`Build Succeeded: 30 steps`) confirmed both `MultiuserWidgetLib` and
+the outer `Multiuser` app module compiled cleanly, with only the same
+three pre-existing unrelated warnings noted in `0001`'s own entry above
+— none touching the edited code path. Compile-time verification only;
+runtime confirmation (does the widget genuinely omit every real user's
+data from memory during a decoy session, not just from rendering)
+deferred to the same consolidated hardware-validation round as the
+other patches in this audit-fix batch.
 
 ## Apply (this section)
 

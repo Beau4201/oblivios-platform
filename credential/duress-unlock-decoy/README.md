@@ -59,11 +59,14 @@ primitive (`frameworks-base` `0026`), **ADR-067** (2026-08-30)
 commissioning an exhaustive, owner-requested audit for every remaining
 leak surface (21 found;
 `docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`),
-and **ADR-068** (2026-08-30) for the first batch of fixes from that
+**ADR-068** (2026-08-30) for the first batch of fixes from that
 audit — three Critical items (`frameworks-base` `0027`,
 `packages-apps-settings` `0004`/`0005`) and four High items
-(`frameworks-base` `0028`, `packages-apps-settings` `0006`) — see
-`SOURCE.md` for exactly what each patch does and why.
+(`frameworks-base` `0028`, `packages-apps-settings` `0006`), and
+**ADR-069** (2026-08-30) for two more items — the dormant status-bar
+multi-user icon (`frameworks-base` `0029`) and the Multiuser widget's
+own data layer (`packages-apps-multiuser` `0002`) — see `SOURCE.md` for
+exactly what each patch does and why.
 
 ## What this is not
 
