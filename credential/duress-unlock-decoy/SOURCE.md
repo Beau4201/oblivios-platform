@@ -1045,6 +1045,79 @@ was removed afterward; the device's real, correctly-typed decoy (already
 registered before this fix) was independently confirmed unaffected
 (`user_setup_complete` still `1`, `pm list users` unchanged).
 
+### `frameworks/base`: Wallet QS tile decoy exemption (`0025`)
+
+Follow-up work after this plan's own closing whole-branch review (`0024`):
+Task 8's own text had left the Wallet and Mobile-Data/Internet QS tiles as
+a deliberate, out-of-scope product decision — "both require `userId ==
+UserHandle.USER_SYSTEM`/`mainUserId` by design for reasons unrelated to
+this feature ... re-scope only if the design owner decides the
+inconsistency itself ... is worth a cosmetic change." The device owner
+was asked and chose to close this for the Wallet tile.
+
+A fresh source read against the real `aegisos-duress-decoy-switch` branch
+found the plan's own premise half wrong: `CellularTile.java` no longer
+exists in this tree (merged into `InternetTileNewImpl.kt`), and no
+`USER_SYSTEM`/main-user check exists anywhere in the Internet/Mobile-Data
+tile's current implementation — if a per-user difference is ever visible
+there, it comes from deeper `SubscriptionManager`/SIM-visibility logic,
+not a tile-level gate. The owner scoped this patch to the Wallet tile
+only, where a real gate does exist
+(`QuickAccessWalletTile.java:209`'s `isWalletRoleAvailable()`, a raw
+`mHost.getUserId() == UserHandle.USER_SYSTEM` comparison —
+`RoleManager.isRoleAvailable(ROLE_WALLET)` itself, confirmed by reading
+`QuickAccessWalletController.java:107-109`, is a device-capability check,
+not per-user, so this raw comparison was the only thing hiding the tile
+from any non-main user).
+
+This is explicitly a product/UX decision, not a security fix: the tile's
+underlying state (`RoleManager`, `QuickAccessWalletClient`) is already
+per-caller, so its absence for the decoy was never an identity-leak
+vector, just a cosmetic inconsistency with every other tile.
+
+- `6740d16784cbcb7fbb9490523276e178e6aeb653` — "aegisos: treat decoy user
+  as main-user-equivalent for Wallet QS tile"
+  (`patches/frameworks-base/0025`, real build-server SHA) — adds a
+  `UserManager` field to `QuickAccessWalletTile` (Dagger-injected via the
+  same constructor-injection pattern already used by `HotspotTile.java`
+  in this same directory, confirmed by reading it first) and a new
+  `isDecoySession()` private helper reusing
+  `UserManager#getUsersForUiDisplay(true)` — the same identity-aware
+  primitive every Component B fix in `0019`-`0021` already uses. Confirmed
+  by reading `UserManagerService#getUsersForUiDisplay`'s real
+  implementation that when the calling user is the decoy, it returns a
+  singleton list containing only the caller's own `UserInfo`, which this
+  helper checks for `userType`. `isWalletRoleAvailable()`'s gate becomes
+  `(userId == USER_SYSTEM || isDecoySession()) && ...`. Authored under
+  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-wallet-tile-fix/`, a fetch-only
+  worktree seeded read-only from the real branch HEAD
+  `cd072d704764a3a7de10e33ec0d562f836031c5b` — only the one touched file,
+  its `sha256sum` confirmed byte-identical to the live remote file before
+  editing) and landed on the real branch with `git am` (applied cleanly,
+  no conflicts). This patch file was regenerated fresh via `git
+  format-patch` directly from the real post-`git am` branch history, not
+  exported from the disposable worktree's own commit, per this project's
+  own standing lesson on why the two SHAs differ.
+- Base commit: `cd072d704764a3a7de10e33ec0d562f836031c5b` (`0024`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Build verification:** a fast `m SystemUI` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side (`nohup ... & disown`), confirmed no
+build was already in flight beforehand: `ninja: 25m52.77s Build
+Succeeded: 773 steps - 0.50/s`, `#### build completed successfully
+(34:04 (mm:ss)) ####`. The only diagnostics in the full log are
+pre-existing warnings/infos in unrelated files (Kotlin nullability
+notices, `@FlaggedApi` infos, `ErrorWhenNew` doc-link warnings); nothing
+attached to `QuickAccessWalletTile.java`. `SystemUI.apk` was confirmed
+freshly rebuilt (fresh mtime matching this run) with `0025`'s commit as
+the file's own tip (`git log -1 -- .../QuickAccessWalletTile.java`).
+This is compile-time verification only — it does not confirm the tile
+actually renders for a real decoy session on hardware; that is deferred
+to this feature's ongoing UI verification sweep, not yet run for this
+specific patch.
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,

@@ -48,10 +48,12 @@ Tasks 4-6, **ADR-058** (2026-08-27) for the second plan's Tasks 1-8
 A's revert to inert (`build-release` `0002`-`0004`) after real validation
 found it caused a device-wide keyguard-bypass regression, **ADR-062**/
 **ADR-063** (2026-08-30) for physical `lynx` hardware validation of the
-third plan's Components B/C/D, and **ADR-064** (2026-08-30) for the closing
+third plan's Components B/C/D, **ADR-064** (2026-08-30) for the closing
 whole-branch review's own fixes (`frameworks-base` `0024`,
-`packages-apps-settings` `0003`) — see `SOURCE.md` for exactly what each
-patch does and why.
+`packages-apps-settings` `0003`), and **ADR-065** (2026-08-30) for the
+Wallet QS tile decoy exemption (`frameworks-base` `0025`), a follow-up
+product decision closing one of the items the third plan had left
+open — see `SOURCE.md` for exactly what each patch does and why.
 
 ## What this is not
 
@@ -72,9 +74,12 @@ confirmed, not silently assumed: a dynamic trigger of the call/media-
 notification-exemption fix against the specific backgrounded-user-0
 scenario; the post-wipe emulator reboot timing; and, on physical hardware,
 the lock-screen avatar switcher, the `com.android.multiuser` widget, the
-clipboard overlay, the alarm icon, and Material You theming (all
-environment-limitation UNCHECKED, not fails — see ADR-063/064 for the
-specific reasoning behind each). Component A (the double-PIN-prompt fix)
+clipboard overlay, the alarm icon, Material You theming, and now also the
+Wallet QS tile exemption (`0025`, ADR-065) — all environment-limitation
+UNCHECKED or simply not yet run, not fails — see ADR-063/064/065 for the
+specific reasoning behind each. The Mobile-Data/Internet tile has no
+per-user gate in this source tree at all (ADR-065), so it is not an open
+item — there is nothing there to check. Component A (the double-PIN-prompt fix)
 ships as inert by deliberate design (ADR-061) — its own resource flip
 (`0018`) is real platform content but harmless only in combination with
 `build/release`'s own `DISABLED` flag override (`0002`-`0004`) *and*
