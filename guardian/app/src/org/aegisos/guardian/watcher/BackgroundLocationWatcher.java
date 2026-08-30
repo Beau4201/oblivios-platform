@@ -3,6 +3,8 @@ package org.aegisos.guardian.watcher;
 import android.app.ActivityManager;
 import android.app.AppOpsManager;
 import android.os.Looper;
+import android.os.Process;
+import android.os.UserHandle;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -72,6 +74,17 @@ public final class BackgroundLocationWatcher {
                 + "startWatchingNoted's no-Executor overload guarantees this today; "
                 + "if that registration ever gains an Executor argument, this assertion "
                 + "is what will catch the resulting race instead of it failing silently.");
+        }
+        // startWatchingNoted/startWatchingActive are registered system-wide, not scoped to
+        // this process's own Android user -- confirmed via real source read, not assumed. On
+        // an AegisOS multi-user device (e.g. a Duress Unlock decoy session, or any two ordinary
+        // users) this Guardian instance would otherwise be notified about, and ingest, another
+        // user's own app activity into this user's own overview store (which has no userId
+        // field to filter on downstream). Found during an exhaustive audit of decoy
+        // identity-leak surfaces, but the bug itself is general to any multi-user pairing, not
+        // decoy-specific.
+        if (!UserHandle.getUserHandleForUid(uid).equals(Process.myUserHandle())) {
+            return;
         }
         if (!isBackground(uid)) {
             return;

@@ -230,6 +230,61 @@ Permission grants are justified in `docs/research/guardian-platform-api-verifica
   `REVOKE_RUNTIME_PERMISSIONS` above. Guardian's grant path is likewise platform-signing the
   APK (signature match); the allowlist entry is deliberately omitted (would be a no-op).
 
+### Fix: `BackgroundLocationWatcher` AppOps callbacks were not user-scoped (ADR-070)
+
+Found incidentally during `aegisos-foundation`'s exhaustive Duress Unlock
+decoy identity-leak audit (`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`,
+item 13), but the defect itself is general to any multi-user AegisOS
+device, not decoy-specific: `AppOpsManager#startWatchingNoted`/
+`startWatchingActive` are registered system-wide by this class, with no
+uid/user filter passed to either call. `onAccess(op, uid, packageName)`
+checked only `isBackground(uid)`, never whether `uid` belonged to this
+process's own Android user. Confirmed this is a real, not theoretical,
+cross-user leak: this Guardian process's own overview data model
+(`GuardianOverviewEntry`/`GuardianActiveProtectionV1` in
+`aegisos-services`' `guardian-core`) carries no `userId` field
+whatsoever, so any event ingested here has no way to be filtered back
+out downstream.
+
+- `9084da3...` — "guardian: scope BackgroundLocationWatcher's AppOps
+  callbacks to this user" (real `vendor/aegisos/guardian` build-server
+  SHA, `master` branch — this package is **first-party AegisOS code**,
+  not a patch against upstream, so there is no separate `patches/`
+  entry for it; the fix lives directly in `app/src/`, kept in sync with
+  the real build-server file). Adds a check comparing
+  `UserHandle.getUserHandleForUid(uid)` against
+  `Process.myUserHandle()` before doing anything else with the event,
+  discarding it if they differ. Both APIs are genuine public SDK APIs
+  (confirmed via source, neither `@hide`); `Process.myUserHandle()`
+  matches the existing pattern already used by
+  `GuardianComponents.java` to construct `AegisOSPlatformGateway`.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  local git repo
+  (`aegisos-platform/.worktrees/guardian-appops-user-scope-fix/`, a
+  fetch-only worktree seeded read-only from the real branch HEAD
+  `91cea5c4aed476a83c24adc390106cbc878b77ae` — only the one touched
+  file, its `sha256sum` confirmed byte-identical to the live remote file
+  before editing) and landed on the real `master` branch with `git am`
+  (applied cleanly, no conflicts, confirmed no build was already in
+  flight beforehand). The patch file was regenerated fresh via `git
+  format-patch` directly from the real post-`git am` branch history, not
+  exported from the disposable worktree's own commit. This vendored
+  `app/src/` copy was then synced to match the real post-`git am` file
+  byte-for-byte.
+- Base commit: `91cea5c4aed476a83c24adc390106cbc878b77ae` (the real
+  `master` branch tip at fetch time).
+
+**Build verification:** a fast `m GuardianApp` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side, confirmed no build was already in
+flight beforehand: `ninja: 1m55.27s Build Succeeded: 21 steps`, `####
+build completed successfully (02:01 (mm:ss)) ####`. No diagnostics
+attached to the edited file. **This is compile-time verification
+only** — it does not confirm the fix actually closes the cross-user
+leak at runtime (would need two real users, one triggering a
+background-location access, confirming it does not appear in the
+other's Guardian Overview). Not yet done as of this entry.
+
 ## AOSP source patches (`patches/`)
 
 Applied to individual AOSP component checkouts, not vendored app code —
