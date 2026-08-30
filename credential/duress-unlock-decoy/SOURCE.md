@@ -946,6 +946,105 @@ reproduce on this build (not re-tested here per explicit instruction —
 reverting the flag does not change that code path's outcome, only removes
 the security regression it had introduced alongside it).
 
+### `frameworks/base`: closing whole-branch review fixes (`0024`)
+
+A closing whole-branch review of this entire third plan — run after all
+11 tasks were marked complete and a physical `lynx` candidate had already
+been flashed — found a real, Critical gap this session's own per-task
+reviews had all missed: `DecoyProfileHelper.setDecoyProfile` never
+validated that the registered `decoyUserId` is actually an existing
+`UserManager.USER_TYPE_FULL_AEGISOS_DECOY` user — only that it isn't
+`UserHandle.USER_SYSTEM`. Every Component B/C fix in `0019`-`0023` keys
+its identity-leak filtering off `UserInfo.userType`, not off the
+registered id, so an ordinary secondary user mistakenly registered as
+"the decoy" (a real scenario given `USER_TYPE_FULL_AEGISOS_DECOY`'s own
+confirmed max-count-of-one restriction) would still route and switch
+correctly via `maybeRouteToDecoy`, but silently receive none of the
+identity-leak or setup-complete protections. Independently confirmed
+against the live branch (not just the reviewer's own disposable-worktree
+copy) before being fixed: `services/core/java/com/android/server/
+locksettings/DecoyProfileHelper.java`, `LockSettingsService.java:4576-4579`,
+and `LockSettingsShellCommand.java:494-536` all confirmed to have no type
+check anywhere in the call chain.
+
+- `cd072d704764a3a7de10e33ec0d562f836031c5b` — "aegisos: validate decoy
+  user type, revert Component A resource, drop UnsupportedAppUsage"
+  (`patches/frameworks-base/0024`, real build-server SHA) — three changes:
+  1. `DecoyProfileHelper.setDecoyProfile` now resolves `decoyUserId` via
+     `LocalServices.getService(UserManagerInternal.class).getUserInfo(...)`
+     and throws `IllegalArgumentException` unless the result is non-null
+     and `UserManager.USER_TYPE_FULL_AEGISOS_DECOY.equals(userType)` —
+     mirroring the existing `USER_SYSTEM` guard's own pattern and placed
+     immediately after it. The `Settings.Secure.USER_SETUP_COMPLETE` write
+     (`0022`/`0023`) was reordered to run *after*
+     `DecoyProfileState.create(decoyUserId).save(...)` succeeds, not
+     before — closing a secondary ordering gap the same review flagged
+     (a failed save could otherwise leave a wrong or not-yet-durable user
+     permanently marked setup-complete).
+  2. `core/res/res/values/config.xml`'s
+     `config_multiuserSkipKeyguardWhenSwitchingToUnlockedUsers` reverted
+     from `true` (`0018`) back to the AOSP default `false`. Not required
+     for correctness on this device's current release config — the
+     `android.multiuser.credential_capture` aconfig flag is already
+     `DISABLED` (`build/release` `0004`), and `UserController.java:542`'s
+     `if (Flags.credentialCapture())` guard means the resource is never
+     consulted while that flag stays disabled — but landed anyway as
+     defense in depth: a future rebase or a different release config's own
+     `RELEASE_ACONFIG_VALUE_SETS`/flag defaults could otherwise silently
+     reactivate the exact device-wide keyguard-bypass regression ADR-061
+     found and closed, without this resource-level revert.
+  3. `core/java/android/os/UserManager.java`'s `getUsersForUiDisplay`
+     wrapper (`0019`) had `@UnsupportedAppUsage` removed — that annotation
+     exists to preserve reflective access for apps already calling a
+     hidden member; a method that did not exist before `0019` has no such
+     callers by construction, so it only widened the non-SDK reflection
+     surface for no benefit.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-review-fix/`,
+  a fetch-only worktree seeded read-only from the real branch HEAD
+  `3941aa4131fe67eb25767d57dd589f1166c6c18a` — only the three touched
+  files, not a full checkout) and landed on the real branch with
+  `git am --3way` (applied cleanly, no conflicts).
+- Base commit: `3941aa4131fe67eb25767d57dd589f1166c6c18a` (`0023`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Build verification:** a full, consolidated `m systemimage` rebuild for
+the physical `lynx-cur-userdebug` target (`OUT_DIR=out-lynx`,
+`OFFICIAL_BUILD=true`, confirmed via a fresh `installed-files*.txt` grep
+for `Updater`/`Auditor`/`Seedvault`/`PdfViewerGOS` across `/system` and
+`/product` before signing), launched fully detached on the remote side:
+`ninja: 53m09.68s Build Succeeded: 3775 steps - 1.18/s`, `#### build
+completed successfully (53:17 (mm:ss)) ####`. Only `system.img` needed
+regenerating (all other 11 partition images were byte-identical to the
+prior Phase A candidate, since none of their own inputs changed) — signed
+as one fully coherent 12-partition set from this build's own output
+(never a splice of this build's `system.img` onto an older candidate's
+other partitions), same alpha key, same rollback index (`1783209600`),
+13/13 independently re-verified on two separate machines, then flashed by
+the device owner (never by an agent) and independently re-verified again:
+matching build fingerprint, unchanged `orange`/`unlocked` boot state, zero
+Dropbox crash/ANR/tombstone entries.
+
+**Decisive real-hardware confirmation of the type-validation fix:** a
+disposable ordinary (non-decoy) secondary user was created on the
+physical device and the device owner ran
+`cmd lock_settings set-decoy-profile --owner-credential <redacted> <id>`
+themselves (the controller never saw, requested, or handled the real
+credential). Real result, reported verbatim by the owner:
+```
+java.lang.IllegalArgumentException: decoyUserId must be an existing org.aegisos.usertype.full.DECOY user
+        at com.android.server.locksettings.DecoyProfileHelper.setDecoyProfile(DecoyProfileHelper.java:150)
+        at com.android.server.locksettings.LockSettingsService.setDecoyProfile(LockSettingsService.java:4578)
+        ...
+```
+The exception fires exactly at the new check's own line, with the full
+real call chain intact (shell command → `LockPatternUtils` →
+`LockSettingsService` → `DecoyProfileHelper`). The disposable test user
+was removed afterward; the device's real, correctly-typed decoy (already
+registered before this fix) was independently confirmed unaffected
+(`user_setup_complete` still `1`, `pm list users` unchanged).
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
@@ -1072,6 +1171,42 @@ background-task notification: `ninja: 5m26.67s Build Succeeded: 22 steps -
 compile errors; unrelated pre-existing Kotlin deprecation warnings only.
 Same caveat as `0001` above: this is not a consolidated `m systemimage`
 build and does not validate runtime behavior.
+
+### Fix found by the closing whole-branch review: `WifiUtils.java` (`0003`)
+
+The same closing whole-branch review that found `frameworks/base` `0024`'s
+Critical gap also found `0002` above was incomplete: the design doc
+(`docs/superpowers/specs/2026-08-28-duress-decoy-session-indistinguishability-design.md`)
+named **three** unscoped Wi-Fi call sites, not two —
+`WifiConfigController2.java` and `WifiUtils.java` — but Task 8 only
+migrated the first. Confirmed by direct source read before fixing:
+`WifiUtils.java:387`'s `isCurrentUserNetworkOwner(WifiEntry, Context)`
+called the unfiltered `userManager.getUserCount()`, so on a device with a
+decoy present, a network created by the real owner before the decoy
+existed would report as not-owned-by-the-current-user in the decoy
+session — a real ownership-based multi-user tell.
+
+- `b9b6d301e5a8386d25142ea1c047f88011629acc` — "aegisos: route
+  WifiUtils#isCurrentUserNetworkOwner through getUsersForUiDisplay"
+  (`patches/packages-apps-settings/0003`, real build-server SHA) — one
+  call-site change: `isCurrentUserNetworkOwner`'s `userCount` now comes
+  from `userManager.getUsersForUiDisplay(false /* excludeDying */).size()`
+  instead of `userManager.getUserCount()`, matching `0001`/`0002`'s own
+  `false` convention. Authored under `AGENTS.md`'s local-first discipline
+  in a disposable local git repo
+  (`aegisos-platform/.worktrees/duress-indistinguishability-review-fix-settings/`,
+  a fetch-only worktree seeded read-only from the real branch HEAD
+  `229434697ac35133c86de3c7cfaeeda7740e8b47` — only the one touched file,
+  not a full checkout) and landed on the real branch with `git am --3way`
+  (applied cleanly, no conflicts).
+- Base commit: `229434697ac35133c86de3c7cfaeeda7740e8b47` (`0002` above,
+  this repository's real HEAD at the time).
+
+**Build verification:** covered by the same consolidated `lynx-cur-userdebug`
+`m systemimage` rebuild described in the `frameworks/base` `0024` entry
+above (both repositories' final patches were landed and rebuilt together)
+— `ninja: 53m09.68s Build Succeeded: 3775 steps`, clean, no compile errors
+in `WifiUtils.java` or any file in this repository.
 
 ## Apply (this section)
 

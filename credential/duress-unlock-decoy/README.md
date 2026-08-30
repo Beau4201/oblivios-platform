@@ -1,6 +1,6 @@
-# Duress Unlock — decoy mechanism, emulator-validated
+# Duress Unlock — decoy mechanism, hardware-validated
 
-Implements the full Duress Unlock decoy mechanism across two plans:
+Implements the full Duress Unlock decoy mechanism across three plans:
 Tasks 1-6 of `docs/superpowers/plans/2026-08-21-duress-decoy-user-switch.md`
 (a new AegisOS-defined Android user type,
 `USER_TYPE_FULL_AEGISOS_DECOY`; a dialog-free silent user switch; decoy
@@ -13,14 +13,23 @@ user 0 during that plan's own Task 7 — with app-level quiescing
 (`RealUserQuiescer`: the existing cached-app freezer plus notification
 suppression, including a call/media-notification-exemption fix found during
 code review), and adding a previously-unspecified return-to-real-user path
-(`ReturnToRealUserHelper`)). Per the owner-approved architecture in ADR-042,
-`docs/superpowers/specs/2026-08-21-duress-decoy-user-switch-design.md`, and
-`docs/superpowers/specs/2026-08-27-duress-real-user-quiescing-and-return-design.md`
+(`ReturnToRealUserHelper`)); and the third plan
+(`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`,
+all 11 tasks) closing real, confirmed session-indistinguishability leaks
+across `frameworks/base`, `build/release`, `packages/apps/Settings`, and
+(new to this package) `packages/apps/Multiuser`. Per the owner-approved
+architecture in ADR-042,
+`docs/superpowers/specs/2026-08-21-duress-decoy-user-switch-design.md`,
+`docs/superpowers/specs/2026-08-27-duress-real-user-quiescing-and-return-design.md`,
+and
+`docs/superpowers/specs/2026-08-28-duress-decoy-session-indistinguishability-design.md`
 in `aegisos-foundation`. This is the full real, end-to-end mechanism: a
 registered decoy credential typed at the primary keyguard silently switches
-to the decoy user (real user quiesced, notifications suppressed), and the
-real owner's credential typed at the decoy's own keyguard silently switches
-back (real user unquiesced, notifications resume).
+to the decoy user (real user quiesced, notifications suppressed), the real
+owner's credential typed at the decoy's own keyguard silently switches back
+(real user unquiesced, notifications resume), and every UI surface that
+lists device users is scoped so the decoy session never sees the real
+owner's identity.
 
 ## Boundary
 
@@ -30,25 +39,47 @@ corresponding ADR naming this exact patch set
 (2026-08-26, amending ADR-042), **ADR-054** for Task 2 (2026-08-26, also
 adopting `AGENTS.md`'s new local-first patch-authoring discipline),
 **ADR-055** (2026-08-26) for Task 3, **ADR-056** (2026-08-27) for
-Tasks 4-6, and **ADR-058** (2026-08-27) for the second plan's Tasks 1-8
-(the quiescing/return-path replacement, patches `0008`-`0017`).
+Tasks 4-6, **ADR-058** (2026-08-27) for the second plan's Tasks 1-8
+(the quiescing/return-path replacement, patches `0008`-`0017`), **ADR-059**
+(2026-08-28) for physical hardware validation of the first two plans,
+**ADR-060** (2026-08-29) for the third plan's Tasks 1-9 (patches
+`0018`-`0023`, `build-release` `0001`, `packages-apps-settings` `0001`-`0002`,
+`packages-apps-multiuser` `0001`), **ADR-061** (2026-08-29) for Component
+A's revert to inert (`build-release` `0002`-`0004`) after real validation
+found it caused a device-wide keyguard-bypass regression, **ADR-062**/
+**ADR-063** (2026-08-30) for physical `lynx` hardware validation of the
+third plan's Components B/C/D, and **ADR-064** (2026-08-30) for the closing
+whole-branch review's own fixes (`frameworks-base` `0024`,
+`packages-apps-settings` `0003`) — see `SOURCE.md` for exactly what each
+patch does and why.
 
 ## What this is not
 
-This package is **build-verified** (three real `m systemimage` builds, all
-clean; see `SOURCE.md`) and **emulator-validated with real evidence** (ADR-058:
-decoy match, real-user freeze, notification suppression, the return path,
-and wrong-PIN/wipe-PIN non-confusion all confirmed via direct `dumpsys`/
-`logcat` evidence, not assumption). Two items are explicitly **not** confirmed
-and remain open: a dynamic trigger of the call/media-notification-exemption
-fix against the specific backgrounded-user-0 scenario (static/logical
-confirmation only — no tooling in the emulator environment could construct
-one), and the post-wipe emulator reboot timing (time-boxed and left
-genuinely inconclusive, assessed as a likely shared-server environment
-artifact rather than a regression). Physical `lynx` hardware validation and
-latency/battery measurement, and recording findings in
-`docs/research/duress-unlock-api-verification.md`, are Tasks 8-9 of the
-*first* plan — **not started, not part of this package.**
+This package is **build-verified** (multiple real `m systemimage` builds,
+all clean; see `SOURCE.md`), **emulator-validated with real evidence**
+(ADR-058: decoy match, real-user freeze, notification suppression, the
+return path, and wrong-PIN/wipe-PIN non-confusion; ADR-060/061: Component
+B/C identity-leak and setup-complete fixes confirmed working, Component A
+confirmed broken and reverted), and **physical-hardware-validated with real
+evidence** (ADR-059: first two plans' real match, decoy match, freeze,
+return path, latency, and battery draw on a physical Pixel 7a; ADR-063:
+third plan's Components B/C/D — identity-leak fixes and the setup-complete
+write's causal before/after — confirmed on the same physical device;
+ADR-064: the whole-branch-review fixes below independently re-confirmed on
+physical hardware, including a real `IllegalArgumentException` proving the
+decoy-type validation fix). Several items remain explicitly **not**
+confirmed, not silently assumed: a dynamic trigger of the call/media-
+notification-exemption fix against the specific backgrounded-user-0
+scenario; the post-wipe emulator reboot timing; and, on physical hardware,
+the lock-screen avatar switcher, the `com.android.multiuser` widget, the
+clipboard overlay, the alarm icon, and Material You theming (all
+environment-limitation UNCHECKED, not fails — see ADR-063/064 for the
+specific reasoning behind each). Component A (the double-PIN-prompt fix)
+ships as inert by deliberate design (ADR-061) — its own resource flip
+(`0018`) is real platform content but harmless only in combination with
+`build/release`'s own `DISABLED` flag override (`0002`-`0004`) *and*
+(after `0024`) its own reverted-to-`false` resource default; a safe
+redesign of the underlying bug is future, unscoped work.
 
 ## Relationship to `credential/duress-unlock-dummy/`
 
