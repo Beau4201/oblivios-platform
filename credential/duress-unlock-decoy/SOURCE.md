@@ -1517,22 +1517,76 @@ remaining decoy identity-leak surface
   fresh via `git format-patch` directly from the real post-`git am`
   branch history, not exported from any disposable worktree's own
   commit.
+- `79f050ee30fde0a7f3d835b0cabcbf3dd1a2d4e7` — "aegisos: fix
+  Utils.isProfileOrDeviceOwner to use getUsersForUiDisplay"
+  (`patches/packages-apps-settings/0007`, real build-server SHA) — found
+  while tracing the remaining-leaks audit's own low-confidence item 16
+  (`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`).
+  The audit cited `AppButtonsPreferenceController.java:469` as possibly
+  moot if the decoy user type is non-admin — confirmed non-admin (no
+  `FLAG_ADMIN` in `UserTypeFactory.java`'s
+  `getDefaultTypeFullAegisosDecoy()`, and no creation path can override
+  it), but that turned out not to matter: unlike the sibling
+  `AppInfoDashboardFragment.shouldShowUninstallForAll()` check (which
+  *is* genuinely gated behind `!mUserManager.isAdminUser()`, confirming
+  the audit's item 16 citations for `AppInfoDashboardFragment.java:607`
+  and `:726` as moot), `Utils.isProfileOrDeviceOwner(UserManager,
+  DevicePolicyManager, String)` has no admin gate anywhere in its own
+  call path — `AppButtonsPreferenceController.updateUninstallButton()`
+  calls it unconditionally. The same unfiltered-`getUsers()` call inside
+  that method also has three more real callers the original 21-item
+  audit missed entirely, in the newer Compose "SPA" App Info screens
+  (`AppButtonRepository.kt:92`, `AppDisableButton.kt:87`,
+  `AppInfoSettingsMoreOptions.kt:151`) — fixing the shared `Utils.java`
+  method closes all four call sites at once rather than patching only
+  the one the audit cited. `isDeviceOwnerAppOnAnyUser()`, the other
+  cross-user check in the same method, is intentionally left unscoped:
+  it is a genuine device-wide security control (should block uninstall
+  regardless of which user asks), not a per-user display concern.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  local git repo
+  (`aegisos-platform/.worktrees/duress-appbuttons-uninstall-fix/`, a
+  fetch-only worktree seeded read-only from the real branch HEAD
+  `195738a1ca67d6b43cc8dec760d76c1a82432bdb` — only the one touched
+  file, its `sha256sum` confirmed byte-identical to the live remote file
+  before editing) and landed on the real branch with `git am --3way`
+  (applied cleanly, no conflicts, confirmed no build was already in
+  flight beforehand). This patch file was regenerated fresh via `git
+  format-patch` directly from the real post-`git am` branch history, not
+  exported from the disposable worktree's own commit.
 - Base commits: `b9b6d301e5a8386d25142ea1c047f88011629acc` (`0003`'s own
   real post-`git am` SHA) for `0004`;
   `ab4b0a932a049f5a3c484c72139dd81ff5661e4b` (`0004`'s own real
   post-`git am` SHA) for `0005`;
   `fcbfa430a14b79b01fdea0aeaaaa449670950fc5` (`0005`'s own real
-  post-`git am` SHA) for `0006`.
+  post-`git am` SHA) for `0006`; `195738a1ca67d6b43cc8dec760d76c1a82432bdb`
+  (`0006`'s own real post-`git am` SHA) for `0007`.
 
 **Build verification:** `0004` confirmed via a fast `m Settings` build
 check (`Build Succeeded: 160 steps`), `0005` via another (`Build
 Succeeded: 89 steps` — this run also confirms the new
 `storage_wizard_move_unlock_generic` string resource resolved cleanly,
 no missing-resource error), `0006` via another (`Build Succeeded: 24
-steps`). No diagnostics attached to any edited file in any of the
-three runs. All three are compile-time verification only; runtime
-confirmation is deferred to a later consolidated hardware-validation
-round for this whole audit-fix batch (see ADR-068).
+steps`), `0007` via another (`Build Succeeded: 20 steps`, 5m49s — only
+pre-existing, unrelated warnings, e.g. missing
+`com.google.android.appfunctions` classes stripped from this
+GrapheneOS-derived tree). No diagnostics attached to any edited file in
+any of the four runs. All four are compile-time verification only;
+runtime confirmation is deferred to a later consolidated
+hardware-validation round for this whole audit-fix batch (see
+ADR-068 for the first ten items; `0007` joins the same batch).
+Separately, a full `m systemimage` consolidated build
+(`out-preflight`, `sdk_phone64_x86_64-cp2a-userdebug`) confirmed the
+original ten fixes (`aegisos-duress-decoy-switch` branch state as of
+2026-08-30) compile together as one coherent build: `ninja: 54m13.01s
+Build Succeeded: 3658 steps`, `#### build completed successfully
+(54:19) ####`, log at
+`/srv/aegisos/evidence/consolidated-build-20260902.log` on the build
+server. `0007` was landed after that run completed (confirmed via
+`pgrep` before `git am`, per the project's own
+never-`git am`-during-a-build rule) and is not yet included in a full
+systemimage-level consolidated build — that coverage comes from the
+physical `lynx` candidate build this fix is now part of.
 
 ## Apply (this section)
 
