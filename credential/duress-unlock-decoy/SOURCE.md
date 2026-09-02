@@ -1290,6 +1290,65 @@ confirmation deferred to the same consolidated hardware-validation
 round as `0026`-`0029` and the `packages-apps-settings`/
 `packages-apps-multiuser` fixes below.
 
+### `frameworks/base`: crash-to-reboot fix (`0030`)
+
+- `13967ec4bc63...` — "aegisos: fix UserBackupManagerService using
+  wrong Context for CE-storage check" (`patches/frameworks-base/0030`,
+  real build-server SHA) — not an identity leak, a real
+  crash-to-full-device-reboot bug found while dynamically validating
+  the audit-fix batch above on physical hardware. Entering the
+  registered decoy's PIN on a device where the real owner had never
+  credential-unlocked that boot crashed `system_server` fatally
+  (`BackupManagerService.Lifecycle.onUserUnlocking`'s handler, via
+  `UserBackupManagerService`'s constructor), which on this AOSP
+  configuration triggers a full device reboot, dropping the
+  just-established decoy session. Root-caused via the device's own
+  event log (`uc_finish_user_unlocking`/`ssm_user_unlocking` firing
+  for user 10, the decoy, never 0, immediately before the crash) down
+  to `UserBackupManagerService.java:622`:
+  `mBackupPreferences = new UserBackupPreferences(mContext, mBaseStateDir);`
+  used `mContext` (the un-scoped, implicitly-user-0 construction-time
+  context) instead of `userContext` (created 34 lines earlier in the
+  same constructor, specifically for this purpose — "We need a context
+  for the user in question"). Confirmed via `git blame` as genuine
+  upstream AOSP code since 2019 (`9e111f19df8e5`), never touched by any
+  AegisOS patch (`git log --grep=^aegisos -- services/backup/` returns
+  nothing) — harmless on every ordinary Android flow, since user 0 is
+  always already unlocked by the time any other user's backup service
+  starts on a normal multi-user switch; AegisOS's Duress Unlock decoy
+  routing is the first path found in this investigation that starts
+  and unlocks a secondary user's session while user 0 has never
+  unlocked at all — exactly the security property a duress mechanism
+  needs, and exactly the condition this six-year-old bug was never
+  exercised against. Fixed with a one-line substitution (`mContext` →
+  `userContext`). Full incident record:
+  `aegisos-foundation`'s
+  `docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  local git repo (`aegisos-platform/.worktrees/duress-backup-context-fix/`,
+  a fetch-only worktree seeded read-only from the real branch HEAD
+  `57239cc4c69658e346f2f32720a548cbef58c27f` — only the one touched
+  file, its `sha256sum` confirmed byte-identical to the live remote file
+  before editing) and landed on the real branch with `git am` (applied
+  cleanly, no conflicts, confirmed no build was already in flight
+  beforehand). This patch file was regenerated fresh via `git
+  format-patch` directly from the real post-`git am` branch history, not
+  exported from the disposable worktree's own commit.
+- Base commit: `57239cc4c69658e346f2f32720a548cbef58c27f` (`0029`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Build verification:** a full `lynx-cur-userdebug` rebuild
+(`OFFICIAL_BUILD=true` reconfirmed, `m -j8`): `Build Succeeded: 224
+steps`, 3m34s — fast, since only this one source file changed. Signed
+with the alpha key, same parameters as the batch above, 13/13
+independently verified on two machines. **Hardware-confirmed, not just
+compile-verified**: the owner flashed the corrected candidate and
+reproduced the exact original crash trigger for real (fresh boot,
+decoy PIN entered directly, real owner's credential never entered that
+boot) — the decoy switch completed cleanly with no crash and no
+reboot, confirmed via the device's own event log and a clean `dumpsys
+dropbox` scan.
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,

@@ -65,8 +65,20 @@ audit — three Critical items (`frameworks-base` `0027`,
 (`frameworks-base` `0028`, `packages-apps-settings` `0006`), and
 **ADR-069** (2026-08-30) for two more items — the dormant status-bar
 multi-user icon (`frameworks-base` `0029`) and the Multiuser widget's
-own data layer (`packages-apps-multiuser` `0002`) — see `SOURCE.md` for
-exactly what each patch does and why.
+own data layer (`packages-apps-multiuser` `0002`), **ADR-071**
+(2026-09-02) for resolving the audit's three low-confidence items (14
+and 17 no-fix; 16 split into a moot citation and a real fix,
+`packages-apps-settings` `0007`, closing three more call sites the
+original audit missed), **ADR-072** (2026-09-03) for the consolidated
+build plus the first real physical-hardware dynamic validation of any
+of this audit's fixes, and **ADR-073** (2026-09-03) for a real
+crash-to-reboot bug found during that validation, root-caused to a
+six-year-old upstream AOSP wrong-context bug in
+`UserBackupManagerService.java` (`frameworks-base` `0030`), fixed, and
+hardware-confirmed by reproducing the exact original trigger — see
+`SOURCE.md` for exactly what each patch does and why, and
+`aegisos-foundation`'s `docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`
+for the crash bug's full record.
 
 ## What this is not
 
@@ -112,6 +124,48 @@ ships as inert by deliberate design (ADR-061) — its own resource flip
 `build/release`'s own `DISABLED` flag override (`0002`-`0004`) *and*
 (after `0024`) its own reverted-to-`false` resource default; a safe
 redesign of the underlying bug is future, unscoped work.
+
+**That dynamic re-validation has since happened, for real, on physical
+hardware (ADR-071 through ADR-073).** The remaining-leaks audit's three
+low-confidence items are resolved: 14 and 17 no-fix (confirmed
+unreachable/safe by tracing the real caller chains), 16 split into a
+moot citation and a real fix (`packages-apps-settings` `0007`, which
+also closed three more real call sites — Compose "SPA" App Info
+screens — the original 21-item audit missed). A physical `lynx`
+candidate carrying all eleven fixes (the ten original plus `0007`) was
+built, signed, and flashed by the owner, and the QS footer's "Select
+user" dialog (this exact ADR-066 leak) and Settings ▸ Users are now
+both **directly confirmed fixed on physical hardware** — screenshot
+and full UI-text-dump evidence, not inference. Six narrower items
+(Wi-Fi shared badge/dialog, uninstall dialogs, the status-bar icon,
+the Multiuser widget, Guardian's cross-user AppOps check, and `0007`
+itself) remain honestly UNCHECKED, not forced into a pass — no valid
+trigger fixture existed for any of them during this validation round.
+
+That same validation session also found, root-caused, fixed, and
+hardware-confirmed a real crash-to-full-device-reboot bug unrelated to
+any identity leak (ADR-073, `frameworks-base` `0030`): entering the
+decoy PIN on a device where the real owner had never unlocked that
+boot crashed `system_server` and rebooted the device, dropping the
+decoy session. Root cause was a six-year-old upstream AOSP
+wrong-context bug in `UserBackupManagerService.java`, latent on every
+ordinary Android flow and exposed for what appears to be the first
+time by Duress Unlock's own core security property. Full record:
+`aegisos-foundation`'s
+`docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`.
+
+**A distinct, still-open, and larger design question was raised by the
+owner after this round, not yet scoped or implemented**: hiding other
+users' identity from the decoy is not the same as making the decoy
+session look like the device's one true primary profile. Even where
+content is correctly filtered, the decoy still presents as an ordinary
+secondary profile through signals independent of any identity leak
+(non-admin/non-main `UserInfo` status, the QS footer's "End session"
+affordance, and anything else keyed off `isMain()`/admin semantics
+rather than a hidden user list). ADR-065's Wallet-tile exemption is
+the one existing precedent for this class of fix, but it was scoped
+narrowly to one tile as a product decision, not generalized — this
+needs its own dedicated design cycle before any implementation.
 
 ## Relationship to `credential/duress-unlock-dummy/`
 
