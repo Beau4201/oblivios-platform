@@ -1349,6 +1349,88 @@ boot) — the decoy switch completed cleanly with no crash and no
 reboot, confirmed via the device's own event log and a clean `dumpsys
 dropbox` scan.
 
+### `frameworks/base`: add `UserManager.isMainForUiDisplay` primitive (`0031`)
+
+Task 1 of the fourth plan
+(`docs/superpowers/plans/2026-09-03-duress-decoy-primary-profile-visual-parity.md`)
+adds the shared display-only primitive the plan's later tasks (2-4) use to
+close two visual "tells" that mark a decoy session as an ordinary secondary
+profile rather than the device's one true primary profile: a new `@hide`
+`UserManager`/`UserManagerService` method,
+`isMainForUiDisplay(@UserIdInt int userId)`, that returns true for a real
+main/system user (mirroring `UserInfo#isMain()`/`UserHandle#USER_SYSTEM`
+unchanged) or for an AegisOS Duress Unlock decoy user when `userId` is the
+device's actual current (foreground) user — keyed off the current user
+rather than the Binder calling user, for the same reason
+`getUsersForUiDisplay` (`0019`) is. This task has no consumer of its own by
+design; it is additive only, exercised for the first time by Tasks 2-4.
+
+- `b2b66088045df71f2565525c2ca173dc929da373` — "aegisos: add
+  UserManager.isMainForUiDisplay primitive"
+  (`patches/frameworks-base/0031-aegisos-add-UserManager.isMainForUiDisplay-primitive.patch`,
+  real build-server SHA) — three-file change:
+  `boolean isMainForUiDisplay(int userId);` added to
+  `core/java/android/os/IUserManager.aidl` immediately after the existing
+  `getUsersForUiDisplay(boolean excludeDying)` declaration;
+  `UserManagerService.isMainForUiDisplay` added to
+  `services/core/java/com/android/server/pm/UserManagerService.java`
+  immediately after the existing `getUsersForUiDisplay` method, gated by
+  `checkManageUsersPermission(...)`, reading the target user's `UserInfo`
+  under `mUsersLock` via the existing `getUserInfoLU`, returning `true`
+  immediately for a real main or `UserHandle.USER_SYSTEM` user, `false` for
+  any non-current user, and otherwise checking
+  `UserManager.USER_TYPE_FULL_AEGISOS_DECOY` against the device's actual
+  current user; and a public `UserManager.isMainForUiDisplay` wrapper added
+  to `core/java/android/os/UserManager.java` immediately after the real
+  `getUsersForUiDisplay` wrapper, carrying
+  `@RequiresPermission(android.Manifest.permission.MANAGE_USERS)` but
+  deliberately no `@UnsupportedAppUsage` — matching `getUsersForUiDisplay`'s
+  own corrected precedent (`0024`): a brand-new `@hide` method has no prior
+  reflective callers, so adding the annotation would needlessly widen the
+  non-SDK reflection surface. The plan's own Step 3 verification caught a
+  one-line caption discrepancy while confirming this insertion point: the
+  plan's brief cited `UserManager.java`'s `getUsersForUiDisplay` wrapper's
+  closing brace as line 5274, but the real closing brace (the method-level
+  `}`, as opposed to the inner `catch` block's own `}` immediately above it)
+  is line 5275 — the quoted code text itself matched the real source
+  byte-for-byte with no drift, only the caption's line number was off by
+  one, so the edit proceeded at the verified real location rather than the
+  cited number. Authored under `AGENTS.md`'s local-first discipline in a
+  disposable local git repo
+  (`aegisos-platform/.worktrees/decoy-visual-parity-task1/`, a fetch-only
+  worktree seeded read-only from the real branch HEAD
+  `13967ec4bc635f07a7c81e1eabd7f764aee0c49d` — only the three touched files,
+  not a full checkout) and landed on the real branch with `git am --3way`
+  (applied cleanly, no conflicts, confirmed no build was already in flight
+  beforehand via `ps aux` rather than the self-matching `pgrep -f` form).
+  The real post-`git am` branch SHA (`b2b66088045df71f2565525c2ca173dc929da373`)
+  differs from the local worktree's own commit SHA
+  (`3e9718794d999072fcb12b23d22b42a4e9bf7951`), confirmed via `git log` on
+  the branch rather than assumed, consistent with every prior patch in this
+  package.
+- Base commit: `13967ec4bc635f07a7c81e1eabd7f764aee0c49d` (`0030`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Build verification:** a fast `m services` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side (`nohup ... & disown`) and polled to
+completion across several fresh SSH connections rather than one held-open
+session (the very first launch invocation's own SSH connection did not
+return within its own timeout, because `source build/envsetup.sh && lunch
+...`'s stdout was not individually redirected before the whole chain was
+backgrounded together with `nohup m services`, leaving that one
+connection's pty attached even though the actual build process was already
+correctly detached and writing to its own log file — confirmed harmless by
+polling the log and process table over a brand-new connection, then
+discarding the stuck one): `ninja: 17m39.79s Build Succeeded: 623 steps -
+0.59/s`, `#### build completed successfully (17:47 (mm:ss)) ####`. No
+compiler diagnostics referenced `IUserManager.aidl`, `UserManager.java`, or
+`UserManagerService.java` — the only warnings in the log are pre-existing,
+unrelated Metalava `UnresolvedLink` javadoc-resolution notices against
+`Manifest.java`/`R.java`. This is not a consolidated `m systemimage` build
+and does not validate runtime behavior — this task adds no call site of
+its own; Tasks 2-4 exercise this API for the first time.
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
