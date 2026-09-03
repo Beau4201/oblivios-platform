@@ -1431,6 +1431,78 @@ unrelated Metalava `UnresolvedLink` javadoc-resolution notices against
 and does not validate runtime behavior — this task adds no call site of
 its own; Tasks 2-4 exercise this API for the first time.
 
+### `frameworks/base`: suppress "End session" affordance for a decoy session (`0032`)
+
+Task 2 of the fourth plan
+(`docs/superpowers/plans/2026-09-03-duress-decoy-primary-profile-visual-parity.md`)
+is `isMainForUiDisplay`'s (`0031`) first real consumer, closing a genuine,
+2026-09-03-audit-confirmed gap unrelated to `isMain()`/`isAdminUser()` and
+untouched by any prior fix in this feature: the QS footer's "End session"
+affordance is gated by `UserManagerService.getUserLogoutability()`, which
+returns `LOGOUTABILITY_STATUS_CANNOT_LOGOUT_SYSTEM_USER` only for the
+literal `userId == UserHandle.USER_SYSTEM`. A decoy user is necessarily a
+non-zero user ID, so this check never applied to it — the decoy session
+saw and could use an affordance ("End session", a secondary-user-only
+concept) the real owner, always user 0 on a genuinely single-owner device,
+never sees.
+
+The plan's own Step 1 flagged that its cited line number for
+`getUserLogoutability` (3426) was written before `0031` landed and would
+have shifted — `0031` inserted its own new method earlier in the same
+file, pushing every later line down. Re-derived via a fresh `grep -n`
+against the real file rather than trusting the plan's guess: the real line
+is 3458. The quoted pre-edit method body otherwise matched the plan's
+expectation exactly, with no other drift.
+
+- `ccc6c058a6f0761b04027c055211bfd68c62e9f1` — "aegisos: suppress End
+  session affordance for decoy session"
+  (`patches/frameworks-base/0032-aegisos-suppress-end-session-for-decoy.patch`,
+  real build-server SHA) — a four-line addition to
+  `services/core/java/com/android/server/pm/UserManagerService.java`'s
+  `getUserLogoutability(@UserIdInt int userId)`: a new
+  `if (isMainForUiDisplay(userId)) { return
+  UserManager.LOGOUTABILITY_STATUS_CANNOT_LOGOUT_SYSTEM_USER; }` block
+  inserted immediately after the existing `userId ==
+  UserHandle.USER_SYSTEM` check and before the existing
+  `getUserSwitchability(userId)` check — every other line of the method,
+  including `getUserSwitchability` itself (a real, separate capability
+  check governing whether the decoy session can actually be switched away
+  from, used by this feature's own return path), is untouched. Only the
+  "End session" UI affordance's visibility changes; the decoy's actual
+  switchability is unaffected. Authored under `AGENTS.md`'s local-first
+  discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/decoy-visual-parity-task2/`, a fetch-only
+  worktree seeded read-only from the real branch HEAD
+  `b2b66088045df71f2565525c2ca173dc929da373` — only the one touched file,
+  its `sha256sum` confirmed byte-identical to the live remote file before
+  editing) and landed on the real branch with `git am --3way` (applied
+  cleanly, no conflicts, confirmed no build was already in flight
+  beforehand via `ps aux`). The real post-`git am` branch SHA
+  (`ccc6c058a6f0761b04027c055211bfd68c62e9f1`) differs from the local
+  worktree's own commit SHA (`e64a77d61f7786704458a301f97aac140a17e832`),
+  confirmed via `git log` on the branch rather than assumed, consistent
+  with every prior patch in this package.
+- Base commit: `b2b66088045df71f2565525c2ca173dc929da373` (`0031`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Build verification:** a fast `m services` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side with the entire launch chain's own
+output redirected into one log file (`{ cd ... && export ... && source
+... && lunch ... && nohup m services > task2-build.log 2>&1; } >
+task2-launch.log 2>&1 & disown`) rather than only the final command's, per
+Task 1's own recorded lesson that redirecting only the last command in the
+chain leaves the SSH connection attached to the earlier commands' stdout.
+This launch returned immediately, confirmed still genuinely running and
+writing its log via a fresh SSH connection, then polled to completion over
+further fresh connections: `ninja: 2m32.42s Build Succeeded: 26 steps -
+0.17/s`, `#### build completed successfully (02:39 (mm:ss)) ####`. No
+`error`/`warning` log lines referenced `UserManagerService.java`. This is
+compile-time verification only — it does not confirm the fix actually
+hides the affordance at runtime; dynamic re-validation of this task
+alongside Tasks 3-4 is expected per this plan's own sequencing, not yet
+done as of this entry.
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
