@@ -1862,6 +1862,67 @@ systemimage` build and does not by itself validate runtime behavior
 real device) — no task in this plan has yet scheduled a dynamic exercise
 of this specific UI surface.
 
+### Fourth plan: primary-profile visual parity, Task 4 (`0009`)
+
+`docs/superpowers/plans/2026-09-03-duress-decoy-primary-profile-visual-parity.md`
+Task 4 closes a second, distinct cosmetic gap the same audit found:
+`DeviceAdminAdd.addDeviceAdminPolicies()` picks between two pre-existing
+string variants (`pi.description`/`pi.descriptionForSecondaryUsers`,
+`pi.label`/`pi.labelForSecondaryUsers`) based on
+`UserManager.get(this).isAdminUser()` — a decoy activating a device-admin
+app (e.g. a Find My Device-style app) would see the "secondary user"
+wording a real single-owner admin never would. Like Task 3, this consumes
+`frameworks/base`'s `isMainForUiDisplay` primitive (`0031`, ADR-074).
+
+- `d5e8d97332f098eeb852deb9c2ff7a17423fc402` — "aegisos: show the owner's
+  device-admin policy text to the decoy"
+  (`patches/packages-apps-settings/0009`, real build-server SHA — the
+  patch file itself was generated from local commit
+  `91bd68206c70c04524c1ada184f47ebdf0d409bb` in a disposable worktree;
+  `git am` reconstructs the commit against the real tree, so it gets a
+  genuinely different SHA even for byte-identical content) — one-line
+  change: `DeviceAdminAdd.java:802`'s `boolean isAdminUser =
+  UserManager.get(this).isAdminUser();` becomes `boolean isAdminUser =
+  UserManager.get(this).isAdminUser() ||
+  UserManager.get(this).isMainForUiDisplay(UserHandle.myUserId());`;
+  `UserHandle` is the class's own pre-existing import (confirmed at line
+  62) and `UserHandle.myUserId()` is already used elsewhere in this exact
+  file (lines 433, 547, 728, 797) — no new import needed. No other line
+  in the method or file changes. Real current content re-confirmed via
+  `git show HEAD:...` against the actual build-server source (exact
+  match to the brief's quoted line) before editing. Authored under
+  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/decoy-visual-parity-task4/`, a
+  fetch-only worktree seeded read-only from the real branch HEAD
+  `885b048dd3c80cefb4e47dde2332abb058edad47` — only the one touched
+  file, not a full checkout) and landed on the real branch with `git am
+  --3way` (applied cleanly, no conflicts, confirmed no build was
+  already in flight beforehand). This patch file was regenerated fresh
+  via `git format-patch` directly from the real post-`git am` branch
+  history, not exported from the disposable worktree's own commit —
+  confirmed byte-identical to a second, independent regeneration from
+  the real branch.
+- Base commit: `885b048dd3c80cefb4e47dde2332abb058edad47` (`0008` above,
+  this repository's real HEAD at the time).
+
+**Build verification:** a fast `m Settings` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side (`nohup ... & disown`, the launch SSH
+connection itself hung per the known Task 1 quirk even though the build
+process was confirmed genuinely running via a separate connection) and
+polled to completion: `ninja: 5m07.60s Build Succeeded: 20 steps -
+0.07/s`, `#### build completed successfully (05:13 (mm:ss)) ####`. No
+compile errors; only pre-existing warnings unrelated to this change
+(a `[removal]` deprecation warning in `ManageApplications.java` and
+missing-class warnings from an unrelated Google `appfunctions` schema
+dependency, neither touched by this patch). This confirms
+`frameworks/base`'s `0031` (`isMainForUiDisplay`) resolves correctly
+from this repository too, matching Task 3's own confirmation. Not a
+consolidated `m systemimage` build and does not by itself validate
+runtime behavior (that a decoy activating a device-admin app genuinely
+sees the owner's wording on a real device) — no task in this plan has
+yet scheduled a dynamic exercise of this specific UI surface.
+
 ## Apply (this section)
 
 ```sh
