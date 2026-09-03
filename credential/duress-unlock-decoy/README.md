@@ -154,18 +154,37 @@ time by Duress Unlock's own core security property. Full record:
 `aegisos-foundation`'s
 `docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`.
 
-**A distinct, still-open, and larger design question was raised by the
-owner after this round, not yet scoped or implemented**: hiding other
-users' identity from the decoy is not the same as making the decoy
-session look like the device's one true primary profile. Even where
-content is correctly filtered, the decoy still presents as an ordinary
-secondary profile through signals independent of any identity leak
-(non-admin/non-main `UserInfo` status, the QS footer's "End session"
-affordance, and anything else keyed off `isMain()`/admin semantics
-rather than a hidden user list). ADR-065's Wallet-tile exemption is
-the one existing precedent for this class of fix, but it was scoped
-narrowly to one tile as a product decision, not generalized — this
-needs its own dedicated design cycle before any implementation.
+**The distinct, larger design question raised by the owner after that
+round — hiding other users' identity from the decoy is not the same as
+making the decoy session look like the device's one true primary
+profile — has since been designed, implemented, and hardware-validated
+(2026-09-03/04, `aegisos-foundation` ADR-074 through ADR-079)**. A real
+audit found only two genuinely cosmetic gaps behind this concern (the
+QS footer's "End session" affordance, and two `packages/apps/Settings`
+text/label choices) — everywhere else `isMain()`/`isAdminUser()` is
+used it turned out to be a real, correctly-enforced capability
+boundary and was deliberately left untouched. One new shared
+display-only primitive, `UserManager.isMainForUiDisplay(int)`
+(`frameworks-base` `0031`), closed both: the "End session" leak
+(`0032`) and the two Settings text choices (`packages-apps-settings`
+`0008`/`0009`). All four patches are hardware-confirmed working on
+physical `lynx`; full record: `aegisos-foundation`'s
+`docs/devices/lynx-duress-decoy-visual-parity-findings.md`. ADR-065's
+Wallet-tile exemption was the precedent this generalized from.
+
+**A further, distinct instance of the same underlying problem was found
+during that closure's own hardware validation and remains open**: the
+device-wide `Settings.Global.USER_SWITCHER_ENABLED` flag — flipped on
+permanently and automatically the moment any second user (including a
+decoy) is ever created, read unfiltered by at least six real UI
+surfaces (the QS icon above being only one) — is not covered by
+`isMainForUiDisplay` at all, since it is a single global setting, not a
+per-user list. Designed (`aegisos-foundation`'s
+`docs/superpowers/specs/2026-09-03-duress-decoy-user-switcher-visibility-design.md`)
+and planned
+(`docs/superpowers/plans/2026-09-03-duress-decoy-user-switcher-visibility.md`,
+next patch `frameworks-base` `0033`) but **not yet implemented** as of
+this writing.
 
 ## Relationship to `credential/duress-unlock-dummy/`
 
