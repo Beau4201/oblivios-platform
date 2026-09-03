@@ -1801,6 +1801,67 @@ never-`git am`-during-a-build rule) and is not yet included in a full
 systemimage-level consolidated build — that coverage comes from the
 physical `lynx` candidate build this fix is now part of.
 
+### Fourth plan: primary-profile visual parity, Task 3 (`0008`)
+
+`docs/superpowers/plans/2026-09-03-duress-decoy-primary-profile-visual-parity.md`
+Task 3 closes a real, audit-confirmed cosmetic gap distinct from any
+identity leak: Settings ▸ Users already shows only the decoy's own row
+(via `0004`'s already-landed `getUsersForUiDisplay` fix), but that row's
+summary label is decided by `if (user.isMain()) "Owner" else if
+(user.isAdmin()) "Admin" else null` — since the decoy is neither main nor
+admin, its own (only visible) row showed no summary at all, while a
+genuine single-owner phone's one row always reads "Owner". This is the
+first patch in this package to consume the new `frameworks/base`
+`isMainForUiDisplay` primitive (`0031`, ADR-074) rather than
+`getUsersForUiDisplay` — a narrower, display-only main/system-user-or
+-current-decoy check, not a user-list filter.
+
+- `885b048dd3c80cefb4e47dde2332abb058edad47` — "aegisos: label the
+  decoy's own row as Owner in Settings > Users"
+  (`patches/packages-apps-settings/0008`, real build-server SHA — the
+  patch file itself was generated from local commit
+  `56992c0466955decba42ee724c562261d0737c74` in a disposable worktree;
+  `git am` reconstructs the commit against the real tree, so it gets a
+  genuinely different SHA even for byte-identical content) — one-line
+  change: `UserSettings.java:1395`'s `if (user.isMain())` becomes `if
+  (user.isMain() || mUserManager.isMainForUiDisplay(user.id))`;
+  `mUserManager` is the class's own pre-existing field (confirmed at
+  line 241, `private UserManager mUserManager;` — no new field or
+  import needed). The `else if (user.isAdmin())` and final `else {
+  pref.setSummary(null); }` branches are untouched. Real current content
+  re-confirmed via `git show HEAD:...` against the actual build-server
+  source (exact match to the brief's quoted block) before editing.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  local git repo
+  (`aegisos-platform/.worktrees/decoy-visual-parity-task3/`, a
+  fetch-only worktree seeded read-only from the real branch HEAD
+  `79f050ee30fde0a7f3d835b0cabcbf3dd1a2d4e7` — only the one touched
+  file, not a full checkout) and landed on the real branch with `git am
+  --3way` (applied cleanly, no conflicts, confirmed no build was
+  already in flight beforehand). This patch file was regenerated fresh
+  via `git format-patch` directly from the real post-`git am` branch
+  history, not exported from the disposable worktree's own commit.
+- Base commit: `79f050ee30fde0a7f3d835b0cabcbf3dd1a2d4e7` (`0007` above,
+  this repository's real HEAD at the time).
+
+**Build verification:** a fast `m Settings` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side (`nohup ... & disown`, the launch SSH
+connection itself hung per the known Task 1 quirk even though the build
+process was confirmed genuinely running via a separate connection) and
+polled to completion with a bounded synchronous loop: `ninja: 6m53.25s
+Build Succeeded: 166 steps - 0.40/s`, `#### build completed successfully
+(06:58 (mm:ss)) ####`. No compile errors; only pre-existing, unrelated
+Kotlin deprecation warnings (`AccessPoint`, `ROUND_HALF_UP`, `bundleOf`,
+`checkIfRestrictionEnforced`) in files this patch does not touch. This
+confirms `frameworks/base`'s `0031` (`isMainForUiDisplay`) was genuinely
+present and resolvable in the current `out-preflight` framework build
+output — no unresolved-symbol failure occurred. Not a consolidated `m
+systemimage` build and does not by itself validate runtime behavior
+(that the decoy's own Settings ▸ Users row genuinely reads "Owner" on a
+real device) — no task in this plan has yet scheduled a dynamic exercise
+of this specific UI surface.
+
 ## Apply (this section)
 
 ```sh
