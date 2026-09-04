@@ -1503,6 +1503,79 @@ hides the affordance at runtime; dynamic re-validation of this task
 alongside Tasks 3-4 is expected per this plan's own sequencing, not yet
 done as of this entry.
 
+### `frameworks/base`: hide user-switcher-enabled state for decoy current-user view (`0033`)
+
+Task 1 of the fifth plan
+(`docs/superpowers/plans/2026-09-03-duress-decoy-user-switcher-visibility.md`)
+closes a real, audit-confirmed leak distinct from anything the fourth
+plan's `isMainForUiDisplay` primitive (`0031`/`0032`) touches:
+`Settings.Global.USER_SWITCHER_ENABLED` is a device-wide, non-per-user flag
+that stock AOSP's `UserManagerService.dispatchUserAdded()` permanently sets
+to `1` the first time any non-profile user (including a decoy) is ever
+created — no admin action, never reset. At least six real UI surfaces read
+this via `UserManager.isUserSwitcherEnabled()`/`isUserSwitcherEnabled(boolean)`,
+all of which trace back to the single-user overload,
+`isUserSwitcherEnabled(@UserIdInt int userId)`.
+
+Deliberately different from the `isMainForUiDisplay` pattern: the new check
+does **not** require `userId == getCurrentUserId()` before firing. Several
+real callers (the QS footer icon, the lockscreen avatar) run under
+SystemUI's cross-process rendering context and pass a `userId` that does
+not necessarily equal the actual current user — the exact ADR-066 failure
+mode. The fix instead reads the actual current user's own type
+unconditionally, independent of whatever `userId` argument was passed, so
+it applies correctly to those cross-process callers too.
+
+- `544d6e6d4567966cf0d8308e110da4a130b7df6e` — "aegisos: hide
+  user-switcher-enabled state for the decoy's own current-user view"
+  (`patches/frameworks-base/0033-aegisos-hide-user-switcher-for-decoy-current-user.patch`,
+  real build-server SHA) — a nine-line addition (8 code lines plus one
+  blank separator) to
+  `services/core/java/com/android/server/pm/UserManagerService.java`'s
+  `isUserSwitcherEnabled(@UserIdInt int userId)`: reads the actual current
+  user's `UserInfo` under `mUsersLock` via the existing `getUserInfoLU`,
+  and returns `false` immediately if its `userType` is
+  `UserManager.USER_TYPE_FULL_AEGISOS_DECOY`, before the existing
+  `multiUserSettingOn` computation runs. Every existing line of the method
+  is otherwise unchanged. No new import needed: `UserInfo`, `getUserInfoLU`,
+  `mUsersLock`, and `getCurrentUserId()` are all already used elsewhere in
+  this same file (confirmed by direct `grep` before editing, matching the
+  prior cycle's `isMainForUiDisplay`/`getUsersForUiDisplay` additions).
+  The plan's own quoted pre-edit method body (lines 3445-3455) was
+  re-verified against the live build-server source (`sed -n
+  '3443,3457p'`) before editing and matched byte-for-byte, with no line
+  drift from the plan's own citation. Authored under `AGENTS.md`'s
+  local-first discipline in a disposable local git repo
+  (`aegisos-platform/.worktrees/decoy-switcher-visibility-task1/`, a
+  fetch-only worktree seeded read-only from the real branch HEAD
+  `ccc6c058a6f0761b04027c055211bfd68c62e9f1` — only the one touched file)
+  and landed on the real branch with `git am --3way` (applied cleanly, no
+  conflicts, confirmed no build was already in flight beforehand via
+  `pgrep -fa 'ninja|soong_ui'`). The real post-`git am` branch SHA
+  (`544d6e6d4567966cf0d8308e110da4a130b7df6e`) differs from the local
+  worktree's own commit SHA (`5837f34625f9a833b993e8e7c824f8d31924f841`),
+  confirmed via `git log` on the branch rather than assumed, consistent
+  with every prior patch in this package.
+- Base commit: `ccc6c058a6f0761b04027c055211bfd68c62e9f1` (`0032`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Build verification:** a fast `m services` build check
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side (`nohup m services > .../decoy-switcher-task1-build.log
+2>&1 < /dev/null & disown`) and polled to completion over fresh,
+independent SSH connections rather than the launch connection itself
+(which again did not return within its own timeout, matching the prior
+two cycles' documented quirk): `ninja: 2m25.96s Build Succeeded: 18 steps
+- 0.12/s`, `#### build completed successfully (02:33 (mm:ss)) ####`. No
+`error`/`warning` log lines referenced `UserManagerService.java` — the
+only diagnostics in the log are three pre-existing, unrelated
+`UnflaggedApi` info notices against `PackageManagerLocal.java`. This is
+compile-time verification only; it does not confirm the fix actually
+hides the switcher at runtime on any of the six identified surfaces —
+dynamic validation across all six plus the owner-regression check is
+Task 2 (emulator) and Task 3 (physical `lynx`), not yet done as of this
+entry.
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
