@@ -1576,6 +1576,120 @@ dynamic validation across all six plus the owner-regression check is
 Task 2 (emulator) and Task 3 (physical `lynx`), not yet done as of this
 entry.
 
+### `frameworks/base`: fix decoy user-switcher visibility regression (`0034`, `0035`)
+
+Task 3 (physical `lynx` hardware validation) of the fifth plan found that
+`0033` did not actually work: 3 of the 6 target surfaces (the QS footer
+icon, the lockscreen avatar, and — on the emulator round this held, but
+was re-suspected here — the Settings toggle) still leaked the decoy's
+existence on real hardware despite `0033`'s bytecode being confirmed
+present and correct via `dexdump` disassembly of the flashed
+`services.jar`. The owner's response ("waarom werkt het niet, vind het")
+triggered a `superpowers:systematic-debugging` root-cause investigation
+rather than a guessed re-fix. Two of the three surfaces resolved to
+genuine, source-confirmed code defects, independent of each other and of
+`0033` itself:
+
+**`0034` — QS footer icon, structural bypass.**
+`UserRepositoryImpl.kt`'s `getSettings()` (the model backing both the QS
+footer's `multi_user_switch` icon via `UserSwitcherController`/
+`UserSwitcherInteractor`, and the legacy switcher UI) read
+`Settings.Global.USER_SWITCHER_ENABLED` directly via
+`globalSettings.getInt(...)` — it never called
+`UserManager.isUserSwitcherEnabled()` at all, so `0033`'s decoy check,
+however correct, was structurally unreachable from this call site. This
+is not a caching or timing bug: a real-hardware forensic recheck (see
+below) confirmed `am get-current-user` reporting `10` in the same command
+block as a `uiautomator dump` still showing `multi_user_switch` present.
+Fixed by deleting the duplicate raw-setting computation and delegating to
+`manager.isUserSwitcherEnabled()` instead, so this repository has one
+source of truth rather than two independently-diverging ones — SystemUI
+already holds `MANAGE_USERS` (confirmed via its `AndroidManifest.xml`
+before relying on it), so no permission change was needed.
+
+**`0035` — lockscreen avatar, missing invalidation.**
+`KeyguardStatusBarView.setUserSwitcherEnabled(boolean)` stored the new
+value into `mIsUserSwitcherEnabled` but never called
+`updateVisibilities()`, the only method that actually applies that field
+to `mMultiUserAvatar`'s real visibility. `updateVisibilities()` only runs
+elsewhere (this view's own `setVisibility(VISIBLE)`, or the unrelated
+`setKeyguardUserAvatarEnabled`/`setKeyguardUserSwitcherEnabled` setters),
+so a value change delivered by
+`KeyguardStatusBarViewController#updateUserSwitcher()`'s async
+`UserManager` call (dispatched via `mBackgroundExecutor` then posted back
+via `mMainExecutor`) could easily be overtaken by an unrelated
+visibility-triggered `updateVisibilities()` call using the still-stale
+previous value, with nothing re-invoking it afterward once the real value
+lands. This is genuine, pre-existing upstream AOSP code — confirmed via
+the surrounding class untouched by any prior AegisOS patch — dormant
+until Duress Unlock became the first caller whose answer to
+`isUserSwitcherEnabled()` changes live, mid-session, rather than staying
+fixed for a keyguard's entire lifetime. Fixed by calling
+`updateVisibilities()` directly from the setter; the one real call site
+(`KeyguardStatusBarViewController.java:759`) already dispatches onto
+`mMainExecutor`, so the added call is on the correct thread for view
+mutation without further change.
+
+**Settings toggle: investigated, not re-fixed.** `UserSettings.java`
+(`SettingsPreferenceFragment`, not `DashboardFragment`) explicitly calls
+`mMainSwitchController.updateState()` from its own `onResume()`, which
+calls `UserCapabilities.updateAddUserCapabilities()`, which recomputes
+`mUserSwitcherEnabled = userManager.isUserSwitcherEnabled()` fresh, on
+the same correct, patched API `0034` now also uses. This exact code
+already passed on the Task 2 emulator round with `0033` alone
+(`docs/superpowers/plans/2026-09-03-duress-decoy-user-switcher-visibility.md`
+Task 2: "Settings 'Allow multiple users' toggle PASS"). No divergent
+implementation or missing-invalidation defect was found in this call
+path by direct source reading. The Task 3 Phase B forensic recheck
+(dispatched specifically to answer this) found the physical check reused
+an already-running `com.android.settings` process for user 10 whose
+activity-launch freshness (cold vs. resumed task) could not be confirmed
+either way, and could not complete a further live re-check (`dumpsys
+user`, a fresh `isUserSwitcherEnabled()` probe) because the physical
+device disconnected from USB mid-session. This surface is therefore left
+**open, not closed**: the leading explanation is a stale-process test
+artifact rather than a code defect, but this is not proven, and no
+speculative fix has been made against unconfirmed evidence — a repeat
+hardware check with a forced-fresh Settings process is the next step,
+not a third patch.
+
+- `75e0f39f9a6522aebf29f58e1e3fda47006df158` — "aegisos: route SystemUI
+  user-switcher-enabled state through UserManager"
+  (`patches/frameworks-base/0034-aegisos-route-SystemUI-user-switcher-enabled-state-t.patch`,
+  real build-server SHA).
+- `83596c4ea7415f4fc966dc5de5b10384ac631617` — "aegisos: refresh
+  lockscreen multi-user avatar visibility on enabled-state change"
+  (`patches/frameworks-base/0035-aegisos-refresh-lockscreen-multi-user-avatar-visibil.patch`,
+  real build-server SHA).
+- Base commit: `544d6e6d4567966cf0d8308e110da4a130b7df6e` (`0033`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+Authored under `AGENTS.md`'s local-first discipline in a disposable local
+git repo
+(`aegisos-platform/.worktrees/duress-switcher-visibility-regression-fix/`,
+a fetch-only worktree seeded read-only from the real branch HEAD above —
+only the two touched files) and landed on the real branch with `git am`
+(applied cleanly, no conflicts; confirmed no build was already in flight
+via `pgrep -fa 'ninja|soong_ui'` immediately before). Both patch files in
+this package were regenerated fresh via `git format-patch` directly from
+the real post-`git am` branch history, not exported from the disposable
+worktree's own commits (whose local SHAs, `4afc117` and `2216489`, differ
+from the real branch SHAs above as expected). Reproduction verified
+byte-for-byte: applying both patches to a fresh worktree seeded at the
+`0033` base and diffing the result against the real branch's live file
+content produced an empty diff for both files.
+
+**Build verification:** a fast, fully-detached `m -j6 SystemUI` build
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), polled to
+completion over a fresh SSH connection rather than the launch connection
+(which again did not return within its own timeout, matching every prior
+cycle's documented quirk): `ninja: 9m59.80s Build Succeeded: 21 steps -
+0.04/s`. No error or warning referenced either changed file; the log's
+only diagnostics are pre-existing, unrelated `SystemUI-core` KSP/jarjar
+notices. This is compile-time verification only — dynamic re-validation
+of all three previously-failing surfaces (emulator first, then a repeat
+physical `lynx` round) is still open as of this entry.
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
