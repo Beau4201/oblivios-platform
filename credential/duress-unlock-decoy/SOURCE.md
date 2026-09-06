@@ -2413,6 +2413,124 @@ cleanly, and re-run against the exact intended filename rather than a
 glob. Dynamic re-validation of these two new patches together with the
 rest of this batch is the immediate next step as of this entry.
 
+### Decoy storage-volume-permanently-unmounted crash (`0038`, `0039`, `0040`)
+
+Found during the physical `lynx` hardware re-validation of `0034`-`0037`:
+entering the registered decoy's PIN directly on a freshly-booted device
+(the owner's own real credential never entered this boot) crashed
+Settings ▸ Storage with `IllegalArgumentException: Volume
+external_primary not found`, and `adb shell sm list-volumes` showed the
+decoy's own emulated storage volume as permanently `unmountable` despite
+the decoy itself being `RUNNING_UNLOCKED`. A control test (a freshly
+created, entirely ordinary `USER_TYPE_FULL_SECONDARY` user, no decoy
+registration) reproduced the identical `unmountable` state while the
+owner's session was locked, and the volume mounted correctly the moment
+the owner unlocked for the first time that boot — confirming this is not
+decoy-specific and not caused by any of `0033`-`0037`. Full incident
+record with the complete evidence trail (logcat excerpts, `git blame`
+citations, three consecutive fix attempts each found to be real but
+individually insufficient):
+`docs/devices/lynx-duress-decoy-storage-unmount-incident.md`.
+
+This resolved to three stacked instances of the same underlying pattern
+— a system service silently assuming user 0 always unlocks before any
+other user's own lifecycle events matter, true on stock Android (you
+must unlock the primary user to even reach the multi-user switcher) but
+false by design under Duress Unlock, whose whole point is that the real
+profile stays genuinely locked through a decoy switch (ADR-073). This is
+the third time this exact bug *class* has been found in this project
+(after ADR-073's `UserBackupManagerService` bug), and the first time it
+took three consecutive, independently-real fixes stacked in the same
+call chain before the symptom actually resolved.
+
+- `94c6a5e888ed2ede04466c972edba36cf9bb3f5e` — "aegisos: check the actual
+  target user, not user 0, for volume-report gating"
+  (`patches/frameworks-base/0038-aegisos-check-the-actual-target-user-not-user-0-for-.patch`).
+  `StorageManagerService.getVolumeList(int userId, ...)` hardcoded
+  `isSystemUnlocked(UserHandle.USER_SYSTEM)` despite already having the
+  correct target `userId` in scope (used a few lines later for the
+  sibling check `isCeStorageUnlocked(userId)`); `git blame` confirmed
+  the hardcoded line dates to an unrelated 2019 refactor
+  (`157dd1dc40c5a`, "Move legacy obb data migration to a handler
+  thread"), not a deliberate, still-valid design decision. Necessary —
+  a real, standalone misreport for any per-user query of this method —
+  but not sufficient to fix the crash on its own; re-testing after this
+  alone still reproduced the identical crash.
+- `ec3b888a36a5ecec81feb31b19ed13c161abeb0a` — "aegisos: initialize
+  ExternalStorageService component on any user's unlock"
+  (`patches/frameworks-base/0039-aegisos-initialize-ExternalStorageService-component-.patch`).
+  The actual proximate cause, found via `adb logcat`, not further source
+  guessing: `StorageSessionController#onUnlockUser(int userId)` only
+  called `initExternalStorageServiceComponent()` — a one-time, global
+  initialization resolving MediaProvider's `ExternalStorageService`
+  component, identical for every user — when `userId == 0`. If user 0
+  never unlocks, the component name stays permanently null and *no*
+  user's storage session, including the decoy's own, can ever bind to
+  it (`StorageUserConnection.connectIfNeeded()` throws "Not ready to
+  bind"). Fixed by guarding on `mExternalStorageServiceComponent == null`
+  instead of which user triggered the check — same one-time-init outcome
+  for every existing Android flow, correct for the decoy-first case too.
+  `mExternalStorageServiceComponent` is `volatile`; a benign race under
+  concurrent unlocks is possible but harmless (same value resolved
+  either way). Necessary, and a real improvement (`adb logcat` confirmed
+  `onUnlockUser(10)` now genuinely attempted initialization for the
+  first time) — but still not sufficient on its own; the attempt itself
+  then failed one layer deeper.
+- `4067c29a100d64da97a2f1ab6d3f81f458c6cdae` — "aegisos: resolve
+  ExternalStorageService as the actually-unlocking user"
+  (`patches/frameworks-base/0040-aegisos-resolve-ExternalStorageService-as-the-actual.patch`).
+  `initExternalStorageServiceComponent()` itself still hardcoded
+  `resolveExternalStorageServiceAsUser(UserHandle.USER_SYSTEM)`
+  internally — a third, independent instance of the identical pattern,
+  one call deeper than `0039` reached. Confirmed directly on hardware:
+  the identical lookup failed with "No valid ExternalStorageService
+  component found" when resolved as user 0 (never unlocked) and
+  succeeded when resolved as the already-unlocked decoy instead. Fixed
+  by threading the actually-unlocking `userId` through
+  `initExternalStorageServiceComponent(int userId)` (previously took no
+  parameter) in place of the hardcoded constant. Only one call site
+  exists (`onUnlockUser`, already updated by `0039`), so this is a
+  clean, mechanical signature change with no other callers to update.
+- Base commit: `f1ef01a416c4f07c0b6296341a07b9e25f6f80fa` (`0037`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+All three authored under `AGENTS.md`'s local-first discipline in the
+same disposable worktree already used for `0034`-`0037`
+(`aegisos-platform/.worktrees/duress-switcher-visibility-regression-fix/`),
+landed on the real branch with `git am` (each applied cleanly, no
+conflicts, confirmed no build in flight beforehand each time),
+regenerated fresh via `git format-patch` from the real post-`git am`
+branch history as a combined 3-patch series and independently verified
+byte-for-byte reproducible against both touched files
+(`StorageManagerService.java`, `StorageSessionController.java`) in one
+combined apply-and-diff check.
+
+**Build verification:** each of the three was individually built
+(`m -j6 services`, `lynx-cur-userdebug`, `OFFICIAL_BUILD=true`
+reconfirmed each time) and repackaged into a fresh `system.img`
+(`m -j6 systemimage`), with `system.img`'s own resulting timestamp
+checked against the freshly-built `services.jar` each time to rule out
+a repeat of ADR-078's `out-lynx` staleness incident. `system_ext.img`
+and the other 10 partitions were confirmed byte-identical to the
+`0037`-era candidate across all three rounds and reused as-is; only
+`system.img` and `vbmeta.img` changed. Each candidate was signed with
+the alpha key (`SHA256_RSA4096`, rollback index `1783209600`,
+`--padding_size 65536`, matching every prior duress-unlock candidate),
+13/13 independently verified on two machines (build-vm, this
+workstation) each round, and flashed by the owner. `0038` alone did not
+resolve the crash (confirmed via a fresh, matching `dumpsys dropbox`
+entry with the identical stack trace after flashing it, and an
+independent `services.jar` checksum match ruling out a stale-build
+explanation). `0038`+`0039` improved the observed behavior
+(`initExternalStorageServiceComponent()` genuinely attempted for the
+decoy for the first time, confirmed via logcat) but still failed one
+layer deeper. `0038`+`0039`+`0040` together is the currently-flashed
+candidate as of this entry; hardware re-validation of the exact original
+trigger (fresh boot, decoy PIN only, Settings ▸ Storage) is in progress
+and not yet confirmed — do not treat this as resolved until
+`docs/devices/lynx-duress-decoy-storage-unmount-incident.md`'s own
+verification section is updated with a real, confirmed-clean result.
+
 ## Apply (this section)
 
 ```sh
