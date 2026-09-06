@@ -2323,6 +2323,96 @@ data from memory during a decoy session, not just from rendering)
 deferred to the same consolidated hardware-validation round as the
 other patches in this audit-fix batch.
 
+### Avatar-color leak audit, remaining call sites (`0003`)
+
+Prompted by the owner's demand for real certainty that every avatar-color
+call site is covered, not just the two found first
+(`frameworks/base` `0034`-`0036`, `packages/apps/Settings` `0010`). An
+exhaustive `grep` across every real `UserIcons.getDefaultUserIcon`/
+`getUserIconColors` call site in `frameworks/base`, `packages/apps/Settings`,
+and `packages/apps/Multiuser` found this widget's own `ImageRepository.kt`
+had the identical bug a fourth time: `getAvatar(userId)` falls back to
+`UserIcons.getDefaultUserIcon(resources, userId, false)` (the real,
+uncorrected `userId`) whenever `UserManager#getUserIcon(userId)` returns
+null — i.e. whenever this widget happens to render a user before that
+user's own Settings ▸ Users row has ever assigned and persisted a default
+photo. A real, user-installable home-screen surface, not a hypothetical
+one.
+
+- `c701d199f831ef5ee05c60a4735dad99b900b875` — "aegisos: use owner's
+  default-avatar color for a decoy in the widget"
+  (`patches/packages-apps-multiuser/0003-aegisos-use-owner-s-default-avatar-color-for-a-decoy.patch`,
+  real build-server SHA). Base commit: `13340a1ba34388f522203198650ddd6e70ab14be`
+  (`0002`'s own real post-`git am` SHA).
+
+Same fix pattern as the other three: route the color-lookup `userId`
+through `isMainForUiDisplay`, substituting `UserHandle.USER_SYSTEM` when
+the current user displays as main. `MANAGE_USERS` already declared in this
+app's own `AndroidManifest.xml` — confirmed before relying on it, not
+assumed from the sibling `0034`/`0036` fixes' own confirmation for a
+different app.
+
+The remaining ~10 `UserIcons`-color call sites across `frameworks/base` and
+`packages/apps/Settings` were individually read and confirmed **not**
+bugs, not merely skipped: `ApplicationPackageManager`/`CrossProfileApps`
+badge/cross-profile item icons don't apply to a decoy session (no
+sub-profiles exist under a decoy); `CrossProfileApps` itself already
+hardcodes `UserHandle.USER_SYSTEM` for its "personal profile" icon
+concept, unrelated to any specific real user; `UserSwitchingDialog`
+(`UserController.showUserSwitchDialog`) is structurally unreachable for a
+decoy switch — traced to source: `DecoyProfileHelper.freezeAndSwitchToDecoy`
+calls `ActivityManagerInternal#switchToUserSilently`, whose
+`UserController#switchToUserSilently` implementation calls
+`sendStartUserSwitchFgMessage` directly and never checks
+`mUserSwitchUiEnabled` or calls `showUserSwitchDialog` at all — confirming
+ADR-053's "dialog-free silent switch" design intent with source evidence,
+not by trusting the prior label; `EditUserPhotoController`'s call uses a
+user-chosen tint color, not a userId-derived one; `CreateUserDialogController`
+and `EditUserInfoController` both use `UserHandle.USER_NULL` (the
+neutral-gray placeholder case), not a real userId, for their "add/edit
+user" dialog previews; `UserCreator.kt` assigns a *newly created ordinary*
+second user's own default icon color, which should legitimately differ
+from the owner's — unrelated to decoy identity, since this path only
+handles creating a plain `USER_TYPE_FULL_SECONDARY` user, never a decoy;
+`UserAdapter.java`'s (personal/work profile picker) `tintColor` is a fixed
+Material theme color (`materialColorPrimary`), never userId-derived, and
+the bouncer's tablet-only user-switcher grid
+(`KeyguardSecurityContainer`) is confirmed structurally dormant on `lynx`
+via its real gating resource, `config_enableBouncerUserSwitcher`
+(`false` in the base `values/config.xml`, the only `true` override
+belonging to the `tangorpro` tablet vendor overlay, absent from this
+device).
+
+Also confirmed during this pass, independent of the audit itself: a
+SECOND, ALREADY-CORRECT parallel repository,
+`frameworks/base/packages/SystemUI/src/com/android/systemui/user/data/repository/UserSwitcherRepository.kt`
+(`UserSwitcherRepositoryImpl`), backs part of the QS footer's status
+model and already calls `userManager.isUserSwitcherEnabled(...)` — the
+same correct, patched API `0034` also routes through — and its
+`userSwitcherStatus` flow short-circuits to `UserSwitcherStatusModel.Disabled`
+whenever that check is false, before ever combining in the (possibly
+still-wrong-colored, if not yet persisted) avatar bitmap. This file
+needed no fix; it is recorded here as evidence actually checked, not
+assumed safe by association with its similarly-named sibling
+(`UserRepositoryImpl.kt`, `0034`'s own target).
+
+**Build verification:** a fully-detached `m -j6 SettingsLib Multiuser
+Settings SystemUI` build (`sdk_phone64_x86_64-cp2a-userdebug`,
+`OUT_DIR=out-preflight`), polled to completion over a fresh SSH
+connection. Both `frameworks-base` `0037` and this `0003` patch were
+regenerated fresh via `git format-patch` from the real post-`git am`
+branch history and independently verified byte-for-byte reproducible
+(apply-and-diff against the real branch tip, empty diff for both files).
+A real, caught-in-time mistake during this round: a stale glob
+(`git am /tmp/0003-*.patch`) on the build server matched three
+differently-dated `/tmp/0003-*.patch` leftovers from earlier sessions and
+applied the wrong one first (a `frameworks/base` patch, rejected outright
+by `packages/apps/Multiuser`'s own tree with "does not exist in index");
+caught immediately by the `git am` failure itself, `git am --abort`'d
+cleanly, and re-run against the exact intended filename rather than a
+glob. Dynamic re-validation of these two new patches together with the
+rest of this batch is the immediate next step as of this entry.
+
 ## Apply (this section)
 
 ```sh
