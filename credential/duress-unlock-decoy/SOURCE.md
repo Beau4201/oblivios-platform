@@ -1690,6 +1690,85 @@ notices. This is compile-time verification only — dynamic re-validation
 of all three previously-failing surfaces (emulator first, then a repeat
 physical `lynx` round) is still open as of this entry.
 
+### `frameworks/base` + `packages/apps/Settings`: decoy default-avatar color (`0036`, Settings `0010`)
+
+Found during dynamic validation of `0034`/`0035`, prompted directly by the
+owner's insistence that the decoy session must present as a genuinely
+single, fresh-out-of-box device — not merely one with every specific
+identity-leak surface patched. `UserIcons.getDefaultUserIcon()`
+(`frameworks/base/core/java/com/android/internal/util/UserIcons.java`)
+picks a default avatar color from a fixed 8-entry palette keyed by
+`userId % 8` whenever a user has no custom photo set. A real-hardware
+screenshot of the fresh emulator's Settings ▸ Users screen confirmed this
+directly: the owner (userId 0) got `user_icon_1` (`#e46962`, red) and the
+decoy (userId 10, `10 % 8 == 2`) got `user_icon_3` (`#4c8df6`, blue) — a
+real, standalone identity tell, independent of every name/list-membership
+leak the `getUsersForUiDisplay`/`isMainForUiDisplay` audits already cover,
+since it fires even when only the decoy's own single avatar is ever shown
+on screen. Two independent call sites persist or compute this color for
+"my own" avatar and both needed the same fix:
+
+- `packages/apps/Settings/src/com/android/settings/users/UserSettings.java`'s
+  `assignDefaultPhoto(Context, int userId)` computes and **persists** (via
+  `UserManager#setUserIcon`) a colored default bitmap the first time a
+  user's Settings ▸ Users row is ever loaded without a real photo set —
+  this is what produced the blue icon.
+- `frameworks/base/packages/SystemUI/src/com/android/systemui/user/data/repository/UserIconProvider.kt`'s
+  `getUserImage()` independently computes (in-memory only, not persisted)
+  the same kind of default colored icon for SystemUI's own rendering
+  paths, for any user without a persisted photo.
+
+Both fixed the same way: route the color-lookup `userId` (never the
+icon's real target `userId`, which must stay correct for
+`setUserIcon`/cache-key purposes) through the existing
+`UserManager.isMainForUiDisplay()` primitive (`0031`) — if the current
+user displays as main (true for a decoy, by design), substitute
+`UserHandle.USER_SYSTEM` so the color always matches what a genuine
+single, fresh-out-of-box owner would show. An ordinary second real user
+(non-decoy, non-main) is unaffected — it keeps its own distinguishing
+color exactly as before, which is correct: this fix only applies to the
+one user AegisOS is already treating as main-for-display purposes
+elsewhere.
+
+- `defa62237873bdcb94cc75c8e9bbe843f2957818` — "aegisos: use owner's
+  default-avatar color for a decoy's own SystemUI icon"
+  (`patches/frameworks-base/0036-aegisos-use-owner-s-default-avatar-color-for-a-decoy.patch`,
+  real build-server SHA). Base commit: `83596c4ea7415f4fc966dc5de5b10384ac631617`
+  (`0035`'s own real post-`git am` SHA).
+- `573708d3d513aa7972c674ec49015e12a4d92d3a` — "aegisos: use owner's
+  default-avatar color for a decoy's own icon"
+  (`patches/packages-apps-settings/0010-aegisos-use-owner-s-default-avatar-color-for-a-decoy.patch`,
+  real build-server SHA). Base commit: `d5e8d97332f098eeb852deb9c2ff7a17423fc402`
+  (`0009`'s own real post-`git am` SHA).
+
+Authored under `AGENTS.md`'s local-first discipline in two disposable
+local git repos
+(`aegisos-platform/.worktrees/duress-switcher-visibility-regression-fix/`
+for the `frameworks/base` change, added as a third file/commit onto the
+same worktree used for `0034`/`0035`; a new
+`aegisos-platform/.worktrees/duress-avatar-color-fix/` for the
+`packages/apps/Settings` change) and landed on their respective real
+branches with `git am` (both applied cleanly, no conflicts; confirmed no
+build was already in flight on either repo beforehand). Both patch files
+were regenerated fresh via `git format-patch` directly from the real
+post-`git am` branch history, not exported from the disposable worktrees'
+own commits. Reproduction verified byte-for-byte for both: applying each
+patch to a fresh worktree seeded at its real base commit and diffing the
+result against the real branch's live file content produced an empty
+diff in both cases.
+
+**Build verification:** a fully-detached `m -j6 SystemUI Settings` build
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), polled to
+completion over a fresh SSH connection: `ninja: 12m41.57s Build Succeeded:
+38 steps - 0.05/s`. No error or warning referenced either changed file.
+`UserManager.isMainForUiDisplay()` requires `MANAGE_USERS` — confirmed
+already held by both callers before relying on it (`UserSettings.java`
+already calls this same method elsewhere in the file; SystemUI already
+declares `MANAGE_USERS` in its manifest, confirmed for `0034`). Dynamic
+re-validation on a fresh, pristine emulator boot (to avoid a
+previously-created test decoy's already-persisted, wrong-colored icon
+masking the fix) is the immediate next step as of this entry.
+
 ### `packages/apps/Settings`
 
 This is the first AegisOS patch to this repository. Prior to this patch,
