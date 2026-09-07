@@ -2556,7 +2556,7 @@ Task 1's own predicate-semantics finding
 does not distinguish a genuinely dismissed keyguard from one merely
 occluded, per that same finding.
 
-- `491d1310985f48ff38300a922543eb3ea2e9dd44` — "test: add coverage for
+- `582a7ec39723dadde855098014c62a787d4dc20f` — "test: add coverage for
   pre-unlock decoy concealment in isUserSwitcherEnabled"
   (`patches/frameworks-base/0041-test-add-coverage-for-pre-unlock-decoy-concealment-i.patch`).
   Three `UserManagerServiceTest` cases: locked device with a decoy
@@ -2573,7 +2573,7 @@ occluded, per that same finding.
   confirmed available via the module's own `Android.bp` mockito
   dependency even though this specific file had not used Mockito
   before.
-- `67f022d0e2312fd728e6a2396c91456237d0c099` — "test: force user
+- `9024eb84d36931ee717fef2290fc52dea1352fae` — "test: force user
   switcher setting on for pre-unlock concealment tests"
   (`patches/frameworks-base/0042-test-force-user-switcher-setting-on-for-pre-unlock-c.patch`).
   A real, environment-specific finding caught by actually running the
@@ -2591,7 +2591,7 @@ occluded, per that same finding.
   cosmetic: without it, `atest` on real hardware showed the *first* test
   passing vacuously and both "real value" tests failing with "expected
   to be true" against the stock code, before `0043` below ever landed.
-- `86f2b5459be0f6a1b88583a89cd94212a249468a` — "aegisos: conceal
+- `362bc84237fb25e0a392cf552d2e9dc531fd3797` — "aegisos: conceal
   multi-user existence on pre-unlock surfaces"
   (`patches/frameworks-base/0043-aegisos-conceal-multi-user-existence-on-pre-unlock-s.patch`).
   The production change: two new private helpers, `hasDecoyUser()`
@@ -2618,13 +2618,47 @@ time), then regenerated fresh via `git format-patch` directly from the
 real post-`git am` branch history as a combined 3-patch series and
 independently verified byte-for-byte reproducible against
 `UserManagerServiceTest.java`/`UserManagerService.java` in one combined
-apply-and-diff check before export. The exported patch files' `From:`
-author was normalized from the authoring session's own git identity to
-this series' established `AegisOS Build <build@aegisos.local>`
-convention (a plain text edit of the patch file, not a rewrite of the
-already-landed branch commits, which keep their real authored
-identity) — every prior `frameworks-base` patch in this directory uses
-that identity and these three were the only exceptions.
+apply-and-diff check before export.
+
+**Identity correction (2026-09-07):** the first export of this series
+carried the authoring session's own personal git identity
+(`beau4201 <beau.ten.berge@gmail.com>`) on the actual landed commit
+objects, not merely on the exported patch text — a genuine mismatch
+against every other `frameworks-base` patch in this directory, all of
+which use `AegisOS Build <build@aegisos.local>`. A prior version of
+this note claimed the fix was "a plain text edit of the patch file, not
+a rewrite of the already-landed branch commits" — that claim was false;
+no such edit had actually been made, so the `From:` header and the real
+commit's author had silently diverged, a factual mismatch against the
+SHA each patch cited. This was corrected as a real, narrow history
+rewrite, explicitly owner-authorized for exactly these 3 tip commits on
+`aegisos-duress-decoy-switch`: each commit was reconstructed via
+`git cherry-pick` onto the unchanged base
+(`4067c29a100d64da97a2f1ab6d3f81f458c6cdae`) followed by
+`git commit --amend --author="AegisOS Build <build@aegisos.local>"`
+(the `--author` flag is required — `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL`
+environment variables are silently ignored by `git commit --amend`,
+which preserves the original author unless `--author` or
+`--reset-author` is passed explicitly; this was discovered the hard way
+when a first attempt using only env vars reproduced the original,
+uncorrected commits byte-for-byte, same SHAs included), with the
+original author date preserved via `--date` and the committer identity
+and date preserved via `GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL`/
+`GIT_COMMITTER_DATE` (`Beau <beau@beau-dev.lan>`, matching every
+adjacent commit's own committer field, itself derived from this host's
+real OS-level identity, not an explicit git config — none exists on
+this server at any level). A backup ref
+(`backup/task4-pre-identity-fix`) was left in place at the original,
+uncorrected tip before the branch pointer was moved, and the resulting
+tree was diffed empty against the original tip before and after the
+rewrite, confirming zero content change — only the 3 commits' author
+identity moved. The SHAs cited above and the patch files in this
+directory reflect the corrected commits, regenerated fresh via
+`git format-patch` from the real corrected branch history per this
+project's own ADR-058 precedent (never trust a hand-edited or
+previously-exported patch file), and independently re-verified
+byte-for-byte reproducible in a disposable worktree before being
+committed here.
 
 **Build/test verification:** real, on the build server, via `atest`
 against the `sdk_phone64_x86_64-cp2a-userdebug` emulator target — not
