@@ -2524,12 +2524,18 @@ independent `services.jar` checksum match ruling out a stale-build
 explanation). `0038`+`0039` improved the observed behavior
 (`initExternalStorageServiceComponent()` genuinely attempted for the
 decoy for the first time, confirmed via logcat) but still failed one
-layer deeper. `0038`+`0039`+`0040` together is the currently-flashed
-candidate as of this entry; hardware re-validation of the exact original
-trigger (fresh boot, decoy PIN only, Settings ▸ Storage) is in progress
-and not yet confirmed — do not treat this as resolved until
-`docs/devices/lynx-duress-decoy-storage-unmount-incident.md`'s own
-verification section is updated with a real, confirmed-clean result.
+layer deeper. `0038`+`0039`+`0040` together is the confirmed-working
+candidate: hardware re-validation of the exact original trigger (fresh
+boot, decoy PIN only, Settings ▸ Storage, owner's credential never
+entered) completed 2026-09-07 and passed against direct device
+evidence — `adb shell dumpsys user` showing user 0 genuinely
+`RUNNING_LOCKED` and the decoy `RUNNING_UNLOCKED`, `adb shell sm
+list-volumes` showing `emulated;10` `mounted`, `adb logcat` showing a
+clean `UNMOUNTED → CHECKING → MOUNTED` transition with zero
+`ExternalStorageServiceException` occurrences, the Settings process
+still alive, and no new `dumpsys dropbox` entry. Full record:
+`docs/devices/lynx-duress-decoy-storage-unmount-incident.md`
+(status: resolved), `docs/governance/decision-log.md` ADR-084.
 
 ## Apply (this section)
 
