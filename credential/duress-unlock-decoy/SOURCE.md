@@ -2644,10 +2644,12 @@ when a first attempt using only env vars reproduced the original,
 uncorrected commits byte-for-byte, same SHAs included), with the
 original author date preserved via `--date` and the committer identity
 and date preserved via `GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL`/
-`GIT_COMMITTER_DATE` (`Beau <beau@beau-dev.lan>`, matching every
-adjacent commit's own committer field, itself derived from this host's
-real OS-level identity, not an explicit git config — none exists on
-this server at any level). A backup ref
+`GIT_COMMITTER_DATE` (matching every adjacent commit's own committer
+field, which reflects the build server's own configured local git
+identity rather than an explicit `AegisOS Build` git config — none
+exists on this server at any level; this is expected, pre-existing
+project convention confirmed present in commits predating this task,
+not a defect). A backup ref
 (`backup/task4-pre-identity-fix`) was left in place at the original,
 uncorrected tip before the branch pointer was moved, and the resulting
 tree was diffed empty against the original tip before and after the
