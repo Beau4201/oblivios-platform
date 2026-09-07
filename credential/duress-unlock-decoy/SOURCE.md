@@ -2537,6 +2537,125 @@ still alive, and no new `dumpsys dropbox` entry. Full record:
 `docs/devices/lynx-duress-decoy-storage-unmount-incident.md`
 (status: resolved), `docs/governance/decision-log.md` ADR-084.
 
+### Pre-unlock concealment: `isUserSwitcherEnabled` (`0041`, `0042`, `0043`)
+
+Task 4 of
+`docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`
+(Component A). `UserManagerService#isUserSwitcherEnabled(int)` already
+returns `false` while the *current* user is a decoy (`0033`), but a
+locked device showing the real owner's own lock screen still advertised
+a second profile whenever a decoy existed anywhere on the device — the
+coercer holding the locked phone is an earlier and more common point in
+the duress scenario than one already inside a decoy session, so a
+lock-screen user-switcher leak defeats the mechanism before it is ever
+invoked. Fixed by extending the same method with a second, narrower
+early return gated on both a decoy actually existing on the device
+*and* the keyguard currently showing, using `isKeyguardShowing()` per
+Task 1's own predicate-semantics finding
+(`docs/devices/lynx-duress-decoy-prelock-audit.md`) — `isKeyguardLocked()`
+does not distinguish a genuinely dismissed keyguard from one merely
+occluded, per that same finding.
+
+- `491d1310985f48ff38300a922543eb3ea2e9dd44` — "test: add coverage for
+  pre-unlock decoy concealment in isUserSwitcherEnabled"
+  (`patches/frameworks-base/0041-test-add-coverage-for-pre-unlock-decoy-concealment-i.patch`).
+  Three `UserManagerServiceTest` cases: locked device with a decoy
+  returns `false`; unlocked device with a decoy returns the real value;
+  locked device with no decoy returns the real value (the regression
+  guard pinning "no decoy present" as bit-for-bit stock). Added
+  `addDecoyUser()`/`setKeyguardLocked(boolean)` test helpers matching
+  the file's own existing conventions: `putUserInfo()`/`removeUserInfo()`
+  for direct user-list manipulation (already used by the file's `setup()`
+  for the same reason — this instrumented test cannot reach real
+  `userlist.xml`), and `LocalServices.addService(WindowManagerInternal.class,
+  mock(...))` for local-service substitution, an existing pattern this
+  module already uses in `BaseLockSettingsServiceTests.java` and
+  confirmed available via the module's own `Android.bp` mockito
+  dependency even though this specific file had not used Mockito
+  before.
+- `67f022d0e2312fd728e6a2396c91456237d0c099` — "test: force user
+  switcher setting on for pre-unlock concealment tests"
+  (`patches/frameworks-base/0042-test-force-user-switcher-setting-on-for-pre-unlock-c.patch`).
+  A real, environment-specific finding caught by actually running the
+  first commit's tests on hardware rather than trusting the plan's own
+  code sample: on this build's real emulator, `Settings.Global
+  .USER_SWITCHER_ENABLED` is unset and `config_showUserSwitcherByDefault`
+  resolves to `false`, so `isUserSwitcherEnabled()` already returned
+  `false` regardless of decoy or lock state — a test suite that passes
+  identically whether or not the concealment code exists proves nothing.
+  Fixed by having each of the three tests force the setting to `1`
+  (captured and restored per-test, not global to the file, so no other
+  test's behavior changes) before exercising the method, establishing a
+  known "true" baseline so the decoy+lock gate is the only thing able to
+  flip the result to `false`. Confirmed this was necessary, not
+  cosmetic: without it, `atest` on real hardware showed the *first* test
+  passing vacuously and both "real value" tests failing with "expected
+  to be true" against the stock code, before `0043` below ever landed.
+- `86f2b5459be0f6a1b88583a89cd94212a249468a` — "aegisos: conceal
+  multi-user existence on pre-unlock surfaces"
+  (`patches/frameworks-base/0043-aegisos-conceal-multi-user-existence-on-pre-unlock-s.patch`).
+  The production change: two new private helpers, `hasDecoyUser()`
+  (scans `mUsers` under `mUsersLock`, skipping `mRemovingUserIds`,
+  matching `UserManager.USER_TYPE_FULL_AEGISOS_DECOY`) and
+  `isDeviceCurrentlyLocked()` (reads `WindowManagerInternal
+  .isKeyguardShowing()` via `LocalServices`, `false` if the service
+  isn't published yet — too early in boot for a keyguard to matter),
+  and one new early return in `isUserSwitcherEnabled()` gated on both.
+  Deliberately queried outside `mUsersLock`, matching Task 1's own
+  lock-ordering finding that no genuine inversion risk exists here but
+  keeping the check outside the lock regardless. Display-only: neither
+  user creation nor user switching consult this method, so this adds no
+  new capability and removes none.
+- Base commit: `4067c29a100d64da97a2f1ab6d3f81f458c6cdae` (`0040`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+Authored under `AGENTS.md`'s local-first discipline in a fresh
+disposable worktree
+(`aegisos-platform/.worktrees/prelock-concealment/`), landed on the
+real branch with `git am` in RED-then-GREEN order (each applied
+cleanly, no conflicts, confirmed no build in flight beforehand each
+time), then regenerated fresh via `git format-patch` directly from the
+real post-`git am` branch history as a combined 3-patch series and
+independently verified byte-for-byte reproducible against
+`UserManagerServiceTest.java`/`UserManagerService.java` in one combined
+apply-and-diff check before export. The exported patch files' `From:`
+author was normalized from the authoring session's own git identity to
+this series' established `AegisOS Build <build@aegisos.local>`
+convention (a plain text edit of the patch file, not a rewrite of the
+already-landed branch commits, which keep their real authored
+identity) — every prior `frameworks-base` patch in this directory uses
+that identity and these three were the only exceptions.
+
+**Build/test verification:** real, on the build server, via `atest`
+against the `sdk_phone64_x86_64-cp2a-userdebug` emulator target — not
+merely compiled. Two real environmental blockers were found and fixed
+before `atest` could run at all: the server's `/tmp` partition (a
+separate, small ~241M filesystem) was completely full, which first
+surfaced as `atest`'s own module-info step failing with `sqlite3
+.OperationalError: database or disk is full`, and, once past that,
+as every `javac`/`jarjar` step failing with `Exception in thread "main"
+java.lang.NullPointerException: Deflater has been closed` — traced to
+the JVM's `hsperfdata` shared-memory files, which are hardcoded to
+`/tmp/hsperfdata_$USER/` regardless of `TMPDIR`/`-Djava.io.tmpdir`.
+Fixed by relocating (not deleting) three large stale files left over
+from earlier, unrelated sessions
+(`/tmp/tmplb3pokio`, `/tmp/dex-check`, `/tmp/svc_check`, totaling
+~200MB) to `/srv/aegisos/tmp-primary/archived-tmp-debris/`. Separately,
+bare class-name resolution (`atest UserManagerServiceTest:<method>`, as
+the plan's own code sample shows) never found the test on this host at
+all — the `CACHE` finder depends on `locate`/`plocate`, confirmed
+absent as a system command, and `MODULE_CLASS` resolution came up empty
+for reasons not further root-caused; the fully-qualified
+`atest FrameworksServicesTests:com.android.server.pm
+.UserManagerServiceTest#<method>` form bypasses that broken resolution
+path entirely and is what actually built and ran. RED (`0041` alone):
+1 pass (the vacuous case), 2 fail with "expected to be true". RED again
+after `0042`: 1 genuine, meaningful failure ("expected to be false"
+against stock code with a forced-true baseline), 2 pass. GREEN (`0041`
++ `0042` + `0043`): all 3 pass. No physical `lynx` hardware build for
+this task — Task 13 of the same plan is the designated dynamic
+validation round for this component, per the plan's own sequencing.
+
 ## Apply (this section)
 
 ```sh
