@@ -2692,6 +2692,182 @@ against stock code with a forced-true baseline), 2 pass. GREEN (`0041`
 this task — Task 13 of the same plan is the designated dynamic
 validation round for this component, per the plan's own sequencing.
 
+### `frameworks/base`: rename decoy-identifying log tags/messages (`0044`)
+
+Task 5 of `docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`,
+applying Task 3's own log-audit decisions
+(`docs/devices/lynx-duress-decoy-prelock-audit.md`, "Log and event-log
+traces" section). Task 3 found none of these traces reachable by an
+attacker confined to the decoy session itself (`READ_LOGS`/`DUMP` are
+both `signature|privileged|development`-gated, and a non-admin decoy
+cannot reach Developer Options at all) — the rename is driven by the
+project's own unconditional hard constraint ("no new log string on the
+decoy path may contain 'decoy', 'duress', or 'Aegis'"), not by closing a
+reachable leak. Pure string-literal changes: no log level, call site, or
+trigger condition changed.
+
+- `e15abc1a26ffa79563ec6665c20fda337d6d94f6` — "aegisos: rename
+  decoy-identifying log tags and messages to neutral text"
+  (`patches/frameworks-base/0044-aegisos-rename-decoy-identifying-log-tags-and-messag.patch`).
+  Four files, tag and message changes only:
+  - `DecoyProfileHelper.java`: `TAG` `"DecoyProfileHelper"` →
+    `"CredentialRoutingHelper"`; the `Slog.e` at (former) line 74 reworded
+    from "Decoy credential matched but freeze/switch could not be
+    initiated..." to "Target-user credential matched but freeze/switch
+    could not be initiated..."; the `Slog.e` at line 87 reworded from
+    "...silent switch to decoy user " to "...silent switch to target
+    user "; the `Slog.w` at line 188 reworded from "...for decoy user " +
+    id + " -- the decoy profile is registered..." to "...for target user
+    " + id + " -- the profile is registered...". The `Slog.e` at line 97
+    ("Failed to install notification suppression for real user...") was
+    already free of "decoy"/"duress"/"Aegis" in its own text — left
+    verbatim, it only benefits from the tag rename above it.
+  - `DecoyProfileState.java`: `TAG` `"DecoyProfileState"` →
+    `"CredentialRoutingState"`; both `Slog.e` messages ("Unrecognized
+    decoy profile state version..." / "Corrupt decoy profile state...")
+    reworded to drop "decoy profile", becoming "Unrecognized routing
+    state version..." / "Corrupt routing state...".
+  - `ReturnToRealUserHelper.java`: `TAG` `"ReturnToRealUserHelper"` →
+    `"SessionReturnHelper"`. Per the audit's own "RENAME, with a caveat"
+    classification, neither this tag nor its one message literally
+    contained a banned word — renamed anyway for defense-in-depth, since
+    the class name (used verbatim as the tag) is otherwise
+    mechanism-identifying by correlation with this project's own public
+    design docs. The message itself ("Real owner credential matched but
+    switch back could not be initiated...") was already neutral and is
+    unchanged.
+  - `RealUserQuiescer.java`: `TAG` `"RealUserQuiescer"` →
+    `"SessionQuiescer"`. Same "RENAME, with the same caveat" basis as
+    above; both messages ("Failed to freeze/unfreeze process...") were
+    already neutral and are unchanged.
+  Class names, javadoc comments, field/method/parameter identifiers
+  (`decoyUserId`, `maybeRouteToDecoy`, etc.), and the
+  `LOCK_SETTINGS_STORAGE_KEY` string constant (`"decoy_profile_state"`,
+  a storage key, not a log call) are all source-only or non-log-call
+  text and were deliberately left untouched — out of scope per Task 3's
+  own scope note (RENAME/DROP/NO-FIX applies to
+  `Slog`/`Log`/`EventLog`/`Trace` calls only). The `EventLog.writeEvent`
+  call and `switchToUserSilently`'s five remaining generic `Slogf`
+  lines (Task 3's two `NO-FIX` groups) and the
+  `org.aegisos.usertype.full.DECOY` string exposed via `dumpsys` (the
+  accepted residual) were left completely untouched, per Task 3's own
+  decision table.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  local git repo (`aegisos-platform/.worktrees/duress-logrename-task5/`,
+  a fetch-only worktree seeded read-only from the real branch HEAD
+  `362bc84237fb25e0a392cf552d2e9dc531fd3797` — only the four touched
+  files, each confirmed byte-identical via `sha256sum` against the live
+  remote before editing) and landed on the real branch with `git am`
+  (applied cleanly, no conflicts, confirmed no build was in flight
+  beforehand). Regenerated fresh via `git format-patch` directly from
+  the real post-`git am` branch history and independently verified
+  byte-for-byte reproducible: applied to a disposable local clone seeded
+  at the real base commit's own file content, diffed against the
+  worktree's own final state — empty diff.
+- Base commit: `362bc84237fb25e0a392cf552d2e9dc531fd3797` (`0043`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**No reachable unit-test seam.** This is a pure string-literal change
+with no behavioral difference (same log level, same call site, same
+trigger condition). None of the four classes has any pre-existing test
+scaffolding, and asserting exact `Slog` tag/message text would require
+new log-interception infrastructure this codebase does not have —
+writing one merely to pin string literals would not exercise any real
+logic. Relying on Task 13's dynamic validation (grepping the flashed
+candidate's `logcat`/`dumpsys` output for the old vs. new strings)
+instead, per the brief's own allowance for fixes with no practical unit
+seam.
+
+**Build verification:** part of the same consolidated `m -j6
+systemimage` build described below (Task 5's build step covers both of
+this task's patches together).
+
+### `packages/apps/Multiuser`: gate the widget's user grid on `isUserSwitcherEnabled` (`0004`)
+
+Task 5 of the same plan, fixing Task 2's audit Finding 13
+(`docs/devices/lynx-duress-decoy-prelock-audit.md`, "Pre-unlock UI
+surfaces" section) — the one `BYPASSES CHOKEPOINT` surface that audit
+found. `UsersRepository.getUsers()` already routes through
+`getUsersForUiDisplay(true)` (`0002`), which only collapses the list
+when the device's actual *current* user is the decoy — pre-unlock, or
+whenever the device was unlocked earlier in the same boot and has since
+merely re-locked, the current user is still the real owner, so this
+data layer loaded every real user's name and avatar into memory
+regardless of `isUserSwitcherEnabled`, unlike its own sibling
+`checkUserSwitchRestrictions()` (already correctly gated) three lines
+away.
+
+- `e60b54249acea2ec5d2f181b866a2ba86f7bef47` — "aegisos: hide
+  non-current users from the widget's grid when switcher disabled"
+  (`patches/packages-apps-multiuser/0004-aegisos-hide-non-current-users-from-the-widget-s-gri.patch`)
+  — a four-line change to `UsersRepository.kt`'s `getUsers()`: reads
+  `userManager.isUserSwitcherEnabled(true)` once, then `.filter`s the
+  `getUsersForUiDisplay(true)` result down to `switcherEnabled ||
+  userInfo.id == currentUserId` before the existing `.map { ... }` — the
+  same "`isUserSwitcherEnabled` OR `isCurrent`" shape as
+  `BaseUserSwitcherAdapter.kt:40`'s already-correct pattern in
+  `frameworks/base`, per the audit's own proposed fix and ADR-080's
+  "route the caller through the already-correct gated pattern" model.
+  No other call site needed touching: `checkUserSwitchRestrictions()`
+  already gates correctly, and this is the only other place
+  `getUsers()`'s own result is read.
+  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  local git repo
+  (`aegisos-platform/.worktrees/duress-multiuser-switcher-gate-task5/`,
+  a fetch-only worktree seeded read-only from the real branch HEAD
+  `c701d199f831ef5ee05c60a4735dad99b900b875` — only the one touched
+  file, confirmed byte-identical via `sha256sum` against the live
+  remote before editing) and landed on the real branch with `git am`
+  (applied cleanly, no conflicts, confirmed no build was in flight
+  beforehand). Regenerated fresh via `git format-patch` directly from
+  the real post-`git am` branch history and independently verified
+  byte-for-byte reproducible the same way as the `frameworks/base` patch
+  above — empty diff.
+- Base commit: `c701d199f831ef5ee05c60a4735dad99b900b875` (`0003`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**No reachable unit-test seam.** `UsersRepository` takes a real
+`UserManager?` directly, and this module's own existing test fixture,
+`FakeUserRepository`, states its purpose in its own doc comment: "so we
+don't have to mock `UserManager`" — confirmed no Mockito dependency
+exists in `MultiuserWidgetUnitTests`' `Android.bp` `static_libs` either.
+Exercising this fix directly would require either mocking
+`UserManager` (a real, isolated departure from this module's own
+established testing convention) or an instrumented test that actually
+creates a second user on-device — neither is a "reachable" unit seam in
+the sense Task 4's tests were. Relying on Task 13's dynamic validation
+instead, per the brief's own allowance.
+
+**Build verification:** part of the same consolidated `m -j6
+systemimage` build described below.
+
+### Task 5 consolidated build (`0044`, Multiuser `0004`)
+
+A full `m -j6 systemimage` build
+(`sdk_phone64_x86_64-cp2a-userdebug`, `OUT_DIR=out-preflight`), launched
+fully detached on the remote side (`nohup ... & disown`) and polled to
+completion with a bounded synchronous loop, confirmed no build was in
+flight beforehand (`pgrep -f "ninja|soong_ui"` clean) both before
+landing either patch and before launching the build itself:
+`ninja: 4m30.19s Build Succeeded: 146 steps - 0.54/s`, `#### build
+completed successfully (04:37 (mm:ss)) ####`. Only 146 steps because
+the vast majority of the dependency graph (all of `frameworks/base`'s
+other 43 patches, the rest of the platform) was already built and
+cached from the immediately-preceding Task 4 build against the same
+`out-preflight` tree; the touched modules
+(`services.core`/`services`/`MultiuserWidgetLib`/`Multiuser`) all
+recompiled cleanly with no new diagnostics beyond the same
+pre-existing, unrelated `PackageManagerLocal.java`
+`@FlaggedApi`/`UnflaggedApi` info notices already seen in prior builds
+in this series. This confirms both of this task's patches compile
+together with the full accumulated patch set (all 44 `frameworks-base`
+patches plus all 4 `packages-apps-multiuser` patches); it does not by
+itself validate runtime behavior (e.g. that the widget's grid genuinely
+shrinks to one tile, or that the renamed log strings actually appear in
+a real `logcat`) — no task in this plan has yet scheduled a dynamic
+exercise of either fix. Task 13 is the designated dynamic-validation
+round for this whole plan.
+
 ## Apply (this section)
 
 ```sh
