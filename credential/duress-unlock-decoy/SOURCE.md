@@ -2868,6 +2868,146 @@ a real `logcat`) — no task in this plan has yet scheduled a dynamic
 exercise of either fix. Task 13 is the designated dynamic-validation
 round for this whole plan.
 
+### `frameworks/base`: decoy switch keyguard-skip authorization, Tasks 6-7 (`0045`)
+
+Tasks 6-7 of `docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`,
+Component B's one-shot, decoy-scoped switch authorization store and its
+consumption point — the same architectural bet ADR-061's regression case
+already forced: the existing AOSP `skipKeyguardWhenSwitchingToUnlockedUsers`
+condition at `UserController.java` stays completely untouched and stays
+inert (gated on a permanently-disabled aconfig flag per ADR-061's revert);
+Component B introduces its own separate, narrowly-scoped authorization
+rather than reusing or widening that condition. Landed together as one
+combined patch file (six commits, one `git format-patch --stdout` mailbox)
+because Task 6 alone wires nothing observable — it only becomes a real,
+verifiable capability once Task 7's consumption point and bridge exist —
+matching this project's own precedent of batching tightly-coupled work
+into one artifact rather than one file per commit.
+
+- `6fc1a61a82e3` — "test: add coverage for the decoy switch authorization
+  store" (Task 6 RED).
+- `5461467e5003` — "aegisos: implement the decoy switch authorization
+  store" (Task 6 GREEN, by trace only at landing time — see below). New
+  `UserController` fields (`mSwitchAuthorizedUserId`/
+  `mSwitchAuthorizedAtMillis`, `@GuardedBy("mLock")`) and two new methods:
+  `authorizeDecoySwitchKeyguardSkip(int targetUserId)` (package-private) —
+  resolves the target's real type via
+  `mInjector.getUserManagerInternal().getUserInfo(targetUserId)` (the
+  device's own authoritative user registry, never a caller-supplied
+  value) and mints only if it is exactly `USER_TYPE_FULL_AEGISOS_DECOY`,
+  entering the `synchronized (mLock)` block at all only on success — a
+  caller cannot "lie" about the target's type because the type is never
+  an input, closing the same class of gap ADR-064 found elsewhere in this
+  project (a wrong-typed target silently receiving protections meant only
+  for the real type), here structurally rather than policy-enforced,
+  since the check runs on every call, not once at registration time.
+  `consumeDecoySwitchAuthorization(int userId)` (package-private,
+  `@VisibleForTesting`) — single scalar slot, exact integer equality, no
+  wildcard/"any pending" fallback; always clears on a matching id whether
+  or not the 30-second window (`DECOY_SWITCH_AUTHORIZATION_TIMEOUT_MS`)
+  has elapsed, so an expired authorization can never be reused via a
+  second call. A new `Injector.elapsedRealtime()` seam was added
+  (defaulting to `SystemClock.elapsedRealtime()`) since none existed on
+  this file before, following the file's own existing
+  `getLastUserUnlockingUptime`-style pattern.
+- `f8e6d4329aba` — "test: add coverage for consuming the decoy switch
+  authorization" (Task 7 RED). Adds
+  `testForegroundSwitch_authorizedDecoy_doesNotForceKeyguard` and
+  `testForegroundSwitch_unauthorizedSecureUser_forcesKeyguard` — the
+  second is the ADR-061 regression case expressed as a unit test and
+  must never be weakened or removed in any future change to this file.
+  `setUserSecure`/`startForegroundUser` helpers implemented against this
+  file's existing `mUserManagerMock`/`setUpUser`/`waitForHandlerToComplete`
+  seams, per the brief's own instruction to use existing test
+  infrastructure rather than the literal sample's assumptions.
+- `6e2adc2a3406` — "test: register ActivityManagerInternal mock for
+  foreground-switch tests" (real-environment fix, found only once these
+  tests actually ran via `atest` for the first time — see "Real `atest`
+  findings" below). Registers a `LocalServices`-backed
+  `ActivityManagerInternal` mock inside `startForegroundUser()`
+  (`LocalServices.removeServiceForTest` then `addService`, matching the
+  existing `WindowManagerInternal` pattern in
+  `UserManagerServiceTest.java`'s `setKeyguardLocked()`), torn down
+  unconditionally in `tearDown()` so it never leaks into another test.
+  Test-only; no production code in this commit.
+- `e380eced01fa` — "aegisos: skip the keyguard for an authorized switch"
+  (Task 7 GREEN). Replaces the inner block at
+  `UserController.java:2335-2345`: a new `if (consumeDecoySwitchAuthorization(userId))`
+  branch is added *ahead* of the existing AOSP three-part condition,
+  which is otherwise byte-identical to before this patch — confirmed by
+  diff, not assumed. Log line ("Skipping keyguard for an authorized
+  switch") deliberately worded without naming the mechanism, since it is
+  reachable from a decoy session and this project's own hard constraint
+  forbids "decoy"/"duress"/"Aegis" in any log string reachable from that
+  path.
+- `bbe0134976a4` — "aegisos: expose the decoy switch authorization mint
+  via ActivityManagerInternal" (Task 7's bridge). New
+  `public abstract boolean authorizeDecoySwitchKeyguardSkip(int targetUserId)`
+  on `ActivityManagerInternal` (next to the existing `switchToUserSilently`
+  from `0003`) and a `LocalService` override in `ActivityManagerService`
+  that is pure delegation to `mUserController.authorizeDecoySwitchKeyguardSkip(targetUserId)`
+  — no logic, no additional checks, nothing beyond the one-line
+  pass-through the brief specified. This exists because Task 6's method
+  is package-private in `com.android.server.am`, while its real caller
+  (`DecoyProfileHelper`, wired in a future task) lives in
+  `com.android.server.locksettings` — a different package. The safety
+  property this bridge must not weaken is enforced entirely on the
+  `UserController` side it delegates to (the type check described above);
+  the bridge itself adds no new way to mint an authorization for a target
+  the caller doesn't control.
+- Base commit: `e15abc1a26ffa79563ec6665c20fda337d6d94f6` (`0044`'s own
+  real post-`git am` SHA, the real branch tip at fetch time).
+
+**Real `atest` findings.** This is the first genuine `atest` execution
+either task's own code has ever had — Task 6's own report explicitly
+flagged that its 5 tests were verified only by hand-trace, not execution,
+because the brief prohibited `git am`/`format-patch` in that task. Real
+RED confirmed both new tests failing for the *expected* reason first
+(`lockDeviceNowAndWaitForKeyguardShown()` still called with an
+authorization present), but only after a first RED attempt surfaced an
+unrelated real bug: `startUserInternal`'s pre-existing (patch `0011`,
+long predating this task)
+`LocalServices.getService(ActivityManagerInternal.class).unquiesceUserApps(userId)`
+call NPEs for *any* test that reaches a genuine foreground user switch,
+since nothing in `UserControllerTest` had ever registered that service —
+fixed by `6e2adc2a3406` above, scoped to only the new
+`startForegroundUser()` helper. Real GREEN then confirmed both new tests
+passing. A full-class run (97 tests) surfaced that this same pre-existing
+NPE affects roughly 30 tests scattered through the file, unrelated to
+this task's own two-commit change (which sits entirely downstream of the
+crash point in the call chain) — confirmed genuinely pre-existing, not
+introduced here, by checking out the real branch at `0044`'s own tip
+(before either task's commits existed) and reproducing the identical
+stack trace on three sampled tests, including two original, non-decoy
+AOSP tests (`testShowKeyguardOnUserStart_showsKeyguard`,
+`testStallUserSwitchUntilTheKeyguardIsShown`). One of the affected tests
+(`testStallUserSwitchUntilTheKeyguardIsShown`) spawns a raw background
+`Thread` to call `startUser()`; its uncaught NPE crashes the whole
+instrumentation process, which is what caused the first full-class
+attempt to silently stop after 41 of 97 tests ("Test run started but did
+not end"). Re-running the other 96 tests (excluding only that one
+process-crashing test) completed cleanly: 62 passed, 28 failed (all with
+the identical pre-existing NPE signature), 6 assumption-failed (also
+pre-existing, unrelated categories) — none of the 7
+decoy/authorization-related tests (5 from Task 6, 2 from Task 7) are
+among the failures. This pre-existing gap is out of this task's scope to
+fix (Task 7's own mandate was the consumption point and a pure-delegation
+bridge, nothing more) and is flagged as a real, separate follow-up item:
+roughly 30% of `UserControllerTest`'s own regression coverage is
+currently unusable via `atest` on this build tree because of a defect
+`0011` introduced, unrelated to Duress Unlock's own correctness.
+
+**Reproducibility.** Regenerated fresh via `git format-patch --stdout`
+directly from the real post-`git am` branch history (six commits
+concatenated into the one `0045` file, not trusted from any local
+worktree's own patch generation) and independently verified byte-for-byte:
+applied via `git am` to a disposable local clone seeded at the real base
+commit's own file content (four files: `UserController.java`,
+`UserControllerTest.java`, `ActivityManagerInternal.java`,
+`ActivityManagerService.java`), diffed against both the authoring
+worktree's final state and the live server tree directly via `sha256sum`
+— empty diff / matching hash on all four files, both ways.
+
 ## Apply (this section)
 
 ```sh
