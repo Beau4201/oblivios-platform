@@ -3046,6 +3046,226 @@ mailbox to two independent clones of the same seeded base produced
 byte-identical resulting trees (`diff -rq`, empty, excluding `.git`) —
 confirming the split lost or altered nothing.
 
+### `frameworks/base`: mint before the reply, switch after (`0051`-`0053`)
+
+Tasks 8-9 of `docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`,
+implemented together in one worktree because Task 8's restructured
+`DecoyProfileHelper` calls Task 9's marker class directly. Base commit:
+`bbe0134976a439337cc84d4c4699d4389264b86a` (`0050`'s own real post-`git am`
+SHA, the real branch tip at fetch time). Fetched five files read-only from
+the real tree and confirmed byte-identical (`sha256sum`, both ways) before
+editing: `DecoyProfileHelper.java`, `LockSettingsShellCommand.java`,
+`DecoyProfileState.java` (read for reference, unchanged), and
+`LockSettingsService.java` (needed for one wiring change described below).
+
+- `8008837d9f38decc0381e58d23b81c72a094399d` — "aegisos: add
+  DecoyRoutingFailureMarker for the seamless-switch fallback path" (Task 9's
+  core class)
+  (`patches/frameworks-base/0051-aegisos-add-DecoyRoutingFailureMarker-for-the-seamle.patch`).
+  New file, package `com.android.server.locksettings`, modeled on the
+  existing `DecoyProfileState`'s storage pattern exactly: `record(LockSettingsStorage,
+  int reason)` and `describe(LockSettingsStorage)`, both static, storing a
+  single `"<version>:<reason>:<epochMillis>"` string via
+  `LockSettingsStorage.setString`/`getString` under `UserHandle.USER_SYSTEM`
+  — the real owner's own DE storage, never readable from a routed-to
+  session. `REASON_SWITCH_NOT_STARTED = 1` and `REASON_QUIESCE_FAILED = 2`
+  as specified. `describe()` always returns a non-null, human-readable
+  string (no recorded failure, a described failure, or a corrupt-entry
+  message) so the shell command below has something to print
+  unconditionally. The one `Slog.e` call (for a corrupt on-disk entry) was
+  checked for the project's log-string ban and contains none of
+  "decoy"/"duress"/"Aegis", matching the file's own already-neutral `TAG`
+  convention (`"CredentialRoutingFailureMarker"`, mirroring
+  `DecoyProfileState`'s `"CredentialRoutingState"`).
+- `4d4ba9bbb654fc07f9c1a4c6d4f34c87ba152437` — "aegisos: add
+  check-credential-routing-status shell command" (Task 9's read-only
+  diagnostic entry point)
+  (`patches/frameworks-base/0052-aegisos-add-check-credential-routing-status-shell-co.patch`).
+  Two files. `LockSettingsShellCommand.java` gains a new subcommand,
+  `check-credential-routing-status`, dispatched the same way
+  `set-decoy-profile`/`clear-decoy-profile` are (intercepted at the top of
+  `onCommand`, before the general credential-gated dispatch), but — per the
+  brief's own instruction — takes no `--owner-credential` argument and
+  never prompts for one, since it only reads state. It still enforces the
+  same permission the sibling commands are ultimately gated on: it calls
+  `mContext.enforceCallingOrSelfPermission(ACCESS_KEYGUARD_SECURE_STORAGE,
+  "LockSettingsRead")` directly, the same permission constant and message
+  string `LockSettingsService#checkReadPermission()` uses for every other
+  read path on this class (confirmed by reading that method), rather than
+  introducing a second, differently-scoped check. `LockSettingsShellCommand`
+  gained one new constructor parameter, `LockSettingsStorage
+  lockSettingsStorage` (stored as `mLockSettingsStorage`), because it
+  previously had no way to reach storage at all — every existing command
+  goes through `mLockPatternUtils`'s AIDL-backed wrapper instead. This is
+  the one deviation from the brief's literal file list (which named only
+  `LockSettingsShellCommand.java`): `LockSettingsService.java`'s
+  `onShellCommand` needed a one-line change to pass its own `mStorage`
+  field through the constructor call. This was judged the minimal correct
+  wiring — the alternative (constructing a second, independent
+  `LockSettingsStorage` instance inside the shell command) would have
+  meant two live instances of a class that is not documented as safe to
+  duplicate, for no real benefit.
+
+  **`onHelp()` judgment call:** the brief asked to mirror "argument parsing,
+  permission enforcement... onHelp registration" from the sibling commands.
+  Read `onHelp()` first and found `set-decoy-profile`/`clear-decoy-profile`
+  are themselves *not* listed there — deliberately undocumented, consistent
+  with not advertising this mechanism to a casual `locksettings help`
+  reader. Mirroring their actual pattern therefore means also not adding
+  `check-credential-routing-status` to `onHelp()`, which is what this patch
+  does; the brief's phrase is read as "match how the siblings actually
+  behave" rather than "add an entry regardless." Flagged explicitly since
+  it is an interpretation of ambiguous brief text, not a literal
+  instruction.
+
+  **Command naming:** named `check-credential-routing-status` rather than
+  anything containing "decoy", per the brief's explicit instruction to keep
+  this one neutral — consistent with the file's own established neutral
+  `TAG` values for this feature area (`CredentialRoutingHelper`,
+  `CredentialRoutingState`), even though the two literal sibling command
+  names (`set-decoy-profile`, `clear-decoy-profile`) do contain "decoy"
+  themselves (pre-existing, unchanged by this patch). The `check-` prefix
+  matches the file's own precedent for a read-only diagnostic command
+  (`check-non-ce-storage-keys`).
+- `4ccf6785de23cf9cdebaa90ae3663a905e0bf61f` — "aegisos: mint the decoy
+  switch authorization before replying, switch after" (Task 8: the ordering
+  fix)
+  (`patches/frameworks-base/0053-aegisos-mint-the-decoy-switch-authorization-before-r.patch`).
+  Restructures `DecoyProfileHelper.maybeRouteToDecoy`: everything above the
+  switch call (the no-decoy dummy check, the decoy credential verification)
+  is unchanged. The tail now mints the switch authorization
+  (`ActivityManagerInternal#authorizeDecoySwitchKeyguardSkip`, from `0050`)
+  synchronously, before any response is returned — a null service or a
+  rejected authorization still returns `null` (today's fail-closed-to-a-
+  second-prompt behavior, unchanged for this specific failure point).
+  `realUserId` is captured via `ActivityManager.getCurrentUser()`
+  immediately before `getHandler().post(...)`, while the current user is
+  still genuinely the real one — capturing it inside the posted runnable
+  would instead race the switch itself, which is exactly the class of bug
+  this task exists to fix one level up (the response-vs-switch race). The
+  handler used is `LockSettingsService.mHandler` (Task 1's confirmed
+  finding — its own dedicated `ServiceThread`, not `FgThread`, which has
+  zero usages in this package), reached via a new private
+  `DecoyProfileHelper#getHandler()` accessor rather than a new field or
+  dependency, since `DecoyProfileHelper` already holds the
+  `lockSettingsService` reference `mHandler` hangs off (same-package
+  `protected` access). `VerifyCredentialResponse.OK` is returned
+  immediately after posting, before the actual switch has run.
+
+  `freezeAndSwitchToDecoy` is renamed `performDecoySwitch` and now returns
+  `void` — it runs on the handler, strictly after the response was already
+  delivered, so it has no response left to withhold. It re-fetches
+  `ActivityManagerInternal` (a second `LocalServices.getService` call, not
+  reused from the mint step, since it now runs on a different thread at a
+  later time) and calls `switchToUserSilently`; on failure it calls
+  `DecoyRoutingFailureMarker.record(..., REASON_SWITCH_NOT_STARTED)` and
+  returns. On success it calls `quiesceUserApps(realUserId)`; on failure it
+  calls `DecoyRoutingFailureMarker.record(..., REASON_QUIESCE_FAILED)`. The
+  old `Slog.e(TAG, "Target-user credential matched but freeze/switch could
+  not be initiated -- treating this attempt as not matched")` line (the
+  real string in this file — the design doc's own citation paraphrased it
+  slightly differently) is deleted outright, not reworded, per the brief's
+  explicit instruction: the marker now carries this information, and this
+  project's own log-string ban means the line could not have been kept
+  as-is regardless (it never contained a banned word, but Task 3's audit
+  had already classified this exact line as a trace to remove). No new or
+  changed `Slog`/`Log` call in this patch contains "decoy", "duress", or
+  "Aegis" — checked line by line, and in fact this patch's net change to
+  `Slog` call count in the file is negative (two calls removed, zero
+  added).
+
+  **Accepted behavioral change, not a regression:** before this patch, a
+  failed `quiesceUserApps` made `maybeRouteToDecoy` return `null` — the
+  decoy credential was reported as *not matched*, and no switch happened at
+  all. That outcome is no longer reachable, because the response is already
+  sent by the time `performDecoySwitch` runs. The real user can now be left
+  un-quiesced (backgrounded but not suppressed) after a successful switch,
+  if `quiesceUserApps` alone fails on that one call. This is the design's
+  own explicit, accepted tradeoff (see the design doc's "Failure path"
+  paragraph: fail-open to a working routed-to session rather than
+  fail-closed to nothing, since the one moment this mechanism exists for is
+  coercion) — `DecoyRoutingFailureMarker` exists specifically so this path
+  is not silently invisible, and Task 13 (dynamic validation) is the
+  designated place to actually exercise it, not this task.
+
+- Base commit: `bbe0134976a439337cc84d4c4699d4389264b86a` (see above).
+
+**Real branch SHAs**, confirmed via `git log --format="%H %s"` on the actual
+branch after `git am`, not assumed from the apply output or the local
+worktree's own commit SHAs (`8d0902c`/`faf84d2`/`8978eb7` in
+`aegisos-platform/.worktrees/duress-seamless-task8-9/`, all superseded by
+`git am` reconstructing the commits against the real tree):
+
+```
+4ccf6785de23cf9cdebaa90ae3663a905e0bf61f  aegisos: mint the decoy switch authorization before replying, switch after
+4d4ba9bbb654fc07f9c1a4c6d4f34c87ba152437  aegisos: add check-credential-routing-status shell command
+8008837d9f38decc0381e58d23b81c72a094399d  aegisos: add DecoyRoutingFailureMarker for the seamless-switch fallback path
+```
+
+`4ccf6785de23cf9cdebaa90ae3663a905e0bf61f` is the real branch tip, confirmed
+a second time (independently of the `git am` output) immediately before the
+build was launched, and a third time after the build completed with no
+other patch having landed in between.
+
+**Build verification.** A full `m -j6 systemimage` (not a fast targeted
+build) was run for this task specifically because Task 9's own brief called
+for it, given the shell-command wiring change touches
+`LockSettingsService.java`'s constructor call site. Launched fully detached
+on the remote side (`nohup ... & disown`), polled synchronously in bounded
+loops rather than left to run unattended:
+
+```
+ninja: 1h16m02.22s Build Succeeded: 2873 steps - 0.63/s
+#### build completed successfully (01:27:08 (hh:mm:ss)) ####
+```
+
+No compile errors; the only diagnostics in the log are pre-existing,
+unrelated warnings (a Kotlin coroutines duplicate-class warning in an
+unrelated MediaProvider module, an unsupported-API-level notice, and a
+`metalava` `UnflaggedApi` info-level note on an unrelated file) — none
+reference any file this patch series touches.
+
+**Reproducibility.** Regenerated fresh via `git format-patch
+bbe0134976a4..HEAD` directly on the real post-`git am` branch (not trusted
+from the local worktree's own patch generation), then independently
+verified: applied the three fresh patches via `git am` to a disposable
+local clone seeded at the real base commit's own content of all five
+touched files, and diffed each of the five resulting files against the live
+server tree directly via `sha256sum` — all five matched exactly
+(`DecoyProfileHelper.java`, `LockSettingsShellCommand.java`,
+`DecoyProfileState.java`, `LockSettingsService.java`,
+`DecoyRoutingFailureMarker.java`).
+
+**Test coverage — explicitly none for this task.** No unit test was written
+for `DecoyRoutingFailureMarker` or the restructured `DecoyProfileHelper`.
+There is no practical unit-test seam for either without mocking
+`LockSettingsStorage`: `LockSettingsStorageTests` does not exist anywhere
+in this tree (confirmed by search, not assumed), and `DecoyProfileHelper`
+itself has never had direct unit test coverage in this branch's history —
+its behavior has only ever been exercised via `atest`
+instrumentation/hardware rounds in prior tasks. Per the brief's own
+instruction for exactly this situation, this is stated explicitly rather
+than skipped silently: verification of both the marker and the reordering
+is deferred to a later dynamic-validation task (the plan's Task 13), which
+must exercise the seamless-unlock success path, the pre-`OK` authorization
+failure path, and — deliberately — the post-`OK` `switchToUserSilently`/
+`quiesceUserApps` failure paths this task's own restructuring newly makes
+reachable without changing the response.
+
+**Open question, not resolved here:** whether `switchToUserSilently` or
+`quiesceUserApps` can genuinely fail for a real, correctly-typed decoy
+target in practice, or whether the two `DecoyRoutingFailureMarker` reason
+codes are defensive-only paths that will never actually fire on real
+hardware. Nothing in this task's own source reading settled this either
+way — `switchToUserSilently`'s own failure modes were not re-traced here,
+and `quiesceUserApps`'s failure surface was previously explored only in
+the context of the earlier real-user-quiescing plan
+(`docs/superpowers/specs/2026-08-27-duress-real-user-quiescing-and-return-design.md`),
+not specifically for whether it can fail against a *decoy* target under
+these exact new call-timing conditions (posted to a handler, after the
+response already went out). Left as a real open question for Task 13's
+dynamic validation to answer with evidence, not guessed here.
+
 ## Apply (this section)
 
 ```sh
