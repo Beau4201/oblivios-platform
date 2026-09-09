@@ -2868,7 +2868,7 @@ a real `logcat`) — no task in this plan has yet scheduled a dynamic
 exercise of either fix. Task 13 is the designated dynamic-validation
 round for this whole plan.
 
-### `frameworks/base`: decoy switch keyguard-skip authorization, Tasks 6-7 (`0045`)
+### `frameworks/base`: decoy switch keyguard-skip authorization, Tasks 6-7 (`0045`-`0050`)
 
 Tasks 6-7 of `docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`,
 Component B's one-shot, decoy-scoped switch authorization store and its
@@ -2877,17 +2877,26 @@ already forced: the existing AOSP `skipKeyguardWhenSwitchingToUnlockedUsers`
 condition at `UserController.java` stays completely untouched and stays
 inert (gated on a permanently-disabled aconfig flag per ADR-061's revert);
 Component B introduces its own separate, narrowly-scoped authorization
-rather than reusing or widening that condition. Landed together as one
-combined patch file (six commits, one `git format-patch --stdout` mailbox)
-because Task 6 alone wires nothing observable — it only becomes a real,
-verifiable capability once Task 7's consumption point and bridge exist —
-matching this project's own precedent of batching tightly-coupled work
-into one artifact rather than one file per commit.
+rather than reusing or widening that condition. Six commits, initially
+landed as one combined `git format-patch --stdout` mailbox
+(`0045-decoy-switch-authorization-store-and-keygua.patch`) on the reasoning
+that Task 6 alone wires nothing observable — it only becomes a real,
+verifiable capability once Task 7's consumption point and bridge exist.
+That combined-mailbox choice deviated from this directory's own established
+one-file-per-commit convention (every other multi-commit export here, e.g.
+`0041`-`0043`, `0044` alongside `packages-apps-multiuser`'s `0004`, uses a
+separate file per commit) and has since been corrected: the same six
+commits, byte-for-byte, now live as six separate files `0045`-`0050`
+below, verified to reconstruct the identical tree the single mailbox did
+(see "Reproducibility").
 
 - `6fc1a61a82e3` — "test: add coverage for the decoy switch authorization
-  store" (Task 6 RED).
+  store" (Task 6 RED)
+  (`patches/frameworks-base/0045-test-add-coverage-for-the-decoy-switch-authorization.patch`).
 - `5461467e5003` — "aegisos: implement the decoy switch authorization
-  store" (Task 6 GREEN, by trace only at landing time — see below). New
+  store" (Task 6 GREEN, by trace only at landing time — see below)
+  (`patches/frameworks-base/0046-aegisos-implement-the-decoy-switch-authorization-sto.patch`).
+  New
   `UserController` fields (`mSwitchAuthorizedUserId`/
   `mSwitchAuthorizedAtMillis`, `@GuardedBy("mLock")`) and two new methods:
   `authorizeDecoySwitchKeyguardSkip(int targetUserId)` (package-private) —
@@ -2911,7 +2920,9 @@ into one artifact rather than one file per commit.
   this file before, following the file's own existing
   `getLastUserUnlockingUptime`-style pattern.
 - `f8e6d4329aba` — "test: add coverage for consuming the decoy switch
-  authorization" (Task 7 RED). Adds
+  authorization" (Task 7 RED)
+  (`patches/frameworks-base/0047-test-add-coverage-for-consuming-the-decoy-switch-aut.patch`).
+  Adds
   `testForegroundSwitch_authorizedDecoy_doesNotForceKeyguard` and
   `testForegroundSwitch_unauthorizedSecureUser_forcesKeyguard` — the
   second is the ADR-061 regression case expressed as a unit test and
@@ -2923,7 +2934,9 @@ into one artifact rather than one file per commit.
 - `6e2adc2a3406` — "test: register ActivityManagerInternal mock for
   foreground-switch tests" (real-environment fix, found only once these
   tests actually ran via `atest` for the first time — see "Real `atest`
-  findings" below). Registers a `LocalServices`-backed
+  findings" below)
+  (`patches/frameworks-base/0048-test-register-ActivityManagerInternal-mock-for-foreg.patch`).
+  Registers a `LocalServices`-backed
   `ActivityManagerInternal` mock inside `startForegroundUser()`
   (`LocalServices.removeServiceForTest` then `addService`, matching the
   existing `WindowManagerInternal` pattern in
@@ -2931,7 +2944,9 @@ into one artifact rather than one file per commit.
   unconditionally in `tearDown()` so it never leaks into another test.
   Test-only; no production code in this commit.
 - `e380eced01fa` — "aegisos: skip the keyguard for an authorized switch"
-  (Task 7 GREEN). Replaces the inner block at
+  (Task 7 GREEN)
+  (`patches/frameworks-base/0049-aegisos-skip-the-keyguard-for-an-authorized-switch.patch`).
+  Replaces the inner block at
   `UserController.java:2335-2345`: a new `if (consumeDecoySwitchAuthorization(userId))`
   branch is added *ahead* of the existing AOSP three-part condition,
   which is otherwise byte-identical to before this patch — confirmed by
@@ -2941,7 +2956,9 @@ into one artifact rather than one file per commit.
   forbids "decoy"/"duress"/"Aegis" in any log string reachable from that
   path.
 - `bbe0134976a4` — "aegisos: expose the decoy switch authorization mint
-  via ActivityManagerInternal" (Task 7's bridge). New
+  via ActivityManagerInternal" (Task 7's bridge)
+  (`patches/frameworks-base/0050-aegisos-expose-the-decoy-switch-authorization-mint-v.patch`).
+  New
   `public abstract boolean authorizeDecoySwitchKeyguardSkip(int targetUserId)`
   on `ActivityManagerInternal` (next to the existing `switchToUserSilently`
   from `0003`) and a `LocalService` override in `ActivityManagerService`
@@ -2997,7 +3014,7 @@ roughly 30% of `UserControllerTest`'s own regression coverage is
 currently unusable via `atest` on this build tree because of a defect
 `0011` introduced, unrelated to Duress Unlock's own correctness.
 
-**Reproducibility.** Regenerated fresh via `git format-patch --stdout`
+**Reproducibility.** Originally regenerated via `git format-patch --stdout`
 directly from the real post-`git am` branch history (six commits
 concatenated into the one `0045` file, not trusted from any local
 worktree's own patch generation) and independently verified byte-for-byte:
@@ -3007,6 +3024,27 @@ commit's own file content (four files: `UserController.java`,
 `ActivityManagerService.java`), diffed against both the authoring
 worktree's final state and the live server tree directly via `sha256sum`
 — empty diff / matching hash on all four files, both ways.
+
+**Split into `0045`-`0050`, one file per commit.** The single combined
+mailbox above deviated from this directory's own established convention
+(see the section intro), and was replaced with six individual
+`git format-patch` files, one per commit, re-derived from the same six
+commits (`865e3c4addaac5e79fea9fc0fbb842aa3d68d52e` through
+`aedb0487345fce6602cef30e4b5ce4528047b5d7` in the local authoring
+worktree, `aegisos-platform/.worktrees/decoy-switch-authorization/` —
+each carrying the real post-`git am` SHA above in its own `From ` header,
+not the local worktree SHA). Verified two ways in that same worktree, both
+against a disposable clone seeded at the local baseline commit representing
+the real base tree for all four touched files
+(`dd81ed8` + `c0d62bd`, together standing in for the real base commit
+`e15abc1a26ffa79563ec6665c20fda337d6d94f6`'s own content of those four
+files): first, applying the six new `0045`-`0050` files in order via
+`git am` reproduced the authoring worktree's own known-good tip
+(`aedb0487345fce6602cef30e4b5ce4528047b5d7`) with an empty `git diff`;
+second, applying the six new files versus applying the original combined
+mailbox to two independent clones of the same seeded base produced
+byte-identical resulting trees (`diff -rq`, empty, excluding `.git`) —
+confirming the split lost or altered nothing.
 
 ## Apply (this section)
 
