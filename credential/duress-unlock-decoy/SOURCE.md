@@ -3269,6 +3269,239 @@ these exact new call-timing conditions (posted to a handler, after the
 response already went out). Left as a real open question for Task 13's
 dynamic validation to answer with evidence, not guessed here.
 
+### `frameworks/base`: warm-start the decoy on keyguard appearance (`0054`-`0056`)
+
+Task 10 of `docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`
+(Component C's warm-start mechanism). Base commit:
+`4ccf6785de23cf9cdebaa90ae3663a905e0bf61f` (`0053`'s own real post-`git am`
+SHA, the real branch tip at fetch time). Fetched two files read-only from the
+real tree and confirmed byte-identical (`sha256sum`, both ways) before
+editing: `DecoyProfileHelper.java` and `LockSettingsService.java` (the latter
+needed for one `systemReady()` wiring line, disclosed below — not in the
+brief's own stated file list of `DecoyProfileHelper.java` only).
+
+**Step 1 gate (source-verified before any code was written).** Starting a
+user does not unlock it. Two real, quoted findings:
+
+- `UserController.finishUserUnlocking` (services/core/java/com/android/server/am/UserController.java:923):
+  `if (!mInjector.isCeStorageUnlocked(userId)) return false;` with the
+  comment "If the user's CE storage hasn't been unlocked yet, we cannot
+  proceed." A background-started user's boot sequence
+  (`finishUserBoot` -> `maybeUnlockUser` -> `finishUserUnlocking`) cannot
+  advance past `STATE_RUNNING_LOCKED` unless CE storage is already unlocked
+  by some other means.
+- The one automatic unlock attempt a background start does trigger,
+  `LockSettingsService#unlockUserKeyIfUnsecured`
+  (services/core/java/com/android/server/locksettings/LockSettingsService.java:2589-2612),
+  bails out for any secured user: `if (isUserSecure(userId)) { Slogf.d(TAG,
+  "Not unlocking CE storage for user %d yet because user is secured",
+  userId); return; }`. It only completes an unlock for a user with
+  `LockscreenCredential.createNone()` — i.e. no credential at all. A
+  registered decoy always has its own credential (that credential is what
+  the whole feature routes against), so this call is always a no-op for a
+  decoy target.
+
+Net: a warm-started decoy lands in, and stays in, `RUNNING_LOCKED` with CE
+storage genuinely locked, until its own credential is verified through the
+normal routing path. This was also confirmed empirically post-reboot on the
+emulator (see "Dynamic validation" below) — a decoy warm-started at boot
+showed `RUNNING_LOCKED` via `am get-started-user-state`, not
+`RUNNING_UNLOCKED`, until its PIN was actually verified.
+
+**Step 2, trigger point.** `UserManagerService` already registers a
+`KeyguardManager.KeyguardLockedStateListener`
+(`initializeAndRegisterKeyguardLockedStateListener`,
+services/core/java/com/android/server/pm/UserManagerService.java:821-833),
+but it is private, and conditionally registered/unregistered based on the
+private-space auto-lock setting
+(`setOrUpdateAutoLockPreferenceForPrivateProfile`) — not a stable signal
+`DecoyProfileHelper` could depend on being active. The listener *type* and
+registration pattern is real, public API
+(`KeyguardManager#addKeyguardLockedStateListener`,
+`SUBSCRIBE_TO_KEYGUARD_LOCKED_STATE`, signature-protected, held implicitly
+by `system_server`), so `DecoyProfileHelper` registers its own instance of
+the same API directly, from `LockSettingsService#systemReady()` (mirroring
+`UserManagerService`'s own choice to register from a post-construction
+lifecycle point rather than from a constructor, since
+`WindowManagerService` — `KeyguardManager`'s real backing — is not
+guaranteed ready at `LockSettingsService` construction time).
+
+- `2fa61e4` (local worktree SHA, superseded — see real branch SHAs below) —
+  "aegisos: warm-start the registered decoy target when the keyguard
+  appears"
+  (`patches/frameworks-base/0054-aegisos-warm-start-the-registered-decoy-target-when-.patch`).
+  Adds a `KeyguardManager.KeyguardLockedStateListener` field
+  (`keyguardLockedStateListener`, a method reference to
+  `onKeyguardLockedStateChanged`), a new package-private `onSystemReady()`
+  that registers it via `new HandlerExecutor(getHandler())` (Task 1's
+  handler, `lockSettingsService.mHandler` — so the callback itself, guard
+  checks included, always runs on that handler, never inline on whatever
+  thread `WindowManagerService`'s own dispatch originates from — this is
+  what the brief's "never inline on a keyguard callback" requirement
+  actually means here, and `HandlerExecutor` gives it directly rather than
+  needing a second explicit `post()`), and
+  `onKeyguardLockedStateChanged(boolean isKeyguardLocked)`: returns early
+  unless `isKeyguardLocked`, returns early unless a decoy is registered
+  (`DecoyProfileState.maybeGet`), returns early if `ActivityManagerInternal`
+  is unavailable or the decoy is already running
+  (`ami.isUserRunning(decoyUserId, 0)`), otherwise starts it in the
+  background. No new log line contains "decoy", "duress", or "Aegis" —
+  checked line by line.
+- `9f2237d` (local worktree SHA, superseded) — "aegisos: wire the
+  credential-routing warm start into systemReady"
+  (`patches/frameworks-base/0055-aegisos-wire-the-credential-routing-warm-start-into-.patch`).
+  One line in `LockSettingsService.systemReady()`:
+  `decoyProfileHelper.onSystemReady();`, placed immediately after the
+  existing `mBiometricDeferredQueue.systemReady(...)` call, matching that
+  method's existing pattern of calling each owned helper's own
+  `systemReady()`/`onSystemReady()` in turn. This is the one file beyond
+  the brief's stated list (`DecoyProfileHelper.java` only) — disclosed, same
+  as the `0052` precedent's own one-file deviation, and for the same reason
+  (no other call site exists to trigger registration at the right lifecycle
+  point).
+- `85c247c` (local worktree SHA, superseded) — "aegisos: fix the warm start to
+  use the real background-start API"
+  (`patches/frameworks-base/0056-aegisos-fix-the-warm-start-to-use-the-real-backgroun.patch`).
+  **A real bug caught by this task's own build-before-landing discipline,
+  not by review.** The first `m -j6 systemimage` attempt against `0054`
+  failed to compile: `ActivityManagerInternal` (used everywhere else in
+  this class for `authorizeDecoySwitchKeyguardSkip`/`switchToUserSilently`/
+  `quiesceUserApps`) has no plain `startUserInBackground(int)` method — only
+  `startUserInBackgroundTemporarily` (auto-stops the user; wrong shape).
+  The line that actually exists on that class, misread from an
+  `IActivityManager.aidl` grep result during Step 1's own research and
+  wrongly attributed to `ActivityManagerInternal`, does not exist there at
+  all. Root-caused against real source and fixed: the correct primitive is
+  `IActivityManager#startUserInBackground`, obtained via
+  `ActivityManager.getService()` — the exact same pattern
+  `UserManagerService` itself already uses for a different background-start
+  case (pre-created-user initialization,
+  services/core/java/com/android/server/pm/UserManagerService.java:6773-6777,
+  "starting pre-created user"). `RemoteException` is caught and logged
+  (`Slog.w(TAG, "Failed to start background credential-routing target",
+  e)` — clean of banned words) since the AIDL method signature declares it,
+  even though this is an in-process call. Per the project's own git
+  discipline (never amend a commit already landed on the real branch via
+  `git am`; land a fix as a new commit instead), this was landed as a third
+  patch on top of `0054`/`0055` rather than rewriting either. A second
+  `m -j6 systemimage` after this fix succeeded (see "Build verification"
+  below), and `dexdump` on the resulting `services.jar` confirmed the
+  `keyguardLockedStateListener` field is genuinely present in the compiled
+  `DecoyProfileHelper` class (its lambda target method itself is
+  R8-synthesized into a `$r8$lambda$...` name, standard method-reference
+  desugaring, not evidence of missing code).
+
+**Real branch SHAs**, confirmed via `git log --format="%H %s"` on the actual
+branch after each `git am` (never assumed from the apply output or the
+local worktree's own commit SHAs):
+
+```
+fdeea399025c6d79a182ceb819f5f34d427285bc  aegisos: fix the warm start to use the real background-start API
+bf50621534ff5aa80daf859a84a6429bba6721d8  aegisos: wire the credential-routing warm start into systemReady
+94725c5aa8ca63ce24d4bde9403629d46702dccb  aegisos: warm-start the registered decoy target when the keyguard appears
+4ccf6785de23cf9cdebaa90ae3663a905e0bf61f  aegisos: mint the decoy switch authorization before replying, switch after (0053, base)
+```
+
+(Confirmed via `git log --format="%H %s"` on the real branch, not assumed
+from `git am`'s own apply output, and re-confirmed unchanged immediately
+before and after the build.) No other patch landed on the tree between base and `fdeea399025c`, and no
+build was ever in flight at any `git am` invocation (confirmed via `pgrep`
+for `ninja`/`soong_ui`/`soong_build` each time).
+
+**Build verification.** First `m -j6 systemimage` (against `0054`+`0055`
+only) failed to compile — see the `0056` bug description above. Second
+`m -j6 systemimage` (against all three patches) succeeded:
+
+```
+ninja: 5m51.57s Build Succeeded: 342 steps - 0.97/s
+#### build completed successfully (05:58 (mm:ss)) ####
+```
+
+(342 steps, not the ~5000+ of a from-scratch build, because most of the
+tree was already built from the immediately-preceding `0051`-`0053` build in
+the same session — this build only needed to redo `services.core`/
+`services` and their downstream dexpreopt/image-assembly steps.)
+`OFFICIAL_BUILD=true` was set (this is the `sdk_phone64_x86_64` preflight
+emulator tree, not a `lynx` device build, so the ADR-047 app-inclusion
+check does not apply the same way, but it was set anyway as a
+habit-reinforcing default).
+
+**Reproducibility.** Regenerated fresh via `git format-patch
+4ccf6785de23..fdeea399025c` directly on the real post-`git am` branch (not
+trusted from the local worktree's own patch generation), then independently
+verified: applied the three fresh patches via `git am` to a disposable
+local clone seeded at the real base commit's own content of both touched
+files (`git show 4ccf6785de23:<path>` on the real server, not a locally
+cached copy), and diffed each of the two resulting files against the live
+server tree directly via `sha256sum` — both matched exactly
+(`DecoyProfileHelper.java`, `LockSettingsService.java`).
+
+**Dynamic validation (emulator, not just compile-time).** The stale Task-4
+emulator instance (PID unchanged since 2026-09-07, `adb shell` returning
+"error: closed") was killed and a fresh `-wipe-data` boot was launched
+against the freshly built `out-preflight` image. Using the project's
+established `pm create-user --user-type
+org.aegisos.usertype.full.DECOY`/`cmd lock_settings set-pin`/`cmd
+lock_settings set-decoy-profile --owner-credential`/`cmd lock_settings
+verify --old <pin> --user 0` test sequence (same pattern as
+`docs/superpowers/plans/2026-08-27-duress-real-user-quiescing-and-return.md`'s
+own Step 2-3, with synthetic test PINs, not the owner's real credential):
+
+- Confirmed, via `dumpsys lock_settings` (`CredentialType: PIN` for the
+  decoy) and `am get-started-user-state`, that a warm-started decoy really
+  does sit in `RUNNING_LOCKED` after a fresh reboot (not
+  `RUNNING_UNLOCKED`) until its own PIN is verified — the empirical
+  confirmation of the Step 1 source finding above. (An earlier same-boot
+  test without an intervening reboot showed the decoy reaching
+  `RUNNING_UNLOCKED` almost immediately after being warm-started; this
+  turned out to be a test-methodology artifact, not a code defect — a
+  newly-created user's CE key is generated and already resident in the
+  kernel keyring at creation time within the same boot, and only becomes
+  genuinely re-locked across a following reboot. Re-run with a reboot
+  between decoy registration and the warm-start check, which produced the
+  result above.)
+- Measured PIN-to-landing latency via real logcat timestamps (device
+  clock, `UserController.UserState` transition lines and
+  `reportOnUserCompletedEvent`), comparable in spirit to ADR-059's
+  methodology but not identical to it (ADR-059 used a temporary
+  `IUserSwitchObserver` instrumentation build on physical `lynx` hardware;
+  this round used the emulator's own existing log lines, since adding and
+  removing a second temporary instrumentation patch was judged
+  disproportionate for one task's own validation round):
+  - **Cold** (decoy never started before the credential check; n=3, fresh
+    decoy user per trial, no intervening keyguard toggle): CE-storage-
+    unlocked reached at 3507ms / 2011ms / 2643ms after the credential call
+    (mean ≈2720ms); full switch-complete
+    (`reportOnUserCompletedEvent`) at 8935ms / 7297ms / 8076ms (mean
+    ≈8103ms).
+  - **Warm** (decoy already `RUNNING_LOCKED` via this task's mechanism
+    before the credential check; n=2, each requiring a fresh reboot since
+    a decoy that has ever been unlocked stays resident for the rest of
+    that boot): CE-storage-unlocked reached at 433ms / 618ms after the
+    credential call (mean ≈526ms, **~5.2x faster** than cold); full
+    switch-complete at 6133ms / 6310ms (mean ≈6222ms, **~1.3x faster**,
+    ≈1.9s saved).
+  - Honest reading: the warm start delivers a large, real cut specifically
+    in the sub-step it targets (getting a not-yet-started decoy to
+    `RUNNING_LOCKED`/CE-unlockable), and a smaller but still real
+    ≈1.9-second cut in the full, holistic PIN-to-landing figure — the
+    remaining time is dominated by broadcast dispatch and other observers
+    (e.g. a logged "User switch slowed down by observer #1
+    WallpaperManagerService: result took 918ms") that this task does not
+    and cannot address. Small sample size (n=2 for warm, each costing a
+    full reboot cycle) is disclosed rather than overstated as a precise
+    ratio.
+  - This is an emulator round, not physical `lynx` hardware — absolute
+    figures are not expected to match ADR-059's physical-device numbers
+    and are not claimed to.
+
+**Test coverage — explicitly none.** No unit test was written for the new
+`onSystemReady()`/`onKeyguardLockedStateChanged` methods, for the same
+reason as every other `DecoyProfileHelper` change in this package: no
+practical seam exists without mocking `LockSettingsStorage` and
+`ActivityManagerInternal`, and none of this file's prior tasks have unit
+coverage either.
+
 ## Apply (this section)
 
 ```sh
