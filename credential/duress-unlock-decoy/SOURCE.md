@@ -3164,11 +3164,14 @@ editing: `DecoyProfileHelper.java`, `LockSettingsShellCommand.java`,
   old `Slog.e(TAG, "Target-user credential matched but freeze/switch could
   not be initiated -- treating this attempt as not matched")` line (the
   real string in this file — the design doc's own citation paraphrased it
-  slightly differently) is deleted outright, not reworded, per the brief's
-  explicit instruction: the marker now carries this information, and this
-  project's own log-string ban means the line could not have been kept
-  as-is regardless (it never contained a banned word, but Task 3's audit
-  had already classified this exact line as a trace to remove). No new or
+  slightly differently) is deleted outright, not reworded. This is a
+  natural consequence of restructuring `maybeRouteToDecoy`/
+  `performDecoySwitch` around the new mint-before-reply ordering — the
+  marker now carries the equivalent information — not an implementation of
+  Task 3's audit decision: that audit classified this exact line (row 2)
+  as **RENAME**, not remove, and the rename (dropping "decoy" from the
+  message body, keeping level and call site unchanged) had already landed
+  in an earlier task, before this patch's own base commit. No new or
   changed `Slog`/`Log` call in this patch contains "decoy", "duress", or
   "Aegis" — checked line by line, and in fact this patch's net change to
   `Slog` call count in the file is negative (two calls removed, zero
