@@ -3918,6 +3918,81 @@ f6747e91e7a4afbaaf939f6487ecb3fcaa1e61a1  test: add coverage for skipping the re
 No build was in flight at either `git am` invocation (confirmed via `pgrep`
 for `ninja`/`soong_ui`/`siso` immediately before each).
 
+### `frameworks/base`: close Task 11b's two review findings (`0065`)
+
+Task 11b (the `0061`-`0064` patch set above) was approved with two Important
+findings still open, closed here.
+
+**Finding 1 -- narrow exception handling broke the fail-closed pattern.**
+`LockPatternUtils.consumeDecoySwitchAuthorizationForBouncerSkip(int)` only
+caught `RemoteException` around the Binder call. Every other branch in this
+chain fails closed (returns `false`) on any doubt -- null service, no minted
+grant, expired grant, wrong user -- but a `SecurityException` from a
+permission misconfiguration on the `LockSettingsService` side (its own
+`consumeDecoySwitchAuthorizationForBouncerSkip` calls `checkHavePermission()`,
+which can throw `SecurityException` via
+`Context.enforceCallingOrSelfPermission`) would have propagated uncaught into
+`KeyguardViewMediator`'s call site instead of degrading safely. `0065` widens
+the catch to `RemoteException | SecurityException`, both fail closed
+identically (return `false`, the bouncer is simply shown again -- never a
+bypass), and updates the method's own doc comment to describe both cases.
+Verified the real server-side implementation before scoping the fix (not
+assumed): `LockSettingsService.consumeDecoySwitchAuthorizationForBouncerSkip`
+is `checkHavePermission(); ... ami.consumeDecoySwitchAuthorizationForBouncerSkip(userId)`
+with no other try/catch anywhere in the call chain back to
+`KeyguardViewMediator.handleUserSwitchComplete()`, confirming the exception
+really could have propagated uncaught.
+
+**Finding 2 -- no real `atest` GREEN run after the full `systemimage`
+rebuild.** `0061`-`0064`'s own GREEN evidence was real device dynamic
+validation, not a unit-test run, because the rebuild needed to bake the new
+Binder method into `framework.jar` didn't leave session time for a follow-up
+`atest` pass. Closed here: after landing `0065`, a fresh emulator instance
+was booted (`-wipe-data -no-snapshot-load`; the long-lived instance reused
+from `0061`-`0064`'s own dynamic validation had lost its `/sdcard` FUSE mount
+after repeated reboots, confirmed via a failed `adb shell df /sdcard` and a
+failing test write before being discarded) and a real `atest` run executed
+against it:
+
+```
+x86_64 FrameworksServicesTests: Passed: 15, Failed: 0, Ignored: 0, Assumption Failed: 0
+x86_64 SystemUITests: Passed: 61, Failed: 0, Ignored: 0, Assumption Failed: 73
+All tests passed!
+```
+
+`FrameworksServicesTests` ran the explicit 15-method list of Task 11a's
+decoy/grant `UserControllerTest` coverage (the 13 methods matching
+`*[Dd]ecoy*` plus `testForegroundSwitch_authorizedDecoy_doesNotForceKeyguard`
+and `testForegroundSwitch_unauthorizedSecureUser_forcesKeyguard`, which don't
+match that pattern by name) -- run as an explicit method list rather than the
+whole class because the full class hits a pre-existing, unrelated crash
+(`testStallUserSwitchUntilTheKeyguardIsShown`, an `unquiesceUserApps` NPE
+from `0011`) that truncates the run before reaching every test. `SystemUITests`
+ran the entire `KeyguardViewMediatorTest` class (134 executions = 67 methods
+under two `animation_library_shell_migration` flag parameterizations, an
+unrelated, pre-existing flag gate this patch set doesn't touch); the 73
+`ASSUMPTION_FAILED` results are the flag-gated skips, not failures. The three
+tests this fix set most directly targets --
+`testUserSwitchToSecureUserShowsBouncer`,
+`testUserSwitchToAuthorizedDecoyUserSkipsBouncer`, and
+`testUserSwitchToUnauthorizedSecureUserStillShowsBouncer` -- were confirmed
+individually as `PASSED` (not merely counted) under the flag variant that
+actually executes on this build.
+
+**Real branch SHA**, confirmed via `git log` on the actual branch after
+`git am`:
+
+```
+f459f29b65f7490fa60d45341c316cc1afe37f4f  fix: fail closed on SecurityException in bouncer-skip authorization check (0065)
+```
+
+No build was in flight at the `git am` invocation (confirmed via `ps aux`
+for `soong_ui`/`ninja`/`siso` immediately before). Reproducibility
+independently verified: `0065` applied via `git am` to a disposable local
+clone seeded at `d4a76bb5dc14`'s own content of `LockPatternUtils.java`
+(`git show d4a76bb5dc14:<path>` on the real server), the resulting file
+diffed byte-for-byte against the live server tree -- empty diff.
+
 ## Apply (this section)
 
 ```sh
