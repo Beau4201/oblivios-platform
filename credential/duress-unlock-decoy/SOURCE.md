@@ -4227,6 +4227,164 @@ on the home screen with zero user interaction at all" framing from the
 original design doc's Component C, which remains a materially larger,
 separately-scoped SystemUI surface question.
 
+### `frameworks/base`: an intervening switch invalidates outstanding decoy grants (`0071`-`0072`)
+
+A review finding on `0066`-`0070`'s own active-dismiss grant identified a
+real gap: because that grant is redeemed only on user-driven interaction (a
+swipe), it -- and, more generally, either of the other two grants from the
+same mint -- could remain outstanding for up to the full 30-second window
+even after the other grants were already spent. Nothing invalidated the
+outstanding grant(s) if a **second, distinct switch event** retargeted the
+device to the same already-authorized decoy user id before the first
+switch's own swipe consumed the active-dismiss grant -- for example,
+switching away from the decoy and back again via a route that never goes
+through `authorizeDecoySwitchKeyguardSkip`'s own real credential-verification
+mint (the lock-screen avatar switcher is one known-unchecked surface from
+prior audits; `am switch-user` over adb, if USB debugging is enabled, is
+another). Narrower than ADR-061 -- it can only ever re-enter the same
+already-once-authorized decoy session, within the bounded 30-second window,
+and only by someone who already possesses/forced the decoy PIN once -- but
+still a real widening of "one verified credential authorizes exactly one
+thing."
+
+**The fix.** Bind each grant's validity to the specific switch event it was
+minted for, not just to the target user id. `UserController` gains a new
+monotonically-incrementing counter, `mSwitchSequenceNumber`, advanced once
+for every foreground switch actually initiated by `switchUser()` or
+`switchToUserSilently()` (never for a no-op switch to the already-current
+user, and never merely for a switch enqueued behind one already in
+progress -- its own eventual dispatch, via `endUserSwitch`'s re-entrant
+`switchUser()` call, is what actually advances the counter once it starts
+for real). `authorizeDecoySwitchKeyguardSkip` records the counter's value at
+mint time in a new field, `mSwitchAuthorizedAtSequence`.
+
+The one subtlety: the real production order is *mint, then switch* --
+`DecoyProfileHelper` mints synchronously (Task 8 of the seamless-unlock
+plan, "mint before the reply, switch after it") and only afterwards posts
+the actual `switchToUserSilently` call for the exact same target. This means
+the switch-sequence number of "the switch this mint is for" genuinely isn't
+known yet at mint time, so a naive "the sequence must never advance past the
+value recorded at mint" rule would immediately invalidate every mint's own
+legitimate switch the instant it starts, breaking the feature entirely. A
+new boolean, `mAwaitingAuthorizedSwitch`, resolves this: true from the
+moment a mint is made, it grants a single exemption to the first switch
+initiated for that mint's own target -- consuming the exemption without
+advancing the sequence -- then is permanently false until the next mint. Any
+switch after that exemption is used, to any target including a return to the
+exact same decoy id, advances the sequence like any other switch. This is
+implemented once, in a new private `recordSwitchInitiatedLocked(int
+targetUserId)`, called from both `switchUser()` and `switchToUserSilently()`
+immediately after `mTargetUserId` is set (the point a switch is genuinely
+initiated, as opposed to merely queued behind one already in flight).
+`consumeGrantLocked` gains a second, independent validity gate alongside the
+existing time-based expiry check -- `mSwitchAuthorizedAtSequence ==
+mSwitchSequenceNumber` -- and a redemption is only honoured when both hold;
+either failing clears the whole record exactly like an expired mint always
+did (fails closed, single evaluation, no retry).
+
+**Why not literally "record raw sequence at mint, require exact match
+forever," as first considered.** That reading is exactly what
+`mAwaitingAuthorizedSwitch`'s exemption prevents from breaking the normal
+flow: without it, the mint's own authorized switch would always invalidate
+itself, since it is itself a switch initiation that happens after the mint.
+The exemption is scoped as narrowly as possible -- it is spent by the first
+switch to the mint's own target and never granted again for that mint, so a
+second switch to the same target (the literal reviewer scenario) is not
+exempt and correctly invalidates.
+
+**Self-review against the two specific risks named going in.** (1) Is the
+sequence counter manipulable by an untrusted caller? No -- `switchUser()`
+and `switchToUserSilently()` are both only reachable through existing,
+already-permission-checked `ActivityManagerService`/`ActivityManagerInternal`
+call paths; nothing new is exposed. The one new test-only entry point,
+`noteForegroundSwitchInitiatedForTests`, is package-private and
+`@VisibleForTesting`, exercised only by `UserControllerTest`. (2) Does
+binding to "any switch" break the legitimate 3-consumer flow for the SAME
+authorized switch? No -- none of the three consume methods themselves call
+`switchUser()`/`switchToUserSilently()`; the only switch-initiation for an
+authorized target during normal operation is `DecoyProfileHelper`'s own
+single `switchToUserSilently` call, which is exactly the one exempted by
+`mAwaitingAuthorizedSwitch`. All three grants remain independently
+consumable across their normal ~0-30s window for that one switch, confirmed
+by a dedicated test (`testDecoySwitchAuthorization_authorizedSwitchInitiationDoesNotInvalidateGrants`).
+
+**Test coverage (`0071`, 5 new `UserControllerTest` cases, all 23 pre-existing
+cases from `0045`-`0070` untouched and re-run alongside them).**
+`testDecoySwitchAuthorization_authorizedSwitchInitiationDoesNotInvalidateGrants`
+proves the normal single-switch flow is unaffected (mint, note the one
+authorized switch, all three grants still consumable).
+`testDecoySwitchAuthorization_interveningSwitchInvalidatesAllOutstandingGrants`
+is the core gap-closure test: mint, note the authorized switch, note a
+second switch to an unrelated user, then confirm all three grant types now
+report `false`.
+`testDecoySwitchAuthorization_switchAwayFromDecoyAndBackStillInvalidatesGrants`
+reproduces the reviewer's literal scenario (switch away, then back to the
+exact same decoy id) and confirms it still invalidates.
+`testDecoySwitchAuthorization_expiryStillAppliesEvenWithNoInterveningSwitch`
+and `testDecoySwitchAuthorization_interveningSwitchInvalidatesEvenWellWithinTimeWindow`
+prove the two validity gates (expiry, sequence match) are each enforced
+independently of the other.
+
+**Real `atest` RED/GREEN.** RED, real device: `git am`'d only `0071`
+(the test file) onto the branch and ran the 5 new tests --
+`cannot find symbol: noteForegroundSwitchInitiatedForTests(int)`, a real
+compile failure, since `0072` had not landed yet. GREEN, after landing
+`0072` (no `m` rebuild needed to exercise `UserControllerTest` itself --
+`atest` recompiled the touched module fresh): all 28 relevant
+`UserControllerTest` methods (the 23 pre-existing decoy/grant cases plus
+these 5 new ones) passed:
+
+```
+x86_64 FrameworksServicesTests: Passed: 28, Failed: 0, Ignored: 0, Assumption Failed: 0
+All tests passed!
+```
+
+A full `m -j6 systemimage` build was then run to confirm the change
+compiles into the actual system image, not just the isolated test module:
+`Build Succeeded, 162 steps, 3m31s`. `grep -ac` on the resulting
+`system.img` for `recordSwitchInitiatedLocked`/
+`noteForegroundSwitchInitiatedForTests` found 2 occurrences, confirming both
+new methods are genuinely present in the built output. This fix is
+unit-test-level only; no dynamic (emulator or physical) re-validation was
+performed, since none of the three grants' own consumer call sites or the
+production switch call sites changed shape -- only their shared validity
+check gained a second, independently-tested gate. If a future session
+touches this mechanism again, a fresh consolidated hardware round (matching
+this package's own established batching precedent) is the right place to
+also confirm this fix dynamically, rather than a standalone repeat here.
+
+**Reproducibility.** Regenerated fresh via `git format-patch
+6031f0f82921..540d4a0366f2` directly from the real post-`git am` branch
+history, not the local worktree's own patch files. Independently verified:
+applied the fresh two-patch set via `git am` to a disposable local clone
+seeded at the real base commit's own content of both touched files (`git
+show 6031f0f82921:<path>` on the real server), then diffed each resulting
+file against the live server tree directly -- both matched byte-for-byte
+(`UserController.java`, `UserControllerTest.java`). The disposable verify
+clone was deleted immediately after.
+
+**Real branch SHA**, confirmed via `git log` on the actual branch after
+`git am` (never assumed from the apply output or the local worktree's own
+commit SHAs):
+
+```
+540d4a0366f2  aegisos: invalidate decoy switch grants on an intervening switch (0072)
+7568e491414d  test: add coverage for intervening-switch invalidation of decoy grants (0071)
+```
+
+No build was in flight at either `git am` invocation (confirmed via `ps aux`
+for `ninja`/`soong_ui`/`siso` immediately before each). Grepped the full
+diff, both patch files, and this section for `192\.168|beau@|beau-dev|
+/srv/aegisos` -- no LAN/account coordinates. Grepped for new log call sites
+containing `decoy`/`duress`/`Aegis` -- none; this fix adds no new logging at
+all, only internal counter/flag bookkeeping.
+
+**What remains open.** Same as `0066`-`0070` above: the six UNCHECKED
+leak-audit items, `credential_capture` (untouched), and the Component C
+"imperceptible transition" framing are all unaffected by this patch set.
+Additionally, this fix's own dynamic (non-unit-test) re-validation has not
+been performed, as noted above.
+
 ## Apply (this section)
 
 ```sh
