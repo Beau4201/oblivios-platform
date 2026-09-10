@@ -3993,6 +3993,240 @@ clone seeded at `d4a76bb5dc14`'s own content of `LockPatternUtils.java`
 (`git show d4a76bb5dc14:<path>` on the real server), the resulting file
 diffed byte-for-byte against the live server tree -- empty diff.
 
+### `frameworks/base`: a third grant closes the manual-swipe double-PIN gap (`0066`-`0070`)
+
+`0061`-`0065` closed the *automatic* 500ms bouncer re-arm after an authorized
+decoy switch. Real touch-input validation of that fix (Task 11b) found a
+second, distinct gap it never claimed to close: after the switch, the device
+lands on an ordinary swipeable lock screen, and the user's first manual swipe
+still raises a fresh, live PIN bouncer -- because nothing had ever told the
+keyguard "this specific session's credential was already verified moments
+ago." `task-11-fix-report.md`'s Avenue 2 had already ruled out repurposing
+`KeyguardUpdateMonitor.getUserCanSkipBouncer`/trust-agent infrastructure for
+this (duration-based grants, a visible "extend unlock" indication, and a
+larger biometric-gating blast radius than this feature can absorb) and named
+a third, independently-trackable grant as the concrete way forward without
+touching that machinery.
+
+**Root investigation.** Traced the real, ordinary same-user PIN-unlock path
+end to end:
+`KeyguardSecurityContainerController.showNextSecurityScreenOrFinish(authenticated,
+targetUserId, ...)` is the one function that decides whether a bouncer
+request finishes immediately or actually challenges the user. Critically, it
+is called *before* any bouncer is rendered:
+`PrimaryBouncerInteractor.show()` (the real chokepoint every swipe-to-bouncer
+request in this build's legacy, non-scene-container bouncer goes through --
+confirmed via `SceneContainerFlag.assertInLegacyMode()` at the top of that
+method, and independently confirmed this build's `compose_bouncer` aconfig
+flag has no `state: ENABLED` override, i.e. is off by default, matching Task
+11's own real-device evidence of a View-based, not Compose, PIN keypad) calls
+`primaryBouncerView.delegate?.showNextSecurityScreenOrFinish()`, whose real
+implementation (`KeyguardBouncerViewBinder.kt`) is
+`securityContainerController.dismiss(selectedUserInteractor.getSelectedUserId())`
+-- which always calls through with `authenticated = false`. If this pre-check
+already decides `finish = true`, the bouncer is never shown at all. This
+function already has exactly this shape for two other signals --
+`mUpdateMonitor.getUserHasTrust(targetUserId)` and
+`getUserUnlockedWithBiometric(targetUserId)` -- both "this user's credential
+was already satisfied by some other mechanism, don't challenge again." A
+third, sibling branch keyed off this feature's own authorization primitive
+(rather than trust/biometric plumbing) is architecturally the same shape,
+without either's documented side effects. Confirmed this branch cannot
+bypass a genuinely required SIM PIN/PUK screen or the secure-lock-device
+second-factor check: both are evaluated downstream of *why* `finish` became
+true, unconditionally, for every branch including the pre-existing
+trust/biometric ones -- this patch set adds no exception to that.
+
+**Why a third grant, not a second use of an existing one.** The
+forced-lock-skip grant (`0045`-`0050`) is consumed synchronously during the
+switch itself; the bouncer-skip grant (`0061`-`0064`) is consumed
+deterministically ~500ms later in `KeyguardViewMediator`. Both are routinely
+already spent by the time the user gets around to swiping (which can happen
+seconds later, whenever they choose to interact). A second consumption
+attempt against either existing grant would reliably find it already burned
+and return `false` -- exactly the "looks correct, isn't" trap this project's
+own `docs/superpowers/sdd/task-11-fix-report.md` had already identified and
+declined to build without a proper design pass.
+
+**`0066`/`0067`: `UserController` grows a third grant.** The existing
+`mForcedLockSkipConsumed`/`mBouncerSkipConsumed` boolean-pair mechanism is
+generalized to three booleans (`mForcedLockSkipConsumed`,
+`mBouncerSkipConsumed`, `mActiveDismissConsumed`) behind a small private
+`DecoySwitchGrant` enum, replacing the old `boolean forcedLockGrant`
+parameter to `consumeGrantLocked`. `authorizeDecoySwitchKeyguardSkip`'s own
+type-check against the real user registry (`UserManagerInternal.getUserInfo
+(targetUserId).userType == USER_TYPE_FULL_AEGISOS_DECOY`) is byte-identical
+to before -- this patch only adds a third field reset inside the same
+`synchronized` block that already ran on every mint, and a third named
+consume method, `consumeDecoySwitchAuthorizationForActiveDismiss(int)`,
+`@VisibleForTesting` and package-private like its two siblings, with zero
+production callers until `0068`/`0070` wire it. The clearing condition
+(`mSwitchAuthorizedUserId` reset to `USER_NULL`, all three bits reset) now
+requires all three grants consumed, or any redemption attempt finding the
+mint already expired -- whichever comes first, exactly generalizing the
+existing two-grant rule. `0067` is 8 new `UserControllerTest` cases mirroring
+the existing dual-grant test shape (basic consume-once/wrong-id/expired/
+never-minted for the new grant, plus four tri-grant interaction tests:
+all-three-consumed-clears-the-record, the active-dismiss grant consumed
+independently of the other two without disturbing them, expiry applying to
+all three even when others were already consumed within the window, and a
+re-mint resetting all three). All 7 pre-existing tests (5 from `0045`-`0050`,
+2 from `0058`-`0060`) are untouched and were re-traced to confirm no
+behavioral divergence -- none of them ever touch the new third bit.
+
+**`0068`: the bridge, mirroring `0061`'s shape exactly.** Pure delegation,
+zero decision logic, at every layer: an abstract
+`ActivityManagerInternal#consumeDecoySwitchAuthorizationForActiveDismiss`,
+a single-statement `ActivityManagerService.LocalService` override, one more
+method appended to the end of `ILockSettings.aidl` (same ordinary,
+unversioned internal AIDL as `0061`'s addition), a `LockSettingsService`
+override gated by the same `checkHavePermission()`
+(`ACCESS_KEYGUARD_SECURE_STORAGE`) `isSecure()` already requires, and an
+uncached `LockPatternUtils` wrapper that fails closed on either
+`RemoteException` or `SecurityException` from the start (the two-exception
+catch `0065` had to add after the fact for the bouncer-skip grant is present
+here from the first commit).
+
+**`0069`/`0070`: the consumer.** `KeyguardSecurityContainerController
+.showNextSecurityScreenOrFinish` gains one new `else if` branch, positioned
+after the existing `getUserUnlockedWithBiometric` branch and before the
+`SecurityMode.None` branch:
+`!authenticated && mLockPatternUtils.consumeDecoySwitchAuthorizationForActiveDismiss(targetUserId)`.
+The `!authenticated` guard is deliberate and stricter than the pre-existing
+trust/biometric branches need: it scopes this grant to the no-bouncer-shown-
+yet pre-check specifically (the only call shape `dismiss(int)` -- the real
+swipe-time chokepoint -- ever produces), so it can never be reached from a
+call where a real credential was just typed into an already-showing bouncer
+for this or any other reason. No `eventSubtype`/`uiEvent` is set on this
+branch (unlike the pre-existing ones) -- deliberately, so this mechanism
+does not create a new, mechanism-identifying metric reachable from a decoy
+session. `0069` adds three `KeyguardSecurityContainerControllerTest` cases:
+the authorized case finishes without any credential (`dismiss(int)` returns
+`true`, `viewMediatorCallback.keyguardDone` is invoked), the unauthorized
+case re-proves the ADR-061 property at this layer (mocked `false`, or
+Mockito's own default, still requires a real credential), and a third case
+proves the grant does not bypass a genuinely required SIM PIN screen --
+mirroring the pre-existing `showNextSecurityScreenOrFinish_calledWithNoAuthentication_butRequiresSimPin`
+test's own shape exactly, for this grant instead of trust.
+
+**Real `atest` RED/GREEN, both modules, no shortcuts.** RED (real device,
+before `0070`): the 3 new `KeyguardSecurityContainerControllerTest` cases
+failed with `java.lang.NoSuchMethodError: No virtual method
+consumeDecoySwitchAuthorizationForActiveDismiss(I)Z in class
+Lcom/android/internal/widget/LockPatternUtils;` -- the same "correctly fails
+without the fix, against a stale on-device `framework.jar`" RED shape
+`0061`-`0064` hit, not a logical-wiring RED in the narrower sense, but
+equally valid: it also caught the *pre-existing*
+`showNextSecurityScreenOrFinish_BiometricUnlockedWithSecondFactorEnabled_DoesNotFinish`
+test regressing for the same reason (this new branch runs unconditionally on
+every unauthenticated pre-check, so it is reached by that test too), and
+that regression was independently re-confirmed to disappear post-rebuild
+below. A full `m -j6 systemimage` build (2696 steps, 1h5m32s, succeeded) was
+run this time before claiming GREEN -- not deferred to dynamic validation
+alone the way `0061`-`0064` had to be. Real, final `atest` GREEN, both
+modules, against the rebuilt image:
+
+```
+x86_64 FrameworksServicesTests: Passed: 23, Failed: 0, Ignored: 0, Assumption Failed: 0
+x86_64 SystemUITests: Passed: 48, Failed: 0, Ignored: 0, Assumption Failed: 1
+All tests passed!
+```
+
+`FrameworksServicesTests` ran the full 23-method decoy/grant
+`UserControllerTest` list (the pre-existing 15 plus this patch set's own 8
+new tri-grant tests) as an explicit method list, for the same pre-existing,
+unrelated `unquiesceUserApps` full-class-truncation reason `0065` already
+documented. `SystemUITests` ran the entire `KeyguardSecurityContainerControllerTest`
+class (49 methods); the single `ASSUMPTION_FAILED`
+(`dismissesKeyguard_whenSceneChangesToGone`) is an unrelated, pre-existing
+scene-container flag gate this patch set never touches, not a failure. The
+previously-regressed biometric-second-factor test now passes cleanly,
+confirming the earlier RED was purely the stale-`framework.jar` artifact.
+
+**Real dynamic validation, decoy case.** Fresh `-wipe-data -no-snapshot-load`
+boot of the rebuilt image, decoy and an ordinary secondary user both
+registered with disposable test PINs. Three independent, clean full-reboot
+trials (plus a fourth, informative data point below) drove the decoy's own
+PIN through the real on-screen bouncer keypad, then swiped immediately
+afterward: all three showed the device landing directly on the decoy's real
+home screen (`App Store`/`Camera`/`Gallery`/`Messaging`/`Phone`/`Vanadium`
+icons, matching Task 11's own reference list exactly), `isKeyguardShowing`
+`false`, and `mCurrentFocus` the launcher itself -- not `NotificationShade`.
+`logcat` confirms the real, ordinary dismiss sequence fired
+(`keyguardGoingAway requested for userId: <decoyUserId>` -->
+`START_KEYGUARD_EXIT_ANIM`) with **no** `LockSettingsService: Verifying
+primary lockscreen credential` line at the swipe timestamp -- the only two
+such lines in the whole trial are the original PIN entry into the owner's
+own bouncer, moments earlier. One earlier trial's swipe was delayed (by this
+session's own multi-step polling/dumping between PIN entry and swipe, not by
+anything in the mechanism) past the grant's 30-second window and correctly
+fell back to a live "Enter PIN" bouncer -- a real, informative confirmation
+of the fail-closed expiry design, not a defect: the grant genuinely expires
+and genuinely requires the ordinary credential path once it has.
+
+**Real dynamic validation, ADR-061 regression case.** On the same live
+device: genuinely unlocked user 0 (`cmd lock_settings verify --user 0 --old
+<owner PIN>`, required first, matching `0061`-`0064`'s own precedent since a
+locked system user cannot be switched away from at all), then `am
+switch-user <ordinary secondary user>` -- a switch this authorization was
+never minted for. The automatic bouncer appeared within 1 second with no
+swipe needed (the general `0061`-`0064` mechanism, unaffected). Additionally,
+and specifically for this patch set's own new chokepoint: a `KEYCODE_HOME`
+attempt followed by a swipe still produced a live "Enter PIN" bouncer, a
+submitted wrong PIN (the *decoy's* own PIN, deliberately, to also rule out
+any cross-contamination between the two mechanisms) was rejected with
+`LockSettingsService: Verifying primary lockscreen credential for user
+<ordinarySecondaryUserId>` logged and "Wrong PIN. Try again." shown, and
+only the genuinely correct PIN unlocked it -- confirming the new
+active-dismiss branch never fires, and never can fire, for a switch this
+authorization was never minted for.
+
+**Reproducibility.** Regenerated fresh via `git format-patch
+f459f29b65f7..6031f0f82921` directly from the real post-`git am` branch
+history, not the local worktree's own patch files. Independently verified:
+applied the fresh five-patch set via `git am` to a disposable local clone
+seeded at the real base commit's own content of all nine touched files
+(`git show f459f29b65f7:<path>` on the real server), then diffed each of the
+nine resulting files against the live server tree directly -- all nine
+matched byte-for-byte (`UserController.java`, `UserControllerTest.java`,
+`ActivityManagerInternal.java`, `ActivityManagerService.java`,
+`ILockSettings.aidl`, `LockSettingsService.java`, `LockPatternUtils.java`,
+`KeyguardSecurityContainerController.java`,
+`KeyguardSecurityContainerControllerTest.kt`). The disposable verify clone
+was deleted immediately after.
+
+**Real branch SHA**, confirmed via `git log` on the actual branch after
+`git am` (never assumed from the apply output or the local worktree's own
+commit SHAs):
+
+```
+6031f0f82921475d58d075a3d6fcdd9347f27d61  aegisos: finish keyguard without re-authentication for an authorized decoy switch (0070)
+5eec1087106c2e5a56bbfc46ace0b016aa060504  test: add coverage for the active-dismiss grant in the bouncer pre-check (0069)
+ee03f17bdf5937240ec545afb1ae46e164e35aa0  aegisos: expose the decoy switch active-dismiss authorization to SystemUI (0068)
+80f02ec10e9699f7228b9fc48c8d2e2252d4e489  aegisos: split the decoy switch authorization into three single-use grants (0067)
+76d35e561b57b2448bd637b9b57c08a93d9be323  test: add coverage for the third (active-dismiss) decoy switch grant (0066)
+```
+
+No build was in flight at the `git am` invocation (confirmed via `ps aux`
+for `ninja`/`soong_ui`/`siso` immediately before). Grepped the full diff,
+every patch file, this section, and the report for `192\.168|beau@|beau-dev|
+/srv/aegisos` -- no LAN/account coordinates. Grepped for new log call sites
+containing `decoy`/`duress`/`Aegis` -- the one new `Log.e` call
+(`"failed to check active-dismiss authorization for switch"`) is deliberately
+worded without naming the mechanism, matching every prior patch in this
+package.
+
+**What remains open.** Six of the ADR-067/ADR-080 leak-audit's own narrower
+items are still UNCHECKED (unchanged by this patch set, see the router). The
+non-decoy-user identity-leak and pre-unlock-concealment work in this package
+remains as previously recorded. This patch set closes exactly the
+manual-swipe double-PIN gap Task 11b's own report left open -- it does not
+revisit `credential_capture` (still disabled, still untouched by any patch
+in this package) or attempt the "imperceptible transition" / "land directly
+on the home screen with zero user interaction at all" framing from the
+original design doc's Component C, which remains a materially larger,
+separately-scoped SystemUI surface question.
+
 ## Apply (this section)
 
 ```sh
