@@ -3614,6 +3614,182 @@ here — this is disclosed, not implied to be more than it is.
 practical unit-test seam exists without mocking `LockSettingsStorage` and
 `ActivityManagerInternal`.
 
+### `frameworks/base`: split the decoy switch authorization into two grants (`0058`-`0060`)
+
+Task 11's own hardware validation found the `0045`-`0050` one-shot
+authorization store (which lets `UserController`'s own internal switch path
+skip its forced keyguard lock for exactly one authorized decoy switch) is
+not the whole fix: `KeyguardViewMediator.handleUserSwitchComplete()` in
+SystemUI, a separate and independent mechanism, unconditionally re-arms a
+live bouncer roughly 500ms after the switch completes, since nothing tells
+it the switch was already authorized. A follow-up investigation
+(`task-11-fix-report.md`) confirmed no existing AOSP signal is safe to
+repurpose for this (see that report's "Avenue 1") and that a naive second
+consumer of the existing single-slot store would always find it already
+spent by `UserController`'s own internal consumption, which fires strictly
+before SystemUI ever gets a chance to ask (see "Avenue 2"). This closes
+that gap at the primitive level: it extends the one mint to pay out two
+independently-trackable single-use grants instead of one, so a future task
+can wire SystemUI's own consumption point without either consumer starving
+the other. **This task only extends and tests the primitive — no SystemUI
+call site is wired to the new method yet; that is explicit follow-up
+work.**
+
+Base commit: `bd9074868224cef7c5f0506797a2e79c9bc22567` (`0057`'s own real
+post-`git am` SHA, the real branch tip at fix time).
+
+- `36aa82e` (local worktree SHA, superseded — see real branch SHA below) —
+  "test: add coverage for dual-grant decoy switch authorization consumption"
+  (`patches/frameworks-base/0058-test-add-coverage-for-dual-grant-decoy-switch-author.patch`).
+  RED: adds 8 new tests to `UserControllerTest.java` exercising a
+  not-yet-existing `consumeDecoySwitchAuthorizationForBouncerSkip(int)`
+  method — both grants consumed exactly once, independently, from a single
+  mint, in both possible orders; expiry evaluated against the mint's own
+  timestamp rather than reset per grant; the ADR-061 zero-mint property
+  re-proved for the new consume path; cross-user isolation for the new
+  grant; and a re-mint resetting both grants. Does not touch or weaken any
+  of Task 6's 5 or Task 7's 2 existing tests.
+
+- `22516dd` — "test: pass LockSettingsStorage mock to LockSettingsShellCommand
+  constructor" (`patches/frameworks-base/0059-test-pass-LockSettingsStorage-mock-to-LockSettingsSh.patch`).
+  **Unrelated pre-existing compile break, found by this task's own RED run,
+  fixed as its own distinct commit** — the same pattern Task 7 used for its
+  own `ActivityManagerInternal` mock-registration fix. `LockSettingsShellCommand`'s
+  production constructor gained a required `LockSettingsStorage` parameter
+  somewhere in the `set-decoy-profile`/`check-credential-routing-status`
+  shell-command work (`0051`-`0053`), but `LockSettingsShellCommandTest`'s own
+  constructor call was never updated, breaking compilation of the whole
+  `FrameworksServicesTests` module regardless of any of this task's own
+  changes — confirmed unrelated via `git log` on the touched file (last
+  touched by `4d4ba9bbb654`, "add check-credential-routing-status shell
+  command"). Test-only: adds a `@Mock LockSettingsStorage` field and passes
+  it as the constructor's 5th argument. No production code touched.
+
+- `2845aa0` — "aegisos: split the decoy switch authorization into two
+  single-use grants" (`patches/frameworks-base/0060-aegisos-split-the-decoy-switch-authorization-into-tw.patch`).
+  GREEN. `UserController.java` changes:
+  - Two new `@GuardedBy("mLock")` fields, `mForcedLockSkipConsumed` and
+    `mBouncerSkipConsumed`, alongside the existing
+    `mSwitchAuthorizedUserId`/`mSwitchAuthorizedAtMillis`.
+  - `authorizeDecoySwitchKeyguardSkip` (mint, unchanged signature/type-check)
+    now also resets both bits to `false` on every mint.
+  - `consumeDecoySwitchAuthorization` (Task 7's existing, unchanged name and
+    external true/false/expiry semantics for its own caller) now delegates
+    to a new private `consumeGrantLocked(userId, forcedLockGrant)` helper
+    instead of clearing the whole record itself.
+  - New `consumeDecoySwitchAuthorizationForBouncerSkip(int userId)` —
+    `@VisibleForTesting`, not yet called from anywhere — delegates to the
+    same shared helper with `forcedLockGrant=false`.
+  - `consumeGrantLocked`: matches `userId`, short-circuits to `false` if
+    that specific grant is already consumed (without touching the other
+    grant), computes `ageMillis` once against the mint's own timestamp,
+    marks the named grant consumed, and fully clears the whole record
+    (both bits, `mSwitchAuthorizedUserId` back to `USER_NULL`) the instant
+    either both grants are consumed or this call finds the mint already
+    expired — whichever happens first. This is why expiry is a property of
+    the mint, not tracked per grant: a grant redeemed for the first time
+    after the window has closed still returns `false` even if the other
+    grant was already redeemed successfully within the window, and the
+    full-clear on any expired hit prevents a stale, half-consumed record
+    from lingering indefinitely.
+
+  **Why this cannot create a new bypass.** No new minting path exists —
+  `authorizeDecoySwitchKeyguardSkip` is otherwise byte-identical to Task 6's
+  landed version, including its own unconditional, uncached
+  `UserManagerInternal.getUserInfo(targetUserId).userType` check against the
+  real decoy type on every single call. Both consume methods are pure
+  readers/mutators of already-minted state; neither can manufacture a grant
+  for a user that was never genuinely mint-authorized moments earlier by a
+  real credential match. The two grants are strictly less permissive than a
+  single reusable flag would be: each is single-use, both derive from the
+  same mint (so there is no way to accumulate multiple pending
+  authorizations for different switches — a fresh mint always overwrites
+  the prior record, resetting both bits), and the new bouncer-skip method is
+  not wired to any caller yet, so it currently has zero reachable attack
+  surface beyond what Task 6/7 already established.
+
+**Real branch SHA**, confirmed via `git log --format="%H %s"` on the actual
+branch after `git am` (never assumed from the apply output or the local
+worktree's own commit SHA):
+
+```
+677b6053207208736476d09e70ff58ed3805f25f  aegisos: split the decoy switch authorization into two single-use grants
+35e81a432723727554499ce2c9856ab0c34565d5  test: pass LockSettingsStorage mock to LockSettingsShellCommand constructor
+9dadf4735964dc14394c773c51e17b6fd479096c  test: add coverage for dual-grant decoy switch authorization consumption (0058, base)
+```
+
+No build was in flight at either `git am` invocation (confirmed via `pgrep`
+for `ninja`/`soong_ui` immediately before each).
+
+**RED confirmed via real `atest`.** First RED attempt failed to compile on
+the unrelated `LockSettingsShellCommandTest` constructor mismatch above,
+before ever reaching this task's own new tests — fixed by `0059`, landing
+before this task's own `0058` result could be trusted. Second RED attempt,
+after `0059` landed:
+
+```
+frameworks/base/services/tests/servicestests/src/com/android/server/am/UserControllerTest.java:2735: error: cannot find symbol
+  symbol:   method consumeDecoySwitchAuthorizationForBouncerSkip(int)
+  location: variable mUserController of type UserController
+[... 11 more identical errors, one per new test's use of the not-yet-existing method ...]
+12 errors
+```
+
+Exactly the expected RED shape: every new test's own reference to the
+not-yet-implemented method, nothing else.
+
+**GREEN could not be captured via real `atest` this session — a real,
+disclosed verification gap, not a silent skip.** After `0060` landed, 8
+consecutive `atest`/`m` invocations against this exact module all failed
+before ever reaching this task's own compiled test code, alternating
+between two distinct native-JVM failure signatures in the unrelated
+`services.core.unboosted` Soong module (a `jarjar` step throwing
+`NullPointerException: Deflater has been closed`, and a `javac` worker
+crashing with `SIGBUS`) — both consistent with the disk-space/resource
+lessons already recorded in `docs/research/build-and-signing-engineering-
+notes.md` and `AGENTS.md`. Root-caused as far as read-only access allowed:
+raising the shell's open-file `ulimit` and overriding `TMPDIR`/
+`JAVA_TOOL_OPTIONS` changed which failure appeared but never fixed it;
+`df`/`df -i` on every filesystem in the chain (`/srv`, `/tmp`, `/dev/shm`)
+showed free space and free inodes throughout, and a direct 2GB test write
+into the exact failing output directory succeeded instantly, ruling out a
+literal, user-visible disk-full condition. The one confirmed environmental
+fact is a concurrently running `qemu-system-x86_64-headless` emulator
+process (not started by this task, still healthy and `adb`-responsive, not
+killed) sustaining ~80% CPU and ~4.5GB RSS throughout every attempt on this
+project's own documented narrow-margin 8-vCPU/31GB-RAM host — the leading
+hypothesis is memory-pressure-driven exhaustion of a Soong/Siso build
+action's own sandboxed scratch space, not a literal full disk, but this was
+not confirmed with certainty given read-only, non-root access to the guest
+VM and no host-level visibility. **Neither hypothesis nor the failures
+themselves reference any file this task touched** — the crash point is
+always in `services.core.unboosted`'s own build graph, before any of this
+task's two touched files are even reached.
+
+In place of a real `atest` GREEN run, a full manual trace of the
+implementation against all 15 relevant tests (Task 6's 5, Task 7's 2, this
+task's 8 new ones) was performed line-by-line against the landed
+`consumeGrantLocked` code, following this project's own Task 6 precedent
+for exactly this situation (see that task's own report for the same
+disclosed gap). The full-class regression comparison against the
+`unquiesceUserApps` pre-existing-failure baseline Task 7 established (28
+failures) could likewise not be run this session for the same reason.
+
+**Reproducibility.** Regenerated fresh via `git format-patch
+bd9074868224..677b605320` directly on the real post-`git am` branch (not
+trusted from the local worktree's own patch generation). Independently
+verified: applied the fresh three-patch set via `git am` to a disposable
+local clone seeded at the real base commit's own content of all three
+touched files (`git show bd9074868224:<path>` on the real server, not a
+locally cached copy), then diffed each of the three resulting files against
+the live server tree directly via `sha256sum` — all three matched exactly
+(`UserController.java`, `UserControllerTest.java`,
+`LockSettingsShellCommandTest.java`).
+
+**Test coverage.** 8 new tests in `UserControllerTest.java`, confirmed RED
+via real `atest`; GREEN not confirmed via `atest` this session for the
+environmental reasons above, only via manual trace.
+
 ## Apply (this section)
 
 ```sh
