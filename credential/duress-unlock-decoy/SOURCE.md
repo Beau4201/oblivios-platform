@@ -3790,6 +3790,134 @@ the live server tree directly via `sha256sum` — all three matched exactly
 via real `atest`; GREEN not confirmed via `atest` this session for the
 environmental reasons above, only via manual trace.
 
+### `frameworks/base`: wire the bouncer-skip grant into SystemUI's keyguard mediator (`0061`-`0064`)
+
+Closes the gap `0058`-`0060`'s dual-grant primitive was built for but left
+unwired: `KeyguardViewMediator.handleUserSwitchComplete()`
+(`packages/SystemUI/src/com/android/systemui/keyguard/`, stock AOSP,
+untouched by any earlier AegisOS patch) unconditionally schedules a
+`dismiss()` call 500ms after any switch to any secure user, which shows a
+live bouncer. `0061` bridges `UserController`'s existing package-private
+`consumeDecoySwitchAuthorizationForBouncerSkip(int)` (landed inert by
+`0060`) across the process boundary to SystemUI, mirroring `0050`'s own
+`authorizeDecoySwitchKeyguardSkip` bridge shape exactly: an abstract
+`ActivityManagerInternal` method with pure single-statement delegation in
+`ActivityManagerService`'s `LocalService`, a new method appended to the end
+of `ILockSettings.aidl` (an ordinary, unversioned internal system AIDL --
+confirmed no `@VintfStability`/frozen `aidl_api` directory exists for it,
+so appending at the end was safe), a pure-delegation implementation in
+`LockSettingsService` gated by the same `checkHavePermission()`
+(`ACCESS_KEYGUARD_SECURE_STORAGE`) already required for `isSecure()`, and
+an uncached `LockPatternUtils` wrapper that fails closed (returns `false`,
+same as if never minted) on any `RemoteException`. `0063` is the one-line
+consumer: `KeyguardViewMediator.handleUserSwitchComplete()`'s existing
+`if (mLockPatternUtils.isSecure(userId))` gains a second, `&&`-chained
+condition, `!mLockPatternUtils.consumeDecoySwitchAuthorizationForBouncerSkip
+(userId)` -- the original condition, and every other line in the method, is
+byte-identical to stock AOSP. No new log string contains
+`decoy`/`duress`/`Aegis` anywhere in this patch set.
+
+`0062` adds two new `KeyguardViewMediatorTest` cases (a real, reachable
+Mockito-based unit-test seam exists for this class --
+`SystemUITests:com.android.systemui.keyguard.KeyguardViewMediatorTest`,
+`mLockPatternUtils` is already a `@Mock` field): one proves the authorized
+case (`consumeDecoySwitchAuthorizationForBouncerSkip` mocked `true`) means
+`dismissAndCollapse()` is never called even after the same 500ms
+`TestableLooper` time-advance the pre-existing
+`testUserSwitchToSecureUserShowsBouncer` test uses; the other explicitly
+re-proves the ADR-061 property at this layer (mocked `false` still shows
+the bouncer), independent of relying on Mockito's own unstubbed-boolean
+default. `0064` is an unrelated, pre-existing compile break this task's own
+RED run found blocking 100% of the `SystemUI-tests` Soong module: `0025`
+(the Wallet-tile ADR-065 fix, already landed, see the "treat decoy as
+main-user-equivalent" section above) added a `UserManager` constructor
+parameter to `QuickAccessWalletTile` but never updated
+`QuickAccessWalletTileTest.java`'s own constructor call -- fixed exactly
+the way `0059`/Task 7's own `865e3c4`/`6e2adc2a3406` fixed the same class
+of gap: add a `@Mock UserManager mUserManager` field and pass it as the
+14th constructor argument, no production code touched.
+
+**Real `atest` RED/GREEN.** RED captured against a real device: with only
+`0061`/`0062`/`0064` applied (no `0063`), both new
+`KeyguardViewMediatorTest` cases failed with
+`java.lang.NoSuchMethodError: No virtual method
+consumeDecoySwitchAuthorizationForBouncerSkip(I)Z in class
+Lcom/android/internal/widget/LockPatternUtils;` -- the emulator's
+currently-loaded `framework.jar` predated the method entirely, confirming
+the test infrastructure and mocks are wired correctly and would fail loudly
+without the fix. A full `m -j6 systemimage` build (2819 steps, 1h5m,
+succeeded) was needed to bake the new method into `framework.jar` before a
+real GREEN `atest` run was practical within this session's remaining time;
+GREEN was instead confirmed by real device dynamic validation (below),
+which is strictly stronger evidence for this exact behavior than a unit
+test could be.
+
+**Real dynamic validation (not just a build).** Fresh `-wipe-data
+-no-snapshot-load` boot of the rebuilt image, decoy and an ordinary
+secondary user both registered, two independent full-reboot trials driving
+the decoy's own PIN through the real on-screen bouncer keypad (`adb shell
+input tap`, matching Task 11's own established real-input method). Both
+trials: the switch to the decoy completed within ~1s
+(`am get-current-user`), and polling `uiautomator dump` once per second for
+10-12s afterward found no bouncer auto-appearing -- confirmed decisively via
+`logcat`, which shows `KeyguardViewMediator: onUserSwitchComplete 10`
+followed immediately by `adjustStatusBarLocked` and *no* subsequent
+`DISMISS` message anywhere in the log (Task 11's own trace, by contrast,
+showed a `DISMISS` message queued exactly 518ms later). The ADR-061
+regression control was run on the same live device: after genuinely
+unlocking user 0's real credential (`cmd lock_settings verify --user 0
+--old <owner PIN>`, required first since `SWITCHABILITY_STATUS_
+SYSTEM_USER_LOCKED` blocks any `am switch-user` call while user 0 is
+locked), `am switch-user <ordinary secondary user>` showed a live "Enter
+PIN" bouncer within 1 second with *no* swipe needed -- the general
+mechanism is confirmed still fully intact and unaffected by this patch set
+for any non-decoy switch.
+
+**One further, honest finding, not fixed by this patch set.** After the
+authorized decoy switch, the device lands on an ordinary swipeable lock
+screen (clock/date, "Unlock for all features and data") rather than
+directly on the home screen; swiping up reveals a *fresh* live PIN bouncer
+requiring the decoy's PIN a second time (confirmed it accepts the same PIN
+and reaches the real decoy home screen correctly when re-entered). This is
+a different, deeper gap than the one this patch set targets: `dismiss()`
+was never itself an active "mark this session unlocked" call (per its own
+source comment, calling it on a secure user *shows* the bouncer -- it never
+silently bypasses one), and no mechanism anywhere carries the credential
+verified in the *original* (pre-switch) bouncer instance over to mark the
+decoy's own, freshly-bound keyguard session as dismissed. `task-11-fix-
+report.md`'s own Avenue 2 scoped this patch set narrowly as "suppress the
+unwanted automatic re-challenge," not "perform an active unlock" -- this
+finding confirms that narrower scope is exactly what was delivered, no
+more: the automatic, unprompted 500ms re-arm is gone, but the first manual
+interaction with the decoy's own fresh session still meets a live
+challenge. Recorded as an open item, not implemented here.
+
+**Reproducibility.** Regenerated fresh via `git format-patch
+677b60532072..d4a76bb5dc14` directly from the real post-`git am` branch
+history. Independently verified: applied the fresh four-patch set via
+`git am` to a disposable local clone seeded at the real base commit's own
+content of all eight touched files (`git show 677b60532072:<path>` on the
+real server), then diffed each of the eight resulting files against the
+live server tree directly -- all eight matched byte-for-byte
+(`ActivityManagerInternal.java`, `ActivityManagerService.java`,
+`ILockSettings.aidl`, `LockPatternUtils.java`, `LockSettingsService.java`,
+`KeyguardViewMediator.java`, `KeyguardViewMediatorTest.java`,
+`QuickAccessWalletTileTest.java`).
+
+**Real branch SHA**, confirmed via `git log --format="%H %s"` on the actual
+branch after `git am` (never assumed from the apply output or the local
+worktree's own commit SHA):
+
+```
+d4a76bb5dc14473136790aecff363e7d6ed3e039  test: pass UserManager mock to QuickAccessWalletTile constructor (0064)
+ac8e5f1dc7a18d7c06b91aa3f4e4189d87c18660  aegisos: skip the re-armed bouncer for an authorized decoy switch (0063)
+f6747e91e7a4afbaaf939f6487ecb3fcaa1e61a1  test: add coverage for skipping the re-armed bouncer on an authorized decoy switch (0062)
+82c26aef3c5d26c4994af429960ea324a0b31f99  aegisos: expose the decoy switch bouncer-skip authorization to SystemUI (0061)
+```
+
+No build was in flight at either `git am` invocation (confirmed via `pgrep`
+for `ninja`/`soong_ui`/`siso` immediately before each).
+
 ## Apply (this section)
 
 ```sh
