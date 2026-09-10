@@ -3502,6 +3502,118 @@ practical seam exists without mocking `LockSettingsStorage` and
 `ActivityManagerInternal`, and none of this file's prior tasks have unit
 coverage either.
 
+### `frameworks/base`: stop the unused warm-started decoy (`0057`)
+
+Task 10's own closing review flagged a real Important finding on the
+`0054`-`0056` work above: `onKeyguardLockedStateChanged` warm-starts the
+decoy on essentially every keyguard lock but has no matching stop call
+anywhere. Since `config_multiuserMaxRunningUsers = 3` is well above the two
+users actually running (owner + decoy), AOSP's own excess-user eviction
+never reclaims it either — a decoy warm-started on the very first lock
+after boot stays `RUNNING_LOCKED` for the rest of that boot session even
+when it is never switched to, directly undermining warm-start's own reason
+for existing over a permanently resident decoy (avoiding continuous
+battery/RAM cost).
+
+Base commit: `fdeea399025c6d79a182ceb819f5f34d427285bc` (`0056`'s own real
+post-`git am` SHA, the real branch tip at fix time). Same two files as
+`0054`-`0056`: `DecoyProfileHelper.java`, `LockSettingsService.java`.
+
+- `b25147c` (local worktree SHA, superseded — see real branch SHA below) —
+  "aegisos: stop an unused warm-started decoy on real credential match"
+  (`patches/frameworks-base/0057-aegisos-stop-an-unused-warm-started-decoy-on-real-cr.patch`).
+  Adds `DecoyProfileHelper#maybeStopUnusedWarmDecoy()`, called from
+  `LockSettingsService#doVerifyCredentialInner` immediately after the real
+  owner's own primary credential is confirmed matched for
+  `UserHandle.USER_SYSTEM` under `LockDomain.Primary` (the one line added
+  to `LockSettingsService.java`, mirroring the `0055` precedent's own
+  one-file-beyond-`DecoyProfileHelper.java` disclosure). The new method
+  posts to the handler (Task 1's `lockSettingsService.mHandler`, matching
+  `maybeRouteToDecoy`'s own `getHandler().post(...)` pattern) and, if the
+  registered decoy is currently running but is not the current foreground
+  user, stops it via `IActivityManager#stopUserWithCallback(userId, null)`
+  obtained from `ActivityManager.getService()` — confirmed against real
+  source (`frameworks/base/services/core/java/com/android/server/pm/
+  UserManagerService.java:2467`, `stopUserForQuietMode`) as the exact same
+  real API and calling pattern `UserManagerService` itself already uses to
+  stop a background user cleanly, rather than inventing a new mechanism.
+  `RemoteException` is caught and logged (`Slog.w(TAG, "Failed to stop
+  unused warm-started credential-routing target", e)` — clean of banned
+  words), the same defensive shape as `0056`'s own `startUserInBackground`
+  call.
+
+  **Cannot race or interrupt an active decoy session, by construction and
+  independently by an AOSP-enforced guard.** By construction: a live
+  session on the warm-started target is only ever reached via
+  `performDecoySwitch`, which runs when `maybeRouteToDecoy`'s own
+  `doVerifyCredentialInner` call matched the *decoy's* credential; this new
+  method instead runs when the *real owner's* credential matched. Those are
+  two mutually exclusive outcomes of the same verify call for
+  `UserHandle.USER_SYSTEM` — one credential cannot satisfy both, so the new
+  stop path and a freshly switched-to session are never both reachable from
+  the same credential check. Independently, even setting that reasoning
+  aside: the method's own current-foreground-user check
+  (`ActivityManager.getCurrentUser() == state.decoyUserId`) refuses to stop
+  a foreground target, and confirmed against real source
+  (`frameworks/base/services/core/java/com/android/server/am/
+  UserController.java:1345`, `stopUsersLU`), `if (isCurrentUserLU(userId))
+  return USER_OP_IS_CURRENT;` is an unconditional, built-in AOSP refusal to
+  stop whichever user is currently in the foreground — the real code
+  eventually reached through `stopUserWithCallback` — so even a caller-side
+  logic error could not tear down an active decoy session.
+
+**Real branch SHA**, confirmed via `git log --format="%H %s"` on the actual
+branch after `git am` (never assumed from the apply output or the local
+worktree's own commit SHA):
+
+```
+bd9074868224cef7c5f0506797a2e79c9bc22567  aegisos: stop an unused warm-started decoy on real credential match
+fdeea399025c6d79a182ceb819f5f34d427285bc  aegisos: fix the warm start to use the real background-start API (0056, base)
+```
+
+No build was in flight at the `git am` invocation (confirmed via `pgrep`
+for `ninja`/`soong_ui`/`siso` immediately before).
+
+**Build verification.** `m -j6 systemimage` against the full tree including
+`0057`:
+
+```
+ninja: 5m50.29s Build Succeeded: 501 steps - 1.43/s
+#### build completed successfully (20:12 (mm:ss)) ####
+```
+
+`dexdump` on the resulting `services.jar`
+(`out-preflight/soong/.intermediates/frameworks/base/services/services/
+android_common/dex/services.jar`) confirmed `maybeStopUnusedWarmDecoy` is
+genuinely present in the compiled output (2 references: declaration and
+call site) — not just a clean exit code.
+
+**Reproducibility.** Regenerated fresh via `git format-patch
+fdeea399025c..bd9074868224` directly on the real post-`git am` branch (not
+trusted from the local worktree's own patch generation) — the only
+differences from the local worktree's own export were the commit SHA, the
+git-version-dependent blob-hash abbreviation length, and the trailing `git
+version` footer line, confirmed via a direct `diff` of both patch files.
+Independently verified: applied the fresh patch via `git am` to a
+disposable local clone seeded at the real base commit's own content of both
+touched files (`git show fdeea399025c:<path>` on the real server, not a
+locally cached copy), then diffed each of the two resulting files against
+the live server tree directly via `sha256sum` — both matched exactly
+(`DecoyProfileHelper.java`, `LockSettingsService.java`).
+
+**Dynamic validation.** Not performed for this fix specifically — deferred
+to Task 13's consolidated dynamic validation round, consistent with this
+plan's own established batching precedent (`0054`-`0056`'s dynamic round
+already happened before this review finding was raised; a second one-off
+emulator round for a single-method fix was judged disproportionate ahead of
+the task's own dedicated validation task). Compile-time verification
+(build success + `dexdump` presence) is the only verification performed
+here — this is disclosed, not implied to be more than it is.
+
+**Test coverage — explicitly none.** Same rationale as `0054`-`0056`: no
+practical unit-test seam exists without mocking `LockSettingsStorage` and
+`ActivityManagerInternal`.
+
 ## Apply (this section)
 
 ```sh
