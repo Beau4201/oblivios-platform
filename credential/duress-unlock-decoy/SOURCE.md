@@ -4385,6 +4385,201 @@ leak-audit items, `credential_capture` (untouched), and the Component C
 Additionally, this fix's own dynamic (non-unit-test) re-validation has not
 been performed, as noted above.
 
+### `frameworks/base`: return-path single-credential grant, and eliminating the swipe (`0073`-`0078`)
+
+The owner asked to close the two usability gaps ADR-085 carried forward:
+the decoy→owner return path demanding two full password entries, and a
+swipe still required between the decoy PIN and the decoy's home screen.
+
+**`0073`-`0074`: return-path grant.** `ReturnToRealUserHelper.
+maybeRouteToRealUser` matched the real owner's credential and called a
+bare `switchToUserSilently(USER_SYSTEM)`, with no authorization mint at
+all -- unlike the outbound direction, which needed three single-use grants
+across five sub-cycles (`0058`-`0070`) before a single credential entry
+actually held. Added `UserController#authorizeRealUserSwitchKeyguardSkip
+(int callerUserId)`, the return-direction mirror of
+`authorizeDecoySwitchKeyguardSkip`: always targets `UserHandle.USER_SYSTEM`
+and checks the *caller* is a genuine decoy-type user (the inverse of the
+outbound check, same ADR-064-motivated rigor), then mints from the exact
+same one-shot, three-grant record. Every existing
+`consumeDecoySwitchAuthorizationFor*` call site is already generic on
+target user id, so none needed to change. `ReturnToRealUserHelper` now
+mints this authorization and, matching `DecoyProfileHelper`'s own
+established pattern, defers the actual switch to the handler instead of
+calling it inline, avoiding the same forced-`lockNow()`-vs-bouncer-
+dismissal race `DecoyProfileHelper` already avoids. Six new
+`UserControllerTest` cases cover minting, consumption, wrong-user-id
+non-consumption, all-three-grants-from-one-mint, expiry, and that a fresh
+outbound mint is not confused with a return-direction one.
+
+**`0075`-`0076`: eliminate the swipe.** Physical-hardware testing (this
+session) found that even after the outbound direction's own single-
+credential fix, a swipe was still required after the decoy PIN before
+landing on the decoy's home screen (the known, previously-disclosed
+ADR-085 gap). Traced to `KeyguardViewMediator#handleUserSwitchComplete`'s
+authorized branch: it correctly skips the automatic bouncer *re-arm*, but
+does nothing else -- the device is left on a swipeable lock screen until
+the user's own next gesture happens to call `PrimaryBouncerInteractor
+#show()`, which is the one place the third (active-dismiss) grant from
+the same mint gets redeemed. Fixed by proactively calling the same
+`dismiss()` the unauthorized branch already calls, redeeming that grant
+immediately instead of leaving it to a gesture -- reusing the identical
+`showNextSecurityScreenOrFinish()` chokepoint trust-agent and biometric
+dismissals already use, not a new dismiss authority.
+
+**Real physical `lynx` hardware validation (first candidate, this
+session):** a fresh boot, owner's credential never entered that boot,
+decoy PIN typed into the real on-screen bouncer. `adb logcat` showed
+`Successfully verified primary lockscreen credential for user 10` at
+`13:35:25.927`, then an automatic `keyguardDonePending: 10` at
+`13:35:27.294` (no user gesture), `KeyguardTransitionRepository`
+`LOCKSCREEN→GONE FINISHED` at `13:35:28.124` -- landed on the decoy's
+home screen with **zero swipe**, total credential-to-landed time ~2.2s
+(down from ~4.8-6.5s including swipe-reaction time on the pre-fix
+candidate). This is real, direct evidence the swipe is gone, not a
+source-level inference.
+
+**`0077`-`0078`: drop the reused 500ms delay.** The owner reported the
+still-flashed first candidate had traded the swipe for a perceptible
+pause -- type the PIN, then visibly wait for it to unlock, unlike a real
+same-user unlock (owner-confirmed: PIN typed into an already-showing
+bouncer lands immediately). Root cause: the new authorized-branch
+`dismiss()` call above reused the unauthorized branch's existing
+`postDelayed(..., 500)`. That 500ms is original, pre-AegisOS AOSP code,
+there specifically to let a *freshly shown* bouncer's own async layout
+listeners settle before interaction -- the authorized branch never shows
+a bouncer at all, so that race does not apply. Changed to
+`postDelayed(..., 0)`, keeping the handler-posted ordering and the
+`mDismissToken` tagging (so the callback stays cancellable by the
+existing `removeCallbacksAndMessages(mDismissToken)` path if an
+intervening switch supersedes it) -- only the specific 500ms wait was
+removed, not the posting pattern itself.
+
+**What this patch set does *not* claim to fix.** Real hardware evidence
+from the first candidate's own trial showed ~865ms between credential-
+verified and `onUserSwitchComplete` (the switch machinery itself --
+freeze/quiesce/permission re-evaluation), plus ~830ms for the transition
+animation. Those are inherent to this mechanism being a real user switch
+under the hood, not an artificial pause `0077`-`0078` can remove --
+eliminating them would need a fundamentally different mechanism than the
+credential-gated-switch architecture this whole feature (`0041` onward)
+is built on. The design's own acceptance criterion has always been
+"materially below the 643ms warm baseline," not literally zero.
+
+**Build verification.** `0073`-`0074` built clean in isolation (`m -j6
+services`, `Build Succeeded: 533 steps`). All four patches together
+required two real, hard-won rebuild corrections, both matching the exact
+`out-lynx` Ninja/Soong incremental-staleness class already recorded
+against this same directory (`0008`/`0009` above, "a consolidated `lynx`
+build reported success while silently omitting..."): a plain `m -j6
+systemimage` twice left `SystemUI.apk` at its pre-patch mtime despite a
+clean log, caught by checking the artifact's own mtime rather than
+trusting the build line, and fixed by force-`touch`ing the patched
+source files and invoking `m systemextimage systemimage` directly rather
+than the generic full-image target. The resulting `SystemUI.apk` was
+independently confirmed to actually carry the compiled change both times
+by extracting `classes2.dex` and `dexdump`-disassembling
+`handleUserSwitchComplete` itself: the first round showed the new
+`if`/`else` branch structure (two independent lambda instantiations,
+case `0` for the existing path and case `3` for the new one); the second
+round showed the authorized branch's `postDelayed` now loading `const-
+wide/16 v5, #int 0` where it previously loaded `#int 500`, confirming
+the delay-removal patch's real presence in compiled output, not just
+source.
+
+**Signing and physical flash.** Built `OFFICIAL_BUILD=true` (confirmed
+via a fresh `installed-files.txt`/`installed-files-product.txt` grep for
+all four gated apps), signed with the alpha key
+(`265ade399a0f3ee65003e56daef26a8f4d70e6a4`, matching every prior
+duress-unlock hardware candidate), rollback index `1783209600`,
+`--padding_size 65536`. Both candidates (pre- and post-delay-fix)
+verified 13/13 on two independent machines and `avbtool` installs (the
+build server's own tree binary, and a separate `avbtool 1.4.0` install
+on the controller's own workstation) -- the fingerprint was
+independently confirmed matching on both machines via two different
+`avbtool` subcommands (`extract_public_key`, and `info_image`'s own
+reported `Public key (sha1)` field plus a separately extracted and
+hashed pubkey file), not assumed from a single "13/13" line, per the
+`0072`-era ADR-079 lesson about a self-consistent-but-wrong-key result
+passing `verify_image` cleanly. All signing and flashing was performed
+by the owner directly, per this project's standing rule; the controller
+never had or requested access to the alpha private key or the
+sign-vm-equivalent signing environment this session.
+
+**A real incident during the first candidate's flash, found and
+recovered, not silently worked around.** The controller's own flash
+instructions did not separate physical partitions (flashable directly
+in bootloader `fastboot`) from logical/dynamic partitions (`product`,
+`system`, `system_ext`, `system_dlkm`, `vendor`, `vendor_dlkm` -- require
+`fastbootd`, reached via `fastboot reboot fastboot`). The owner's first
+flash attempt failed six `resize-logical-partition` commands mid-run,
+leaving the device with a genuinely mixed partition state (new `boot`/
+`dtbo`/`init_boot`/`pvmfw`/`vendor_boot`, old everything else, old
+`vbmeta` never reached) that then booted on its own. Independently
+verified this was not a real failure: `ro.boot.verifiedbootstate=orange`
+(not a red-state AVB rejection -- this device's bootloader is unlocked,
+so AVB mismatches are advisory, not enforced), `sys.boot_completed=1`,
+zero crash/ANR/tombstone dropbox entries for that boot. Recovered by
+completing the flash properly in two stages (physical partitions in
+bootloader mode, then `fastboot reboot fastboot` with an explicit
+`is-userspace: yes` wait before the six logical partitions plus
+`vbmeta`), independently re-verified clean afterward (fingerprint, boot
+state, dropbox). Two separate `/tmp`-full incidents also interrupted
+this session's own tooling -- once in the controller's own sandbox
+(blocking a partition-image download), once on the build server itself
+(blocking both `avbtool extract_public_key`'s output write and, later,
+`lunch`'s own `dumpvars` mechanism) -- both resolved by clearing
+disposable files (the controller's own prior verification scratch
+directories) rather than anything belonging to the owner.
+
+**Real branch SHAs**, confirmed via `git log` on the actual branch after
+each `git am` (never assumed from the apply output or a local worktree's
+own commit SHAs):
+
+```
+e0a88d56218c  aegisos: drop the artificial delay before redeeming the active-dismiss grant (0078)
+5bee3e4264bc  test: expect the authorized-branch dismiss with no artificial delay (0077)
+4ec56d8ebedb  aegisos: redeem the active-dismiss grant proactively instead of on a gesture (0076)
+15426c69eeb1  test: expect the redeemed active-dismiss grant to land without a swipe (0075)
+12c52edb9703  aegisos: mirror the decoy switch authorization for the return path (0074)
+8e39d14f4640  test: add coverage for the return-direction switch authorization (0073)
+```
+
+Patches regenerated fresh via `git format-patch 540d4a0366f2..HEAD`
+directly from the real post-`git am` branch history before being copied
+into this package, not carried over from any local worktree's own patch
+files. Grepped all six patch files for `192\.168|beau@|beau-dev|
+/srv/aegisos` -- no LAN/account coordinates.
+
+**What remains open, stated plainly, not glossed over.**
+
+- **The return-path fix (`0073`-`0074`) itself has not been dynamically
+  exercised on hardware this session.** Its own `UserControllerTest`
+  coverage is unit-level only (not run against real device hardware this
+  session -- see the build-verification note above for what *was*
+  confirmed: compilation and presence in the built image). The actual
+  decoy→owner return flow, with this exact candidate flashed, was queued
+  for a real touch-input trial when the session was redirected to this
+  documentation instead. Do not treat single-credential return as
+  hardware-confirmed until that trial actually happens.
+- **The delay-removal fix (`0077`-`0078`) has not been dynamically
+  exercised on hardware either.** It is compile- and bytecode-confirmed
+  present (see above) and was flashed and booted cleanly (fingerprint,
+  `orange` boot state, zero crash/ANR/tombstone), but the actual felt
+  latency -- whether removing the 500ms genuinely reads as "immediate"
+  rather than merely "faster" -- was not confirmed by a real PIN-entry
+  trial before this session ended.
+- The swipe-elimination fix itself (`0075`-`0076`) **is** hardware-
+  confirmed, with the direct logcat evidence quoted above.
+- Same open items as every prior entry in this file: the six UNCHECKED
+  leak-audit items, `credential_capture` (untouched), and Component C's
+  latency floor (~1.7s of inherent switch-machinery-plus-animation time,
+  independent of anything this patch set changed).
+- No ADR has been written for this patch set yet, and the
+  `aegisos-foundation` handoff-router's current-state narrative has not
+  been updated to reflect it. Both are still needed before this work can
+  be described as closed anywhere else in the project's own records.
+
 ## Apply (this section)
 
 ```sh
