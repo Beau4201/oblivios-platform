@@ -4765,12 +4765,77 @@ and mint, 493ms switch machinery, **1110ms decoy-launcher cold start**,
   bouncer between it and the owner's session. A safe version needs a new
   internal API passing `onTop = false`, plus hardware proof that no decoy
   frame is visible before the switch. Not attempted.
-- **The pre-switch unlock window is unverified.** `0080` now calls
-  `unlockUser` roughly a second before the switch lands, while the decoy
-  is still foreground; previously this happened after the owner was
-  already in front. `RealUserQuiescer` should suppress user-0
-  notifications in that window, but whether the quiesce flag covers
-  processes started *by* that unlock has not been checked on hardware.
+- **The pre-switch unlock window — resolved at source level, not yet on
+  hardware.** `0080` calls `unlockUser` roughly a second before the switch
+  lands, while the decoy is still foreground; previously this happened
+  after the owner was already in front. The concern was whether user-0
+  processes started *by* that unlock escape the quiescer's notification
+  suppression. They do not: `0010` gates on
+  `mAmi.isUserQuiescedForDuress(userId)` at notification-post time, a
+  per-user check rather than per-process state, so it covers processes
+  started at any point while the user is quiesced. User 0 is still
+  quiesced throughout that window, since `0011` only unquiesces once the
+  user becomes current. Windows are separately filtered by current user,
+  and the bouncer covers the screen regardless. Not observed directly on
+  hardware, so stated as a source-level conclusion.
+
+## Bouncer-retention security review (`0086`)
+
+`0086` keeps a live bouncer across a user switch, which upstream never
+does, so its identity surface was reviewed specifically rather than
+assumed benign.
+
+**The bouncer cannot render the user-switcher/avatar header on this
+device.** `KeyguardSecurityContainer` does have a `MODE_USER_SWITCHER`
+with an avatar header (`bouncer_user_switcher_header_bg`), selected by
+`KeyguardSecurityContainerController#configureMode` when
+`canDisplayUserSwitcher()` is true -- which reads exactly one value,
+`R.bool.config_enableBouncerUserSwitcher`. Read out of the **actually
+built** `SystemUI.apk` for `lynx`, not from the source default:
+
+```
+resource 0x7f050017 bool/config_enableBouncerUserSwitcher
+  () false
+```
+
+The only SystemUI overlay on the product partition
+(`GlanceableHubSysuiConfigOverlay.apk`) does not touch it -- confirmed by
+dumping its resources. `vendor/adevtool/config/device/common/
+overlay-inclusion.yml` does list this key as `= true`, but that file is
+adevtool's extraction inclusion list, not an applied product overlay, and
+the built artifact is what settles it. So `configureMode` can only ever
+pick `MODE_DEFAULT` here, and no avatar or user name is on the bouncer to
+leak.
+
+Residual, low-risk and not visually verified: the bouncer's
+`KeyguardMessageArea` and carrier text remain live across the retained
+window. Neither is user-identifying in this flow (no message is set), but
+a real touch-input trial watching that window has not been done.
+
+**The authorization surface is unchanged by `0079`-`0086`.** Re-checked
+rather than assumed:
+
+- The mint (`authorizeDecoySwitchKeyguardSkip`,
+  `authorizeRealUserSwitchKeyguardSkip`) lives on
+  `ActivityManagerInternal`, an in-process LocalService -- unreachable
+  from apps or shell, and only ever called from `DecoyProfileHelper` /
+  `ReturnToRealUserHelper` after a real Gatekeeper-backed credential
+  match.
+- The consume side is Binder-reachable via `LockPatternUtils`, but
+  `LockSettingsService` guards every one of those entry points with
+  `checkHavePermission()` ->
+  `enforceCallingOrSelfPermission(ACCESS_KEYGUARD_SECURE_STORAGE)`, whose
+  `protectionLevel` is `signature|setup`. It also fails closed on
+  `RemoteException`, where the only consequence is that the ordinary
+  bouncer is shown.
+- `0086` changes *when* SystemUI redeems the bouncer-skip grant
+  (handleBeforeUserSwitching rather than handleUserSwitchComplete), not
+  who may redeem it. No new IPC endpoint or permission was added by this
+  patch set.
+- `0080` cannot be used to unlock anything without the owner's real
+  credential: it is gated on `response.isMatched()` from
+  `unlockLskfBasedProtector`, rate-limited on the same `LskfIdentifier`
+  as an ordinary check, and asserted in both directions by `0079`.
 - Same open items as every prior entry: the six UNCHECKED leak-audit
   items, and `credential_capture` (untouched).
 - No ADR has been written for this patch set yet, and the
