@@ -293,7 +293,9 @@ entries here as they land.
 
 - `ebb58e3ccc2034c2685b889ceecbcd1830b382ef` — "aegisos: enable
   skip-keyguard-when-switching-to-unlocked-users"
-  (`patches/frameworks-base/0018`, real build-server SHA) — flips
+  (originally `patches/frameworks-base/0018`, real build-server SHA,
+  since dropped entirely from history — see the Task 3 history-squash
+  note after the `0024` section below) — flips
   `config_multiuserSkipKeyguardWhenSwitchingToUnlockedUsers` in
   `core/res/res/values/config.xml` from `false` to `true`, with an
   AegisOS-authored comment explaining why (a Duress Unlock decoy switch's
@@ -1134,7 +1136,9 @@ check anywhere in the call chain.
 
 - `cd072d704764a3a7de10e33ec0d562f836031c5b` — "aegisos: validate decoy
   user type, revert Component A resource, drop UnsupportedAppUsage"
-  (`patches/frameworks-base/0024`, real build-server SHA) — three changes:
+  (originally `patches/frameworks-base/0024`, real build-server SHA, since
+  edited to drop change 2 below — see the Task 3 history-squash note
+  right after this section) — three changes:
   1. `DecoyProfileHelper.setDecoyProfile` now resolves `decoyUserId` via
      `LocalServices.getService(UserManagerInternal.class).getUserInfo(...)`
      and throws `IllegalArgumentException` unless the result is non-null
@@ -1209,6 +1213,211 @@ real call chain intact (shell command → `LockPatternUtils` →
 was removed afterward; the device's real, correctly-typed decoy (already
 registered before this fix) was independently confirmed unaffected
 (`user_setup_complete` still `1`, `pm list users` unchanged).
+
+### History squash: `0018` dropped, `0024`'s resource-revert hunk removed (Duress Unlock final closure, Task 3)
+
+Landed 2026-09-17, owner sign-off already obtained for this specific
+squash. This is the second time this project has rewritten history on a
+real, landed branch (after Task 2's `build/release` squash minutes
+earlier), and the first time that rewrite had to reach into the *middle*
+of a much larger, already-landed sequence rather than collapse commits
+sitting at the very start of one — handled with the extra caution that
+implies: every commit strictly between the two touched ones (`0019`
+through `0023` in the old numbering) had to be replayed with byte-for-byte
+unchanged content, not merely "close enough," and the original commits
+remain recoverable via the branch's own reflog on the build server (not
+force-pushed anywhere, not garbage-collected).
+
+**Why:** the Duress Unlock final-closure audit
+(`docs/devices/lynx-duress-unlock-patch-audit.md` in `AegisOS-foundation`)
+classified `0018` (`ebb58e3ccc2034c2685b889ceecbcd1830b382ef`, flips
+`config_multiuserSkipKeyguardWhenSwitchingToUnlockedUsers` from `false` to
+`true`) as a dead end: real hardware validation after it landed found the
+mechanism both failed to fix the double-PIN-prompt bug it was meant to
+fix and introduced a genuine device-wide keyguard bypass for ordinary
+(non-decoy) user switches, which is exactly why `0024` reverted it back
+to `false` days later. A commit that is enabled and then reverted within
+the same patch series nets to "never touched" — squashing to that literal
+net state (drop `0018` outright, and drop only the matching revert hunk
+from `0024`, since there is nothing left for it to revert) is more
+accurate history than keeping either half. `0024`'s other two changes
+(decoy-user-type validation in `DecoyProfileHelper.java`, the
+`@UnsupportedAppUsage` removal in `UserManager.java`) are real, needed
+fixes unrelated to the resource flip and were re-confirmed independently
+against the live branch (not just the plan's own framing) before this
+squash touched anything — including one change the original plan text
+never mentioned at all: the `USER_SETUP_COMPLETE` write was reordered in
+that same commit to run after `DecoyProfileState.save()`, not before, and
+that reordering is bundled in the same diff hunk as the type-validation
+check, so it was preserved as an inseparable unit, not cherry-picked
+apart.
+
+**How:** `frameworks/base` is a much larger repository than `build/release`
+(Task 2), so a full or even shallow clone was avoided. Per `AGENTS.md`'s
+"fetch only the touched files, read-only" pattern, the full list of files
+touched by patches `0018`-`0086` was collected (38 distinct files, one of
+them — `DecoyRoutingFailureMarker.java` — created fresh partway through
+the series so it had no baseline content), then `git archive` fetched
+their real content as of `5f3a562a4eefea8a14c2aaf42d14fc9c49cf0c1a` (the
+real commit immediately before `0018`) into a disposable local repo. All
+69 locally-exported `0018`-`0086` patches applied cleanly via `git am` on
+top of that baseline; every one of the 40 touched-file blob hashes in the
+resulting tree matched the real branch tip's own file content exactly
+(`git rev-parse fade68916b06...:<path>` over SSH) before any rebase
+surgery began — proof the replay genuinely reconstructs the real branch,
+not an approximation.
+
+A real `git rebase -i` (not a hand-spliced patch file) then dropped the
+`0018`-equivalent commit and marked the `0024`-equivalent commit `edit`.
+The first attempt at resolving the resulting `config.xml` conflict used
+`git commit --amend` directly instead of `git rebase --continue` — since
+the conflict meant no commit had been created yet for that step, the
+amend silently folded the *previous* commit's own changes (`0023`,
+"clear calling identity for decoy setup-complete write") into the edited
+commit instead of creating a new one on top of it. Caught by diffing the
+result against the original replay before trusting it (`git show
+--stat` on the amended commit showed `DecoyProfileHelper.java` changes
+that belonged to the wrong commit) — the rebase was aborted and redone
+correctly: resolve the conflict, `git add`, then `git rebase --continue`
+(which creates the commit itself, using the original commit's own
+message), then a second, separate `git rebase -i ... reword` pass to fix
+only the message. The `--stat` output after doing it the right way
+tracked exactly to the two intended files (`UserManager.java`,
+`DecoyProfileHelper.java`, 26 insertions/3 deletions total, zero mention
+of `config.xml`), and a full-tree diff between this corrected replay and
+the original (unedited) 69-commit replay showed exactly one file
+different — `config.xml`, and only the 12-line AegisOS comment block
+removed, value unchanged — confirming nothing else in the entire replayed
+history shifted.
+
+**Renumbering:** dropping one commit in the middle of the series shifts
+every subsequent patch's filename down by one. Old `0019` through `0086`
+(68 patches) are now `0018` through `0085`; the `0024`-derived edited
+commit is now `0023`. **Sections below this one that cite old patch
+numbers `0019`-`0086` were deliberately left unchanged** — per this
+project's own convention (established in Task 2's `build-release` squash
+note), those citations are accurate records of what was true when they
+were written, and rewriting them would misrepresent history. Subtract 1
+from any `patches/frameworks-base/00NN` citation with `NN >= 19` in a
+section below this point to find its current filename; sections above
+this point (`0001`-`0017`) are unaffected and still match their own
+citations exactly.
+
+**New/edited commits, real post-`git am` SHAs:**
+- Base commit (unchanged from `0018`'s own original parent):
+  `5f3a562a4eefea8a14c2aaf42d14fc9c49cf0c1a`.
+- `0018` (`ebb58e3ccc2034c2685b889ceecbcd1830b382ef`) no longer exists
+  anywhere in the branch's ancestry. Confirmed with the exact check the
+  plan's own brief specified,
+  `git log --oneline --all -- core/res/res/values/config.xml | grep -i
+  multiuserSkip`: zero results. That specific check passes partly by
+  construction on a repo this size — neither original commit's own
+  one-line subject contains the literal substring `multiuserSkip`, so the
+  grep would have found nothing even before the squash — so it was
+  cross-checked with a scoped, unambiguous version instead:
+  `git log --oneline 5f3a562a4eefea8a14c2aaf42d14fc9c49cf0c1a..
+  aegisos-duress-decoy-switch -- core/res/res/values/config.xml` (i.e.
+  "does any commit reachable only from this branch, since `0018`'s old
+  parent, touch this file at all") — zero commits. `core/res/res/values/
+  config.xml`'s blob hash at the new branch tip is
+  `d7a4004a27d6923894306b46f5f81044b471a55d` — the exact same hash it had
+  at `0018`'s own parent, i.e. bit-identical to upstream AOSP, never
+  touched by this series at all, not merely reverted to the same value.
+- `866593d9735cc6fcf6444b158b0ee2b628a9a0ad` — "aegisos: validate decoy
+  user type, drop UnsupportedAppUsage" (`patches/frameworks-base/0023`,
+  replacing the old `0024`) — the original `cd072d704764a3a7...` commit
+  with its `config.xml` hunk removed and nothing else changed; message
+  updated to match (dropped the resource-revert bullet, added a closing
+  note explaining why). Diff is exactly the `UserManager.java`/
+  `DecoyProfileHelper.java` hunks from the original commit, byte-for-byte
+  — confirmed by diffing this commit's own patch text against the
+  original `0024` patch file with the `config.xml` hunk manually excised
+  from the comparison.
+- Every one of the 38 other touched files (`DecoyRoutingFailureMarker.java`
+  excluded, since it doesn't exist yet at the baseline) has an unchanged
+  blob hash at the new branch tip versus the pre-squash tip
+  (`fade68916b06c61e7ad63dc5156b3928693c901a`) — verified by comparing all
+  39 non-`config.xml` hashes pairwise, zero differences.
+- New branch tip: `949164d7ae30c4743d0799f0dfc11275228ea4fc` (68 commits
+  above the unchanged base, replacing the original 69). Landed with
+  `git reset --hard 5f3a562a4eefea8a14c2aaf42d14fc9c49cf0c1a` followed by
+  `git am` of the 68 re-exported patches (all applied cleanly, no
+  conflicts) after re-confirming immediately beforehand: no build in
+  flight, working tree clean, HEAD still at the expected pre-squash
+  `fade68916b06...`. The original commits remain reachable via `git
+  reflog` on the build server (time-bounded safety net, not permanent).
+
+**Build verification (behavioral-identity proof, before vs. after):**
+A real `m services framework-res` was attempted first, launched fully
+detached (`OFFICIAL_BUILD=true OUT_DIR=out-lynx`, `lynx-cur-userdebug`,
+`SOONG_INCREMENTAL_ANALYSIS=true`) and polled rather than run inline. It
+did not succeed: repeated `memory stall` warnings from Soong's own tracer
+during the Android.bp analysis pass preceded the single `soong_build`
+process being killed outright (`stderr: Killed`, exit 137 — a host-level
+OOM kill, not a content or dependency error) at 7m22s, before any actual
+compilation began. `free -h` immediately after showed the host back at
+30GiB free with 6GiB of swap in use, consistent with a genuine transient
+memory-pressure event on this host rather than anything wrong with the
+squashed tree itself. Per the plan's own instruction not to let a build
+run unbounded when it looks disproportionate to the task, this was not
+blindly retried; the same class of substitution Task 2 used when its own
+`m android.multiuser.flags-aconfig` stalled was applied here instead —
+real compiled-artifact evidence obtained without a full product build:
+
+- **Source identity, the load-bearing fact underneath everything below:**
+  every file `services`/`framework-res` would compile from is either
+  completely unchanged by this squash, or (for `config.xml`) changed only
+  by removing a comment. `DecoyProfileHelper.java` and `UserManager.java`
+  — the two files `0024` touches — have git blob hashes at the new branch
+  tip identical to the pre-squash tip's own hashes (see above). Java
+  compilation is a deterministic function of source, classpath, and
+  compiler flags; none of those changed, so recompiling cannot produce
+  different bytecode for these two files' methods.
+- **Real compiled bytecode, not a re-derivation:** rather than trust that
+  claim on logic alone, the actual compiled classes were pulled from the
+  most recent real build already on the server and disassembled with
+  `javap -p -c -constants` (`prebuilts/jdk/jdk21`, not re-derived from
+  source): `DecoyProfileHelper.class` from `services.jar`'s own
+  `combined` intermediate (built 2026-09-16 21:33, i.e. against a
+  frameworks-base tree only one commit removed from the pre-squash tip —
+  `services.jar` is byte-for-byte outside the scope of anything this
+  squash touches either way, per the source-identity point above), blob
+  hash `e9abde6d978b5a49231fdaddc834f3f12db65d91eb985c182d0a1328aef5d064`;
+  `UserManager.class` from `framework-minus-apex`'s own `combined`
+  intermediate (built 2026-09-16 09:35), blob hash
+  `d89a5776040f4a6e262a6a93ffcda06d899f98d843380679761ef5c767c95d16`. Both
+  disassemblies confirm the exact methods `0024` touches are present with
+  the expected signatures: `void setDecoyProfile(LockscreenCredential,
+  int)` (the validation + save-ordering change) and `public List<UserInfo>
+  getUsersForUiDisplay(boolean)` (the `@UnsupportedAppUsage` removal,
+  visible in the disassembly as the absence of any
+  `RuntimeVisibleAnnotations` entry referencing that annotation type on
+  this method — annotations are part of a class's bytecode-level metadata,
+  so their absence is directly observable here, not just inferred from
+  source). Since source identity (point above) guarantees recompilation
+  cannot change this output, this is equivalent-or-stronger evidence to an
+  actual post-squash rebuild of these two files specifically — it is real
+  tool output against real compiled bytecode, not inference alone, even
+  though it substitutes for rather than replaces the brief's literal `m
+  services` instruction.
+- **Resource value, from a real compiled APK:** `aapt2 dump resources`
+  against the most recent `framework-res.apk` already on the server
+  (built 2026-08-30 07:27, ~47 minutes after the original `0024` landed)
+  shows `resource 0x01110224 bool/config_multiuserSkipKeyguardWhenSwitching
+ToUnlockedUsers` `() false` — the real compiled value, matching both the
+  pre-squash and post-squash source exactly, since aapt2 strips XML
+  comments when compiling to binary resources and the squash changed
+  nothing but a comment (the `<bool>` value line itself was untouched by
+  every commit in this squash, confirmed above by the full-tree diff
+  showing only a 12-line comment block removed).
+
+This does not carry the same weight as an actual fresh `m services
+framework-res` run against the post-squash tree, and is recorded here as
+a real, disclosed deviation from the brief's literal Step 4 instruction —
+not a substitute for it that should be treated as equally conclusive. A
+follow-up full build (or a retry once the host's memory pressure has been
+independently investigated) is recommended before this squash is treated
+as fully closed at the same confidence level as Task 2's.
 
 ### `frameworks/base`: Wallet QS tile decoy exemption (`0025`)
 
