@@ -4586,3 +4586,200 @@ files. Grepped all six patch files for `192\.168|beau@|beau-dev|
 cd packages/apps/Multiuser && git checkout -b aegisos-duress-decoy-switch && \
   git am ../../credential/duress-unlock-decoy/patches/packages-apps-multiuser/*.patch
 ```
+
+# frameworks/base `0079`-`0086` (2026-09-17)
+
+Fixes the two defects the owner hit on the candidate `0073`-`0078`
+produced: the decoy-to-owner return stranded the session on the
+direct-boot placeholder, and the duress unlock visibly swiped itself up
+instead of landing like an ordinary unlock. Both are now
+**hardware-confirmed on the physical `lynx`**, with the evidence quoted
+below rather than inferred from a clean build.
+
+## The return-path hang (`0079`-`0080`)
+
+`0073`-`0074` removed the second credential prompt on the return path.
+That prompt was load-bearing: it was the only thing that ever unlocked
+the returning user's CE storage, because `verifyPrimaryCredentialNoRouting`
+(`0013`/`0014`) deliberately skipped every side effect of an ordinary
+verification and zeroized the synthetic password.
+
+Device event log, captured from the owner's own failed attempt:
+
+```
+18:07:30.572  boot_progress_start                  <- fresh boot, user 0 CE-LOCKED
+18:07:50.814  uc_finish_user_unlocked: 10          <- duress PIN; decoy unlocks
+18:09:43.546  wm_resume_activity [0, com.android.settings/.FallbackHome]
+18:09:43.614  uc_finish_user_unlocking: 0          <- ...and then nothing
+18:14:27.413  uc_finish_user_unlocked: 0           <- 4m44s later, no reboot
+```
+
+`FallbackHome` is the direct-boot placeholder. `UserController.java:1001`
+writes `UC_FINISH_USER_UNLOCKING`, then line 1006 returns false at
+`if (!mInjector.isCeStorageUnlocked(userId))` -- exactly the truncation
+the log shows.
+
+`0080` applies the same `onCredentialVerified` side effects
+`doVerifyCredentialInner` applies on a match, **outside** the
+`mSpManager` lock (matching upstream's own placement -- that call makes
+binder calls into StorageManager and ActivityManager, and holding
+`mSpManager` across those is a deadlock shape). Verified at the bytecode
+level in the shipped `services.jar`, not just in source:
+
+```
+0003: monitor-enter v2
+003e: monitor-exit v2                                  <- lock released
+004b: invoke-virtual LockSettingsService.onCredentialVerified
+0056: invoke-virtual SyntheticPassword.zeroize
+```
+
+**Deliberately does not** mirror `sendCredentialsOnUnlockIfRequired`,
+which would hand the raw credential to a DPC and to profiles tied to
+this lock. Accepted consequence: such a profile stays locked after a
+return and is challenged on next access.
+
+Confirmed on hardware: `Unlocked CE storage for secured user 0` now
+appears on the return, and the owner reported the placeholder gone.
+
+## The swipe (`0081`-`0086`, three attempts -- two of them wrong)
+
+Recorded in full because the two dead ends are the useful part: they are
+the wrong layers, and a future session should not re-enter them.
+
+**Attempt 1 (`0081`-`0082`) -- insufficient, kept.** Set
+`KEYGUARD_GOING_AWAY_FLAG_NO_WINDOW_ANIMATIONS`. Confirmed on hardware to
+leave the swipe completely intact. The going-away is merged into the
+user-switch transition and animated by the Shell's
+`KeyguardTransitionHandler`, which dispatches on
+`TRANSIT_FLAG_KEYGUARD_GOING_AWAY` alone -- there is **no reference to
+the no-animation flag anywhere** under
+`libs/WindowManager/Shell/src/com/android/wm/shell/keyguard/`. Kept
+because it is still the semantically correct request and is honoured on
+the non-Shell path, but it does nothing on this build.
+
+**Attempt 2 (`0083`-`0084`) -- also insufficient, also kept.** Suppressed
+the canned unlock animation in
+`KeyguardUnlockAnimationController#playCannedUnlockAnimation`, using the
+same instant path the adjacent `isWakeAndUnlock` branch already uses.
+Confirmed working -- `surfaceBehindEntryAnimator` never starts any more --
+and the swipe still survived it. Kept because the animator would
+otherwise return.
+
+**Attempt 3 (`0085`-`0086`) -- the actual fix.** A lossless 64MiB logcat
+capture (the earlier diagnoses were made from a default-sized buffer that
+was silently dropping SystemUI lines during the switch burst -- that is
+why two wrong layers were fixed first) showed the keyguard's own state
+machine:
+
+```
+RESET
+STARTED  PRIMARY_BOUNCER -> LOCKSCREEN  by FromPrimaryBouncerTransitionInteractor
+FINISHED PRIMARY_BOUNCER -> LOCKSCREEN                       (471ms)
+keyguardGoingAway requested for userId: 10
+STARTED  LOCKSCREEN -> GONE  by FromLockscreenTransitionInteractor
+FINISHED LOCKSCREEN -> GONE                                  (416ms)
+```
+
+The incoming user's lock screen is animated in and then animated away
+again. Both are visible; together they are the swipe. An ordinary unlock
+on the same device, captured for comparison, goes `PRIMARY_BOUNCER ->
+GONE` in one step and never presents a lock screen.
+
+Cause: `resetStateLocked()` collapsing the bouncer during the switch
+drops `primaryBouncerShowing`, and
+`FromPrimaryBouncerTransitionInteractor#listenForPrimaryBouncerNotShowing`
+turns exactly that into a transition to `LOCKSCREEN`. Everything after is
+forced.
+
+`0086` uses `resetStateLocked`'s **existing** `hideBouncer` parameter to
+leave the bouncer up for an authorized switch. The bouncer covers the
+screen at least as completely as the lock screen it replaces, so nothing
+of the outgoing user's session is exposed, and it is the surface the
+credential was just typed into. The bouncer-skip grant moves to
+`handleBeforeUserSwitching` because the decision must be made there;
+switch-complete now reads that decision instead of redeeming twice.
+Ordinary secure-user switches are untouched and still collapse their
+bouncer (asserted in `0085`, the ADR-061 property at this layer).
+
+Hardware-confirmed after flashing:
+
+```
+from=PRIMARY_BOUNCER, to=GONE, transitionState=STARTED,  by FromPrimaryBouncerTransitionInteractor
+from=PRIMARY_BOUNCER, to=GONE, transitionState=FINISHED, by FromPrimaryBouncerTransitionInteractor
+```
+
+Owner's own verdict on the flashed result: it works.
+
+**Real branch SHAs**, read from `git log` on the actual branch after each
+`git am`, and the exported patches regenerated fresh from that same
+history (never carried over from a local worktree's own patch files):
+
+```
+fade68916b06  aegisos: keep the bouncer up across an authorized switch (0086)
+f0fa81c8ac63  test: expect an authorized switch to keep its bouncer up (0085)
+f5c64142b278  aegisos: suppress the canned unlock animation for an authorized switch (0084)
+0bb1b53a84ca  test: expect the authorized-switch dismiss mark to be single-use (0083)
+b069fd0096f9  aegisos: cut rather than animate the authorized-switch dismissal (0082)
+f12d17c6d6dd  test: expect the authorized-switch dismiss to suppress the unlock animation (0081)
+bef0d05fb66c  aegisos: unlock the returning user on a matched return credential (0080)
+cdab10e2ee4f  test: expect the return-path credential check to unlock CE storage (0079)
+```
+
+Built with `OFFICIAL_BUILD=true`; all four gated packages confirmed
+present (`Seedvault`/`Updater` in this build's own fresh
+`installed-files.txt`, `Auditor`/`PdfViewerGOS` in the product
+partition's, which was not rebuilt and not reflashed). Signed with the
+alpha key `265ade399a0f3ee65003e56daef26a8f4d70e6a4`, rollback index
+`1783209600` unchanged, verified 13/13 on two separate machines with two
+different `avbtool` binaries before each flash.
+
+## Measured latency, and what is left open
+
+Measured on hardware after the fix, PIN verified to home:
+
+| | |
+|---|---|
+| ordinary owner unlock | **771 ms** |
+| duress unlock | **~2050 ms** |
+
+Breakdown of the duress path: 438ms credential-check plus decoy routing
+and mint, 493ms switch machinery, **1110ms decoy-launcher cold start**,
+809ms transition tail. The launcher process for the decoy starts at
+`am_proc_start [10, ..., com.android.launcher3]` *during* the switch.
+
+- **The gap itself is a tell.** 2.0s against 0.8s is stopwatch-measurable.
+  Note the inverse also holds: making the duress path *faster* than an
+  ordinary unlock would be just as much a tell, so `TO_GONE_DURATION`
+  (500ms, identical to an ordinary unlock) must not be shortened.
+- **Pre-warming the decoy launcher cannot close this fully.**
+  `com.android.launcher3` is not `DIRECT_BOOT_AWARE` (confirmed via
+  `dumpsys package`), and a warm-started decoy stays in `RUNNING_LOCKED`
+  until its own credential is verified -- so its launcher physically
+  cannot start before the duress PIN is typed. Only the overlap between
+  CE-unlock and the switch machinery is recoverable (~300-700ms).
+- **The obvious implementation of that overlap is unsafe and was not
+  landed.** `RootWindowContainer#canStartHomeOnDisplayArea` has no
+  current-user check, and `startHomeOnAllDisplays` goes through
+  `startHomeOnTaskDisplayArea(..., onTop = true)` -- it would bring the
+  decoy's home forward while user 0 is still current, with only the
+  bouncer between it and the owner's session. A safe version needs a new
+  internal API passing `onTop = false`, plus hardware proof that no decoy
+  frame is visible before the switch. Not attempted.
+- **The pre-switch unlock window is unverified.** `0080` now calls
+  `unlockUser` roughly a second before the switch lands, while the decoy
+  is still foreground; previously this happened after the owner was
+  already in front. `RealUserQuiescer` should suppress user-0
+  notifications in that window, but whether the quiesce flag covers
+  processes started *by* that unlock has not been checked on hardware.
+- Same open items as every prior entry: the six UNCHECKED leak-audit
+  items, and `credential_capture` (untouched).
+- No ADR has been written for this patch set yet, and the
+  `aegisos-foundation` handoff-router has not been updated.
+
+## Apply (this section)
+
+```sh
+cd frameworks/base && git am \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/007[9]-*.patch \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/008[0-6]-*.patch
+```
