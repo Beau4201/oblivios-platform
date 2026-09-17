@@ -676,9 +676,30 @@ and future patch cycles in `packages/apps/Settings` and
 HEAD before landing anything, so this and future `build/release` commits
 land on a real ref, not an anonymous detached-HEAD history.
 
+**History note (Duress Unlock final closure, Task 2):** this repository's
+original four commits (`e4722bcb53a3`, `aae51c7d0274`, `952bd37e4bbc`,
+`10209de65d2a` — enable at `trunk_staging`, relocate to `cp2a`, fix
+permission to `READ_ONLY`, revert to `DISABLED`) were squashed into one
+commit on 2026-09-17, with owner sign-off, after a closure audit
+(`docs/devices/lynx-duress-unlock-patch-audit.md` in `AegisOS-foundation`)
+found this flag's own upstream declared default already resolves to
+`state: DISABLED, permission: READ_ONLY` on this product's `cp2a` release
+config — identical to `0004`'s final state — meaning the whole four-patch
+enable/fix/fix/revert cycle nets out to exactly what a bare declaration
+would have produced anyway. The owner chose to keep one explicit override
+file as defense-in-depth (fails the build loudly if a future upstream
+`.aconfig` edit ever changes the default, where no override file would
+fail silently) rather than delete it outright. The narrative below
+(original `0001`-`0004`, kept for historical record of how the mechanism
+was actually discovered, built, and rejected) now describes commits that
+no longer exist on the real branch; the squash's own record, with the
+real post-squash SHA and the before/after behavioral-identity proof, is
+at the end of this subsection.
+
 - `e4722bcb53a3ad8e67aafad21c6540a83f552ee1` — "aegisos: enable
   credential_capture flag for skip-keyguard-when-switching-to-unlocked-users"
-  (`patches/build-release/0001`, real build-server SHA) — adds
+  (originally `patches/build-release/0001`, real build-server SHA, since
+  squashed — see history note above) — adds
   `aconfig/trunk_staging/android.multiuser/credential_capture_flag_values.textproto`,
   setting the `android.multiuser` package's `credential_capture` aconfig
   flag to `state: ENABLED` / `permission: READ_WRITE`. This flag already
@@ -739,7 +760,8 @@ this fix required (not by inspection):
 
 - `aae51c7d0274f8d610348a04caac7d778af5aac3` — "aegisos: move
   credential_capture flag override to the release config this product
-  actually reads" (`patches/build-release/0002`, real build-server SHA) —
+  actually reads" (originally `patches/build-release/0002`, real
+  build-server SHA, since squashed — see history note above) —
   pure rename,
   `aconfig/trunk_staging/android.multiuser/credential_capture_flag_values.textproto`
   → `aconfig/cp2a/android.multiuser/credential_capture_flag_values.textproto`,
@@ -760,7 +782,8 @@ this fix required (not by inspection):
   cleanly, no conflicts).
 - `952bd37e4bbceda794f3cc823e18f1c0948beeeb` — "aegisos: mark
   credential_capture flag READ_ONLY for cp2a release config"
-  (`patches/build-release/0003`, real build-server SHA) — changes
+  (originally `patches/build-release/0003`, real build-server SHA, since
+  squashed — see history note above) — changes
   `permission: READ_WRITE` to `permission: READ_ONLY` in the same file
   `0002` just relocated. Found by a genuine build failure, not anticipated
   by the original task brief (which called for moving the file with
@@ -877,7 +900,8 @@ whether the flag itself is enabled or disabled.
 
 - `10209de65d2accda1d7cdb8e178f41f9a20f166f` — "aegisos: disable
   credential_capture flag, revert to inert pending redesign"
-  (`patches/build-release/0004`, real build-server SHA) — a one-line
+  (originally `patches/build-release/0004`, real build-server SHA, since
+  squashed — see history note above) — a one-line
   change, `state: ENABLED` → `state: DISABLED`, in the same file `0002`
   relocated and `0003` fixed the permission of. No other file touched.
   Confirmed via a direct read of `frameworks/base/services/core/java/com/
@@ -945,6 +969,147 @@ Component A's decoy double-PIN bug is expected and accepted to still
 reproduce on this build (not re-tested here per explicit instruction —
 reverting the flag does not change that code path's outcome, only removes
 the security regression it had introduced alongside it).
+
+### History squash: `0001`-`0004` collapsed into one commit (Duress Unlock final closure, Task 2)
+
+Landed 2026-09-17, owner sign-off already obtained for this specific
+squash. This is the first time this project has rewritten history on a
+real, landed branch — done with the extra caution that implies, not less:
+the original four commits remain recoverable via the branch's own reflog
+on the build server (not force-pushed anywhere, not garbage-collected),
+and every step below was verified against the real branch state
+immediately before acting, not assumed from an earlier read.
+
+**Why:** the Duress Unlock final-closure audit
+(`docs/devices/lynx-duress-unlock-patch-audit.md` in `AegisOS-foundation`,
+Step 2) found `credential_capture`'s own upstream declared default (no
+explicit `state:` in `frameworks/base/core/java/android/content/pm/
+multiuser.aconfig`, so `aconfig`'s own hardcoded
+`DEFAULT_FLAG_STATE = DISABLED` applies) resolves, once `cp2a`'s real
+release-config inheritance chain is followed
+(`cp2a`→`cp1a`→`bp4a`→`bp3a`→`bp2a`→`bp1a`, `bp1a`'s own
+`RELEASE_ACONFIG_FLAG_DEFAULT_PERMISSION` override sets `READ_ONLY`), to
+`state: DISABLED, permission: READ_ONLY` — identical to `0004`'s explicit
+end state. The four-commit enable/relocate/fix-permission/revert sequence
+therefore nets out to exactly what zero override file would have produced
+on its own. Rather than delete the file (the audit's own stated cleanest
+technical outcome), the owner chose defense-in-depth: **keep one explicit
+override**, so a future upstream `.aconfig` edit that changes this flag's
+own default can't silently change this product's behavior — an override
+file makes that scenario a loud build-time surprise instead of a silent
+one. Mechanically this means the brief's "if ENABLED: no content edit
+needed, squash the four commits into one" branch applies even though the
+technical trigger condition found was DISABLED.
+
+**How:** a disposable local git repo was seeded two ways — first a direct
+shallow `git fetch --depth=6` of the real branch was attempted and failed
+identically to `0002`'s own prior experience ("lazy fetching disabled;
+some objects may not be available" / "aborting due to possible repository
+corruption on the remote side" — `build/release` is a partial/promisor
+clone on the build server, confirming this isn't a one-off). Fell back to
+`AGENTS.md`'s own "fetch only the touched files" pattern instead: an
+empty baseline commit, then the four locally-exported `0001`-`0004`
+patches applied via `git am` on top of it (all four applied cleanly), with
+the resulting file's `sha256sum` confirmed byte-identical to the real
+branch tip's own file (fetched read-only via `git show HEAD:<path>` on the
+build server) before proceeding — proof the four-patch replay genuinely
+reconstructs the real branch tip, not an approximation. `git reset --soft`
+back to the baseline commit collapsed all four into a single new commit
+with the identical resulting tree (verified: `git diff` between the
+4-commit HEAD and the squashed commit is empty), authored as `AegisOS
+Build <build@aegisos.local>` — the same author identity the original four
+commits themselves used (confirmed via `git log --format='%an <%ae>' -4`
+on the real branch before writing the new commit, not assumed).
+
+Landing on the real branch: confirmed no build in flight
+(`pgrep -af "^ninja|soong_ui --build-mode$"`, re-checked immediately
+before the operation, not just once earlier in the session), then
+`git reset --hard 8976d78feac337469081409228886065a4dfefab` (the real
+commit immediately before `0001`, moving the branch pointer back — the
+history-rewriting step) followed by `git am` of the squashed patch. The
+old four commits stayed reachable via `git reflog` immediately after
+(`10209de65 HEAD@{2}: am: ...`, etc.) — a live safety net, not merely a
+claim.
+
+**New commit, real post-`git am` SHA:**
+`0ded9b0e3972e2addd5d0d973db21f6891b26473` — "aegisos: squash
+credential_capture enable/relocate/permission/revert history"
+(`patches/build-release/0001`, replacing the old `0001`-`0004`). File
+content confirmed byte-identical to the pre-squash tip by git blob hash
+alone: the new commit's diff creates
+`aconfig/cp2a/android.multiuser/credential_capture_flag_values.textproto`
+with post-image blob `2af5b42d9` — the exact same blob hash `0004`'s own
+original patch ended on. Base commit:
+`8976d78feac337469081409228886065a4dfefab` (unchanged from the original
+`0001`'s own base — this squash does not move the branch point, only
+collapses what sits on top of it).
+
+**Build verification (behavioral-identity proof, before vs. after):**
+`aconfig` value files aren't compiled artifacts; the actual consumer is
+`aconfig create-cache` (`build/soong/aconfig/aconfig_declarations.go`),
+invoked per-module by Soong. A full `m android.multiuser.flags-aconfig`
+was attempted first but timed out after 280s still in Soong's analysis
+phase with no output — consistent with a full product-graph analysis
+pass, not the lightweight single-file operation the brief expected;
+per the brief's own instruction to stop rather than kick off a long build,
+this was abandoned in favor of invoking the already-built host `aconfig`
+binary directly (the same tool Soong itself calls, same inputs, zero
+Kati/Soong analysis overhead):
+
+- **Before** (real build artifact, produced by a genuine prior `m`
+  invocation against this exact branch tip, timestamped after `0004`
+  landed, untouched by any of this task's git operations):
+  `aconfig dump-cache --cache out-lynx/soong/.intermediates/frameworks/base/
+  android.multiuser.flags-aconfig/aconfig-cache.pb --filter=name:credential_capture
+  --format=textproto` →
+  ```
+  parsed_flag {
+    package: "android.multiuser"
+    name: "credential_capture"
+    namespace: "multiuser"
+    description: "Perform authentication in the login app on desktop before switching to a user"
+    bug: "448603243"
+    state: DISABLED
+    permission: READ_ONLY
+    trace {
+      source: "frameworks/base/core/java/android/content/pm/multiuser.aconfig"
+      state: DISABLED
+      permission: READ_ONLY
+    }
+    trace {
+      source: "build/release/aconfig/cp2a/android.multiuser/credential_capture_flag_values.textproto"
+      state: DISABLED
+      permission: READ_ONLY
+    }
+    is_fixed_read_only: false
+    is_exported: false
+    container: "system"
+    metadata { purpose: PURPOSE_UNSPECIFIED storage: NONE }
+  }
+  ```
+  (Also confirms the audit's own Step 2 claim directly, not just by
+  source-reading: the first `trace` entry — the flag's own declared
+  default, computed before any value-file override is applied — already
+  shows `DISABLED`/`READ_ONLY`, matching the override's own value exactly.)
+- **After** (post-`git am`, direct `aconfig create-cache` invocation
+  against the real, now-squashed working tree — `--package android.multiuser
+  --container system --declarations frameworks/base/core/java/android/
+  content/pm/multiuser.aconfig --values build/release/aconfig/cp2a/
+  android.multiuser/credential_capture_flag_values.textproto
+  --default-permission read_only --allow-read-write false`, then the same
+  `dump-cache` filter): byte-identical output to the "before" block above —
+  `diff` between the two saved outputs was empty, and both files' own
+  `sha256sum` matched exactly
+  (`d2ab7118d9242dd9df77584178f9b5d496db1767e905878b19d1fcb8854480b0`).
+
+No behavioral change. `credential_capture` stays `state: DISABLED,
+permission: READ_ONLY` on this product's `cp2a` release config, before and
+after the squash, confirmed by the actual `aconfig` tool's own output, not
+inferred.
+
+No LAN/account coordinates in this section, the new patch file, or the
+squashed commit message — grepped for `192\.168|beau@|beau-dev|
+/srv/aegisos` before this commit.
 
 ### `frameworks/base`: closing whole-branch review fixes (`0024`)
 
