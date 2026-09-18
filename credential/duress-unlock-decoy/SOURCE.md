@@ -5398,3 +5398,143 @@ cd frameworks/base && git am \
   ../../credential/duress-unlock-decoy/patches/frameworks-base/0086-*.patch \
   ../../credential/duress-unlock-decoy/patches/frameworks-base/0087-*.patch
 ```
+
+## `UserRepositoryImpl`'s stale-cache bug on a keyguard transition (`0088`)
+
+`UserRepositoryImpl._userSwitcherSettings` is a `StateFlow` built from
+`globalSettings.observerFlow()` over three `Settings.Global` keys
+(`SETTING_SIMPLE_USER_SWITCHER`, `ADD_USERS_WHEN_LOCKED`,
+`USER_SWITCHER_ENABLED`). Its `getSettings()` mapper calls
+`manager.isUserSwitcherEnabled()`, which is itself live and
+keyguard-state-aware (patch `0043`: it additionally hides the switcher
+for a Duress Unlock decoy session's own current-user view, without
+touching the device-wide setting) -- but the `StateFlow`'s cached value
+only refreshes when one of those three `Settings.Global` keys changes
+via `ContentObserver`. A keyguard showing-state transition (e.g. the
+duress decoy switch) with zero `Settings.Global` writes left the cached
+value stale until some unrelated settings write happened to refresh it.
+
+This is a different, newer finding than the one originally recorded
+against this file (patch `0034`, the QS-footer-icon raw-setting bypass
+fixed by delegating to `manager.isUserSwitcherEnabled()`). That fix is
+still correct and unrelated -- `getSettings()` already calls the live,
+keyguard-aware API; the bug this patch fixes is one layer up, in when
+the `StateFlow` re-invokes that mapper at all.
+
+**API confirmed by reading the real source before writing code (no
+`KeyguardStateController`/`KeyguardTransitionRepository` guess):**
+`KeyguardTransitionRepository` (`keyguard/data/repository/
+KeyguardTransitionRepository.kt`) only exposes `TransitionStep`s between
+`KeyguardState` values (`STARTED`/`RUNNING`/`FINISHED`/`CANCELED`), no
+plain "is showing" boolean -- confirmed by reading its full interface.
+`KeyguardRepository.isKeyguardShowing: StateFlow<Boolean>`
+(`keyguard/data/repository/KeyguardRepository.kt`) is the real signal:
+already consumed the identical way (`keyguardRepository.isKeyguardShowing`)
+by `DeviceEntryFaceAuthRepository` in a sibling `data/repository` package,
+confirming both the API shape and that direct `KeyguardRepository`
+injection is an established, working pattern in this Dagger graph.
+Checked for a circular dependency before injecting it:
+`KeyguardRepositoryImpl`'s own constructor (`StatusBarStateController`,
+`KeyguardStateController`, `KeyguardUpdateMonitor`,
+`DozeTransitionListener`, `AuthController`,
+`DreamOverlayCallbackController`, `SystemClock`, `FacePropertyRepository`,
+`UserTracker`, `LockPatternUtils`) has no dependency on `UserRepository`
+-- `UserTracker` is a lower-level primitive already shared by both
+classes, not a cycle.
+
+`0088` merges `keyguardRepository.isKeyguardShowing.map { Unit }` into
+`_userSwitcherSettings`'s upstream `merge(...)` alongside the existing
+`globalSettings.observerFlow(...)`, so a keyguard transition re-evaluates
+`getSettings()` even when none of the three settings keys changed. Test:
+`UserRepositoryImplTest.userSwitcherSettings_reEvaluatesOnKeyguardTransition_
+withoutSettingsChange` uses `FakeKeyguardRepository`
+(`kosmos.fakeKeyguardRepository`, already existing in
+`tests/utils/.../keyguard/data/repository/`, no new fake needed) and its
+`setKeyguardShowing(Boolean)` to flip the keyguard state with zero
+`Settings.Global` writes, then asserts the cached `isUserSwitcherEnabled`
+reflects the new `manager.isUserSwitcherEnabled()` mock return value.
+Test and fix landed as a single commit (rather than this branch's usual
+separate `test:`/`aegisos:` pair) because the fix requires a new
+constructor dependency (`KeyguardRepository`) that the test itself must
+also thread through `create()` -- splitting them would leave the
+intermediate `test:` commit failing to compile, not failing its
+assertion, which is a materially different (and less useful) RED state
+than the brief specified.
+
+Confirmed only one call site constructs `UserRepositoryImpl` directly
+(`UserRepositoryImplTest.create()`, updated) -- every other consumer
+across `packages/SystemUI` goes through Dagger's `@Inject constructor`
+or the `Kosmos` fixture `kosmos.fakeUserRepository`/`userRepository`
+(a hand-written `FakeUserRepository`, never `UserRepositoryImpl`
+itself), so the new constructor parameter has zero blast radius outside
+the one file changed. Also confirmed the QS-footer icon's own
+`UserSwitcherRepositoryImpl.isEnabled` (`UserSwitcherRepository.kt`,
+same package) is a fully independent `conflatedCallbackFlow` with no
+reference to `UserRepositoryImpl` or `_userSwitcherSettings` -- untouched
+by this change, by construction, not just by observation.
+
+## Verification: BLOCKED on real `atest` execution (disclosed, not hidden)
+
+Real branch tip after `git am`, confirmed via `git log`/`git status`
+directly on the build server both before and after landing, not trusted
+from the local worktree: `fee7a84087f9691786ce082fc9c17eadbc8e3a94`
+(`frameworks/base`, `aegisos-duress-decoy-switch`).
+
+`atest UserRepositoryImplTest -v` was attempted twice and never produced
+a compiled or executed test result -- both attempts died in Soong's own
+bootstrap module-graph analysis, the identical failure signature already
+recorded for `0086`/`0087` above:
+
+1. First attempt used a stale `lunch sdk_phone64_x86_64-userdebug`
+   invocation (missing the `-<release>-` component current `lunch`
+   requires) and failed immediately with a `lunch` usage error -- not the
+   real environmental failure, so not counted against the two-attempt
+   budget.
+2. Corrected invocation (`OUT_DIR=out-preflight` exported before `source
+   build/envsetup.sh`, `lunch sdk_phone64_x86_64-cp2a-userdebug`, then
+   `atest UserRepositoryImplTest -v`): `soong_build`
+   (`out-preflight/host/linux-x86/bin/soong_build`) ran for ~22 minutes of
+   real CPU time, climbing to 94% system memory (30.9GB RSS of 31Gi
+   total) with `siso`-level "memory stall" warnings logged
+   (`trace_sys_linux.go:89`), then died -- confirmed by
+   `out-preflight/target/product/emu64x/module-info.json` still stamped
+   `Aug 6`, meaning the module-graph analysis never completed.
+
+This is the **third** task today to hit this exact failure on this
+server (Task 3's `m services` in `out-lynz`, Task 5's `atest
+RealUserQuiescerTest` four separate ways, now this task's `atest
+UserRepositoryImplTest` two ways) -- a confirmed, reproducible
+build-server capacity limit for this branch's current size against the
+`sdk_phone64_x86_64`/`out-preflight` config, not a fluke tied to any one
+test module or invocation method. Per the same standing instruction that
+governed `0086`/`0087`'s verification gap, no further retry was
+attempted.
+
+**What this means concretely:** neither the RED state (the new test
+failing against the pre-image `_userSwitcherSettings`, which only merges
+`globalSettings.observerFlow(...)`) nor the GREEN state (the same test
+passing against `0088`'s merged flow) was executed via real `atest`. Both
+claims rest on source-level reasoning, not a build-server run:
+`FakeKeyguardRepository.setKeyguardShowing()` only ever reaches
+`UserRepositoryImpl` through `keyguardRepository.isKeyguardShowing`,
+which the pre-image file never read at all (confirmed by direct read of
+the file before editing) -- so the pre-image would leave
+`settings?.isUserSwitcherEnabled` at its stale `true` value after the
+keyguard transition, exactly the brief's predicted RED failure. The
+GREEN claim rests on `merge()`'s documented semantics (each source flow's
+emissions propagate downstream independently) plus the `unconfined` test
+dispatcher already used by every other test in this file, none of which
+call `runCurrent()` for an analogous synchronous trigger
+(`userUnlockedFlow_tracksBroadcastedChanges` triggers a broadcast and
+reads the result immediately, the same shape used here). This is a real,
+disclosed verification gap, not a masked one -- revisit before this
+branch's next consolidated build, which will compile this code
+regardless and surface a genuine compile error immediately if the manual
+trace above is wrong.
+
+## Apply (this section)
+
+```sh
+cd frameworks/base && git am \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0088-*.patch
+```
