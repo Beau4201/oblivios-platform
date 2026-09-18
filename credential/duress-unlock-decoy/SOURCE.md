@@ -5222,3 +5222,179 @@ cd frameworks/base && git am \
   ../../credential/duress-unlock-decoy/patches/frameworks-base/007[9]-*.patch \
   ../../credential/duress-unlock-decoy/patches/frameworks-base/008[0-6]-*.patch
 ```
+
+# frameworks/base `0086`-`0087` (2026-09-18)
+
+## `REASON_QUIESCE_FAILED` made reachable
+
+Before this change, `ActivityManagerService`'s `LocalService#quiesceUserApps`
+hardcoded `return true`, so `RealUserQuiescer.quiesce()`'s per-process freeze
+failures were logged but never escalated --
+`DecoyRoutingFailureMarker.REASON_QUIESCE_FAILED`, wired at
+`DecoyProfileHelper.java:258` since the seamless-unlock work (`0051`-`0053`),
+was structurally unreachable dead code. This was flagged as an open
+completeness gap during the `credential_capture`/Finding-13 closure pass
+("Component B's failure-path fallback ... is DEAD CODE, confirmed by direct
+source trace") and is Component 3 of `docs/superpowers/specs/2026-09-17
+-duress-unlock-final-closure-design.md` in the `aegisos-foundation` repo.
+Owner's explicit threshold (2026-09-17): any single process failing to
+freeze counts as a quiesce failure -- not "all fail" or "majority fail".
+
+## A stale design assumption, found while reading the real callers
+
+The 2026-08-27 real-user-quiescing-and-return design doc defined an
+"asymmetric error handling rule": `quiesceUserApps`'s return value was meant
+to reflect *notification-suppression install* success only, with freeze
+failures deliberately excluded ("freeze failures never affect this return
+value"). `ActivityManagerInternal.java`'s own javadoc for `quiesceUserApps`
+still stated this verbatim, word for word, right up to this change.
+
+That premise no longer matches the mechanism as actually built.
+`RealUserQuiescer` never implements an installable "notification-suppression
+flag" -- its own class javadoc says so directly ("This class does not touch
+notification state"). Notification suppression is instead a live query
+(`NotificationManagerService` consults `isUserQuiescedForDuress()` at
+notification-post time, confirmed at
+`services/core/java/com/android/server/notification/NotificationManagerService.java:10317`),
+which cannot fail in the sense the original design envisioned -- there was
+never a real install step whose success this return value could report. So
+the hardcoded `return true` was not a bug relative to the *original*
+2026-08-27 semantic; it was a faithful placeholder for a step that does not
+exist in the mechanism as shipped. The owner's 2026-09-17 decision repurposes
+the same return value and reason code for a different, now-real failure mode
+(per-process freeze failure) rather than reviving the original one.
+
+Also confirmed while reading: `performDecoySwitch` (`DecoyProfileHelper.java`,
+landed `0051`-`0053`) already calls `switchToUserSilently(decoyUserId)`
+*before* `quiesceUserApps(realUserId)` -- the reverse of the 2026-08-27 doc's
+stated sequencing (quiesce, then notification-suppression, then switch). This
+is a correct, necessary divergence: `RealUserQuiescer`'s own javadoc requires
+the target user to have already stopped being foreground before its
+processes can be frozen. One consequence, independently useful for this
+task: because the switch always happens first and unconditionally, a
+`quiesce()` failure structurally cannot block or unwind the decoy switch --
+by the time `quiesce()` runs, the switch has already succeeded.
+`DecoyProfileHelper.java`'s existing failure branch (`if
+(!ami.quiesceUserApps(realUserId)) { DecoyRoutingFailureMarker.record(...,
+REASON_QUIESCE_FAILED); }`, with nothing after it) already does exactly the
+right thing with zero changes required there -- it was correctly written in
+anticipation of a real boolean, just never exercised.
+
+Minor, not fixed (out of this task's file list, which named
+`DecoyRoutingFailureMarker.java` read-only-confirm): the marker's own class
+javadoc describes every recorded failure as causing "the seamless
+credential-routing switch [to fall] back to the pre-seamless behavior (a
+second credential prompt)". Accurate for `REASON_SWITCH_NOT_STARTED`
+(`switchToUserSilently` failed, the real user stays current, the next unlock
+attempt shows an ordinary keyguard) but not for `REASON_QUIESCE_FAILED`,
+where the switch has already succeeded and no second prompt occurs -- the
+decoy session is already live; the only real consequence is that some
+backgrounded real-user process may still be unfrozen. Flagged for a future
+doc-accuracy pass.
+
+## The fix (`0086`-`0087`)
+
+`0086` adds `RealUserQuiescerTest.java` (new file; no prior test existed for
+this class) with three cases: zero processes (trivially true), a single
+process whose `forceFreezeAppAsyncLSP` throws (returns false, user still
+marked quiesced), and a process belonging to a different user (correctly
+skipped, returns true). `ProcessRecord`/`ProcessList` are real AOSP classes
+not designed for mocking -- `ProcessList` is `final` (unmockable,
+unsubclassable) and `ProcessRecordInternal`'s `uid`/`processName` are
+`public final` fields set only by `ProcessRecord`'s full constructor (which
+needs a wired `ActivityTaskManagerService`). The test instead constructs a
+real, minimal `ProcessList` directly and uses the same reflection-based
+final-field-setting helper already established in this exact package
+(`AnrHelperTest`, `ProcessRecordTests` both define their own
+`setFieldValue`, using `Field.class.getDeclaredField("accessFlags")`, not
+`"modifiers"` -- confirmed this codebase's toolchain needs that exact
+approach) to populate only `uid`/`processName` on a Mockito-mocked
+`ProcessRecord`.
+
+`0087` is the real fix: `RealUserQuiescer.quiesce(int): void` becomes
+`quiesce(int): boolean`, tracking `allSucceeded` across the freeze loop --
+any single caught `RuntimeException` sets it false. `userId` is still added
+to `mQuiescedUserIds` regardless, so notification suppression stays intact
+on a partial freeze failure. `ActivityManagerService.LocalService
+#quiesceUserApps` becomes a real pass-through of this value instead of the
+hardcoded `true`. `ActivityManagerInternal.java`'s javadoc is corrected to
+describe the new, real contract instead of the stale asymmetric-error
+-handling text quoted above.
+
+## Verification: BLOCKED on real `atest` execution (disclosed, not hidden)
+
+Real branch tip after `git am`: `16e532d8667418d51a950881ae938193e8bbda79`
+(`frameworks/base`, `aegisos-duress-decoy-switch`), confirmed via `git log`
+/`git rev-parse HEAD` directly on the build server both before and after
+landing, not trusted from the local worktree.
+
+`atest FrameworksServicesTests:com.android.server.am.RealUserQuiescerTest`
+was attempted four times and never produced a single compiled or executed
+test result -- every attempt died in Soong's own bootstrap module-graph
+analysis (`[100% 2/2] analyzing Android.bp files and generating ninja file
+at out-preflight/soong/build.sdk_phone64_x86_64.ninja`), before any test
+code was ever compiled or run:
+
+1. Plain `atest ... RealUserQuiescerTest -v` -- 9m07s, `exit=137
+   signal:killed`.
+2. Identical retry after confirming memory had recovered (30Gi free at
+   rest) -- 11m02s, same `exit=137 signal:killed`, same step.
+3. `atest -j 3 ...` -- 7m35s, same failure. Confirmed by reading
+   `build/soong/ui/build/soong.go`/`config.go` that atest's own `-j`/
+   `--build-j` flag controls *test execution* parallelism only; the actual
+   invoked command
+   (`./build/soong/soong_ui.bash --make-mode WRAPPER_TOOL=atest
+   ATEST_RUN_ID=... .../module-info.json`) carries no `-j` at all, so
+   `config.Parallel()` fell back to its default (`runtime.NumCPU()+2` = 10)
+   for the bootstrap ninja/siso invocation that actually failed.
+4. One mitigated attempt, run directly (bypassing atest) as
+   `./build/soong/soong_ui.bash --make-mode -j2
+   out-preflight/target/product/emu64x/module-info.json` -- confirmed via
+   source read that `-j` parsed on `soong_ui`'s own argv does reach
+   `config.Parallel()` and from there the bootstrap `--local_jobs`/`-j`
+   ninja arg. Still failed identically: 6m35s, `exit=137 signal:killed`,
+   same `build.sdk_phone64_x86_64.ninja` target.
+
+All four failures share one signature: `FAILED:
+out-preflight/soong/build.sdk_phone64_x86_64.ninja`, `stderr: Killed`,
+`exit=137 # signal:killed` -- almost certainly the kernel OOM killer, though
+`journalctl -k` confirmation was inconclusive (no elevated read access on
+this account). At-rest memory was healthy before every attempt (28-30Gi free
+of 31Gi, 16Gi swap present with 6-10Gi free) -- this is a spike *during*
+Soong's full Android.bp module-graph re-analysis (triggered by "Globs
+changed, rerunning soong" once a new `.java` file was added under
+`frameworks/base/services/tests/servicestests/src/**`), not sustained
+exhaustion. This is the same failure class (signal-killed during a full
+Soong analysis pass, same host) as Task 3 hit the same day during its own
+`m services` attempt in `out-lynz` -- a second, independent occurrence
+strengthens rather than weakens the case that this is a real, general
+build-server resource constraint, not a fluke tied to this one test module.
+
+**What this means concretely:** neither Step 3 (RED: confirm the test fails
+to compile against the old `void` signature) nor Step 5/7 (GREEN: confirm
+both new test cases pass, plus the wider `UserControllerTest`/
+`ActivityManagerServiceTest` regression suite) was executed via real
+`atest`. The RED claim rests on static/source-level reasoning only (the
+pre-image `RealUserQuiescer.quiesce` was confirmed `void` by direct read
+before editing; the test calls `assertThat(mQuiescer.quiesce(0)).isTrue()`,
+which requires a `boolean` return -- a `void`-returning method there is a
+compile error, not a runtime assertion failure). The GREEN claim rests on
+manual code trace only: the `allSucceeded` flag is set `false` on the exact
+same `catch (RuntimeException e)` branch the brief's own sample code
+specifies, and is never reset before `return`; the loop's `continue` for a
+non-matching `userId` was traced by hand for the third test case. This is a
+real, disclosed verification gap, not a masked one -- `REASON_QUIESCE_FAILED`
+is now structurally reachable and covered by a real test file on the real
+branch, but that test file has not yet been confirmed to actually compile
+and pass on this build server. Revisit before Task 7's consolidated build
+(which will compile this code regardless, as part of `m -j6 systemimage`,
+and will surface a genuine compile error immediately if the manual trace
+above is wrong).
+
+## Apply (this section)
+
+```sh
+cd frameworks/base && git am \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0086-*.patch \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0087-*.patch
+```
