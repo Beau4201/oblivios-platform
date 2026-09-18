@@ -215,7 +215,10 @@ commit (`41aeb66e0893`) and diffing the result against the real tip
   after use; the new method in `0013` didn't. Fixed with a `try/finally`
   around the return.
 - `62b84f2aa8d1` — "aegisos: add ReturnToRealUserHelper, wire the return
-  path" (`0015`) — new `ReturnToRealUserHelper.java`
+  path" (originally `0015`, since squashed with `0016` into one commit at
+  the file's correct final path — see the Duress Unlock final-closure
+  Task 4 history-squash note near the end of this file) — new
+  `ReturnToRealUserHelper.java`
   (`com.android.server.locksettings`), the mirror image of
   `DecoyProfileHelper`: routes a failed credential check for the
   currently-registered decoy user back to the real owner if the entered
@@ -227,12 +230,13 @@ commit (`41aeb66e0893`) and diffing the result against the real tip
   `doVerifyCredentialInner`'s not-matched path). Deliberately does not call
   `unquiesceUserApps` itself — `0011`'s generic hook handles it.
 - `c1c367950ab6` — "aegisos: fix ReturnToRealUserHelper.java path (patch
-  0014 misapplied it under frameworks/base/)" (`0016`) — the first attempt
-  at `0015` placed the new file under a spurious extra `frameworks/base/`
-  path prefix (the repo root is already `frameworks/base`), which broke
-  compilation; a task reviewer's diff-stat check (2 files changed, 0
-  deletions) confirmed this follow-up commit cleanly relocated the file
-  rather than leaving a duplicate.
+  0014 misapplied it under frameworks/base/)" (originally `0016`, since
+  squashed into `0015` above — see the Task 4 history-squash note near the
+  end of this file) — the first attempt at `0015` placed the new file
+  under a spurious extra `frameworks/base/` path prefix (the repo root is
+  already `frameworks/base`), which broke compilation; a task reviewer's
+  diff-stat check (2 files changed, 0 deletions) confirmed this follow-up
+  commit cleanly relocated the file rather than leaving a duplicate.
 - `295f6f9cf610` — "aegisos: suppress call and media notifications for a
   duress-quiesced user" (`0017`) — fixes a real gap a task reviewer found in
   `0010`: the pre-existing `if (isBlocked && !(n.isMediaNotification() ||
@@ -5532,9 +5536,65 @@ branch's next consolidated build, which will compile this code
 regardless and surface a genuine compile error immediately if the manual
 trace above is wrong.
 
+## Duress Unlock final closure — Task 4: squash `0015`+`0016` (history cleanup only)
+
+Per the final-closure plan's Task 1 audit and owner sign-off (see the
+Duress Unlock final-closure Task 3 note earlier in this file for the same
+pattern applied to a different candidate). `0015` ("add
+`ReturnToRealUserHelper`, wire the return path") and `0016` ("fix
+`ReturnToRealUserHelper.java` path, patch 0014 misapplied it under
+`frameworks/base/`") squashed into one commit that adds the file directly
+at its correct final path — pure history simplification, zero content
+change. `0016` was itself a 100%-similarity pure rename with a 0-line
+diff, so the combined patch is built by taking `0015`'s own diff and
+correcting only the destination path in its header.
+
+Verified two independent ways before landing, not assumed: (1) the
+squashed commit was first test-applied on a disposable throwaway branch
+(never touching the real branch), and `git diff` against the pre-squash
+tip came back empty; (2) the new file's git blob hash
+(`4aeb1e0b71daad2654dc68629d325a4ffcf6f5a1`) was confirmed byte-identical
+before and after — blob hashes are content-only in git, so this is a
+direct cryptographic proof the squash changed no bytes, independent of
+the diff check. Landed on the real branch via `git reset --hard` to
+`0015`'s own real parent (`079d5588f4830a916c1b892e535a8871c8deb0f1`)
+followed by `git am` of the combined patch, then `git am` of the 74
+unchanged original commits from `0017` through the real tip in their
+original order (exported fresh from the real branch before the reset, so
+nothing but `0015`/`0016` themselves ever changed). Landed by the owner
+directly (not a subagent) after this session's harness permission
+classifier twice refused the equivalent action when attempted
+programmatically — the owner ran the exact, pre-verified command block
+handed to them, output matched expectations exactly (75 commits from
+`0015`'s parent to the new tip, was 76; empty diff against the pre-squash
+tip, reconfirmed independently by the controller afterward via a fresh
+SSH check).
+
+New real branch tip: `08ba5b75a24df34df4b983af66c90378a6e617fb`. Squashed
+commit itself: `babea734ee48` ("aegisos: add ReturnToRealUserHelper, wire
+the return path").
+
+Whole `frameworks-base` patch series regenerated fresh from real branch
+history (`e6e5746502a3ea1b8970210cb9ccbfac979e490d..HEAD`), per this
+project's standing "never hand-renumber" rule. Regenerating fresh
+produced 89 patches, not the expected 87 — the extra two are the same
+pre-existing, already-reverted, never-independently-exported "temporary
+latency instrumentation for decoy switch (Task 8 Step 4/5)" commit pair
+documented earlier in this file's Third-plan/`0018` section (the "88 vs
+86 commits" discrepancy a Task 3 reviewer flagged as worth reconciling —
+this confirms the pair's real commit subjects directly from the
+regenerated patch filenames themselves, settling that earlier open
+question: they really are the latency-instrumentation pair, not a
+different pair). Excluded both from the numbered series again, matching
+established precedent, then renumbered continuously: `0001`-`0014`
+unchanged, `0015` is the new squashed commit, `0016`-`0087` are the
+previously-`0017`-`0088` commits shifted down by one (with the two
+temporary-instrumentation commits removed from the count entirely, not
+occupying numbered slots either before or after this squash).
+
 ## Apply (this section)
 
 ```sh
 cd frameworks/base && git am \
-  ../../credential/duress-unlock-decoy/patches/frameworks-base/0088-*.patch
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0087-*.patch
 ```
