@@ -5661,3 +5661,133 @@ cd frameworks/base && git am \
   ../../credential/duress-unlock-decoy/patches/frameworks-base/0089-*.patch \
   ../../credential/duress-unlock-decoy/patches/frameworks-base/0090-*.patch
 ```
+
+## `0091`: RealUserQuiescerTest never actually compiled until real `atest` ran
+
+ADR-092 carried forward "obtain real `atest` evidence for
+`RealUserQuiescerTest`/`UserRepositoryImplTest`" as a genuinely open item —
+no adb-reachable device/emulator existed on the build server as of that
+closure. Re-opened per that entry's own stated re-open condition: a
+build-server emulator was brought up (nested KVM,
+`sdk_phone64_x86_64-cp2a-userdebug`, manual launch procedure, `adb` attached
+and booted) and `atest FrameworksServicesTests:RealUserQuiescerTest` was run
+for real for the first time in this plan's history.
+
+The very first real compile of this test target failed:
+`RealUserQuiescerTest.java:56/59: error: unreported exception Exception;
+must be caught or declared to be thrown`. Root cause: `setFinalField()`
+declares `throws Exception` but was called directly inside the `Runnable`
+lambda passed to `DexmakerShareClassLoaderRule.runWithDexmakerShareClassLoader`,
+whose functional interface is plain `java.lang.Runnable` (confirmed by
+reading the real `DexmakerShareClassLoaderRule.java` source — its `Runnable`
+overload has no checked-exception-throwing variant). This had never been
+caught because `atest` had never successfully compiled this exact test
+target since patch `0085` added it — Task 7's earlier consolidated
+`m systemimage` builds only ever needed the production `RealUserQuiescer`
+source to compile, never this test.
+
+Fixed (`0091`) by wrapping the two `setFinalField` calls in a
+try/catch and rethrowing unchecked, matching the idiom already used
+elsewhere for this same JUnit rule. Authored under `AGENTS.md`'s
+local-first discipline in a disposable local git repo
+(`aegisos-platform/.worktrees/duress-quiesce-atest-compile-fix/`, seeded
+read-only from the real branch HEAD `f3f3c9ebc980`) and landed on the real
+branch with `git am` (applied cleanly, real SHA `95131c37a0a3`).
+
+The next real `atest` run compiled but then failed at runtime: both tests
+exercising the freeze-failure path (`quiesce_singleProcessThrowsOnFreeze_returnsFalse`,
+`quiesce_otherUsersProcess_isIgnoredAndReturnsTrue`) threw
+`UnsupportedOperationException: cannot proxy inaccessible class
+com.android.server.am.ProcessRecord` / `IllegalAccessError`. Root cause:
+`ProcessRecord` is package-private (unlike the `public`
+`ActivityManagerService`/`CachedAppOptimizer` already mocked inside
+`runWithDexmakerShareClassLoader` in `setUp()`), and these two tests each
+called `mock(ProcessRecord.class)` directly inside the `@Test` method body,
+outside that wrapper — exactly the case `DexmakerShareClassLoaderRule`'s own
+javadoc exists to cover ("allows mocking package-private methods").
+
+Fixed (`0092`) with a small `createMockProcessRecord()` helper that builds
+the mock inside `runWithDexmakerShareClassLoader`, reusing the existing
+mechanism rather than introducing a new one (`sun.misc.Unsafe.allocateInstance`
+and a full `ProcessRecordTests`-style real-constructor setup were both
+considered and rejected: zero precedent for the former anywhere in this test
+tree, and the latter needs a fully wired `ActivityTaskManagerService` this
+test was explicitly designed to avoid). Authored the same way, in
+`aegisos-platform/.worktrees/duress-quiesce-atest-mock-classloader-fix/`,
+landed real SHA `d0cdc34c8227`.
+
+**Real `atest FrameworksServicesTests:RealUserQuiescerTest` result after
+both fixes: all 3 tests PASSED** (`quiesce_allProcessesFreezeCleanly_returnsTrue`,
+`quiesce_singleProcessThrowsOnFreeze_returnsFalse`,
+`quiesce_otherUsersProcess_isIgnoredAndReturnsTrue`), on a build-server
+`sdk_phone64_x86_64-cp2a-userdebug` emulator (nested KVM). This closes
+ADR-092's re-open condition 1 for `RealUserQuiescerTest` specifically, and
+its condition 2 (Component B's freeze-failure path) via this same
+Mockito-based coverage — the underlying `forceFreezeAppAsyncLSP` still has
+no organic synchronous-exception path reachable from real hardware
+(confirmed by reading `CachedAppOptimizer.freezeAppAsyncInternalLSP`: it
+only posts a delayed `Handler` message and returns), so this mock-based unit
+test remains the only real dynamic coverage of that catch block — a ceiling
+already accepted in ADR-092 itself, not a new gap.
+
+New real branch tip: `d0cdc34c8227`.
+
+## Apply (this section)
+
+```sh
+cd frameworks/base && git am \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0091-*.patch \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0092-*.patch
+```
+
+## `0093`: UserRepositoryImplTest never actually compiled until real `atest` ran
+
+Same re-open condition as `0091`/`0092`, other test target. First real
+compile of `SystemUiRoboTests:com.android.systemui.user.data.repository.UserRepositoryImplTest`
+failed: `UserRepositoryImplTest.kt:567: error: argument type mismatch:
+actual type is 'FakeKeyguardRepository', but 'Lazy<KeyguardRepository>' was
+expected`. Root cause: Task 6's own Dagger-cycle fix (landed as part of
+`f3f3c9ebc980`, see the `0088`-`0090` entry above) changed
+`UserRepositoryImpl`'s constructor to take `Lazy<KeyguardRepository>`
+instead of a plain `KeyguardRepository` — but this test's own `create()`
+helper was never updated to match, because `SystemUiRoboTests` had never
+actually been compiled via `atest` before now (Task 7's `m systemimage`
+builds only need the production `SystemUI` target).
+
+Fixed (`0093`) by wrapping the call site: `dagger.Lazy { keyguardRepository }`
+— the exact idiom already used elsewhere in this same package
+(`CustomizationProviderTest.kt`), not a new pattern. Authored in
+`aegisos-platform/.worktrees/duress-closure-userrepo-lazy-fix/`, landed real
+SHA `93aa9b2ae960`.
+
+**Real `atest` result after this fix: the specific test this whole plan
+cares about, `userSwitcherSettings_reEvaluatesOnKeyguardTransition_withoutSettingsChange`,
+PASSED** — closing ADR-092's re-open condition 1 for `UserRepositoryImplTest`
+specifically. 12 of the file's other 15 test methods also passed; 16 more
+parameterized variants were `ASSUMPTION_FAILED` (a `do_not_use_run_blocking=true`
+parameterization skip, not a failure). **4 unrelated pre-existing tests in
+the same file failed** (`refreshUsers`, `refreshUsers_sortsByCreationTime_guestUserLast`,
+`userSwitcherSettings`, `isLogoutWithUserManagerEnabled_userManagerLogoutDisabled_alwaysFalse`)
+— all show an expected 3-or-4-user list coming back empty (`but was: []`)
+from the same fake `manager`/`tracker` setup `refreshUsers()` relies on.
+This is untouched by `0093`'s one-line change (which only touches the
+`keyguardRepository` parameter) and, like every other bug in this SOURCE.md
+entry, was simply never exposed before because this test target never
+compiled. **Not investigated further this session** — real hardware
+evidence already confirms the actual production behavior these tests cover
+works correctly (ADR-092's Task 8 "owner-regression" sweep), so this reads
+as a Robolectric/test-double wiring gap rather than a production defect,
+but that is not yet confirmed by reading the real cause. Carried forward as
+a new, separate open item — not one of ADR-092's original four re-open
+conditions.
+
+New real branch tip: `93aa9b2ae960`.
+
+## Apply (this section)
+
+```sh
+cd frameworks/base && git am \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0091-*.patch \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0092-*.patch \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0093-*.patch
+```
