@@ -5592,9 +5592,72 @@ previously-`0017`-`0088` commits shifted down by one (with the two
 temporary-instrumentation commits removed from the count entirely, not
 occupying numbered slots either before or after this squash).
 
+## Duress Unlock final closure — Task 7: two build-blocking fixes discovered mid-build
+
+Neither of these was anticipated by the final-closure plan or by ADR-091's
+own accounting of Tasks 1-6. Both surfaced only when Task 7 (build the
+consolidated hardware candidate) actually forced a genuinely clean
+recompile of code that six weeks of stale incremental Soong cache had
+been silently protecting from ever being recompiled at all.
+
+**`0088` -- migrate `ReferenceGlobalRootComponent` to Kotlin.** KSP
+(Kotlin Symbol Processing), this module's annotation processor since a
+real upstream commit (`e00adb95523b8`, October 2025) enabled
+`enable_ksp` for `SystemUI-application`, does not process plain `.java`
+sources. `ReferenceGlobalRootComponent.java` was the only remaining
+`.java` file in the whole SystemUI tree still declaring a Dagger
+`@Component` -- every sibling component had already been migrated to
+Kotlin. This has nothing to do with the Duress Unlock patches; it is a
+pure upstream/tooling compatibility fix, confirmed via `git blame`
+(upstream commit, not an `aegisos:` patch) before touching it.
+
+**`0089`+`0090` -- a real Dagger dependency cycle Task 6 itself
+introduced.** Rebuilding past `0088` surfaced a genuine
+`[Dagger/DependencyCycle]` compiler error:
+`KeyguardRepositoryImpl -> KeyguardRepository -> UserRepositoryImpl ->
+UserRepository -> SelectedUserInteractor -> AssistManager -> Dependency ->
+back to KeyguardRepositoryImpl`. Task 6's own `KeyguardRepository`
+injection into `UserRepositoryImpl` (patch `0087`) created this cycle --
+directly against that same task's own Step 2 instruction to pick a
+signal "without introducing a new circular dependency." Never caught
+before because Task 6 had never actually been compiled until this build.
+
+`0089` wrapped the dependency in `dagger.Lazy<KeyguardRepository>`.
+This compiled clean and a dex-level bytecode check on the built
+`SystemUI.apk` confirmed the exact expected `Ldagger/Lazy;.get()`
+pattern in `UserRepositoryImpl.<init>` -- every automated check
+available passed. The candidate was alpha-signed, flashed to the real
+physical device, and `SystemUI` StackOverflow-crash-looped continuously.
+Root cause, confirmed by reading `CachedAppOptimizer` and the real crash
+trace: `Lazy<T>` only defers *which* instance Dagger hands back, not
+*when* `.get()` runs. Calling it inline as a `merge()` argument still
+executed it synchronously inside `UserRepositoryImpl`'s own constructor,
+before Dagger's `DoubleCheck` memoization committed for this singleton --
+so the same cycle re-entered at runtime as a genuine `StackOverflowError`.
+`0090` fixes this for real by deferring the call into a cold
+`flow { emitAll(...) }` builder, which only runs once `stateIn`'s
+coroutine actually executes -- dispatched, not synchronous with the
+constructor's own call stack -- by which point the singleton is already
+memoized. Confirmed correct via a real on-device boot test after
+reflashing just `system_ext`+`vbmeta`: crash buffer empty, `SystemUI`
+stable at one PID across 31+ minutes, and (separately, during the
+following hardware-verification sweep) direct confirmation that the
+owner's own Select-user dialog -- the exact scenario Task 6 was written
+to fix -- now shows the real, current user list immediately after a
+lock/unlock cycle with zero `Settings.Global` writes.
+
+New real branch tip: `f3f3c9ebc980`. Full record, including every
+command run and every piece of on-device evidence:
+`docs/superpowers/plans/2026-09-17-duress-unlock-final-closure.md`'s own
+Task 7/8 execution (this repo), and
+`docs/product/2026-09-20-duress-unlock-final-closure-session.md` (the
+narrative session record, `AegisOS-foundation` repo).
+
 ## Apply (this section)
 
 ```sh
 cd frameworks/base && git am \
-  ../../credential/duress-unlock-decoy/patches/frameworks-base/0087-*.patch
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0088-*.patch \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0089-*.patch \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0090-*.patch
 ```
