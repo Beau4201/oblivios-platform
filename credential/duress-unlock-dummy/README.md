@@ -1,25 +1,25 @@
 # Duress Unlock — hardware-backed dummy-cost credential check
 
-This package implements Stage 1 of AegisOS's Duress Unlock feature: a
+This package implements Stage 1 of SovereignOS's Duress Unlock feature: a
 cost-symmetric "dummy" credential check, so that a failed real-credential
 attempt costs the same real GateKeeper/Weaver round-trip whether or not an
-AegisOS decoy profile is registered on the device. Without this, failed-login
+SovereignOS decoy profile is registered on the device. Without this, failed-login
 timing would itself reveal whether a decoy profile exists — the exact
 side-channel this package closes.
 
-Design: `aegisos-foundation/docs/superpowers/specs/2026-08-15-duress-dummy-candidate-b-design.md`.
+Design: `sovereignos-foundation/docs/superpowers/specs/2026-08-15-duress-dummy-candidate-b-design.md`.
 Plan and full real execution record (build/boot/logcat evidence, two task
-reviews, one fixed defect): `aegisos-foundation/docs/superpowers/plans/2026-08-15-duress-dummy-cost-primitive.md`.
+reviews, one fixed defect): `sovereignos-foundation/docs/superpowers/plans/2026-08-15-duress-dummy-cost-primitive.md`.
 
 ## Boundary
 
 Do not apply this package to a Phase 1 (or later) baseline tree without a
-corresponding ADR in `aegisos-foundation/docs/governance/decision-log.md`
-naming this exact patch set (`aegisos-platform/AGENTS.md`'s hard rule). That
+corresponding ADR in `sovereignos-foundation/docs/governance/decision-log.md`
+naming this exact patch set (`sovereignos-platform/AGENTS.md`'s hard rule). That
 ADR is **ADR-040** (2026-08-15, updated 2026-08-16) — it names the exact
 commit hashes below. The Phase 1 baseline itself is
 `Accepted baseline (qualified, ADR-025)` per
-`aegisos-foundation/docs/reviews/phase-1-emulator-baseline-review.md`.
+`sovereignos-foundation/docs/reviews/phase-1-emulator-baseline-review.md`.
 
 ## What this is not
 
@@ -32,19 +32,19 @@ and the Settings setup UI is Stage 2 — not started, not part of this package.
 ## Provenance
 
 Real, dated commits on the build server's `platform-primary` checkout,
-branch `aegisos-duress-dummy-primitive` (a disposable, single-copy AOSP
+branch `sovereignos-duress-dummy-primitive` (a disposable, single-copy AOSP
 checkout — this package is the durable record; see
-`aegisos-foundation/.claude/local-server-memory.md` for the checkout's own
+`sovereignos-foundation/.claude/local-server-memory.md` for the checkout's own
 operational history, not tracked in version control). Generated via
 `git format-patch`, one file per real commit; the diff content is
 unmodified, but the commit author identity was rewritten from the build
-server's local git config to a generic `AegisOS Build` identity before
+server's local git config to a generic `SovereignOS Build` identity before
 committing here, per this project's standing rule against copying host/
 account details into commits.
 
 | Tree | Base commit | Patches |
 | --- | --- | --- |
-| `frameworks/base` | `7d7001f9c4e4` (`aegisos: apply approved boot-identity assets`, ADR-019) | `patches/frameworks-base/0001`, `0002` |
+| `frameworks/base` | `7d7001f9c4e4` (`sovereignos: apply approved boot-identity assets`, ADR-019) | `patches/frameworks-base/0001`, `0002` |
 | `system/sepolicy` | `87a06ed71fd6` (`update zygote policy for zygote_next exec spawning support`, upstream) | `patches/system-sepolicy/0001`–`0003` |
 | `system/core` | `84ebea5e2111` (`use lazy preloading for compat zygote`, upstream) | `patches/system-core/0001` |
 

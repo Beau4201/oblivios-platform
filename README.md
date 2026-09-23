@@ -1,12 +1,12 @@
-# aegisos-platform
+# sovereignos-platform
 
-Isolated AegisOS framework and platform patches layered over pinned GrapheneOS
+Isolated SovereignOS framework and platform patches layered over pinned GrapheneOS
 revisions. Android source trees, build output, vendor blobs, signing material
 and device logs do not belong in this repository.
 
 ## Current packages
 
-- [`branding/boot`](branding/boot/README.md) — AegisOS boot identity,
+- [`branding/boot`](branding/boot/README.md) — SovereignOS boot identity,
   reproducible assets and the `frameworks/base` background/framerate
   patches (ADR-019).
 - [`credential/duress-unlock-dummy`](credential/duress-unlock-dummy/README.md) —
@@ -25,9 +25,9 @@ and device logs do not belong in this repository.
   (app + core) plus the AOSP-side patches that wire it into the emulator
   and `lynx` product builds (ADR-033/ADR-035/ADR-051).
 - [`release/ota-server-url`](release/ota-server-url/README.md) — points
-  the Updater app at AegisOS's private lynx OTA server (ADR-052, amending
+  the Updater app at SovereignOS's private lynx OTA server (ADR-052, amending
   ADR-045).
 
 All packages are patches layered over the pinned GrapheneOS manifest tag
-recorded in `aegisos-manifest`; none are applied to a baseline tree without
+recorded in `sovereignos-manifest`; none are applied to a baseline tree without
 the ADR their own README cites.

@@ -1,7 +1,7 @@
 From 7a0d44da85a709329f4c803ea911e4213be1b6b4 Mon Sep 17 00:00:00 2001
-From: AegisOS Build <build@aegisos.local>
+From: SovereignOS Build <build@sovereignos.local>
 Date: Mon, 24 Aug 2026 01:19:54 +0200
-Subject: [PATCH] aegisos: point Updater at the private lynx OTA server
+Subject: [PATCH] sovereignos: point Updater at the private lynx OTA server
 
 ---
  res/values/config.xml | 2 +-

@@ -43,14 +43,14 @@ test "$(pixel "$shine_path" 20 767)" = "srgb(119,131,255)"
 test "$(pixel "$shine_path" 404 767)" = "srgb(119,131,255)"
 
 grep -Fq 'M0 16C0 7.16344 7.16344 0 16 0H84C92.8366 0 100 7.16344 100 16V50C100 82 72 106 54 113.2C51.5 114.2 48.5 114.2 46 113.2C28 106 0 82 0 50V16Z' \
-  "$root_dir/source/aegisos-boot-lockup.svg"
+  "$root_dir/source/sovereignos-boot-lockup.svg"
 grep -Fq 'M50 35L76 83H66.5L50 51.5L33.5 83H24L50 35ZM50 58L59 75.5H41L50 58Z' \
-  "$root_dir/source/aegisos-boot-lockup.svg"
+  "$root_dir/source/sovereignos-boot-lockup.svg"
 grep -Fq 'M50 28L78 78H67L50 47L33 78H22L50 28Z' \
-  "$root_dir/source/aegisos-boot-lockup.svg"
+  "$root_dir/source/sovereignos-boot-lockup.svg"
 
 # Production assets must not depend on font discovery at build time.
-if grep -Eq '<text\b' "$root_dir/source/aegisos-boot-lockup.svg"; then
+if grep -Eq '<text\b' "$root_dir/source/sovereignos-boot-lockup.svg"; then
   echo "wordmark must be converted to vector paths" >&2
   exit 1
 fi

@@ -7,7 +7,7 @@
 - Draft:
   `05aa247d-7776-4385-83f0-0f01238729be`
 - Draft title:
-  `AegisOS Boot Identity - Precision Alignment Fix`
+  `SovereignOS Boot Identity - Precision Alignment Fix`
 - Draft version: `5`
 - Exported HTML SHA-256:
   `6be494f6c15fe7ab35054607d251c1dab85546d8eff1cd7e3cea597574031410`
@@ -23,4 +23,4 @@
 - License: SIL Open Font License 1.1
 
 Only the resulting glyph outlines are retained in
-`source/aegisos-boot-lockup.svg`; the Android build does not load a font.
+`source/sovereignos-boot-lockup.svg`; the Android build does not load a font.

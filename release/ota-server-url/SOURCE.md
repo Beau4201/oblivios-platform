@@ -4,12 +4,12 @@
 
 ### `packages/apps/Updater`
 
-- `7a0d44da85a709329f4c803ea911e4213be1b6b4` — "aegisos: point Updater at
+- `7a0d44da85a709329f4c803ea911e4213be1b6b4` — "sovereignos: point Updater at
   the private lynx OTA server" (`patches/packages-apps-updater/0001`)
 - Base commit: `d7e29f110890de68b63bb8c256b4d249a2d29cf9`
 
 Generated via `git format-patch`, author identity rewritten to a generic
-`AegisOS Build <build@aegisos.local>` identity before committing here (same
+`SovereignOS Build <build@sovereignos.local>` identity before committing here (same
 convention as `credential/duress-unlock-dummy/SOURCE.md`). Verified to
 reproduce the real branch tree byte-for-byte via `git am` against the base
 commit in a disposable worktree before being trusted.

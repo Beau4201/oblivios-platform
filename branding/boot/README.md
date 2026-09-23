@@ -1,4 +1,4 @@
-# AegisOS boot identity
+# SovereignOS boot identity
 
 This package implements Superdesign draft
 `05aa247d-7776-4385-83f0-0f01238729be` for GrapheneOS's built-in,
@@ -7,15 +7,15 @@ low-overhead boot renderer.
 ## Boundary
 
 Do not apply this package to a Phase 1 baseline tree without a corresponding
-ADR in `aegisos-foundation/docs/governance/decision-log.md` naming this exact
-patch set (`aegisos-platform/AGENTS.md`'s hard rule). The Phase 1 baseline
+ADR in `sovereignos-foundation/docs/governance/decision-log.md` naming this exact
+patch set (`sovereignos-platform/AGENTS.md`'s hard rule). The Phase 1 baseline
 itself is `Accepted (Task 5 waived)` per ADR-018 — that gate alone is not a
 substitute for the per-patch ADR.
 
 ## Generate
 
 ```sh
-branding/boot/tools/generate_boot_assets.sh /tmp/aegisos-boot-assets
+branding/boot/tools/generate_boot_assets.sh /tmp/sovereignos-boot-assets
 branding/boot/tests/test_boot_assets.sh
 ```
 

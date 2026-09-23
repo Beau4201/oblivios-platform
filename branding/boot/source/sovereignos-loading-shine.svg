@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="800" viewBox="0 0 1920 800">
-  <title>AegisOS boot loading texture</title>
+  <title>SovereignOS boot loading texture</title>
   <desc>
     Repeating 384px loading pattern. GrapheneOS scrolls this texture at a
     fixed 240px/s, producing one recurrence every 1.6 seconds.

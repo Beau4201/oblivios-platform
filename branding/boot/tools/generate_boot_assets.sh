@@ -20,14 +20,14 @@ rsvg-convert \
   --width=448 \
   --height=800 \
   --output="$output_dir/android-logo-mask.png" \
-  "$root_dir/source/aegisos-boot-lockup.svg"
+  "$root_dir/source/sovereignos-boot-lockup.svg"
 
 rsvg-convert \
   --format=png \
   --width=1920 \
   --height=800 \
   --output="$output_dir/android-logo-shine.png" \
-  "$root_dir/source/aegisos-loading-shine.svg"
+  "$root_dir/source/sovereignos-loading-shine.svg"
 
 sha256sum \
   "$output_dir/android-logo-mask.png" \
