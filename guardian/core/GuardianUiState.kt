@@ -1,4 +1,4 @@
-package org.aegisos.guardian.ui
+package org.sovereignos.guardian.ui
 
 sealed interface GuardianUiState {
     data class Detected(

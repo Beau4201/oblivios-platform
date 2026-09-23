@@ -1,8 +1,8 @@
-package org.aegisos.guardian.ui
+package org.sovereignos.guardian.ui
 
-import org.aegisos.guardian.application.GuardianApplicationResult
-import org.aegisos.guardian.overview.GuardianOverviewSnapshot
-import org.aegisos.guardian.remediation.RemediationOutcome
+import org.sovereignos.guardian.application.GuardianApplicationResult
+import org.sovereignos.guardian.overview.GuardianOverviewSnapshot
+import org.sovereignos.guardian.remediation.RemediationOutcome
 
 interface GuardianUiScenario {
     fun detectBackgroundLocation(): GuardianApplicationResult

@@ -2,7 +2,7 @@
 
 ## guardian-core.jar
 
-- Source: `aegisos-services` commit `c9ac0dfc28454824e8c049d9d5222ee79fce28b5`
+- Source: `sovereignos-services` commit `c9ac0dfc28454824e8c049d9d5222ee79fce28b5`
   (`master`, after merging `guardian-residuals-hardening` — merge commit
   message: "merge: guardian-core persistent stores, coarse-location
   detection, audit hardening"). Supersedes the 2026-08-05 vendoring below.
@@ -20,7 +20,7 @@
 <details>
 <summary>Previous vendoring (2026-08-05, superseded)</summary>
 
-- Source: `aegisos-services` commit `3d66a461b7aa9b61f2e6f2db9e4f96cbf380cf43`.
+- Source: `sovereignos-services` commit `3d66a461b7aa9b61f2e6f2db9e4f96cbf380cf43`.
 - SHA-256: `6a9517f3ebe783ce0190ef3e1ea56e58c7328b86b040fb5ca9d044707c0e63f6`.
 
 </details>
@@ -28,7 +28,7 @@
 ## GuardianUiController.kt / GuardianUiState.kt
 
 - Copied verbatim from the 2026-08-05 commit above (`3d66a461b`),
-  `guardian-ui-reference/src/main/kotlin/org/aegisos/guardian/ui/`.
+  `guardian-ui-reference/src/main/kotlin/org/sovereignos/guardian/ui/`.
 - Reused as-is: both files are plain Kotlin with no Compose Desktop or
   desktop-windowing dependency.
 - Re-diffed against the new 2026-08-13 source commit (`c9ac0dfc2`) before
@@ -41,9 +41,9 @@
 ### Deviation: GuardianUiController.kt secondary constructor removed
 
 - The source file included a secondary `constructor(scenario: GuardianReferenceScenario)`
-  and its import (`org.aegisos.guardian.reference.GuardianReferenceScenario`).
+  and its import (`org.sovereignos.guardian.reference.GuardianReferenceScenario`).
 - `GuardianReferenceScenario` is CLI-only reference scaffolding in the
-  `guardian-reference` module of `aegisos-services`, not part of `guardian-core`,
+  `guardian-reference` module of `sovereignos-services`, not part of `guardian-core`,
   and was not vendored into this repository. The import cannot resolve,
   causing a hard Kotlin compile error.
 - The secondary constructor is demo-only code (hardcoding fake package names for
@@ -56,8 +56,8 @@
 ### Deviation: GuardianUiController.kt's GuardianUiScenario made public (Task 6)
 
 - The source file declared `internal interface GuardianUiScenario` (line 7).
-- Task 6 wires `GuardianActivity` (package `org.aegisos.guardian`, not
-  `org.aegisos.guardian.ui`) to implement `GuardianUiScenario` with an
+- Task 6 wires `GuardianActivity` (package `org.sovereignos.guardian`, not
+  `org.sovereignos.guardian.ui`) to implement `GuardianUiScenario` with an
   anonymous object.
 - **Fix:** removed the `internal` modifier only — the interface is now
   `interface GuardianUiScenario`. No other content in the file changed.
@@ -73,7 +73,7 @@
 
 Re-vendor by repeating Task 1 of
 `docs/superpowers/plans/2026-08-05-guardian-platform-integration.md` against
-a newer `aegisos-services` commit; do not hand-edit any file in this
+a newer `sovereignos-services` commit; do not hand-edit any file in this
 directory.
 
 ### Resolved staleness (was: guardian-core.jar predates this app's sources)
@@ -82,7 +82,7 @@ Historical record — this section described a real, now-fixed blocker; kept
 for context on why the 2026-08-13 re-vendor happened.
 
 Four APIs this app's sources called did not exist in the 2026-08-05 vendored
-jar. All four were added on `aegisos-services`' `guardian-residuals-hardening`
+jar. All four were added on `sovereignos-services`' `guardian-residuals-hardening`
 branch, which was unmerged at the time. That branch's own tests were
 re-verified green (`./gradlew :guardian-core:test --offline`, `BUILD
 SUCCESSFUL`) before merging it to `master` (merge commit, no conflicts — the
@@ -97,40 +97,40 @@ jar (see the SHA-256 entry above):
 | `overview.GuardianOverviewEntry.ActiveProtection#auditId()` | `app/src/.../ui/GuardianScreenModels.kt` | introduced by the UI rework |
 | `audit.FileGuardianAuditStore#retentionPeriod()` | `app/src/.../GuardianComponents.java#retentionPeriod()` | introduced by the UI rework |
 
-## Reference UI screens (app/src/org/aegisos/guardianui/)
+## Reference UI screens (app/src/org/sovereignos/guardianui/)
 
-- Source: `aegisos-services` `master` at commit `7171dbd47e93`
+- Source: `sovereignos-services` `master` at commit `7171dbd47e93`
   (2026-08-14 re-vendor, superseding the earlier `bf13c97`; carries three
   upstream commits: the sliding-indicator nav bar (dropping Home's settings
   gear), a dash-free copy pass plus a card-width fix, and moving the
   "Keep history for" retention control from Trust to Choices while adding a
   soft radial screen tint to every screen — see those commits' messages for
   the itemized lists),
-  `guardian-ui-reference/src/main/kotlin/org/aegisos/guardianui/`.
+  `guardian-ui-reference/src/main/kotlin/org/sovereignos/guardianui/`.
 - Copied files: `theme/GuardianColor.kt`, `theme/GuardianType.kt`,
   `theme/GuardianTheme.kt`, `icons/GuardianIcons.kt`,
   `components/GuardianMark.kt`, `components/GuardianUiComponents.kt`, and the
   five `screens/Guardian{FirstRun,Home,Trust,Choices,IncidentReview}Screen.kt`.
 - `GuardianVisualIdentityDemo.kt` is deliberately **not** copied: it is desktop
   preview wiring, not a navigation shell. The real shell is
-  `app/src/org/aegisos/guardian/ui/GuardianApp.kt`.
+  `app/src/org/sovereignos/guardian/ui/GuardianApp.kt`.
 - The package and directory layout are kept identical to the reference module
-  so a future re-vendor is a diff rather than a rewrite. AegisOS-specific glue
+  so a future re-vendor is a diff rather than a rewrite. SovereignOS-specific glue
   (navigation, adapters, the tapjacking guard) lives in
-  `org.aegisos.guardian.ui` instead, alongside the vendored UI controller.
+  `org.sovereignos.guardian.ui` instead, alongside the vendored UI controller.
 - `app/res/drawable-nodpi/guardian_mark.png` is a byte-identical copy of the
   reference module's `src/main/resources/guardian_mark.png`.
 
-These files supersede the earlier `org.aegisos.guardian.ui` screens (green,
+These files supersede the earlier `org.sovereignos.guardian.ui` screens (green,
 Material 2, light theme), which were removed. See
 `docs/superpowers/specs/2026-08-13-guardian-visual-identity-design.md` in
-`aegisos-foundation`.
+`sovereignos-foundation`.
 
 ### Android port deviations
 
 Every deviation is defaulted so the reference module's own call sites and its
 Compose UI tests still pass unchanged against these copies. Confirmed by
-inspection for this re-vendor (all 59 of `aegisos-services`' own
+inspection for this re-vendor (all 59 of `sovereignos-services`' own
 `guardian-ui-reference` tests passed against the un-vendored source before
 copying, and every default value and call-site signature was diffed by hand
 against the previous vendored copy) — **not** re-run against these platform
@@ -211,16 +211,16 @@ happens at the next Soong build.
 ## GuardianApp (app module)
 
 The `app/` module (Android manifest, resources, permission allowlist, build
-configuration, and later source code in `app/src/`) is **first-party AegisOS
-code**, not vendored. It is built and deployed as part of the AegisOS platform.
+configuration, and later source code in `app/src/`) is **first-party SovereignOS
+code**, not vendored. It is built and deployed as part of the SovereignOS platform.
 
 Permission grants are justified in `docs/research/guardian-platform-api-verification.md`:
 
 - `android.permission.WATCH_APPOPS` — marked `signature|privileged` in AOSP.
-  Granted by `privapp-permissions-org.aegisos.guardian.xml` allowlist entry
+  Granted by `privapp-permissions-org.sovereignos.guardian.xml` allowlist entry
   via `frameworks/base` auto-grant at installation.
 - `android.permission.GET_APP_OPS_STATS` — marked `signature|privileged|development` in AOSP.
-  Granted by `privapp-permissions-org.aegisos.guardian.xml` allowlist entry
+  Granted by `privapp-permissions-org.sovereignos.guardian.xml` allowlist entry
   via `frameworks/base` auto-grant at installation.
 - `android.permission.REVOKE_RUNTIME_PERMISSIONS` — marked `signature|installer|verifier` in AOSP.
   Guardian's grant path is platform-signing the APK (signature match); the allowlist
@@ -232,9 +232,9 @@ Permission grants are justified in `docs/research/guardian-platform-api-verifica
 
 ### Fix: `BackgroundLocationWatcher` AppOps callbacks were not user-scoped (ADR-070)
 
-Found incidentally during `aegisos-foundation`'s exhaustive Duress Unlock
+Found incidentally during `sovereignos-foundation`'s exhaustive Duress Unlock
 decoy identity-leak audit (`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`,
-item 13), but the defect itself is general to any multi-user AegisOS
+item 13), but the defect itself is general to any multi-user SovereignOS
 device, not decoy-specific: `AppOpsManager#startWatchingNoted`/
 `startWatchingActive` are registered system-wide by this class, with no
 uid/user filter passed to either call. `onAccess(op, uid, packageName)`
@@ -242,13 +242,13 @@ checked only `isBackground(uid)`, never whether `uid` belonged to this
 process's own Android user. Confirmed this is a real, not theoretical,
 cross-user leak: this Guardian process's own overview data model
 (`GuardianOverviewEntry`/`GuardianActiveProtectionV1` in
-`aegisos-services`' `guardian-core`) carries no `userId` field
+`sovereignos-services`' `guardian-core`) carries no `userId` field
 whatsoever, so any event ingested here has no way to be filtered back
 out downstream.
 
 - `9084da3...` — "guardian: scope BackgroundLocationWatcher's AppOps
   callbacks to this user" (real `vendor/aegisos/guardian` build-server
-  SHA, `master` branch — this package is **first-party AegisOS code**,
+  SHA, `master` branch — this package is **first-party SovereignOS code**,
   not a patch against upstream, so there is no separate `patches/`
   entry for it; the fix lives directly in `app/src/`, kept in sync with
   the real build-server file). Adds a check comparing
@@ -257,10 +257,10 @@ out downstream.
   discarding it if they differ. Both APIs are genuine public SDK APIs
   (confirmed via source, neither `@hide`); `Process.myUserHandle()`
   matches the existing pattern already used by
-  `GuardianComponents.java` to construct `AegisOSPlatformGateway`.
+  `GuardianComponents.java` to construct `SovereignOSPlatformGateway`.
   Authored under `AGENTS.md`'s local-first discipline in a disposable
   local git repo
-  (`aegisos-platform/.worktrees/guardian-appops-user-scope-fix/`, a
+  (`sovereignos-platform/.worktrees/guardian-appops-user-scope-fix/`, a
   fetch-only worktree seeded read-only from the real branch HEAD
   `91cea5c4aed476a83c24adc390106cbc878b77ae` — only the one touched
   file, its `sha256sum` confirmed byte-identical to the live remote file
@@ -290,7 +290,7 @@ other's Guardian Overview). Not yet done as of this entry.
 Applied to individual AOSP component checkouts, not vendored app code —
 see each tree's own row for the exact base commit and patch count.
 Generated via `git format-patch`, author identity rewritten to a generic
-`AegisOS Build <build@aegisos.local>` identity before committing here (same
+`SovereignOS Build <build@sovereignos.local>` identity before committing here (same
 convention as `credential/duress-unlock-dummy/SOURCE.md`). Real, dated
 commits on the build server's `platform-primary` checkout.
 

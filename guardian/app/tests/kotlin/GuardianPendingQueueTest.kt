@@ -1,4 +1,4 @@
-package org.aegisos.guardian.ui
+package org.sovereignos.guardian.ui
 
 import androidx.activity.compose.HarnessBackDispatcher
 import androidx.compose.ui.test.filterToOne
@@ -13,13 +13,13 @@ import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.aegisos.guardian.application.GuardianApplicationResult
-import org.aegisos.guardian.contracts.GuardianIncidentV1
-import org.aegisos.guardian.overview.GuardianOverviewEntry
-import org.aegisos.guardian.overview.GuardianOverviewSnapshot
-import org.aegisos.guardian.overview.GuardianProtectionLifecycle
-import org.aegisos.guardian.remediation.RemediationOutcome
-import org.aegisos.guardianui.screens.GuardianIncidentTone
+import org.sovereignos.guardian.application.GuardianApplicationResult
+import org.sovereignos.guardian.contracts.GuardianIncidentV1
+import org.sovereignos.guardian.overview.GuardianOverviewEntry
+import org.sovereignos.guardian.overview.GuardianOverviewSnapshot
+import org.sovereignos.guardian.overview.GuardianProtectionLifecycle
+import org.sovereignos.guardian.remediation.RemediationOutcome
+import org.sovereignos.guardianui.screens.GuardianIncidentTone
 import org.junit.Rule
 
 /**

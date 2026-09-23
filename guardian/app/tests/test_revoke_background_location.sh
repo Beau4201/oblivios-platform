@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-FIXTURE_PKG="org.aegisos.guardian.locationfixture"
+FIXTURE_PKG="org.sovereignos.guardian.locationfixture"
 
 echo "--- granting background location to fixture (test setup, not Guardian) ---"
 adb shell pm grant "$FIXTURE_PKG" android.permission.ACCESS_FINE_LOCATION
@@ -13,7 +13,7 @@ adb shell dumpsys package "$FIXTURE_PKG" | grep -q "ACCESS_BACKGROUND_LOCATION: 
 echo "--- triggering Guardian's real ingest -> approve cycle ---"
 # Launch the fixture, then immediately background it via Home. MainActivity
 # schedules its location request 8 seconds after onCreate() (see
-# guardian/testfixtures/locationfixture/src/org/aegisos/guardian/locationfixture/MainActivity.java)
+# guardian/testfixtures/locationfixture/src/org/sovereignos/guardian/locationfixture/MainActivity.java)
 # specifically so it fires while backgrounded, since Guardian's watcher only
 # flags background access. The 12-second wait below covers that 8-second
 # delay plus margin -- confirmed sufficient against a real Task 8 emulator

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<permissions>
-    <privapp-permissions package="org.aegisos.guardian">
-        <permission name="android.permission.WATCH_APPOPS"/>
-        <permission name="android.permission.GET_APP_OPS_STATS"/>
-        <permission name="android.permission.PACKAGE_USAGE_STATS"/>
-    </privapp-permissions>
-</permissions>

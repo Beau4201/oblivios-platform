@@ -1,13 +1,13 @@
-package org.aegisos.guardianui.screens
+package org.sovereignos.guardianui.screens
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import org.aegisos.guardianui.theme.GuardianTheme
+import org.sovereignos.guardianui.theme.GuardianTheme
 import org.junit.Rule
 import org.junit.Test
 
 /**
- * AegisOS-specific tests for Choices' retention section — the one place on
+ * SovereignOS-specific tests for Choices' retention section — the one place on
  * this build that used to imply (on Trust, before the control moved here)
  * that the device enforces a deletion schedule it never runs.
  *

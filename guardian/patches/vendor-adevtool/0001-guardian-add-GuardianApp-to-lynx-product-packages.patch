@@ -1,5 +1,5 @@
 From 43b73335bca28273f787e54871607f8fff4257b5 Mon Sep 17 00:00:00 2001
-From: AegisOS Build <build@aegisos.local>
+From: SovereignOS Build <build@sovereignos.local>
 Date: Thu, 6 Aug 2026 19:35:26 +0200
 Subject: [PATCH] guardian: add GuardianApp to lynx product packages
 
@@ -16,10 +16,10 @@ index a2c74f94..8063e8a0 100644
  
  include vendor/adevtool/config/mk/google_devices/platform/gs201/device.mk
 +
-+# AegisOS: Guardian REVOKE_BACKGROUND_LOCATION (real hardware, no test fixture)
++# SovereignOS: Guardian REVOKE_BACKGROUND_LOCATION (real hardware, no test fixture)
 +PRODUCT_PACKAGES += \
 +    GuardianApp \
-+    privapp-permissions-org.aegisos.guardian.xml
++    privapp-permissions-org.sovereignos.guardian.xml
 -- 
 2.39.5
 

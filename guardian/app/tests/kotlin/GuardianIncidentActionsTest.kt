@@ -1,10 +1,10 @@
-package org.aegisos.guardian.ui
+package org.sovereignos.guardian.ui
 
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.aegisos.guardianui.screens.GuardianIncidentTone
+import org.sovereignos.guardianui.screens.GuardianIncidentTone
 import org.junit.jupiter.api.Test
 
 /**
