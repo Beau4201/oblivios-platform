@@ -32,7 +32,7 @@ and the Settings setup UI is Stage 2 — not started, not part of this package.
 ## Provenance
 
 Real, dated commits on the build server's `platform-primary` checkout,
-branch `sovereignos-duress-dummy-primitive` (a disposable, single-copy AOSP
+branch `aegisos-duress-dummy-primitive` (a disposable, single-copy AOSP
 checkout — this package is the durable record; see
 `sovereignos-foundation/.claude/local-server-memory.md` for the checkout's own
 operational history, not tracked in version control). Generated via

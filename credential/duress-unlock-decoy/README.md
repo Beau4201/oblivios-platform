@@ -23,7 +23,7 @@ architecture in ADR-042,
 `docs/superpowers/specs/2026-08-27-duress-real-user-quiescing-and-return-design.md`,
 and
 `docs/superpowers/specs/2026-08-28-duress-decoy-session-indistinguishability-design.md`
-in `aegisos-foundation`. This is the full real, end-to-end mechanism: a
+in `sovereignos-foundation`. This is the full real, end-to-end mechanism: a
 registered decoy credential typed at the primary keyguard silently switches
 to the decoy user (real user quiesced, notifications suppressed), the real
 owner's credential typed at the decoy's own keyguard silently switches back
@@ -35,7 +35,7 @@ owner's identity.
 
 Do not apply this package to a Phase 1 (or later) baseline tree without a
 corresponding ADR naming this exact patch set
-(`aegisos-platform/AGENTS.md`'s hard rule). That ADR is **ADR-053** for Task 1
+(`sovereignos-platform/AGENTS.md`'s hard rule). That ADR is **ADR-053** for Task 1
 (2026-08-26, amending ADR-042), **ADR-054** for Task 2 (2026-08-26, also
 adopting `AGENTS.md`'s new local-first patch-authoring discipline),
 **ADR-055** (2026-08-26) for Task 3, **ADR-056** (2026-08-27) for
@@ -77,7 +77,7 @@ six-year-old upstream AOSP wrong-context bug in
 `UserBackupManagerService.java` (`frameworks-base` `0030`), fixed, and
 hardware-confirmed by reproducing the exact original trigger — see
 `SOURCE.md` for exactly what each patch does and why, and
-`aegisos-foundation`'s `docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`
+`sovereignos-foundation`'s `docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`
 for the crash bug's full record.
 
 ## What this is not
@@ -151,14 +151,14 @@ decoy session. Root cause was a six-year-old upstream AOSP
 wrong-context bug in `UserBackupManagerService.java`, latent on every
 ordinary Android flow and exposed for what appears to be the first
 time by Duress Unlock's own core security property. Full record:
-`aegisos-foundation`'s
+`sovereignos-foundation`'s
 `docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`.
 
 **The distinct, larger design question raised by the owner after that
 round — hiding other users' identity from the decoy is not the same as
 making the decoy session look like the device's one true primary
 profile — has since been designed, implemented, and hardware-validated
-(2026-09-03/04, `aegisos-foundation` ADR-074 through ADR-079)**. A real
+(2026-09-03/04, `sovereignos-foundation` ADR-074 through ADR-079)**. A real
 audit found only two genuinely cosmetic gaps behind this concern (the
 QS footer's "End session" affordance, and two `packages/apps/Settings`
 text/label choices) — everywhere else `isMain()`/`isAdminUser()` is
@@ -168,7 +168,7 @@ display-only primitive, `UserManager.isMainForUiDisplay(int)`
 (`frameworks-base` `0031`), closed both: the "End session" leak
 (`0032`) and the two Settings text choices (`packages-apps-settings`
 `0008`/`0009`). All four patches are hardware-confirmed working on
-physical `lynx`; full record: `aegisos-foundation`'s
+physical `lynx`; full record: `sovereignos-foundation`'s
 `docs/devices/lynx-duress-decoy-visual-parity-findings.md`. ADR-065's
 Wallet-tile exemption was the precedent this generalized from.
 
@@ -179,7 +179,7 @@ permanently and automatically the moment any second user (including a
 decoy) is ever created, read unfiltered by at least six real UI
 surfaces (the QS icon above being only one) — is not covered by
 `isMainForUiDisplay` at all, since it is a single global setting, not a
-per-user list. Designed (`aegisos-foundation`'s
+per-user list. Designed (`sovereignos-foundation`'s
 `docs/superpowers/specs/2026-09-03-duress-decoy-user-switcher-visibility-design.md`)
 and planned
 (`docs/superpowers/plans/2026-09-03-duress-decoy-user-switcher-visibility.md`,
