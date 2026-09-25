@@ -2,8 +2,8 @@
 
 Implements the full Duress Unlock decoy mechanism across three plans:
 Tasks 1-6 of `docs/superpowers/plans/2026-08-21-duress-decoy-user-switch.md`
-(a new AegisOS-defined Android user type,
-`USER_TYPE_FULL_AEGISOS_DECOY`; a dialog-free silent user switch; decoy
+(a new SovereignOS-defined Android user type,
+`USER_TYPE_FULL_SOVEREIGNOS_DECOY`; a dialog-free silent user switch; decoy
 profile routing state storage; the `DecoyProfileHelper` keyguard-hook
 orchestration; its wiring into `doVerifyCredentialInner`; and the
 `set-decoy-profile`/`clear-decoy-profile` shell command backend), and all 8
