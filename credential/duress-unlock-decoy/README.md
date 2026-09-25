@@ -31,6 +31,10 @@ owner's credential typed at the decoy's own keyguard silently switches back
 lists device users is scoped so the decoy session never sees the real
 owner's identity.
 
+> **Patch numbering:** the series was squashed from 107 to 13 patches on
+> 2026-09-25. Old patch numbers cited in this package and in ADR-053
+> through ADR-096 are pre-squash; `SOURCE.md` has the old → new map.
+
 ## Boundary
 
 Do not apply this package to a Phase 1 (or later) baseline tree without a

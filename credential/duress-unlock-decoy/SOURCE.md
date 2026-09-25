@@ -1,5 +1,65 @@
 # Source record
 
+## Patch series squashed (2026-09-25) — read this before using any old patch number
+
+The decoy package's patches were consolidated from 107 fine-grained patches
+into 13: `frameworks-base` 93 → 10, `packages-apps-settings` 10 → 2,
+`packages-apps-multiuser` 4 → 1. `build-release` (already one squashed
+patch) is unchanged. Every "patch `NNNN`" reference elsewhere in this file,
+in `README.md`, and in the decision log (ADR-053 through ADR-096) uses the
+**pre-squash** numbering; the table below maps each old number to its new
+patch. Each new patch's commit message also lists the old subjects it
+absorbed.
+
+Scope: package files only. The real build-server branch
+`sovereignos-duress-decoy-switch` was **not** rewritten and still carries
+the fine-grained history (and its original SHAs) in `frameworks/base`,
+`packages/apps/Settings` and `packages/apps/Multiuser`. The two forms are
+tree-equivalent, not SHA-equivalent.
+
+Equivalence evidence (all three re-run from a clean `git am` of the
+exported files, not taken from the squash step):
+
+- Seeded a disposable local repo from the real base at the build server
+  (read-only `git archive`), applied the old series, and compared every
+  touched file against the branch tip on the build server: 48/48
+  `frameworks/base`, 14/14 Settings, 2/2 Multiuser identical apart from the
+  `AegisOS`→`SovereignOS` rename applied to this package by ADR-093.
+- Squashed by cherry-pick per group; final tree identical to the unsquashed
+  tree before export. One group reorders `0028` behind `0029`-`0035` (new
+  `frameworks-base/0005`); the tree comparison covers that.
+- Fresh `git am` of the exported patches onto the same base reproduces
+  these tree hashes:
+  - `frameworks/base` (after the two `duress-unlock-dummy` patches):
+    `2f1399b82be7513fbc852746732bd16f0b200887`
+  - `packages/apps/Settings`: `3bb5dc8f7e35a78ef7e4e6d6adedbf3d4752b58b`
+  - `packages/apps/Multiuser`: `c86730033a917895b001a31d2c2d97c96cf251bb`
+- Bases: `frameworks/base` `7d7001f9c4e4` (GrapheneOS `2026071500` plus the
+  boot-identity commit) plus `credential/duress-unlock-dummy`;
+  `packages/apps/Settings` the parent of the ten former patches on the
+  build-server branch (tag `2026072900` lineage); `packages/apps/Multiuser` `44f89da`.
+- Not rebuilt: this is a source-tree-identity result, no `m` build or
+  device run was done for the squashed form.
+
+### Old → new patch map
+
+| New patch | Former patches | Subject |
+| --- | --- | --- |
+| `frameworks-base/0001` | 0001-0007 | sovereignos: add the duress decoy user type, routing and keyguard hook |
+| `frameworks-base/0002` | 0008-0016 | sovereignos: quiesce the real user during a decoy session and add the return path |
+| `frameworks-base/0003` | 0017-0027 | sovereignos: hide real-user identity from the decoy session's UI surfaces |
+| `frameworks-base/0004` | 0029-0035 | sovereignos: make the decoy session's UI match a single-owner device |
+| `frameworks-base/0005` | 0028, 0036-0038 | sovereignos: use the actual target user for CE-storage checks in backup and storage |
+| `frameworks-base/0006` | 0039-0042 | sovereignos: conceal multi-user existence on pre-unlock surfaces |
+| `frameworks-base/0007` | 0043-0057 | sovereignos: authorize a single-credential decoy switch and warm-start the target |
+| `frameworks-base/0008` | 0058-0070 | sovereignos: skip the re-armed bouncer and active-dismiss on an authorized switch |
+| `frameworks-base/0009` | 0071-0084 | sovereignos: authorize the return path and remove the unlock swipe and delay |
+| `frameworks-base/0010` | 0085-0093 | sovereignos: report real quiesce failures and re-evaluate the user-switcher state |
+| `packages-apps-settings/0001` | 0001-0007 | sovereignos: hide real-user identity from Settings for the decoy session |
+| `packages-apps-settings/0002` | 0008-0010 | sovereignos: make Settings present the decoy as the device owner |
+| `packages-apps-multiuser/0001` | 0001-0004 | sovereignos: hide real-user identity from the Multiuser widget for the decoy session |
+
+
 ## Commits (verbatim from `git format-patch`)
 
 ### `frameworks/base`
