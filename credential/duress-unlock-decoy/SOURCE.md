@@ -1,5 +1,19 @@
 # Source record
 
+## Correction 2026-09-26: `system-current.txt` sort order after the rename
+
+`frameworks-base/0001` added `USER_TYPE_FULL_SOVEREIGNOS_DECOY` to
+`core/api/system-current.txt` in the position the old `..._AEGISOS_DECOY`
+name sorted to (before `..._GUEST`). The API file is checked in sorted order,
+so `check_current_api` failed at 99% of the first `2026091900` `lynx` build.
+The hunk now places the line after `..._SECONDARY`, before `..._SYSTEM`; nothing
+else in the patch changed. Verified with a fresh `git am` of the whole
+`frameworks-base` series (10 patches, after `branding/boot` and
+`duress-unlock-dummy`): old base `2026071500` tree `c243494ada68`, new base
+`2026091900` tree `e0b2c4bf0727`; on both, only `system-current.txt` differs
+from the previous series. The tree hashes in the squash section below predate
+this correction.
+
 ## Patch series squashed (2026-09-25) — read this before using any old patch number
 
 The decoy package's patches were consolidated from 107 fine-grained patches
