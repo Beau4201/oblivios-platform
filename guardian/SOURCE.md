@@ -10,8 +10,16 @@
   runtime dependencies — confirmed via `guardian-core/build.gradle.kts`).
   Reproduced via `:guardian-core:clean :guardian-core:jar --offline` to rule
   out a stale Gradle cache; hash matched both times.
-- SHA-256: `a96a00e21ac4a13d5750f3dd00d4fcf86efd1c99c18e0f2da3d443a8f28eac58`.
-- Built: 2026-08-13.
+- SHA-256 (current, after the `org.aegisos` -> `org.sovereignos` package
+  rename, re-vendored 2026-09-25 in `c3e1684`):
+  `f35ba45f394ee96beb3b7579a6c1b9e30684c93030996a0b3c834b7f5fc2ffac`.
+  Independently reproduced 2026-09-28 with `./gradlew :guardian-core:clean
+  :guardian-core:jar --offline` at `sovereignos-services` `92d29b7`: same
+  hash. Same 84 entries as the pre-rename jar, only the package prefix
+  differs.
+- SHA-256 of the pre-rename 2026-08-13 build (superseded):
+  `a96a00e21ac4a13d5750f3dd00d4fcf86efd1c99c18e0f2da3d443a8f28eac58`.
+- Built: 2026-08-13; rebuilt after the rename 2026-09-25.
 - Verified present via `unzip -l`/`javap` before use: `FileGuardianAuditStore`,
   `FileGuardianOverviewStore`, `ActiveProtection#auditId()`,
   `FileGuardianAuditStore#retentionPeriod()` — the four APIs the "Known
@@ -284,6 +292,36 @@ only** — it does not confirm the fix actually closes the cross-user
 leak at runtime (would need two real users, one triggering a
 background-location access, confirming it does not appear in the
 other's Guardian Overview). Not yet done as of this entry.
+
+### Sync: live tree renamed and moved to `vendor/sovereignos/guardian` (2026-09-28)
+
+The package was renamed to `org.sovereignos` on 2026-09-23 (`e2829a1`), but
+the live build-server tree at `vendor/aegisos/guardian` never was. adevtool's
+`PRODUCT_PACKAGES` entry names `privapp-permissions-org.sovereignos.guardian.xml`,
+while the live module was still `privapp-permissions-org.aegisos.guardian.xml`,
+so the `lynx` build of 2026-09-26 shipped `GuardianApp` with no privapp
+allowlist and the build did not fail. Found during `stallion` bring-up
+(`sovereignos-foundation` ADR-111 and
+`docs/superpowers/plans/2026-09-28-stallion-daily-use-personal-stable.md`).
+
+- Before syncing, the live tree (renamed mechanically in a scratch copy) was
+  diffed against this package file by file. Drift ran both ways: this
+  package was newer for the retention tests (moved from Trust to Choices)
+  and `guardian-core.jar` (rebuilt after the rename). The live tree was newer
+  for `testfixtures/locationfixture` (the coarse-location `FUSED_PROVIDER`
+  request from the residuals-hardening Task 10, ADR-034/036), which this
+  package had never received. Every other difference was a sed artifact.
+- Result, landed with `git am` on the live `master`:
+  `1ed9ff6197bf60ca4ae6d8c4f930d61524ca8c6d` ("guardian: rename
+  org.aegisos to org.sovereignos, sync with the platform package"). The
+  directory was then moved to `vendor/sovereignos/guardian`; nothing else in
+  the tree referenced the old path. Authored in a disposable clone
+  (`.worktrees/guardian-rename/`) of the live repo at `9084da3`.
+- This package received the newer location fixture in the same change, so
+  the live tree and this directory match file for file, `patches/` aside.
+- Not yet build- or hardware-verified. The next `stallion`/`lynx` build must
+  pass `tools/build-vm/check-required-packages.sh` (`sovereignos-foundation`),
+  which checks the privapp allowlist is actually installed.
 
 ## AOSP source patches (`patches/`)
 
