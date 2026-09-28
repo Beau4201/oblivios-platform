@@ -334,7 +334,7 @@ commits on the build server's `platform-primary` checkout.
 
 | Tree | Base commit | Patches | Approving ADR |
 | --- | --- | --- | --- |
-| `vendor/adevtool` | `4c9a78e2e7428818291a8c1e620f1e07e33ef185` | `patches/vendor-adevtool/0001` | ADR-035 (names this branch/commit literally: `aegisos-guardian-lynx`, `43b73335`) |
+| `vendor/adevtool` | `4c9a78e2e7428818291a8c1e620f1e07e33ef185` | `patches/vendor-adevtool/0001`-`0002` | 0001: ADR-035 (names this branch/commit literally: `aegisos-guardian-lynx`, `43b73335`; carried onto the `2026091900` rebase branch `sovereignos-2026091900` as `5aa3fac8`). 0002: `sovereignos-foundation` ADR-111 — moves the Guardian `PRODUCT_PACKAGES` entry from `device/lynx/device.mk` to `common/device-common.mk` so every Pixel target ships it; landed as `6ebe8024291a5c003f0615a896574afbb9cbf29b` on `sovereignos-2026091900`, authored from a fetch-only local repo of the two touched files (the live repo is a partial clone, so a full clone fails). |
 | `device/generic/goldfish` | `1facfe03b3519c3413a51d2ea56400bbade0b4c3` | `patches/device-generic-goldfish/0001`-`0003` | ADR-051 (amends ADR-033) |
 
 Apply from the tree's own repository root:
