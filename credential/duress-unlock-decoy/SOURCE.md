@@ -1,5 +1,56 @@
 # Source record
 
+## Fix 2026-09-29: wrong PIN crashed SystemUI when the decoy user had been removed (`frameworks-base/0011`)
+
+Reported by the owner on `stallion` and `lynx`: after a wrong PIN the screen
+turns off, and re-entering the same PIN shows "Already tried that PIN".
+
+**Root cause, from logcat and the device's `locksettings.db` on `stallion`.**
+`decoy_profile_state` was `0:10` while user 10 no longer existed: removing the
+decoy user (`pm remove-user`) does not clear the registration. On every first
+wrong PIN, `DecoyProfileHelper.maybeRouteToDecoy` called
+`doVerifyCredentialInner` for user 10. A removed user has no protector, so its
+`LskfIdentifier` reads as a special credential, and
+`SyntheticPasswordManager.getSpecialUserPersistentData` threw
+`IllegalArgumentException: Unknown special user id 10` out of
+`SoftwareRateLimiter.writeStats`. That crossed Binder into
+`LockPatternUtils.checkCredential` in SystemUI, which crashed and restarted
+(`am_crash`, pid change), which is the screen going off. A repeated identical
+guess is a duplicate wrong guess: it skips the hardware write, so it does not
+crash, and the bouncer shows the upstream "Already tried that PIN" message.
+That message is unmodified upstream behaviour and is deliberately untouched.
+
+**Fix.** A registration whose user is missing or `partial` (being removed) is
+treated as no decoy, including the equivalent-cost dummy check, so timing
+matches a device with no decoy. One file, +16/-1.
+
+- Real branch: `frameworks/base` `sovereignos-2026091900-r2`, commit
+  `c013345b2161` on top of `8b9b021f5ff1`, landed with `git am` (authored in a
+  disposable local worktree, then `git am`'d). This patch is exported fresh
+  from that landed commit. Not yet on `sovereignos-duress-decoy-switch`.
+- Compiled in: `javap` on the built class shows
+  `private static boolean decoyUserExists(int)`.
+- Hardware, `stallion`, `user` build `2026092802` (unlocked, before relock):
+  - The three core Duress scenarios still pass (owner to decoy; decoy to owner
+    with one owner-PIN entry; reboot then only the decoy PIN: user 0 CE
+    storage was unlocked only by the later owner PIN, no second prompt).
+  - Reproduction state (decoy removed, registration left): five
+    verifications of user 0 and none of user 10, no `am_crash`, no
+    `Unknown special user`, no SystemUI restart, and "Already tried that PIN"
+    on the repeated guess.
+- Limits: no unit test (no test file exists for `DecoyProfileHelper`). On a
+  `user` build `locksettings.db` cannot be read, so the "registration is still
+  stale" premise rests on the same procedure leaving `0:10` in place earlier
+  the same day. Not tested on `lynx`. Follow-up not done: clear the
+  registration when the decoy user is removed.
+
+Apply after the series above:
+
+```sh
+cd frameworks/base && git am \
+  ../../credential/duress-unlock-decoy/patches/frameworks-base/0011-*.patch
+```
+
 ## Correction 2026-09-26: `system-current.txt` sort order after the rename
 
 `frameworks-base/0001` added `USER_TYPE_FULL_SOVEREIGNOS_DECOY` to
