@@ -1,5 +1,41 @@
 # AirPods — Source Provenance
 
+## airpods-core.jar
+
+- Source: `sovereignos-services` commit `92d29b75abe310b68a18024aafd3c3c24dec2f24`
+  (`master`, "airpods: make fuzz test generate structurally valid frames").
+- Build command: `./gradlew :airpods-core:clean :airpods-core:test :airpods-core:jar --offline`
+  (Java 21 toolchain, zero runtime dependencies: `airpods-core/build.gradle.kts`
+  lists only test dependencies). Output `airpods-core-0.1.0-SNAPSHOT.jar`,
+  vendored under the name `airpods-core.jar`.
+- Tests at that commit: 7 classes, 22 tests, 0 failures, 0 errors, 0 skipped.
+- SHA-256: `324091f9bafadc0b2b6105a830d17f88835c0868b0a3bd97b2c0965538801a55`.
+  Rebuilt from clean a second time with the same command: same hash.
+- 18 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
+  class-file major version 65, the same as the vendored `guardian-core.jar`.
+- Vendored 2026-09-29. Re-vendor whenever `airpods-core` changes, and record the
+  new commit and hash here.
+
+## AirPodsApp (`app/`)
+
+Scaffold only (Plan 3 Task 5, ADR-118). Nothing here has been compiled: the
+single AOSP rebuild follows all planned AirPods work.
+
+- `Android.bp`: `android_app` `AirPodsApp`, `privileged`, `sdk_version:
+  "system_current"`, no `certificate:` line (release key at signing, never the
+  platform key), no `platform_apis`. Two `prebuilt_etc` modules:
+  `privapp-permissions-org.sovereignos.airpods.xml` (into `permissions`) and
+  `hidden-api-whitelisted-app-org.sovereignos.airpods.xml` (into `sysconfig`).
+- `AndroidManifest.xml`: `BLUETOOTH_CONNECT` and
+  `org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY` only.
+- Privapp allow-list: `MANAGE_AIRPODS_IDENTITY` only (`BLUETOOTH_CONNECT` is a
+  runtime permission and needs no allow-list entry).
+- Sysconfig: `<hidden-api-whitelisted-app package="org.sovereignos.airpods"/>`,
+  one package, read from `/system/etc/sysconfig`.
+- Open before it can work on a device: the runtime grant of `BLUETOOTH_CONNECT`
+  (no default-grant policy exists for it yet), and the `PRODUCT_PACKAGES`
+  patch that installs all three modules on `/system`.
+
 ## AOSP source patches (`patches/`)
 
 Applied to individual AOSP component checkouts, not vendored app code — see

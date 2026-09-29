@@ -1,0 +1,38 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// ADR-118: AirPodsApp is deliberately NOT platform-signed and NOT platform_apis.
+// - The only privileged Bluetooth call it needs (BluetoothDevice#setAirPodsIdentity,
+//   and later setAirPodsMetadata) is a @SystemApi, so system_current is enough.
+// - Its one hidden-API use (the BluetoothSocket L2CAP constructor) is covered by a
+//   single-package sysconfig entry (hidden-api-whitelisted-app-*.xml below), not by
+//   a platform signature, so a compromise of this app does not inherit the platform
+//   key's identity. No `certificate:` line: the default development certificate is
+//   replaced by the release key at signing, never by the platform key.
+android_app {
+    name: "AirPodsApp",
+    manifest: "AndroidManifest.xml",
+    resource_dirs: ["res"],
+    static_libs: [
+        "airpods-core-prebuilt",
+    ],
+    sdk_version: "system_current",
+    privileged: true,
+}
+
+prebuilt_etc {
+    name: "privapp-permissions-org.sovereignos.airpods.xml",
+    src: "privapp-permissions-org.sovereignos.airpods.xml",
+    sub_dir: "permissions",
+}
+
+// Read by SystemConfig only from /system/etc/sysconfig on purpose: the /product
+// path is flagged by upstream for removal (b/157203468), see
+// docs/research/airpods-nonsdk-api-exemption-investigation.md in
+// sovereignos-foundation.
+prebuilt_etc {
+    name: "hidden-api-whitelisted-app-org.sovereignos.airpods.xml",
+    src: "hidden-api-whitelisted-app-org.sovereignos.airpods.xml",
+    sub_dir: "sysconfig",
+}
