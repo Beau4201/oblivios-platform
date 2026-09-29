@@ -62,6 +62,7 @@ build server's `platform-primary` checkout.
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0003` | ADR-115: register through a dedicated btif/JNI call; clear on unbond (`98c91e16d3ba08fa269c76dedb664e1c1f9e0478`) |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0004` | ADR-115: non-mutating SDP vendor view; hooks gated on registry and bond; interop feature removed (`8a31c37d88e2536f5ea102e63d811f79453d73d5`) |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0005` | ADR-115: `BluetoothDevice#setAirPodsIdentity` client wrapper (`b86ac07d9f3a81d450cb1bd8ff4e68f41a7545b2`) |
+| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0006` | ADR-119: `BluetoothDevice#setAirPodsMetadata`, the narrow metadata setter behind `MANAGE_AIRPODS_IDENTITY` (`e4b12de12490582d60b3c57832750a9c113ea9bd`; `git am` exit 0; the ten touched files sha256-identical to the authoring worktree) |
 | `vendor/adevtool` | `6ebe8024291a5c003f0615a896574afbb9cbf29b` | `patches/vendor-adevtool/0001` | ADR-118: `AirPodsApp` and its two sysconfig modules in `common/device-common.mk` (`4438b3d305f765315672db8cc94e85923b692f9d`, branch `sovereignos-airpods-identity`, created from `sovereignos-2026091900`; authored from a fetch-only local copy of the one touched file, `git am` exit 0, resulting file sha256 equal to the worktree's) |
 
 Apply from the tree's own repository root:
@@ -69,6 +70,31 @@ Apply from the tree's own repository root:
 ```sh
 cd packages/modules/Bluetooth && git am ../../airpods/patches/packages-modules-bluetooth/*.patch
 ```
+
+### What patch 0006 does (ADR-117, ADR-119)
+
+Adds `BluetoothDevice#setAirPodsMetadata(int key, byte[] value)` (`@SystemApi`),
+backed by `IBluetooth#setAirPodsMetadata`. `AdapterServiceBinder` enforces
+`org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY` (never
+`BLUETOOTH_PRIVILEGED`). `AdapterService#setAirPodsMetadata` then:
+
+- accepts only 18 keys (`AirPodsMetadataPolicy`): the untethered and main icon,
+  battery, charging and low-battery-threshold keys, `IS_UNTETHERED_HEADSET`, and
+  `FAST_PAIR_CUSTOMIZED_FIELDS`. `ENHANCED_SETTINGS_UI_URI`, `COMPANION_APP`,
+  `DEVICE_TYPE` and the manufacturer, model and version keys are refused;
+- accepts only a value of at most `METADATA_MAX_LENGTH` bytes;
+- runs only for a device that is bonded and was registered through
+  `setAirPodsIdentity` (`AirPodsIdentityTracker`, one lock shared with
+  `setAirPodsIdentity` and the unbond hook, held across the storage write);
+- reuses `setMetadata` for the write and returns true when the stored value
+  already equals the request, so a false result means refused or failed.
+
+New files: `AirPodsMetadataPolicy.java`, `AirPodsIdentityTracker.java`, their
+host-runnable tests, and three binder tests in `AdapterServiceBinderTest.kt`.
+Evidence: 17 host tests pass against the two new classes (fetched from the
+server tree), and three mutation runs fail the tests as intended. Not
+compiled: the Bluetooth module, the Kotlin tests, the API file. The
+`setAirPodsMetadata` declaration was compiled on its own with the tree's `aidl`.
 
 ### What patch 0001 does (its registration and SDP mechanism is superseded, see Corrections)
 
