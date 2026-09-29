@@ -33,8 +33,14 @@ single AOSP rebuild follows all planned AirPods work.
 - Sysconfig: `<hidden-api-whitelisted-app package="org.sovereignos.airpods"/>`,
   one package, read from `/system/etc/sysconfig`.
 - Open before it can work on a device: the runtime grant of `BLUETOOTH_CONNECT`
-  (no default-grant policy exists for it yet), and the `PRODUCT_PACKAGES`
-  patch that installs all three modules on `/system`.
+  (no default-grant policy exists for it yet).
+- `PRODUCT_PACKAGES` wiring is `patches/vendor-adevtool/0001` (table below). The
+  build resolves `AirPodsApp` only if this package is present on the build
+  server at `vendor/sovereignos/airpods` (its own git repo, like
+  `vendor/sovereignos/guardian`). As of 2026-09-29 that directory does NOT exist
+  there yet: the patch is landed, the package is not deployed. Deploy it (a
+  byte-for-byte copy of `app/`, `core/`, `README.md`, `SOURCE.md`, verified by
+  sha256) before any build.
 
 ## AOSP source patches (`patches/`)
 
@@ -56,6 +62,7 @@ build server's `platform-primary` checkout.
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0003` | ADR-115: register through a dedicated btif/JNI call; clear on unbond (`98c91e16d3ba08fa269c76dedb664e1c1f9e0478`) |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0004` | ADR-115: non-mutating SDP vendor view; hooks gated on registry and bond; interop feature removed (`8a31c37d88e2536f5ea102e63d811f79453d73d5`) |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0005` | ADR-115: `BluetoothDevice#setAirPodsIdentity` client wrapper (`b86ac07d9f3a81d450cb1bd8ff4e68f41a7545b2`) |
+| `vendor/adevtool` | `6ebe8024291a5c003f0615a896574afbb9cbf29b` | `patches/vendor-adevtool/0001` | ADR-118: `AirPodsApp` and its two sysconfig modules in `common/device-common.mk` (`4438b3d305f765315672db8cc94e85923b692f9d`, branch `sovereignos-airpods-identity`, created from `sovereignos-2026091900`; authored from a fetch-only local copy of the one touched file, `git am` exit 0, resulting file sha256 equal to the worktree's) |
 
 Apply from the tree's own repository root:
 

@@ -1,0 +1,32 @@
+From 4438b3d305f765315672db8cc94e85923b692f9d Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Tue, 29 Sep 2026 17:19:37 +0200
+Subject: [PATCH] airpods: ship AirPodsApp on every Pixel target via
+ device-common.mk
+
+Adds AirPodsApp and its two sysconfig modules (privapp allow-list and the
+single-package hidden-API entry) to PRODUCT_PACKAGES next to Guardian, so
+every Pixel platform carries them.
+---
+ config/mk/google_devices/common/device-common.mk | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
+index 3ad95440..333d7715 100644
+--- a/config/mk/google_devices/common/device-common.mk
++++ b/config/mk/google_devices/common/device-common.mk
+@@ -72,3 +72,11 @@ PRODUCT_PACKAGES += restrict-pixel-health-association
+ PRODUCT_PACKAGES += \
+     GuardianApp \
+     privapp-permissions-org.sovereignos.guardian.xml
++
++# SovereignOS: AirPods compatibility app (ADR-118). Kept next to Guardian in the
++# common file so every Pixel target ships it. The two XML modules are the privapp
++# allow-list and the single-package hidden-API entry; the app needs both.
++PRODUCT_PACKAGES += \
++    AirPodsApp \
++    privapp-permissions-org.sovereignos.airpods.xml \
++    hidden-api-whitelisted-app-org.sovereignos.airpods.xml
+-- 
+2.39.5
+
