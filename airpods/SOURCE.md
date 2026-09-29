@@ -15,7 +15,11 @@ build server's `platform-primary` checkout.
 
 | Tree | Base commit | Patches | Approving ADR |
 | --- | --- | --- | --- |
-| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0001` | ADR-109 (names this branch/commit literally: `sovereignos-airpods-identity`, `1102e506bdb774bf2a4ccb24d8057e3e370d6290`) |
+| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0001` | ADR-109 (names this branch/commit literally: `sovereignos-airpods-identity`, `1102e506bdb774bf2a4ccb24d8057e3e370d6290`). **Must not ship alone**, see Corrections below. |
+| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0002` | ADR-115: exact-match, bond-gated identity registry, header-only (`593ddedbad37e477737b83302f20b9825eb0c96f`) |
+| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0003` | ADR-115: register through a dedicated btif/JNI call; clear on unbond (`98c91e16d3ba08fa269c76dedb664e1c1f9e0478`) |
+| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0004` | ADR-115: non-mutating SDP vendor view; hooks gated on registry and bond; interop feature removed (`8a31c37d88e2536f5ea102e63d811f79453d73d5`) |
+| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0005` | ADR-115: `BluetoothDevice#setAirPodsIdentity` client wrapper (`b86ac07d9f3a81d450cb1bd8ff4e68f41a7545b2`) |
 
 Apply from the tree's own repository root:
 
@@ -23,7 +27,7 @@ Apply from the tree's own repository root:
 cd packages/modules/Bluetooth && git am ../../airpods/patches/packages-modules-bluetooth/*.patch
 ```
 
-### What the patch does
+### What patch 0001 does (its registration and SDP mechanism is superseded, see Corrections)
 
 Adds a bonded-device-scoped identity mechanism (design §6.2 of
 `docs/superpowers/specs/2026-09-28-airpods-compatibility-and-finding-design.md`
@@ -61,7 +65,45 @@ Device-ID half):
   `BTA_DmSetLocalDiRecord` sets is never touched, and no other Bluetooth
   peer or connection is affected.
 
-### Real defect found and fixed before landing
+### Corrections to 0001 (patches 0002-0005, ADR-115)
+
+A pre-build review of `0001` against the live pinned tree (2026-09-29, read
+only, nothing built) found five defects. Patches `0002`-`0005` are additive on
+top of `0001` (no history rewrite of `sovereignos-airpods-identity`); `0001`
+alone must not be shipped.
+
+- **D1** `sdp_dynamic_change_airpods_vendor` wrote the Apple vendor ID into the
+  shared SDP record with no restore, so after one AirPods query every peer saw
+  Apple (a device-wide spoof). Now the vendor attribute is served from a
+  per-response copy (`sdpu_airpods_vendor_view`); the shared record is never
+  written.
+- **D2** `AdapterService#setAirPodsIdentity` passed length 6 to
+  `interop_database_add_addr`, which asserts `length < sizeof(RawAddress)` with a
+  fatal log: the first registration would abort the Bluetooth process. Registration
+  no longer uses the interop database.
+- **D3** interop dynamic entries persist to
+  `/data/misc/bluedroid/interop_database_dynamic.conf` and were never removed on
+  unbond. The registry is now in memory only and cleared on `BOND_NONE`.
+- **D4** `interop_match_addr_or_name` also matched by device name. Removed.
+- **D5** no client path existed for `AirPodsApp`. Added
+  `BluetoothDevice#setAirPodsIdentity(boolean)` (`@Hide @SystemApi`, modeled on
+  `setMetadata`, with its `framework/api/system-current.txt` line).
+
+Mechanism now: `system/device/include/airpods_identity.h` holds at most 16 exact
+6-byte peers; `airpods_identity_applies()` is true only for a registered peer
+that is also currently bonded (`BTM_IsBonded`, injected from `btif`, fails closed
+when absent). Both native hooks (SDP, L2CAP) consult only that predicate.
+
+**Not compiled yet.** Per the owner's directive (2026-09-29) there is one
+rebuild after all planned AirPods work is applied. `0002`-`0005` are verified
+only by standalone `g++ -Wall -Wextra -Werror` checks of the header and the pure
+SDP view function, a gtest run of the registry tests against a stand-in
+`RawAddress`, a `javac` parse-only gate on the edited Java files, and per-file
+sha256 comparison between the worktree and the landed branch. The build plan
+starts with a host compile of `net_test_device` and `net_test_stack_sdp`.
+Validation on hardware: `AIR-021`, `AIR-029` to `AIR-032`.
+
+### Real defect found and fixed before landing (patch 0001)
 
 The first patch attempt used an AIDL `@JavaPassthrough`/`RequiresPermission`
 annotation embedding the new permission as an escaped string literal
