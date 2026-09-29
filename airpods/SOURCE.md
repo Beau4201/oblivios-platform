@@ -37,10 +37,10 @@ single AOSP rebuild follows all planned AirPods work.
 - `PRODUCT_PACKAGES` wiring is `patches/vendor-adevtool/0001` (table below). The
   build resolves `AirPodsApp` only if this package is present on the build
   server at `vendor/sovereignos/airpods` (its own git repo, like
-  `vendor/sovereignos/guardian`). As of 2026-09-29 that directory does NOT exist
-  there yet: the patch is landed, the package is not deployed. Deploy it (a
-  byte-for-byte copy of `app/`, `core/`, `README.md`, `SOURCE.md`, verified by
-  sha256) before any build.
+  `vendor/sovereignos/guardian`). Deployed 2026-09-29 (commit `c61330f` there):
+  a byte-for-byte copy of `app/`, `core/`, `README.md`, `SOURCE.md`, 9 of 9
+  files verified by sha256. Any later change here must be copied over the same
+  way and re-verified before a build.
 
 ## AOSP source patches (`patches/`)
 
