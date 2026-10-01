@@ -23,7 +23,9 @@ single AOSP rebuild follows all planned AirPods work.
 
 - `Android.bp`: `android_app` `AirPodsApp`, `privileged`, `sdk_version:
   "system_current"`, no `certificate:` line (release key at signing, never the
-  platform key), no `platform_apis`. Two `prebuilt_etc` modules:
+  platform key), no `platform_apis`, `dex_preopt.enabled: false` (temporary: the
+  scaffold has no sources, so no `classes.dex` exists and dex2oat fails; remove it
+  with the first source file in Plan 6). Two `prebuilt_etc` modules:
   `privapp-permissions-org.sovereignos.airpods.xml` (into `permissions`) and
   `hidden-api-whitelisted-app-org.sovereignos.airpods.xml` (into `sysconfig`).
 - `AndroidManifest.xml`: `BLUETOOTH_CONNECT` and

@@ -19,6 +19,13 @@ android_app {
     ],
     sdk_version: "system_current",
     privileged: true,
+    // The scaffold has no srcs, so no classes.dex is produced while hasCode() is true
+    // (static_libs only): dex2oat then fails with "Failed to find entry 'classes.dex'"
+    // (lynx build 2026093001, step 123030). Remove this line as soon as the app gets
+    // its first source file (Plan 6).
+    dex_preopt: {
+        enabled: false,
+    },
 }
 
 prebuilt_etc {
