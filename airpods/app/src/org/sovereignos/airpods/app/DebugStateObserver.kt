@@ -11,7 +11,7 @@ import org.sovereignos.airpods.ui.DebugStateParser
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
 
 /**
- * Debuggable builds only (AirPodsRuntime checks Build.IS_DEBUGGABLE): reads the state from the
+ * Debuggable builds only (AirPodsRuntime checks Build.TYPE != "user"): reads the state from the
  * global setting `airpods_debug_state`, set with `adb shell settings put global ...`. There is no
  * component or IPC endpoint for it, so the production app has no debug entry. The format is in
  * DebugStateParser; invalid input is ignored and never logged (it may contain an address).

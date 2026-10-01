@@ -6,6 +6,12 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 
+/**
+ * Build.IS_DEBUGGABLE is @hide (@UnsupportedAppUsage) and not in the system API stubs, which the
+ * first compile of this code showed. Build.TYPE is public and is "user" on a release build.
+ */
+internal fun isDebuggableBuild(): Boolean = Build.TYPE != "user"
+
 /** Wires the process once: the metadata writer, and the debug input in debuggable builds only. */
 object AirPodsRuntime {
     private var started = false
@@ -16,7 +22,7 @@ object AirPodsRuntime {
         started = true
         val app = context.applicationContext
         AirPodsStateStore.addListener(AirPodsMetadataWriter(app))
-        if (Build.IS_DEBUGGABLE) DebugStateObserver(app).start()
+        if (isDebuggableBuild()) DebugStateObserver(app).start()
     }
 }
 
