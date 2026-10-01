@@ -13,6 +13,7 @@ and `docs/superpowers/specs/2026-09-29-airpods-settings-ui-design.md` in
   Currently a scaffold: manifest, build file, privapp allow-list, the
   single-package hidden-API sysconfig entry, and one string resource. The
   services, providers and pages are Plan 6.
+- `debug-harness/` — userdebug-only validation apps (ADR-120), never in `user` builds.
 - `patches/` — AOSP source patches (Bluetooth module identity and client
   wrapper). Provenance and apply instructions in `SOURCE.md`.
 

@@ -44,6 +44,28 @@ single AOSP rebuild follows all planned AirPods work.
   files verified by sha256. Any later change here must be copied over the same
   way and re-verified before a build.
 
+## Validation harness (`debug-harness/`)
+
+Userdebug-only validation apps for `AIR-029` to `AIR-032` and `AIR-036` (ADR-120, plan
+`docs/superpowers/plans/2026-10-01-airpods-debug-harness.md` in `sovereignos-foundation`).
+Not part of the product: they are installed through `PRODUCT_PACKAGES_DEBUG`
+(`patches/vendor-adevtool/0002`, not landed yet) and the package gate refuses them in a
+`user` image.
+
+- One source file (`HarnessProvider`) and one parser (`HexBytes`) built into three
+  `privileged` apps: `AirPodsDebugHarness` (holds `MANAGE_AIRPODS_IDENTITY`),
+  `AirPodsProbeNoPerm` (`BLUETOOTH_CONNECT` only), `AirPodsProbeBtPriv`
+  (`BLUETOOTH_PRIVILEGED`, not ours). All three carry the same single-package
+  hidden-API exemption mechanism as `AirPodsApp`.
+- The provider answers only to uid shell or root and is guarded by `DUMP`.
+- Checked on 2026-10-01 without a full build: `HexBytesCheck` (plain `javac`/`java`, three
+  mutations detected); the Java compiled against the build's own
+  `android_system_stubs_current.jar` (`javac -source 8 -target 8`, exit 0); `bpfmt -d`
+  clean; the three manifests link with the build's `aapt2` against `framework-res`.
+  **Not compiled by Soong and not run on a device.**
+- Deploy like `app/` (a byte-for-byte copy to `vendor/sovereignos/airpods`, sha256
+  verified) before the build that carries it.
+
 ## AOSP source patches (`patches/`)
 
 Applied to individual AOSP component checkouts, not vendored app code — see
