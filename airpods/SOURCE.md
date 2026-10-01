@@ -44,6 +44,20 @@ single AOSP rebuild follows all planned AirPods work.
   files verified by sha256. Any later change here must be copied over the same
   way and re-verified before a build.
 
+## AirPodsApp native device page provider (Plan 6B, ADR-122)
+
+`app/src/org/sovereignos/airpods/ui/` (pure Java, host-tested with `app/test/.../UiLogicCheck.java`: `AirPodsUiState`,
+`MetadataEncoder`, `ListeningModeToggles`, `NativePageLayout`, `DebugStateParser`) and
+`app/src/org/sovereignos/airpods/app/` (Kotlin: state store, command sink, runtime and receiver, debug observer,
+metadata writer, icon provider, settings factory, the two bound services). Resources: strings, 12 row icons
+generated from the approved design (`tools/design/svg-icons-to-vector-drawables.py` in `sovereignos-foundation`), three
+ring artwork PNGs rendered once (`render-airpods-artwork.sh`, `assets/icons/`). Checks: `UiLogicCheck` (ten
+mutations killed), `tools/check-no-hardcoded-text.sh`, `tools/check-devicesettings-vendoring.sh`.
+Built (`AirPodsApp` compiled by Soong, images `2026100102` to `2026100104`) and seen on a `lynx` with a debug state:
+see `AIR-111` to `AIR-115` in the validation matrix. No real AirPods session yet (Plan 6D). The debug input is the
+global setting `airpods_debug_state`, read only when `Build.TYPE` is not `user`.
+Deploy like `app/`: rsync to `vendor/sovereignos/airpods` (without `patches/` and `.git`), commit there, build.
+
 ## Vendored DeviceSettings contract (`app/src/com/android/settingslib/bluetooth/devicesettings/`)
 
 40 files copied byte-for-byte from `frameworks/base/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/`
