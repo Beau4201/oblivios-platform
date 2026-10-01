@@ -1,0 +1,187 @@
+From f004903a08af679cf5118e9a3946017150c716bb Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Thu, 1 Oct 2026 17:34:33 +0200
+Subject: [PATCH] sovereignos: let a device-settings provider draw multi-toggle
+ labels inside the buttons
+
+Adds an opt-in boolean extra on ToggleInfo (TOGGLE_LABEL_IN_BUTTON), copies it into
+ToggleModel.labelInsideButton, and lets SegmentedButtonPreference show the label as the
+button text with the separate label row hidden. Absent or false keeps the stock rendering,
+so other callers and older providers are unchanged. The approved AirPods settings design
+shows the listening-mode text inside the buttons.
+---
+ .../widget/SegmentedButtonPreference.kt       | 32 +++++++++++++++----
+ .../devicesettings/DeviceSettingContract.kt   |  7 ++++
+ .../repository/DeviceSettingRepository.kt     |  6 +++-
+ .../shared/model/DeviceSettingModel.kt        |  8 ++++-
+ .../repository/DeviceSettingRepositoryTest.kt | 17 ++++++++++
+ 5 files changed, 62 insertions(+), 8 deletions(-)
+
+diff --git a/packages/SettingsLib/SegmentedButtonPreference/src/com/android/settingslib/widget/SegmentedButtonPreference.kt b/packages/SettingsLib/SegmentedButtonPreference/src/com/android/settingslib/widget/SegmentedButtonPreference.kt
+index 1e07138a0c77..2c967f9a15b8 100644
+--- a/packages/SettingsLib/SegmentedButtonPreference/src/com/android/settingslib/widget/SegmentedButtonPreference.kt
++++ b/packages/SettingsLib/SegmentedButtonPreference/src/com/android/settingslib/widget/SegmentedButtonPreference.kt
+@@ -49,6 +49,11 @@ class SegmentedButtonPreference @JvmOverloads constructor(
+     // Default checked button
+     private var checkedIndex: Int = -1
+ 
++    // SovereignOS: opt-in. Draw the label inside each button (no icon) and hide the separate label
++    // row below the group. The approved AirPods design shows the listening-mode text in the
++    // buttons.
++    private var labelInsideButton: Boolean = false
++
+     // Internal button click listener to handle the button checked programmatically.
+     private val internalButtonClickListener =
+         object : MaterialButtonToggleGroup.OnButtonCheckedListener {
+@@ -79,6 +84,8 @@ class SegmentedButtonPreference @JvmOverloads constructor(
+         buttonLabels.add(1, holder.findViewById(R.id.button_2_text) as TextView)
+         buttonLabels.add(2, holder.findViewById(R.id.button_3_text) as TextView)
+         buttonLabels.add(3, holder.findViewById(R.id.button_4_text) as TextView)
++        // SovereignOS: always assign so a recycled holder resets when the mode changes.
++        holder.findViewById(R.id.button_group_text)?.isGone = labelInsideButton
+ 
+         // Apply stored data
+         applyButtonSetupData()
+@@ -105,6 +112,14 @@ class SegmentedButtonPreference @JvmOverloads constructor(
+         notifyChanged()
+     }
+ 
++    fun setLabelInsideButton(inside: Boolean) {
++        if (inside == labelInsideButton) {
++            return
++        }
++        labelInsideButton = inside
++        notifyChanged()
++    }
++
+     fun setButtonVisibility(index: Int, visible: Boolean) {
+         buttonVisibilityData.put(index, visible)
+         notifyChanged()
+@@ -164,12 +179,17 @@ class SegmentedButtonPreference @JvmOverloads constructor(
+     }
+ 
+     private fun applyButtonSetupData(index: Int, text: String, icon: SegmentedButtonIcon) {
+-        when (icon) {
+-            is SegmentedButtonIcon.ResourceIcon ->
+-                (buttonGroup?.getChildAt(index) as? MaterialButton)?.setIconResource(icon.resId)
+-
+-            is SegmentedButtonIcon.DrawableIcon ->
+-                (buttonGroup?.getChildAt(index) as? MaterialButton)?.icon = icon.drawable
++        val button = buttonGroup?.getChildAt(index) as? MaterialButton
++        if (labelInsideButton) {
++            // SovereignOS: the label is the button content; the provider's icon is not shown.
++            button?.icon = null
++            button?.text = text
++        } else {
++            button?.text = null
++            when (icon) {
++                is SegmentedButtonIcon.ResourceIcon -> button?.setIconResource(icon.resId)
++                is SegmentedButtonIcon.DrawableIcon -> button?.icon = icon.drawable
++            }
+         }
+         // Set content description to avoid the button label is not read by TalkBack.
+         buttonGroup?.getChildAt(index)?.contentDescription = text
+diff --git a/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/DeviceSettingContract.kt b/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/DeviceSettingContract.kt
+index 65adec4a71a8..066ee8a6aa8d 100644
+--- a/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/DeviceSettingContract.kt
++++ b/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/DeviceSettingContract.kt
+@@ -19,4 +19,11 @@ package com.android.settingslib.bluetooth.devicesettings
+ /** The contract between the device settings provider services and Settings. */
+ object DeviceSettingContract {
+     const val INVISIBLE_PROFILES = "INVISIBLE_PROFILES"
++
++    /**
++     * Boolean extra on a [ToggleInfo]: draw the toggle's label inside its button instead of an
++     * icon with the label in a separate row below. SovereignOS: the approved AirPods design shows
++     * the listening-mode text in the buttons; absent or false keeps the stock rendering.
++     */
++    const val TOGGLE_LABEL_IN_BUTTON = "TOGGLE_LABEL_IN_BUTTON"
+ }
+diff --git a/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepository.kt b/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepository.kt
+index 7e535eb8f55d..2df5a211c7c5 100644
+--- a/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepository.kt
++++ b/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepository.kt
+@@ -253,7 +253,11 @@ class DeviceSettingRepositoryImpl(
+     }
+ 
+     private fun ToggleInfo.toModel(): ToggleModel =
+-        ToggleModel(label, DeviceSettingIcon.BitmapIcon(icon))
++        ToggleModel(
++            label,
++            DeviceSettingIcon.BitmapIcon(icon),
++            extras?.getBoolean(DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON, false) ?: false,
++        )
+ 
+     private fun com.android.settingslib.bluetooth.devicesettings.DeviceSettingIcon.toModel(): DeviceSettingIcon? {
+         val bitmapIcon = customizedIcon
+diff --git a/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/shared/model/DeviceSettingModel.kt b/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/shared/model/DeviceSettingModel.kt
+index 93159f4be863..a5691c0187f2 100644
+--- a/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/shared/model/DeviceSettingModel.kt
++++ b/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/shared/model/DeviceSettingModel.kt
+@@ -86,7 +86,13 @@ sealed interface DeviceSettingModel {
+ }
+ 
+ /** Models a toggle in [DeviceSettingModel.MultiTogglePreference]. */
+-data class ToggleModel(val label: String, val icon: DeviceSettingIcon)
++data class ToggleModel(
++    val label: String,
++    val icon: DeviceSettingIcon,
++    // SovereignOS: opt-in, see DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON. The default keeps
++    // every existing caller (SystemUI, tests) source-compatible.
++    val labelInsideButton: Boolean = false,
++)
+ 
+ /** Models a button in [DeviceSettingModel.BannerPreference]. */
+ data class ButtonModel(val label: String, val action: DeviceSettingActionModel?)
+diff --git a/packages/SettingsLib/tests/robotests/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepositoryTest.kt b/packages/SettingsLib/tests/robotests/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepositoryTest.kt
+index febe34447dcc..e6062d85b6c7 100644
+--- a/packages/SettingsLib/tests/robotests/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepositoryTest.kt
++++ b/packages/SettingsLib/tests/robotests/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepositoryTest.kt
+@@ -22,6 +22,7 @@ import android.content.Context
+ import android.content.Intent
+ import android.content.ServiceConnection
+ import android.graphics.Bitmap
++import android.os.Bundle
+ import com.android.settingslib.bluetooth.CachedBluetoothDevice
+ import com.android.settingslib.bluetooth.devicesettings.ActionSwitchPreference
+ import com.android.settingslib.bluetooth.devicesettings.ActionSwitchPreferenceState
+@@ -29,6 +30,7 @@ import com.android.settingslib.bluetooth.devicesettings.BannerPreference
+ import com.android.settingslib.bluetooth.devicesettings.ButtonInfo
+ import com.android.settingslib.bluetooth.devicesettings.DeviceInfo
+ import com.android.settingslib.bluetooth.devicesettings.DeviceSetting
++import com.android.settingslib.bluetooth.devicesettings.DeviceSettingContract
+ import com.android.settingslib.bluetooth.devicesettings.DeviceSettingGroup
+ import com.android.settingslib.bluetooth.devicesettings.DeviceSettingHelpPreference
+ import com.android.settingslib.bluetooth.devicesettings.DeviceSettingId
+@@ -459,6 +461,13 @@ class DeviceSettingRepositoryTest {
+         assertThat(actual.label).isEqualTo(serviceResponse.label)
+         assertThat((actual.icon as DeviceSettingIcon.BitmapIcon).bitmap)
+             .isEqualTo(serviceResponse.icon)
++        assertThat(actual.labelInsideButton)
++            .isEqualTo(
++                serviceResponse.extras.getBoolean(
++                    DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON,
++                    false,
++                )
++            )
+     }
+ 
+     private fun assertConfig(
+@@ -633,6 +642,14 @@ class DeviceSettingRepositoryTest {
+                             ToggleInfo.Builder()
+                                 .setLabel("label1")
+                                 .setIcon(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
++                                .setExtras(
++                                    Bundle().apply {
++                                        putBoolean(
++                                            DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON,
++                                            true,
++                                        )
++                                    }
++                                )
+                                 .build()
+                         )
+                         .addToggleInfo(
+-- 
+2.39.5
+
