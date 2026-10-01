@@ -1,0 +1,46 @@
+From bae295d23b6899567dcf7eec67d9ee9353164403 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Thu, 1 Oct 2026 19:30:19 +0200
+Subject: [PATCH] sovereignos: give a button that shows its own label room for
+ the whole label
+
+The default text-button padding of 24 dp on each side cut "Transparency" and "Noise cancel"
+to "Transpare..." and "Noise can..." when three buttons share a row (seen on a Pixel 7a).
+In labelInsideButton mode the horizontal padding is 8 dp. The stock icon-only rendering is
+unchanged.
+---
+ .../settingslib/widget/SegmentedButtonPreference.kt | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/packages/SettingsLib/SegmentedButtonPreference/src/com/android/settingslib/widget/SegmentedButtonPreference.kt b/packages/SettingsLib/SegmentedButtonPreference/src/com/android/settingslib/widget/SegmentedButtonPreference.kt
+index 2c967f9a15b8..a3240e2a77e6 100644
+--- a/packages/SettingsLib/SegmentedButtonPreference/src/com/android/settingslib/widget/SegmentedButtonPreference.kt
++++ b/packages/SettingsLib/SegmentedButtonPreference/src/com/android/settingslib/widget/SegmentedButtonPreference.kt
+@@ -184,6 +184,14 @@ class SegmentedButtonPreference @JvmOverloads constructor(
+             // SovereignOS: the label is the button content; the provider's icon is not shown.
+             button?.icon = null
+             button?.text = text
++            // The default text-button padding (24 dp on each side) cuts a label such as
++            // "Transparency" to "Transpare..." when three buttons share one row; the approved
++            // design shows the whole label.
++            button?.let {
++                val density = it.resources.displayMetrics.density
++                val padding = (LABEL_INSIDE_PADDING_DP * density).toInt()
++                it.setPaddingRelative(padding, it.paddingTop, padding, it.paddingBottom)
++            }
+         } else {
+             button?.text = null
+             when (icon) {
+@@ -236,4 +244,9 @@ class SegmentedButtonPreference @JvmOverloads constructor(
+ 
+         data class ResourceIcon(@param:DrawableRes val resId: Int) : SegmentedButtonIcon
+     }
++
++    private companion object {
++        // SovereignOS: horizontal padding of a button that shows its label (labelInsideButton).
++        const val LABEL_INSIDE_PADDING_DP = 8
++    }
+ }
+-- 
+2.39.5
+
