@@ -19,10 +19,11 @@ android_app {
     ],
     sdk_version: "system_current",
     privileged: true,
-    // The scaffold has no srcs, so no classes.dex is produced while hasCode() is true
-    // (static_libs only): dex2oat then fails with "Failed to find entry 'classes.dex'"
-    // (lynx build 2026093001, step 123030). Remove this line as soon as the app gets
-    // its first source file (Plan 6).
+    // The scaffold declares no components, so R8 has no entry points and removes every
+    // class (proguard_usage lists all of airpods-core as unused): the APK ends up without
+    // classes.dex and dex2oat fails with "Failed to find entry 'classes.dex'" (lynx build
+    // 2026093001, step 123030). Remove this property as soon as the manifest declares its
+    // first component (Plan 6), when R8 gets real entry points.
     dex_preopt: {
         enabled: false,
     },
