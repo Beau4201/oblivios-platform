@@ -49,7 +49,7 @@ single AOSP rebuild follows all planned AirPods work.
 Userdebug-only validation apps for `AIR-029` to `AIR-032` and `AIR-036` (ADR-120, plan
 `docs/superpowers/plans/2026-10-01-airpods-debug-harness.md` in `sovereignos-foundation`).
 Not part of the product: they are installed through `PRODUCT_PACKAGES_DEBUG`
-(`patches/vendor-adevtool/0002`, not landed yet) and the package gate refuses them in a
+(`patches/vendor-adevtool/0002`) and the package gate refuses them in a
 `user` image.
 
 - One source file (`HarnessProvider`) and one parser (`HexBytes`) built into three
@@ -63,8 +63,8 @@ Not part of the product: they are installed through `PRODUCT_PACKAGES_DEBUG`
   `android_system_stubs_current.jar` (`javac -source 8 -target 8`, exit 0); `bpfmt -d`
   clean; the three manifests link with the build's `aapt2` against `framework-res`.
   **Not compiled by Soong and not run on a device.**
-- Deploy like `app/` (a byte-for-byte copy to `vendor/sovereignos/airpods`, sha256
-  verified) before the build that carries it.
+- Deployed 2026-10-01 like `app/`: a byte-for-byte copy to `vendor/sovereignos/airpods`, 19 of 19
+  files sha256-identical, committed there as `b522ca9`.
 
 ## AOSP source patches (`patches/`)
 
@@ -88,6 +88,7 @@ build server's `platform-primary` checkout.
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0005` | ADR-115: `BluetoothDevice#setAirPodsIdentity` client wrapper (`b86ac07d9f3a81d450cb1bd8ff4e68f41a7545b2`) |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0006` | ADR-119: `BluetoothDevice#setAirPodsMetadata`, the narrow metadata setter behind `MANAGE_AIRPODS_IDENTITY` (`e4b12de12490582d60b3c57832750a9c113ea9bd`; `git am` exit 0; the ten touched files sha256-identical to the authoring worktree) |
 | `vendor/adevtool` | `6ebe8024291a5c003f0615a896574afbb9cbf29b` | `patches/vendor-adevtool/0001` | ADR-118: `AirPodsApp` and its two sysconfig modules in `common/device-common.mk` (`4438b3d305f765315672db8cc94e85923b692f9d`, branch `sovereignos-airpods-identity`, created from `sovereignos-2026091900`; authored from a fetch-only local copy of the one touched file, `git am` exit 0, resulting file sha256 equal to the worktree's) |
+| `vendor/adevtool` | `4438b3d305f765315672db8cc94e85923b692f9d` | `patches/vendor-adevtool/0002` | ADR-120: `PRODUCT_PACKAGES_DEBUG += AirPodsDebugHarness AirPodsProbeNoPerm AirPodsProbeBtPriv` in `common/device-common.mk`, so the userdebug-only validation harness never reaches a `user` image (`9b0e6172643f76714f76b1be8c6ad986ae4dde35`, branch `sovereignos-airpods-identity`; authored from a fetch-only local copy of the one touched file; `git am` exit 0; resulting file sha256 `3451d24107b6de4e534d337036c90756911b83b25e5c1272a2953786c33fd336`, equal to the authoring worktree's; the lynx version pin was moved to this commit, backup `adevtool-version-check.mk.pre-harness`) |
 
 Apply from the tree's own repository root:
 
