@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AirPods</string>
+    <!-- Native Settings device page (design screen 1). English source strings; every one is a
+         resource so it follows the system language (design D5). -->
+    <string name="airpods_group_listening">Listening mode</string>
+    <string name="airpods_group_comfort">Comfort</string>
+    <string name="airpods_mode_off">Off</string>
+    <string name="airpods_mode_transparency">Transparency</string>
+    <string name="airpods_mode_noise_cancel">Noise cancel</string>
+    <string name="airpods_mode_adaptive">Adaptive</string>
+    <string name="airpods_ear_detection_title">Automatic ear detection</string>
+    <string name="airpods_ear_detection_summary">Pause when you take one out</string>
+    <string name="airpods_conversation_title">Conversation awareness</string>
+    <string name="airpods_conversation_summary">Lower media while you speak</string>
+    <string name="airpods_all_settings_title">All AirPods settings</string>
+    <string name="airpods_all_settings_summary">Equalizer, controls, find</string>
 </resources>
