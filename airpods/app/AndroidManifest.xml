@@ -9,7 +9,40 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY" />
 
+    <!-- Needed to hand Settings a persistable read grant on the icon URIs (package visibility). -->
+    <queries>
+        <package android:name="com.android.settings" />
+    </queries>
+
     <application
+        android:name=".app.AirPodsApplication"
         android:label="@string/app_name"
-        android:allowBackup="false" />
+        android:allowBackup="false">
+
+        <!-- Bound by Settings (system uid, which may bind unexported components). -->
+        <service
+            android:name=".app.AirPodsConfigService"
+            android:exported="false" />
+        <service
+            android:name=".app.AirPodsSettingsService"
+            android:exported="false" />
+
+        <!-- Ring icons for Settings; Settings gets a persistable read grant, nobody else can read. -->
+        <provider
+            android:name=".app.AirPodsIconProvider"
+            android:authorities="org.sovereignos.airpods.icons"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- Starts the process when an AirPods connects. ACL_CONNECTED is a protected broadcast
+             (only the system can send it); the Bluetooth process sends it as its own uid, so the
+             receiver must be exported. -->
+        <receiver
+            android:name=".app.ConnectionReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+            </intent-filter>
+        </receiver>
+    </application>
 </manifest>

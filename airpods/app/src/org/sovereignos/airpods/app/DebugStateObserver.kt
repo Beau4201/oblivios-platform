@@ -1,0 +1,75 @@
+package org.sovereignos.airpods.app
+
+import android.content.Context
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import android.util.Log
+import org.sovereignos.airpods.ui.AirPodsUiState
+import org.sovereignos.airpods.ui.DebugStateParser
+import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
+
+/**
+ * Debuggable builds only (AirPodsRuntime checks Build.IS_DEBUGGABLE): reads the state from the
+ * global setting `airpods_debug_state`, set with `adb shell settings put global ...`. There is no
+ * component or IPC endpoint for it, so the production app has no debug entry. The format is in
+ * DebugStateParser; invalid input is ignored and never logged (it may contain an address).
+ */
+internal class DebugStateObserver(private val context: Context) :
+    ContentObserver(Handler(Looper.getMainLooper())) {
+
+    fun start() {
+        context.contentResolver.registerContentObserver(
+            Settings.Global.getUriFor(KEY), false, this)
+        AirPodsCommands.sink = DebugCommandSink
+        apply()
+    }
+
+    override fun onChange(selfChange: Boolean) {
+        apply()
+    }
+
+    private fun apply() {
+        val raw = Settings.Global.getString(context.contentResolver, KEY)
+        val next = try {
+            DebugStateParser.parse(raw)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "ignored an invalid debug state")
+            return
+        }
+        AirPodsStateStore.update(next)
+    }
+
+    /** Echoes accepted commands into the store, as a real session would after the device answers. */
+    private object DebugCommandSink : AirPodsCommandSink {
+        override fun setListeningMode(mode: ListeningMode): Boolean {
+            val state = AirPodsStateStore.state
+            if (!state.isConnected) return false
+            return try {
+                AirPodsStateStore.update(state.toBuilder().listeningMode(mode).build())
+                true
+            } catch (e: IllegalArgumentException) {
+                false
+            }
+        }
+
+        override fun setFeature(feature: AirPodsUiState.Feature, enabled: Boolean): Boolean {
+            val state = AirPodsStateStore.state
+            if (!state.isConnected) return false
+            val builder = state.toBuilder()
+            when (feature) {
+                AirPodsUiState.Feature.EAR_DETECTION -> builder.earDetection(enabled)
+                AirPodsUiState.Feature.CONVERSATION_AWARENESS -> builder.conversationAwareness(enabled)
+                else -> return false
+            }
+            AirPodsStateStore.update(builder.build())
+            return true
+        }
+    }
+
+    companion object {
+        const val KEY = "airpods_debug_state"
+        private const val TAG = "AirPodsDebug"
+    }
+}

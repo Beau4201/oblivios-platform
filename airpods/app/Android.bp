@@ -14,6 +14,7 @@ android_app {
     name: "AirPodsApp",
     manifest: "AndroidManifest.xml",
     resource_dirs: ["res"],
+    asset_dirs: ["assets"],
     srcs: [
         "src/**/*.java",
         "src/**/*.kt",
@@ -33,14 +34,6 @@ android_app {
     ],
     sdk_version: "system_current",
     privileged: true,
-    // The scaffold declares no components, so R8 has no entry points and removes every
-    // class (proguard_usage lists all of airpods-core as unused): the APK ends up without
-    // classes.dex and dex2oat fails with "Failed to find entry 'classes.dex'" (lynx build
-    // 2026093001, step 123030). Remove this property as soon as the manifest declares its
-    // first component (Plan 6), when R8 gets real entry points.
-    dex_preopt: {
-        enabled: false,
-    },
 }
 
 prebuilt_etc {
