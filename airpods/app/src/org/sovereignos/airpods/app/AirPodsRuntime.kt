@@ -14,15 +14,20 @@ internal fun isDebuggableBuild(): Boolean = Build.TYPE != "user"
 
 /** Wires the process once: the metadata writer, and the debug input in debuggable builds only. */
 object AirPodsRuntime {
-    private var started = false
+    private var writer: AirPodsMetadataWriter? = null
 
     @Synchronized
     fun start(context: Context) {
-        if (started) return
-        started = true
+        if (writer != null) return
         val app = context.applicationContext
-        AirPodsStateStore.addListener(AirPodsMetadataWriter(app))
+        writer = AirPodsMetadataWriter(app).also { AirPodsStateStore.addListener(it) }
         if (isDebuggableBuild()) DebugStateObserver(app).start()
+    }
+
+    /** A connection or bond event: repeat any metadata write that did not succeed before. */
+    @Synchronized
+    fun onConnectionEvent() {
+        writer?.retry()
     }
 }
 
@@ -34,12 +39,13 @@ class AirPodsApplication : Application() {
 }
 
 /**
- * Starts our process when an AirPods connects (Plan 6D starts the session here). ACL_CONNECTED is
- * a protected broadcast that only the system can send, and the Bluetooth process sends it as its
- * own uid, so the receiver has to be exported.
+ * Starts our process when an AirPods connects or its bond changes (Plan 6D starts the session
+ * here). Both are protected broadcasts that only the system can send, and the Bluetooth process
+ * sends them as its own uid, so the receiver has to be exported.
  */
 class ConnectionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         AirPodsRuntime.start(context)
+        AirPodsRuntime.onConnectionEvent()
     }
 }

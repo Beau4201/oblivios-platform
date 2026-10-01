@@ -34,14 +34,15 @@
             android:exported="false"
             android:grantUriPermissions="true" />
 
-        <!-- Starts the process when an AirPods connects. ACL_CONNECTED is a protected broadcast
-             (only the system can send it); the Bluetooth process sends it as its own uid, so the
-             receiver must be exported. -->
+        <!-- Starts the process and retries pending metadata writes when an AirPods connects or its
+             bond changes. Both are protected broadcasts (only the system can send them); the
+             Bluetooth process sends them as its own uid, so the receiver must be exported. -->
         <receiver
             android:name=".app.ConnectionReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.BOND_STATE_CHANGED" />
             </intent-filter>
         </receiver>
     </application>
