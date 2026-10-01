@@ -44,6 +44,23 @@ single AOSP rebuild follows all planned AirPods work.
   files verified by sha256. Any later change here must be copied over the same
   way and re-verified before a build.
 
+## Vendored DeviceSettings contract (`app/src/com/android/settingslib/bluetooth/devicesettings/`)
+
+40 files copied byte-for-byte from `frameworks/base/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/`
+(top-level files only; the Settings-side `data/` and `shared/` packages are not needed), taken from the
+tree after the Plan 6A patch (`frameworks/base` `f004903a08af`), so `DeviceSettingContract` carries
+`TOGGLE_LABEL_IN_BUTTON`. Why vendored: `SettingsLib` is an `android_library` without `sdk_version`, and
+Soong refuses it as a static dependency of the `system_current` `AirPodsApp`
+(`build/soong/java/base.go`, `sdkLinkType` check). The AIDL descriptors and parcelable class names must
+match Settings' own, so the files keep their package and content. Imports are limited to `android.*`,
+`androidx.annotation` and Guava `ImmutableList` (`androidx.annotation_annotation` and `guava` in
+`static_libs`). Compiled on the build server on 2026-10-01 (`AirPodsApp` only, 17 steps, exit 0; the
+intermediate `javac` jar holds 75 `devicesettings` entries including the generated AIDL interfaces,
+the `kotlin` jar 17; R8 removes them from the APK until a component uses them).
+Drift check: `BUILD_HOST=<user@host> tools/check-devicesettings-vendoring.sh` (read-only; fails on any
+changed, added or missing file; two mutations verified). Re-vendor and re-check after every rebase of
+`frameworks/base` that touches that directory.
+
 ## Validation harness (`debug-harness/`)
 
 Userdebug-only validation apps for `AIR-029` to `AIR-032` and `AIR-036` (ADR-120, plan

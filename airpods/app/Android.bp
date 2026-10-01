@@ -14,8 +14,22 @@ android_app {
     name: "AirPodsApp",
     manifest: "AndroidManifest.xml",
     resource_dirs: ["res"],
+    srcs: [
+        "src/**/*.java",
+        "src/**/*.kt",
+        "src/**/*.aidl",
+    ],
+    // The DeviceSettings contract of the Settings Bluetooth page is vendored under
+    // src/com/android/settingslib/bluetooth/devicesettings/ (40 files, byte-identical to the
+    // build tree): SettingsLib is a platform-API module and Soong refuses it as a static
+    // dependency of a system_current app (build/soong/java/base.go, sdkLinkType check).
+    aidl: {
+        local_include_dirs: ["src"],
+    },
     static_libs: [
         "airpods-core-prebuilt",
+        "androidx.annotation_annotation",
+        "guava",
     ],
     sdk_version: "system_current",
     privileged: true,
