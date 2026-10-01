@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config>
+    <hidden-api-whitelisted-app package="org.sovereignos.airpods.debugharness"/>
+    <hidden-api-whitelisted-app package="org.sovereignos.airpods.debugharness.noperm"/>
+    <hidden-api-whitelisted-app package="org.sovereignos.airpods.debugharness.btpriv"/>
+</config>

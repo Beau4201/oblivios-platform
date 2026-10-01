@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<permissions>
+    <privapp-permissions package="org.sovereignos.airpods.debugharness">
+        <permission name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY"/>
+    </privapp-permissions>
+    <privapp-permissions package="org.sovereignos.airpods.debugharness.btpriv">
+        <permission name="android.permission.BLUETOOTH_PRIVILEGED"/>
+    </privapp-permissions>
+</permissions>
