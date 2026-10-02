@@ -2,17 +2,16 @@
 
 ## airpods-core.jar
 
-- Source: `sovereignos-services` commit `bcd4d4fe3b4091be0f01c906702196bbcbd30c4c`
-  (`master`, "airpods: encode the allow-off option and add real off frames as test vectors"; the codec itself came with `1de2180`).
+- Source: `sovereignos-services` commit `b45b72b` (`master`, "airpods: decode the conversation awareness level and the adaptive strength from captured frames"; the codec itself came with `1de2180`). Re-vendored 2026-10-02 with `ConversationAwarenessLevel` and `AdaptiveLevelSetting`.
 - Build command: `./gradlew :airpods-core:clean :airpods-core:test :airpods-core:jar --offline`
   (Java 21 toolchain, zero runtime dependencies: `airpods-core/build.gradle.kts`
   lists only test dependencies). Output `airpods-core-0.1.0-SNAPSHOT.jar`,
   vendored under the name `airpods-core.jar`.
-- Tests at that commit: 25 tests, 0 failures, 0 errors, 0 skipped (`AapCodecTest`, `AapCodecFuzzTest`, the
-  state-machine and contract tests); the codec was mutation-checked (6 of 7 mutations killed, the seventh is equivalent).
-- SHA-256: `c28cc29c6523d1c7bb76161a783aa904c499263ed8111e88713e2e44ee6c43d1`.
+- Tests at that commit: 36 tests, 0 failures (`AapCodecTest`, `AapCodecFuzzTest`, `AapCodecConversationTest`, the
+  state-machine and contract tests); the new decoders were mutation-checked (5 of 5 killed on a scratch copy; the adaptive range is checked in two layers on purpose, so that mutation changes both).
+- SHA-256: `771d85ba1dc687fbbe4fbbfcc85d4afa0c13bfc11286f5e3c25c796b98629703`.
   Rebuilt from clean a second time with the same command: same hash.
-- 25 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
+- 27 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
   class-file major version 65, the same as the vendored `guardian-core.jar`.
 - Replaces the jar of 2026-09-29 (`324091f9...`), whose parser decoded an invented format that no AirPods sends.
   Vendored 2026-10-02. Re-vendor whenever `airpods-core` changes, and record the new commit and hash here.
