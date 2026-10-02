@@ -35,12 +35,24 @@ public final class ProbeActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        String address = getIntent().getStringExtra("address");
+        String given = getIntent().getStringExtra("address");
+        String name = getIntent().getStringExtra("name");
+        String found = null;
+        if (given == null && name != null) {
+            // --es name AirPods: the bonded device whose name contains it, so no address is typed or logged
+            for (BluetoothDevice d : getSystemService(BluetoothManager.class).getAdapter().getBondedDevices()) {
+                if (d.getName() != null && d.getName().contains(name)) {
+                    found = d.getAddress();
+                    break;
+                }
+            }
+        }
+        final String address = given != null ? given : found;
         int seconds = getIntent().getIntExtra("seconds", 20);
         String order = getIntent().getStringExtra("order");
         String cmds = getIntent().getStringExtra("cmds");
         if (address == null) {
-            Log.e(TAG, "missing --es address");
+            Log.e(TAG, "missing --es address, or --es name that matches a bonded device");
             finish();
             return;
         }
