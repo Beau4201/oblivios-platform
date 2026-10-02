@@ -1,10 +1,13 @@
 package org.sovereignos.airpods.app
 
 import android.app.Application
+import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 
 /**
  * Build.IS_DEBUGGABLE is @hide (@UnsupportedAppUsage) and not in the system API stubs, which the
@@ -22,6 +25,9 @@ object AirPodsRuntime {
         val app = context.applicationContext
         writer = AirPodsMetadataWriter(app).also { AirPodsStateStore.addListener(it) }
         if (isDebuggableBuild()) DebugStateObserver(app).start()
+        // A process that starts while the AirPods are connected (it was killed, or Settings bound us)
+        // has to find the link itself: no connection event will come for a link that is already up.
+        Handler(Looper.getMainLooper()).post { AirPodsSessionHost.resume(app) }
     }
 
     /** A connection or bond event: repeat any metadata write that did not succeed before. */
@@ -39,13 +45,28 @@ class AirPodsApplication : Application() {
 }
 
 /**
- * Starts our process when an AirPods connects or its bond changes (Plan 6D starts the session
- * here). Both are protected broadcasts that only the system can send, and the Bluetooth process
- * sends them as its own uid, so the receiver has to be exported.
+ * Starts our process and the session when a bonded AirPods' Bluetooth link comes up or goes away.
+ * All three are protected broadcasts that only the system can send, and the Bluetooth process
+ * sends them as its own uid, so the receiver has to be exported. Only the BR/EDR link counts: the
+ * AirPods also have an LE link that comes and goes on its own.
  */
 class ConnectionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         AirPodsRuntime.start(context)
         AirPodsRuntime.onConnectionEvent()
+        val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
+        when (intent.action) {
+            BluetoothDevice.ACTION_ACL_CONNECTED ->
+                if (isBredr(intent)) AirPodsSessionHost.onLinkUp(context.applicationContext, device)
+            BluetoothDevice.ACTION_ACL_DISCONNECTED ->
+                if (isBredr(intent)) AirPodsSessionHost.onLinkDown(device.address)
+            BluetoothDevice.ACTION_BOND_STATE_CHANGED ->
+                if (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR) == BluetoothDevice.BOND_NONE) {
+                    AirPodsSessionHost.onLinkDown(device.address)
+                }
+        }
     }
+
+    private fun isBredr(intent: Intent): Boolean =
+        intent.getIntExtra(BluetoothDevice.EXTRA_TRANSPORT, BluetoothDevice.TRANSPORT_AUTO) == BluetoothDevice.TRANSPORT_BREDR
 }

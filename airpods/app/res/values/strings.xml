@@ -15,4 +15,7 @@
     <string name="airpods_conversation_summary">Lower media while you speak</string>
     <string name="airpods_all_settings_title">All AirPods settings</string>
     <string name="airpods_all_settings_summary">Equalizer, controls, find</string>
+    <!-- Notification of the foreground service that keeps the AirPods session alive. -->
+    <string name="airpods_notification_channel">AirPods connection</string>
+    <string name="airpods_notification_title">AirPods connected</string>
 </resources>

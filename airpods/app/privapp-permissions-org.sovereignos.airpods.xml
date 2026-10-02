@@ -2,5 +2,6 @@
 <permissions>
     <privapp-permissions package="org.sovereignos.airpods">
         <permission name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY"/>
+        <permission name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND"/>
     </privapp-permissions>
 </permissions>

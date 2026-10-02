@@ -8,6 +8,13 @@
          permission, and every Guardian permission. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY" />
+    <!-- The session runs in a foreground service of type connectedDevice so the process is not
+         frozen as a cached app (a cached app does not run). The service is started from the
+         broadcast receiver and at process start, both in the background, which needs the privileged
+         START_FOREGROUND_SERVICES_FROM_BACKGROUND (named in the privapp allow-list). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
 
     <!-- Needed to hand Settings a persistable read grant on the icon URIs (package visibility). -->
     <queries>
@@ -27,6 +34,11 @@
             android:name=".app.AirPodsSettingsService"
             android:exported="false" />
 
+        <!-- Keeps the process alive while the recognised AirPods are connected; not exported. -->
+        <service
+            android:name=".app.AirPodsSessionService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
         <!-- Ring icons for Settings; Settings gets a persistable read grant, nobody else can read. -->
         <provider
             android:name=".app.AirPodsIconProvider"
@@ -34,14 +46,16 @@
             android:exported="false"
             android:grantUriPermissions="true" />
 
-        <!-- Starts the process and retries pending metadata writes when an AirPods connects or its
-             bond changes. Both are protected broadcasts (only the system can send them); the
+        <!-- Starts the process, the AirPods session and the retry of pending metadata writes when an
+             AirPods' link comes up or goes away or its bond changes. All three are protected
+             broadcasts (only the system can send them); the
              Bluetooth process sends them as its own uid, so the receiver must be exported. -->
         <receiver
             android:name=".app.ConnectionReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
                 <action android:name="android.bluetooth.device.action.BOND_STATE_CHANGED" />
             </intent-filter>
         </receiver>

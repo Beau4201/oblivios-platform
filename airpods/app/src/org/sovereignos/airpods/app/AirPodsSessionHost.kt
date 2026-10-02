@@ -1,0 +1,157 @@
+package org.sovereignos.airpods.app
+
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.content.Context
+import android.content.Intent
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import org.sovereignos.airpods.ui.AirPodsRecognition
+import org.sovereignos.airpods.ui.AirPodsUiState
+import org.sovereignos.airpods.ui.Backoff
+
+/**
+ * Owns the one AirPods session of the process. Every field is touched on the main thread only: the
+ * receiver, the service and the session's callbacks (posted) all arrive there. The foreground
+ * service exists to keep the process out of the frozen cached state (a cached app does not run);
+ * it lives exactly as long as the Bluetooth link to the recognised AirPods.
+ */
+internal object AirPodsSessionHost {
+    private const val TAG = "AirPodsHost"
+
+    private val main = Handler(Looper.getMainLooper())
+    private val opener: AirPodsSocketOpener = HiddenL2capOpener
+
+    private var service: AirPodsSessionService? = null
+    private var target: BluetoothDevice? = null
+    private var session: AirPodsSession? = null
+    private var attempt = 0
+    private var sinkBeforeSession: AirPodsCommandSink? = null
+    private val retry = Runnable { connect() }
+
+    /** True while a published session exists. The debug input stays quiet then. */
+    @Volatile
+    var live = false
+        private set
+
+    /** A bonded device that lists the accessory-protocol service. Only a candidate test. */
+    fun recognised(device: BluetoothDevice): Boolean {
+        if (device.bondState != BluetoothDevice.BOND_BONDED) return false
+        val uuids = device.uuids?.map { it.toString() }
+        return AirPodsRecognition.matches(uuids)
+    }
+
+    /** The BR/EDR link of a bonded device came up (receiver). */
+    fun onLinkUp(context: Context, device: BluetoothDevice) {
+        if (!recognised(device)) return
+        target = device
+        attempt = 0
+        try {
+            context.startForegroundService(Intent(context, AirPodsSessionService::class.java))
+        } catch (e: RuntimeException) {
+            // For example the foreground-service start rule or a missing BLUETOOTH_CONNECT grant.
+            Log.w(TAG, "foreground service not started: " + e.javaClass.simpleName)
+        }
+    }
+
+    /** The link or the bond of this address is gone (receiver). */
+    fun onLinkDown(address: String) {
+        val t = target ?: return
+        if (!t.address.equals(address, ignoreCase = true)) return
+        target = null
+        main.removeCallbacks(retry)
+        val s = session
+        if (s != null) s.close() else stopService()
+    }
+
+    /** A process start finds the AirPods already connected (for example after the process was killed). */
+    fun resume(context: Context) {
+        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return
+        val bonded = try {
+            adapter.bondedDevices
+        } catch (e: SecurityException) {
+            return
+        }
+        for (device in bonded) if (device.isConnected) onLinkUp(context, device)
+    }
+
+    fun onServiceStarted(svc: AirPodsSessionService) {
+        service = svc
+        connect()
+    }
+
+    fun onServiceStopped(svc: AirPodsSessionService) {
+        if (service === svc) service = null
+    }
+
+    private fun connect() {
+        val device = target
+        if (device == null) {
+            stopService()
+            return
+        }
+        if (session != null) return
+        // The platform serves the L2CAP mode and the Device-ID answer of this peer only once it is
+        // registered, so the registration comes before the first connection attempt.
+        if (!device.setAirPodsIdentity(true)) {
+            retryOrStop(device)
+            return
+        }
+        val s = AirPodsSession(device, device.address.uppercase(), opener, listener)
+        session = s
+        s.start()
+    }
+
+    private val listener = object : AirPodsSession.Listener {
+        override fun onPublished(session: AirPodsSession) {
+            main.post {
+                if (this@AirPodsSessionHost.session !== session) return@post
+                attempt = 0
+                live = true
+                sinkBeforeSession = AirPodsCommands.sink
+                AirPodsCommands.sink = SessionCommandSink(session)
+            }
+        }
+
+        override fun onEnded(session: AirPodsSession, reason: AirPodsSession.Reason) {
+            main.post { ended(session, reason) }
+        }
+    }
+
+    private fun ended(ended: AirPodsSession, reason: AirPodsSession.Reason) {
+        if (session !== ended) return
+        session = null
+        if (live) {
+            live = false
+            AirPodsCommands.sink = sinkBeforeSession ?: AirPodsCommands.sink
+        }
+        AirPodsStateStore.update(AirPodsUiState.DISCONNECTED)
+        Log.i(TAG, "session ended: $reason")
+        val device = target
+        when (reason) {
+            AirPodsSession.Reason.CLOSED_BY_US,
+            AirPodsSession.Reason.UNSUPPORTED,
+            AirPodsSession.Reason.PEER_MISBEHAVED -> stopService()
+            AirPodsSession.Reason.CONNECT_FAILED,
+            AirPodsSession.Reason.STREAM_ENDED -> if (device == null) stopService() else retryOrStop(device)
+        }
+    }
+
+    /** Retries with a growing delay while the link is still up; otherwise the service stops. */
+    private fun retryOrStop(device: BluetoothDevice) {
+        if (!device.isConnected) {
+            target = null
+            stopService()
+            return
+        }
+        main.postDelayed(retry, Backoff.delayMs(attempt++))
+    }
+
+    private fun stopService() {
+        val svc = service ?: return
+        service = null
+        svc.stopSelf()
+    }
+}

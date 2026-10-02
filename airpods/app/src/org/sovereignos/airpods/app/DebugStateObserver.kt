@@ -31,6 +31,8 @@ internal class DebugStateObserver(private val context: Context) :
     }
 
     private fun apply() {
+        // A live session owns the state; the debug input is for a device without one.
+        if (AirPodsSessionHost.live) return
         val raw = Settings.Global.getString(context.contentResolver, KEY)
         val next = try {
             DebugStateParser.parse(raw)
