@@ -17,6 +17,7 @@ public final class NativePageLayout {
         LISTENING_TOGGLE,
         EAR_DETECTION_SWITCH,
         CONVERSATION_SWITCH,
+        DUCK_LEVEL_TOGGLE,
         ALL_SETTINGS_LINK
     }
 
@@ -30,6 +31,7 @@ public final class NativePageLayout {
     public static final int ID_EAR = 50001;
     public static final int ID_CONVERSATION = 50002;
     public static final int ID_ALL_SETTINGS = 50003;
+    public static final int ID_DUCK = 50004;
 
     public static final int GROUP_LISTENING = 0;
     public static final int GROUP_COMFORT = 1;
@@ -63,6 +65,8 @@ public final class NativePageLayout {
         }
         if (s.supported.contains(Feature.CONVERSATION_AWARENESS)) {
             out.add(new Item(ID_CONVERSATION, Kind.CONVERSATION_SWITCH, null, GROUP_COMFORT));
+            // The choice is offered with the switch it belongs to; it is the owner's, not the AirPods'.
+            out.add(new Item(ID_DUCK, Kind.DUCK_LEVEL_TOGGLE, null, GROUP_COMFORT));
         }
         if (s.supported.contains(Feature.ALL_SETTINGS_PAGE)) {
             out.add(new Item(ID_ALL_SETTINGS, Kind.ALL_SETTINGS_LINK, null, GROUP_COMFORT));

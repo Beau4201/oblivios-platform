@@ -25,7 +25,14 @@ public final class SessionReducer {
      * switch offered, with the value we last wrote ({@code earDetection}; the AirPods never report it).
      */
     public static AirPodsUiState connected(String address, boolean earDetection) {
-        return new AirPodsUiState.Builder().address(address).earDetection(earDetection)
+        return connected(address, SessionSeed.fresh(earDetection));
+    }
+
+    /** A validated session before its first frame, from the stored values of the owner and the case. */
+    public static AirPodsUiState connected(String address, SessionSeed seed) {
+        return new AirPodsUiState.Builder().address(address).earDetection(seed.earDetection())
+                .duckPercent(seed.duckPercent())
+                .percents(-1, -1, seed.casePercent()).charging(false, false, seed.caseCharging())
                 .feature(Feature.EAR_DETECTION).build();
     }
 
@@ -71,8 +78,12 @@ public final class SessionReducer {
                     rightCharging = charging;
                 }
                 case CASE -> {
-                    box = e.level();
-                    caseCharging = charging;
+                    // The case is out of reach while the pods are in the ears. The owner wants its last
+                    // value shown at all times (ADR-125, decision 13); the next report replaces it.
+                    if (e.charge() != BatteryStatus.Charge.DISCONNECTED) {
+                        box = e.level();
+                        caseCharging = charging;
+                    }
                 }
             }
         }

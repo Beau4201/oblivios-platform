@@ -36,6 +36,8 @@ public final class AirPodsUiState {
     public final ListeningMode listeningMode;
     public final boolean earDetection;
     public final boolean conversationAwareness;
+    /** Percent of the volume that stays while the owner speaks (conversation awareness); one of {@link DuckLevels}. */
+    public final int duckPercent;
     public final Set<Feature> supported;
 
     public static final AirPodsUiState DISCONNECTED = new Builder().build();
@@ -50,6 +52,9 @@ public final class AirPodsUiState {
         if (b.mode == ListeningMode.ADAPTIVE && !b.features.contains(Feature.ADAPTIVE_MODE)) {
             throw new IllegalArgumentException("adaptive mode not supported");
         }
+        if (!DuckLevels.isValid(b.duck)) {
+            throw new IllegalArgumentException("bad lowered volume");
+        }
         address = b.address;
         leftPercent = b.left;
         rightPercent = b.right;
@@ -60,6 +65,7 @@ public final class AirPodsUiState {
         listeningMode = b.mode;
         earDetection = b.ear;
         conversationAwareness = b.conversation;
+        duckPercent = b.duck;
         Set<Feature> copy = EnumSet.noneOf(Feature.class);
         copy.addAll(b.features);
         supported = Collections.unmodifiableSet(copy);
@@ -77,6 +83,7 @@ public final class AirPodsUiState {
                 .listeningMode(listeningMode)
                 .earDetection(earDetection)
                 .conversationAwareness(conversationAwareness)
+                .duckPercent(duckPercent)
                 .features(supported.toArray(new Feature[0]));
     }
 
@@ -94,6 +101,7 @@ public final class AirPodsUiState {
                 && listeningMode == s.listeningMode
                 && earDetection == s.earDetection
                 && conversationAwareness == s.conversationAwareness
+                && duckPercent == s.duckPercent
                 && supported.equals(s.supported);
     }
 
@@ -101,7 +109,7 @@ public final class AirPodsUiState {
     public int hashCode() {
         return Objects.hash(address, leftPercent, rightPercent, casePercent, leftCharging,
                 rightCharging, caseCharging, listeningMode, earDetection, conversationAwareness,
-                supported);
+                duckPercent, supported);
     }
 
     public static final class Builder {
@@ -115,6 +123,7 @@ public final class AirPodsUiState {
         private ListeningMode mode;
         private boolean ear;
         private boolean conversation;
+        private int duck = DuckLevels.DEFAULT;
         private final Set<Feature> features = EnumSet.noneOf(Feature.class);
 
         public Builder address(String a) {
@@ -148,6 +157,11 @@ public final class AirPodsUiState {
 
         public Builder conversationAwareness(boolean v) {
             conversation = v;
+            return this;
+        }
+
+        public Builder duckPercent(int p) {
+            duck = p;
             return this;
         }
 

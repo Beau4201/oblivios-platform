@@ -40,6 +40,17 @@ public final class SessionLogicCheck {
         // a disconnected pod has no level and is not charging
         AirPodsUiState s3 = feed(s2, "04 00 04 00 04 00 01 02 01 FF 04 01");
         check(s3.rightPercent == -1 && !s3.rightCharging && s3.leftPercent == 100, "disconnected pod");
+        // The case out of reach (level 0, status 4 while the pods are in the ears) keeps its last value; the next report replaces it.
+        AirPodsUiState s4 = feed(s2, "04 00 04 00 04 00 01 08 01 00 04 01");
+        check(s4.casePercent == 18 && s4.caseCharging && s4.leftPercent == 100, "an unreachable case keeps its last value");
+        AirPodsUiState s5 = feed(s4, "04 00 04 00 04 00 01 08 01 11 02 01");
+        check(s5.casePercent == 17 && !s5.caseCharging, "the next report of the case replaces it");
+        // A new session starts from the stored case value and the owner's lowered-volume choice.
+        AirPodsUiState seeded = SessionReducer.connected(ADDR, new SessionSeed(true, 35, 42, true));
+        check(seeded.casePercent == 42 && seeded.caseCharging && seeded.duckPercent == 35 && seeded.leftPercent == -1 && seeded.earDetection,
+                "seeded session");
+        check(feed(seeded, "04 00 04 00 04 00 01 08 01 00 04 01").casePercent == 42, "an unreachable case keeps the seeded value");
+        check(SessionReducer.connected(ADDR, true).casePercent == -1 && SessionReducer.connected(ADDR, true).duckPercent == 50, "an unseeded session has no case and the default lowered volume");
 
         // the listening mode and conversation awareness appear with the first report of each
         check(!s1.supported.contains(Feature.LISTENING_MODE), "no mode before a report");
