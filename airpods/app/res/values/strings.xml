@@ -13,6 +13,8 @@
     <string name="airpods_ear_detection_summary">Pause when you take one out</string>
     <string name="airpods_conversation_title">Conversation awareness</string>
     <string name="airpods_conversation_summary">Lower media while you speak</string>
+    <string name="airpods_duck_title">Volume while speaking</string>
+    <string name="airpods_duck_option">%1$d%%</string>
     <string name="airpods_all_settings_title">All AirPods settings</string>
     <string name="airpods_all_settings_summary">Equalizer, controls, find</string>
     <!-- Notification of the foreground service that keeps the AirPods session alive. -->

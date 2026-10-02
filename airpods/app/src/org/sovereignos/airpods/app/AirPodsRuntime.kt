@@ -24,6 +24,7 @@ object AirPodsRuntime {
         if (writer != null) return
         val app = context.applicationContext
         writer = AirPodsMetadataWriter(app).also { AirPodsStateStore.addListener(it) }
+        AirPodsStateStore.addListener(CaseBatteryRecorder(app))
         if (isDebuggableBuild()) DebugStateObserver(app).start()
         // A process that starts while the AirPods are connected (it was killed, or Settings bound us)
         // has to find the link itself: no connection event will come for a link that is already up.
@@ -63,6 +64,8 @@ class ConnectionReceiver : BroadcastReceiver() {
             BluetoothDevice.ACTION_BOND_STATE_CHANGED ->
                 if (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR) == BluetoothDevice.BOND_NONE) {
                     AirPodsSessionHost.onLinkDown(device.address)
+                    // The stored case value never outlives the bond.
+                    CaseBatteryStore.forget(context.applicationContext, device.address)
                 }
         }
     }

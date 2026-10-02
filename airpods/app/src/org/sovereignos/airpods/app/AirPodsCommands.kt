@@ -9,6 +9,9 @@ interface AirPodsCommandSink {
     fun setListeningMode(mode: ListeningMode): Boolean
 
     fun setFeature(feature: AirPodsUiState.Feature, enabled: Boolean): Boolean
+
+    /** The owner chose how loud the music stays while they speak (one of DuckLevels); applies to the next conversation. */
+    fun setDuckPercent(percent: Int): Boolean
 }
 
 object AirPodsCommands {
@@ -20,5 +23,7 @@ object AirPodsCommands {
         override fun setListeningMode(mode: ListeningMode): Boolean = false
 
         override fun setFeature(feature: AirPodsUiState.Feature, enabled: Boolean): Boolean = false
+
+        override fun setDuckPercent(percent: Int): Boolean = false
     }
 }

@@ -19,6 +19,7 @@ import com.android.settingslib.bluetooth.devicesettings.MultiTogglePreference
 import com.android.settingslib.bluetooth.devicesettings.ToggleInfo
 import org.sovereignos.airpods.R
 import org.sovereignos.airpods.ui.AirPodsUiState
+import org.sovereignos.airpods.ui.DuckLevels
 import org.sovereignos.airpods.ui.ListeningModeToggles
 import org.sovereignos.airpods.ui.NativePageLayout
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
@@ -76,6 +77,7 @@ internal class NativeSettingsFactory(private val context: Context) {
                 R.drawable.ic_airpods_voice,
                 state.conversationAwareness,
             )
+            NativePageLayout.Kind.DUCK_LEVEL_TOGGLE -> duckToggle(state)
             NativePageLayout.Kind.ALL_SETTINGS_LINK -> linkRow()
             NativePageLayout.Kind.BUILTIN -> error("built-in items have no provider setting")
         }
@@ -94,6 +96,26 @@ internal class NativeSettingsFactory(private val context: Context) {
                 ToggleInfo.Builder()
                     .setLabel(context.getString(labelOf(mode)))
                     // Settings requires an icon; with the opt-in below it is not drawn.
+                    .setIcon(Bitmap.createBitmap(iconPx, iconPx, Bitmap.Config.ARGB_8888))
+                    .setExtras(Bundle().apply {
+                        putBoolean(DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON, true)
+                    })
+                    .build()
+            )
+        }
+        return builder.build()
+    }
+
+    /** How loud the music stays while the owner speaks: four buttons, like the listening mode group. */
+    private fun duckToggle(state: AirPodsUiState): MultiTogglePreference {
+        val builder = MultiTogglePreference.Builder()
+            .setTitle(context.getString(R.string.airpods_duck_title))
+            .setAllowChangingState(true)
+            .setState(maxOf(0, DuckLevels.indexOf(state.duckPercent)))
+        for (percent in DuckLevels.options()) {
+            builder.addToggleInfo(
+                ToggleInfo.Builder()
+                    .setLabel(context.getString(R.string.airpods_duck_option, percent))
                     .setIcon(Bitmap.createBitmap(iconPx, iconPx, Bitmap.Config.ARGB_8888))
                     .setExtras(Bundle().apply {
                         putBoolean(DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON, true)

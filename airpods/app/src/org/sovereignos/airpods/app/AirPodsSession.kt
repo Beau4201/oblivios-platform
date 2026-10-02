@@ -8,6 +8,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.ui.SessionReducer
+import org.sovereignos.airpods.ui.SessionSeed
 import org.sovereignos.airpods.validation.AapCodec
 import org.sovereignos.airpods.validation.AirPodsValidationException
 import org.sovereignos.airpods.validation.BatteryStatus
@@ -27,7 +28,7 @@ internal class AirPodsSession(
     private val device: BluetoothDevice,
     private val address: String,
     private val opener: AirPodsSocketOpener,
-    private val earDetectionKept: Boolean,
+    private val seed: SessionSeed,
     private val listener: Listener,
 ) {
     enum class Reason { CLOSED_BY_US, UNSUPPORTED, CONNECT_FAILED, STREAM_ENDED, PEER_MISBEHAVED }
@@ -176,7 +177,7 @@ internal class AirPodsSession(
             if (message is ListeningModeState) modeSeen = true
             if (!published) {
                 published = true
-                AirPodsStateStore.update(SessionReducer.connected(address, earDetectionKept))
+                AirPodsStateStore.update(SessionReducer.connected(address, seed))
                 listener.onPublished(this)
             }
             if (message is EarState) {

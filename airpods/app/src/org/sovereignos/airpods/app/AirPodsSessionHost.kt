@@ -11,6 +11,7 @@ import android.util.Log
 import org.sovereignos.airpods.ui.AirPodsRecognition
 import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.ui.Backoff
+import org.sovereignos.airpods.ui.SessionSeed
 
 /**
  * Owns the one AirPods session of the process. Every field is touched on the main thread only: the
@@ -137,7 +138,14 @@ internal object AirPodsSessionHost {
         }
         val address = device.address.uppercase()
         val earDetection = service?.let { EarDetectionStore.read(it.applicationContext, address) } ?: true
-        val s = AirPodsSession(device, address, opener, earDetection, listener)
+        val ctx = service?.applicationContext
+        val seed = if (ctx == null) {
+            SessionSeed.fresh(earDetection)
+        } else {
+            val case = CaseBatteryStore.read(ctx, address)
+            SessionSeed(earDetection, DuckLevelStore.read(ctx), case.first, case.second)
+        }
+        val s = AirPodsSession(device, address, opener, seed, listener)
         session = s
         service?.let { ears = EarDetectionController(it.applicationContext, device, earDetection) }
         // The conversation awareness switch value arrives with the AirPods' first reports; the controller

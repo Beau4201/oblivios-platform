@@ -2,6 +2,7 @@ package org.sovereignos.airpods.app
 
 import android.content.Context
 import org.sovereignos.airpods.ui.AirPodsUiState
+import org.sovereignos.airpods.ui.DuckLevels
 import org.sovereignos.airpods.ui.ListeningModeToggles
 import org.sovereignos.airpods.ui.SessionReducer
 import org.sovereignos.airpods.validation.AapCodec
@@ -62,6 +63,18 @@ internal class SessionCommandSink(
         if (feature == AirPodsUiState.Feature.EAR_DETECTION && context != null && address != null) {
             EarDetectionStore.write(context, address, enabled)
         }
+        return true
+    }
+
+    override fun setDuckPercent(percent: Int): Boolean {
+        val state = AirPodsStateStore.state
+        if (!state.isConnected || AirPodsUiState.Feature.CONVERSATION_AWARENESS !in state.supported ||
+            !DuckLevels.isValid(percent)
+        ) {
+            return false
+        }
+        if (context != null) DuckLevelStore.write(context, percent)
+        AirPodsStateStore.transform { it.toBuilder().duckPercent(percent).build() }
         return true
     }
 

@@ -7,6 +7,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import org.sovereignos.airpods.ui.AirPodsUiState
+import org.sovereignos.airpods.ui.DuckLevels
 import org.sovereignos.airpods.ui.DebugStateParser
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
 
@@ -66,6 +67,13 @@ internal class DebugStateObserver(private val context: Context) :
                 else -> return false
             }
             AirPodsStateStore.update(builder.build())
+            return true
+        }
+
+        override fun setDuckPercent(percent: Int): Boolean {
+            val state = AirPodsStateStore.state
+            if (!state.isConnected || !DuckLevels.isValid(percent)) return false
+            AirPodsStateStore.update(state.toBuilder().duckPercent(percent).build())
             return true
         }
     }
