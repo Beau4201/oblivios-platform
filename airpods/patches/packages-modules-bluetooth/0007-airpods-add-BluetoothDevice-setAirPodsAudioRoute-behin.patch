@@ -1,0 +1,632 @@
+From 237cae4055a53bd0a86740b8ff8430e829590865 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Fri, 2 Oct 2026 19:23:37 +0200
+Subject: [PATCH] airpods: add BluetoothDevice#setAirPodsAudioRoute behind
+ MANAGE_AIRPODS_IDENTITY
+
+The AirPods app has to take the AirPods out of the active audio slots when both
+pods are out of the ears, and put them back, like an iPhone does. Granting it
+MODIFY_AUDIO_ROUTING would let it redirect any app's audio, so add a narrow call
+instead: only for a bonded device registered through setAirPodsIdentity, it
+removes the device only from the A2DP/HFP slots where it is active, restores
+only what it removed and only where the slot is still free, and never selects
+another device. The record is dropped on profile disconnect, unbond and adapter
+off, and the route is restored if the calling process dies.
+---
+ .../aidl/android/bluetooth/IBluetooth.aidl    |   8 ++
+ .../btservice/ActiveDeviceManager.java        |  63 +++++++++
+ .../bluetooth/btservice/AdapterService.java   |  67 ++++++++++
+ .../btservice/AdapterServiceBinder.java       |  22 ++++
+ .../btservice/AirPodsRouteTracker.java        |  96 ++++++++++++++
+ .../btservice/AdapterServiceBinderTest.kt     |  30 +++++
+ .../btservice/AirPodsRouteTrackerTest.java    | 124 ++++++++++++++++++
+ framework/api/system-current.txt              |   1 +
+ .../android/bluetooth/BluetoothDevice.java    |  38 ++++++
+ 9 files changed, 449 insertions(+)
+ create mode 100644 android/app/src/com/android/bluetooth/btservice/AirPodsRouteTracker.java
+ create mode 100644 android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsRouteTrackerTest.java
+
+diff --git a/android/app/aidl/android/bluetooth/IBluetooth.aidl b/android/app/aidl/android/bluetooth/IBluetooth.aidl
+index 4716910fa0..aaf01b5bfa 100644
+--- a/android/app/aidl/android/bluetooth/IBluetooth.aidl
++++ b/android/app/aidl/android/bluetooth/IBluetooth.aidl
+@@ -213,6 +213,14 @@ interface IBluetooth {
+     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
+     boolean setAirPodsMetadata(in BluetoothDevice device, in int key, in byte[] value, in AttributionSource attributionSource);
+ 
++    // For the AirPods audio route (ADR-125). Also requires
++    // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
++    // AdapterServiceBinder, see setAirPodsIdentity above for why the annotation cannot carry it).
++    // The device must be bonded and registered. The token is a binder of the caller: if it dies
++    // while the AirPods are routed away, the route is restored.
++    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
++    boolean setAirPodsAudioRoute(in BluetoothDevice device, in boolean away, in IBinder token, in AttributionSource attributionSource);
++
+     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.BLUETOOTH_PRIVILEGED})")
+     oneway void requestActivityInfo(in IBluetoothActivityEnergyInfoListener listener, in AttributionSource attributionSource);
+ 
+diff --git a/android/app/src/com/android/bluetooth/btservice/ActiveDeviceManager.java b/android/app/src/com/android/bluetooth/btservice/ActiveDeviceManager.java
+index 27922c7caf..268b1b4497 100644
+--- a/android/app/src/com/android/bluetooth/btservice/ActiveDeviceManager.java
++++ b/android/app/src/com/android/bluetooth/btservice/ActiveDeviceManager.java
+@@ -108,6 +108,11 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
+ 
+     private final Object mLock = new Object();
+ 
++    // SovereignOS ADR-125: what was taken out of the active slots because the AirPods are out of the
++    // ears. Own lock; only ever changed while holding mLock here so a change and its bookkeeping
++    // cannot interleave with an active-device event.
++    private final AirPodsRouteTracker mAirPodsRoute = new AirPodsRouteTracker();
++
+     @GuardedBy("mLock")
+     private final List<BluetoothDevice> mA2dpConnectedDevices = new ArrayList<>();
+ 
+@@ -742,6 +747,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
+                             + ", mA2dpActiveDevice="
+                             + mA2dpActiveDevice);
+             mA2dpConnectedDevices.remove(device);
++            mAirPodsRoute.forget(device.getAddress());
+ 
+             if (Flags.admSuspendFallbackDuringChange()) {
+                 if (Objects.equals(mPendingActiveDevice, device)) {
+@@ -763,6 +769,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
+                     TAG,
+                     "handleHfpDisconnected: " + device + ", mHfpActiveDevice=" + mHfpActiveDevice);
+             mHfpConnectedDevices.remove(device);
++            mAirPodsRoute.forget(device.getAddress());
+ 
+             if (Flags.admSuspendFallbackDuringChange()) {
+                 if (Objects.equals(mPendingActiveDevice, device)) {
+@@ -1848,6 +1855,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
+     private void resetState() {
+         synchronized (mLock) {
+             mA2dpConnectedDevices.clear();
++            mAirPodsRoute.clear();
+             mA2dpActiveDevice = null;
+ 
+             mHfpConnectedDevices.clear();
+@@ -1865,6 +1873,61 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
+         }
+     }
+ 
++    /**
++     * SovereignOS ADR-125: the AirPods are out of the ears. If {@code device} is the active A2DP
++     * and/or HFP device, make no device active for that profile, so the audio (and a call) plays on
++     * the phone. Never selects another device. Remembers exactly what it removed so
++     * {@link #routeAirPodsBack} restores that and nothing else.
++     *
++     * @return true when everything that had to be removed was removed (also when nothing had to be)
++     */
++    boolean routeAirPodsAway(BluetoothDevice device) {
++        synchronized (mLock) {
++            AirPodsRouteTracker.Change change =
++                    mAirPodsRoute.away(
++                            device.getAddress(),
++                            Objects.equals(mA2dpActiveDevice, device),
++                            Objects.equals(mHfpActiveDevice, device));
++            boolean ok = true;
++            if (change.hfp) {
++                ok &= setHfpActiveDevice(null);
++            }
++            if (change.a2dp) {
++                ok &= setA2dpActiveDevice(null, /* stopAudio= */ false);
++            }
++            return ok;
++        }
++    }
++
++    /**
++     * SovereignOS ADR-125: the AirPods are in an ear again (or the app is gone). Make the device
++     * active again on exactly the profiles {@link #routeAirPodsAway} removed it from, and only
++     * where the slot is still free: no other classic device, LE Audio device or hearing aid has taken
++     * it since. HFP first, as in {@link #setActiveDevice}.
++     */
++    boolean routeAirPodsBack(BluetoothDevice device) {
++        synchronized (mLock) {
++            boolean othersIdle = mLeAudioActiveDevice == null && !isAnyHearingAidDeviceActive();
++            AirPodsRouteTracker.Change change =
++                    mAirPodsRoute.back(
++                            device.getAddress(),
++                            othersIdle && mA2dpActiveDevice == null,
++                            othersIdle && mHfpActiveDevice == null);
++            boolean ok = true;
++            if (change.hfp) {
++                ok &= setHfpActiveDevice(device);
++            }
++            if (change.a2dp) {
++                ok &= setA2dpActiveDevice(device, /* stopAudio= */ false);
++            }
++            return ok;
++        }
++    }
++
++    void forgetAirPodsRoute(String address) {
++        mAirPodsRoute.forget(address);
++    }
++
+     @VisibleForTesting
+     BluetoothDevice getA2dpActiveDevice() {
+         synchronized (mLock) {
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterService.java b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+index 909a7dbd9c..5bcd5120fb 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterService.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+@@ -321,6 +321,10 @@ public class AdapterService extends Service {
+     // SovereignOS ADR-115/ADR-117: which bonded peers the AirPods app has registered.
+     private final AirPodsIdentityTracker mAirPodsIdentity = new AirPodsIdentityTracker();
+ 
++    // SovereignOS ADR-125: one death recipient per AirPods address that was routed away, so the
++    // route is restored if the calling process dies.
++    private final Map<String, IBinder.DeathRecipient> mAirPodsRouteWatch = new HashMap<>();
++
+     /**
+      * Predicate that tests if the given {@link BluetoothDevice} is well-known to be used for
+      * physical location.
+@@ -2382,6 +2386,68 @@ public class AdapterService extends Service {
+                                 || setMetadata(device, key, value));
+     }
+ 
++    /**
++     * SovereignOS ADR-125: takes the registered AirPods out of the active A2DP/HFP slots
++     * ({@code away}) or puts them back. The caller (AdapterServiceBinder) has already enforced
++     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
++     * accepted, under the same lock as register and unbond. {@code token} is a binder of the
++     * calling process: if it dies while the AirPods are routed away, the route is restored.
++     *
++     * @return true when the request was applied or there was nothing to do; false when refused
++     */
++    public boolean setAirPodsAudioRoute(BluetoothDevice device, boolean away, IBinder token) {
++        final String address = device.getAddress();
++        return mAirPodsIdentity.runIfRegistered(
++                address,
++                () -> getBondState(device) == BOND_BONDED,
++                () -> {
++                    if (away) {
++                        return watchAirPodsRoute(device, token)
++                                && mActiveDeviceManager.routeAirPodsAway(device);
++                    }
++                    unwatchAirPodsRoute(address, token);
++                    return mActiveDeviceManager.routeAirPodsBack(device);
++                });
++    }
++
++    private boolean watchAirPodsRoute(BluetoothDevice device, IBinder token) {
++        final String address = device.getAddress();
++        synchronized (mAirPodsRouteWatch) {
++            if (mAirPodsRouteWatch.containsKey(address)) {
++                return true;
++            }
++            IBinder.DeathRecipient recipient =
++                    () -> {
++                        synchronized (mAirPodsRouteWatch) {
++                            mAirPodsRouteWatch.remove(address);
++                        }
++                        Log.i(TAG, "AirPods route: caller died, restoring");
++                        mActiveDeviceManager.routeAirPodsBack(device);
++                    };
++            try {
++                token.linkToDeath(recipient, 0);
++            } catch (RemoteException e) {
++                Log.w(TAG, "AirPods route: caller already dead, not routing away");
++                return false;
++            }
++            mAirPodsRouteWatch.put(address, recipient);
++            return true;
++        }
++    }
++
++    private void unwatchAirPodsRoute(String address, IBinder token) {
++        synchronized (mAirPodsRouteWatch) {
++            IBinder.DeathRecipient recipient = mAirPodsRouteWatch.remove(address);
++            if (recipient != null) {
++                try {
++                    token.unlinkToDeath(recipient, 0);
++                } catch (java.util.NoSuchElementException e) {
++                    // linked through another proxy of the same binder; the death callback is then a no-op
++                }
++            }
++        }
++    }
++
+     private void logManufacturerInfo(BluetoothDevice device, int key, byte[] bytesValue) {
+         String callingApp = getPackageManager().getNameForUid(Binder.getCallingUid());
+         String manufacturerName = "";
+@@ -4577,6 +4643,7 @@ public class AdapterService extends Service {
+             mAirPodsIdentity.onUnbond(
+                     device.getAddress(),
+                     () -> mNativeInterface.setAirPodsIdentity(device.getAddress(), false));
++            mActiveDeviceManager.forgetAirPodsRoute(device.getAddress());
+         }
+ 
+         // Remove the bond caller info when bonding is concluded
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java b/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java
+index 4e85f539f1..6b04636c04 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java
+@@ -1491,6 +1491,28 @@ class AdapterServiceBinder extends IBluetooth.Stub {
+         return service.setAirPodsMetadata(device, key, value);
+     }
+ 
++    /**
++     * Takes the registered AirPods out of the active audio slots, or puts them back (ADR-125).
++     * Scoped to the caller holding org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY, never a
++     * general BLUETOOTH_PRIVILEGED holder; the bond and registration checks are in {@link
++     * AdapterService#setAirPodsAudioRoute}.
++     */
++    @Override
++    public boolean setAirPodsAudioRoute(
++            BluetoothDevice device, boolean away, IBinder token, AttributionSource source) {
++        requireNonNull(device);
++        requireNonNull(token);
++        var service = getServiceAndEnforceCallerUserAndConnect(source, "setAirPodsAudioRoute");
++        if (service == null) {
++            return false;
++        }
++
++        service.enforceCallingOrSelfPermission(
++                "org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY", null);
++
++        return service.setAirPodsAudioRoute(device, away, token);
++    }
++
+     @Override
+     public byte[] getMetadata(BluetoothDevice device, int key, AttributionSource source) {
+         requireNonNull(device);
+diff --git a/android/app/src/com/android/bluetooth/btservice/AirPodsRouteTracker.java b/android/app/src/com/android/bluetooth/btservice/AirPodsRouteTracker.java
+new file mode 100644
+index 0000000000..873bc18a19
+--- /dev/null
++++ b/android/app/src/com/android/bluetooth/btservice/AirPodsRouteTracker.java
+@@ -0,0 +1,96 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.bluetooth.btservice;
++
++import com.android.internal.annotations.GuardedBy;
++
++import java.util.HashMap;
++import java.util.Map;
++
++/**
++ * SovereignOS ADR-125: the record of which active-device slots (A2DP, HFP) were taken away from a
++ * registered AirPods device because the pods are out of the ears. It decides nothing about Bluetooth
++ * state; {@link ActiveDeviceManager} passes in what is active and acts on the answer. The record is
++ * what lets the restore touch only what this feature removed. In memory only; bounded by the
++ * registry of AirPods peers (at most 16 addresses can ever be registered).
++ */
++final class AirPodsRouteTracker {
++    /** Which profiles to change now. */
++    static final class Change {
++        static final Change NONE = new Change(false, false);
++
++        final boolean a2dp;
++        final boolean hfp;
++
++        Change(boolean a2dp, boolean hfp) {
++            this.a2dp = a2dp;
++            this.hfp = hfp;
++        }
++    }
++
++    private final Object mLock = new Object();
++
++    @GuardedBy("mLock")
++    private final Map<String, Change> mRemoved = new HashMap<>();
++
++    /**
++     * Records and returns what must be removed now: exactly the profiles on which this address is
++     * the active device. A profile removed by an earlier call stays in the record.
++     */
++    Change away(String address, boolean a2dpActive, boolean hfpActive) {
++        synchronized (mLock) {
++            Change before = mRemoved.getOrDefault(address, Change.NONE);
++            Change after = new Change(before.a2dp || a2dpActive, before.hfp || hfpActive);
++            if (after.a2dp || after.hfp) {
++                mRemoved.put(address, after);
++            }
++            return new Change(a2dpActive, hfpActive);
++        }
++    }
++
++    /**
++     * Ends the record and returns what to restore: the profiles this feature removed, and only
++     * those whose slot is still free.
++     */
++    Change back(String address, boolean a2dpFree, boolean hfpFree) {
++        synchronized (mLock) {
++            Change before = mRemoved.remove(address);
++            if (before == null) {
++                return Change.NONE;
++            }
++            return new Change(before.a2dp && a2dpFree, before.hfp && hfpFree);
++        }
++    }
++
++    void forget(String address) {
++        synchronized (mLock) {
++            mRemoved.remove(address);
++        }
++    }
++
++    void clear() {
++        synchronized (mLock) {
++            mRemoved.clear();
++        }
++    }
++
++    boolean isRouted(String address) {
++        synchronized (mLock) {
++            return mRemoved.containsKey(address);
++        }
++    }
++}
+diff --git a/android/app/tests/unit/src/com/android/bluetooth/btservice/AdapterServiceBinderTest.kt b/android/app/tests/unit/src/com/android/bluetooth/btservice/AdapterServiceBinderTest.kt
+index c3fbbd3e5b..620536aee2 100644
+--- a/android/app/tests/unit/src/com/android/bluetooth/btservice/AdapterServiceBinderTest.kt
++++ b/android/app/tests/unit/src/com/android/bluetooth/btservice/AdapterServiceBinderTest.kt
+@@ -29,6 +29,7 @@ import android.bluetooth.IBluetoothOobDataCallback
+ import android.content.AttributionSource
+ import android.content.Context
+ import android.os.Bundle
++import android.os.IBinder
+ import android.os.ParcelUuid
+ import android.os.UserManager
+ import androidx.test.ext.junit.runners.AndroidJUnit4
+@@ -67,6 +68,7 @@ class AdapterServiceBinderTest {
+     @Mock private lateinit var service: AdapterService
+     @Mock private lateinit var adapterProperties: AdapterProperties
+     @Mock private lateinit var device: BluetoothDevice
++    @Mock private lateinit var token: IBinder
+     @Mock private lateinit var remoteDevices: RemoteDevices
+     @Mock private lateinit var userManager: UserManager
+     @Mock private lateinit var dispatcher: BluetoothHciVendorSpecificDispatcher
+@@ -476,6 +478,34 @@ class AdapterServiceBinderTest {
+         verify(service).setAirPodsMetadata(device, AIRPODS_KEY, AIRPODS_VALUE)
+     }
+ 
++    @Test
++    fun setAirPodsAudioRoute_serviceUnavailable_returnsFalse() {
++        doReturn(false).whenever(service).isAvailable
++        assertThat(binder.setAirPodsAudioRoute(device, true, token, source)).isFalse()
++        verify(service, never()).setAirPodsAudioRoute(any(), any(), any())
++    }
++
++    @Test
++    fun setAirPodsAudioRoute_withoutIdentityPermission_throwsSecurityException() {
++        doThrow(SecurityException("MANAGE_AIRPODS_IDENTITY permission required"))
++            .whenever(service)
++            .enforceCallingOrSelfPermission(eq(MANAGE_AIRPODS_IDENTITY), anyOrNull())
++        assertThrows(SecurityException::class.java) {
++            binder.setAirPodsAudioRoute(device, true, token, source)
++        }
++        verify(service, never()).setAirPodsAudioRoute(any(), any(), any())
++    }
++
++    @Test
++    fun setAirPodsAudioRoute_withIdentityPermission_forwardsBothDirections() {
++        doReturn(true).whenever(service).setAirPodsAudioRoute(device, true, token)
++        doReturn(true).whenever(service).setAirPodsAudioRoute(device, false, token)
++        assertThat(binder.setAirPodsAudioRoute(device, true, token, source)).isTrue()
++        assertThat(binder.setAirPodsAudioRoute(device, false, token, source)).isTrue()
++        verify(service).setAirPodsAudioRoute(device, true, token)
++        verify(service).setAirPodsAudioRoute(device, false, token)
++    }
++
+     companion object {
+         // Transport constants from BluetoothDevice
+         private const val INVALID_TRANSPORT_NEGATIVE = -1
+diff --git a/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsRouteTrackerTest.java b/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsRouteTrackerTest.java
+new file mode 100644
+index 0000000000..2ba3245fb3
+--- /dev/null
++++ b/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsRouteTrackerTest.java
+@@ -0,0 +1,124 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.bluetooth.btservice;
++
++import static com.google.common.truth.Truth.assertThat;
++
++import androidx.test.ext.junit.runners.AndroidJUnit4;
++import androidx.test.filters.SmallTest;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++
++/** SovereignOS ADR-125: what the AirPods route tracker removes and restores. */
++@SmallTest
++@RunWith(AndroidJUnit4.class)
++public class AirPodsRouteTrackerTest {
++    private static final String A = "AA:BB:CC:DD:EE:01";
++    private static final String B = "AA:BB:CC:DD:EE:02";
++
++    private final AirPodsRouteTracker mTracker = new AirPodsRouteTracker();
++
++    private static void assertChange(AirPodsRouteTracker.Change c, boolean a2dp, boolean hfp) {
++        assertThat(c.a2dp).isEqualTo(a2dp);
++        assertThat(c.hfp).isEqualTo(hfp);
++    }
++
++    @Test
++    public void away_whenActiveOnBoth_removesBoth() {
++        assertChange(mTracker.away(A, true, true), true, true);
++        assertThat(mTracker.isRouted(A)).isTrue();
++    }
++
++    @Test
++    public void away_whenOnlyA2dpActive_removesOnlyA2dp() {
++        assertChange(mTracker.away(A, true, false), true, false);
++        assertChange(mTracker.back(A, true, true), true, false);
++    }
++
++    @Test
++    public void away_whenNotActiveAnywhere_removesNothingAndRemembersNothing() {
++        assertChange(mTracker.away(A, false, false), false, false);
++        assertThat(mTracker.isRouted(A)).isFalse();
++        assertChange(mTracker.back(A, true, true), false, false);
++    }
++
++    @Test
++    public void away_twice_secondRemovesNothingButTheFirstIsRemembered() {
++        mTracker.away(A, true, true);
++        assertChange(mTracker.away(A, false, false), false, false);
++        assertChange(mTracker.back(A, true, true), true, true);
++    }
++
++    @Test
++    public void away_secondCallWithAnotherProfile_mergesTheRecord() {
++        mTracker.away(A, true, false);
++        assertChange(mTracker.away(A, false, true), false, true);
++        assertChange(mTracker.back(A, true, true), true, true);
++    }
++
++    @Test
++    public void back_restoresExactlyWhatWasRemoved() {
++        mTracker.away(A, true, true);
++        assertChange(mTracker.back(A, true, true), true, true);
++    }
++
++    @Test
++    public void back_skipsAProfileThatAnotherDeviceTook() {
++        mTracker.away(A, true, true);
++        assertChange(mTracker.back(A, false, true), false, true);
++    }
++
++    @Test
++    public void back_withoutAway_doesNothing() {
++        assertChange(mTracker.back(A, true, true), false, false);
++    }
++
++    @Test
++    public void back_clearsTheRecord() {
++        mTracker.away(A, true, true);
++        mTracker.back(A, true, true);
++        assertThat(mTracker.isRouted(A)).isFalse();
++        assertChange(mTracker.back(A, true, true), false, false);
++    }
++
++    @Test
++    public void forget_dropsTheRecordOfThatAddressOnly() {
++        mTracker.away(A, true, true);
++        mTracker.away(B, true, true);
++        mTracker.forget(A);
++        assertThat(mTracker.isRouted(A)).isFalse();
++        assertThat(mTracker.isRouted(B)).isTrue();
++        assertChange(mTracker.back(A, true, true), false, false);
++    }
++
++    @Test
++    public void clear_dropsEverything() {
++        mTracker.away(A, true, true);
++        mTracker.away(B, true, false);
++        mTracker.clear();
++        assertThat(mTracker.isRouted(A)).isFalse();
++        assertThat(mTracker.isRouted(B)).isFalse();
++    }
++
++    @Test
++    public void addresses_areIndependent() {
++        mTracker.away(A, true, false);
++        assertChange(mTracker.back(B, true, true), false, false);
++        assertChange(mTracker.back(A, true, true), true, false);
++    }
++}
+diff --git a/framework/api/system-current.txt b/framework/api/system-current.txt
+index cd28399c36..6a0a5bc376 100644
+--- a/framework/api/system-current.txt
++++ b/framework/api/system-current.txt
+@@ -272,6 +272,7 @@ package android.bluetooth {
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}, conditional=true) public boolean removeBond();
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public int requestAudioPolicyAsSink(@NonNull android.bluetooth.BluetoothSinkAudioPolicy);
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public int setActiveAudioDevicePolicy(int);
++    method @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) public boolean setAirPodsAudioRoute(boolean);
+     method @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) public boolean setAirPodsIdentity(boolean);
+     method @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) public boolean setAirPodsMetadata(int, @NonNull byte[]);
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public boolean setLowLatencyAudioAllowed(boolean);
+diff --git a/framework/java/android/bluetooth/BluetoothDevice.java b/framework/java/android/bluetooth/BluetoothDevice.java
+index 956b231dff..23c1ebffe7 100644
+--- a/framework/java/android/bluetooth/BluetoothDevice.java
++++ b/framework/java/android/bluetooth/BluetoothDevice.java
+@@ -50,6 +50,7 @@ import android.compat.annotation.EnabledSince;
+ import android.compat.annotation.UnsupportedAppUsage;
+ import android.content.AttributionSource;
+ import android.content.Context;
++import android.os.Binder;
+ import android.os.Build;
+ import android.os.Handler;
+ import android.os.IpcDataCache;
+@@ -3425,6 +3426,43 @@ public final class BluetoothDevice implements Parcelable, Attributable {
+         }
+     }
+ 
++    /** Identifies this process to the Bluetooth service for {@link #setAirPodsAudioRoute}. */
++    private static final Binder AIRPODS_ROUTE_TOKEN = new Binder();
++
++    /**
++     * Takes this <em>bonded</em> device, which must currently be registered as an AirPods accessory
++     * through {@link #setAirPodsIdentity}, out of the active A2DP and HFP slots ({@code
++     * awayFromAirPods} true: the audio and any call play on the phone) or puts it back (false). Only
++     * a device that is the active device on a profile is removed from that profile, only what was
++     * removed is restored, and only where the slot is still free; no other device is ever selected.
++     * The route is also restored when the profile disconnects, the bond is removed, Bluetooth is
++     * turned off, or the calling process dies.
++     *
++     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
++     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
++     * not require {@code BLUETOOTH_PRIVILEGED} or {@code MODIFY_AUDIO_ROUTING}.
++     *
++     * @return true when the request was applied or there was nothing to do; false when refused or on
++     *     error
++     */
++    @Hide
++    @SystemApi
++    @RequiresBluetoothConnectPermission
++    @RequiresPermission(BLUETOOTH_CONNECT)
++    public boolean setAirPodsAudioRoute(boolean awayFromAirPods) {
++        if (DBG) log("setAirPodsAudioRoute()");
++        try {
++            return callServiceIfEnabled(
++                    s ->
++                            s.setAirPodsAudioRoute(
++                                    this, awayFromAirPods, AIRPODS_ROUTE_TOKEN, mAttributionSource),
++                    false);
++        } catch (SecurityException se) {
++            GmsCompat.catchOrRethrow(se);
++            return false;
++        }
++    }
++
+     /**
+      * Get a keyed metadata for this {@link BluetoothDevice} as {@link String}
+      *
+-- 
+2.39.5
+

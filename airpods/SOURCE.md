@@ -138,6 +138,7 @@ build server's `platform-primary` checkout.
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0004` | ADR-115: non-mutating SDP vendor view; hooks gated on registry and bond; interop feature removed (`8a31c37d88e2536f5ea102e63d811f79453d73d5`) |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0005` | ADR-115: `BluetoothDevice#setAirPodsIdentity` client wrapper (`b86ac07d9f3a81d450cb1bd8ff4e68f41a7545b2`) |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0006` | ADR-119: `BluetoothDevice#setAirPodsMetadata`, the narrow metadata setter behind `MANAGE_AIRPODS_IDENTITY` (`e4b12de12490582d60b3c57832750a9c113ea9bd`; `git am` exit 0; the ten touched files sha256-identical to the authoring worktree) |
+| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0007` | ADR-125: `BluetoothDevice#setAirPodsAudioRoute`, the narrow audio-route call behind `MANAGE_AIRPODS_IDENTITY` (`237cae40557f` on branch `sovereignos-airpods-identity` on top of `e4b12de124`; `git am` exit 0; the nine touched files sha256-identical to the authoring worktree; not yet compiled, the module build is the first compile) |
 | `vendor/adevtool` | `6ebe8024291a5c003f0615a896574afbb9cbf29b` | `patches/vendor-adevtool/0001` | ADR-118: `AirPodsApp` and its two sysconfig modules in `common/device-common.mk` (`4438b3d305f765315672db8cc94e85923b692f9d`, branch `sovereignos-airpods-identity`, created from `sovereignos-2026091900`; authored from a fetch-only local copy of the one touched file, `git am` exit 0, resulting file sha256 equal to the worktree's) |
 | `vendor/adevtool` | `4438b3d305f765315672db8cc94e85923b692f9d` | `patches/vendor-adevtool/0002` | ADR-120: `PRODUCT_PACKAGES_DEBUG += AirPodsDebugHarness AirPodsProbeNoPerm AirPodsProbeBtPriv` in `common/device-common.mk`, so the userdebug-only validation harness never reaches a `user` image (`9b0e6172643f76714f76b1be8c6ad986ae4dde35`, branch `sovereignos-airpods-identity`; authored from a fetch-only local copy of the one touched file; `git am` exit 0; resulting file sha256 `3451d24107b6de4e534d337036c90756911b83b25e5c1272a2953786c33fd336`, equal to the authoring worktree's; the lynx version pin was moved to this commit, backup `adevtool-version-check.mk.pre-harness`) |
 | `frameworks/base` | `c013345b2161` | `patches/frameworks-base/0001` | ADR-121: opt-in `DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON`, `ToggleModel.labelInsideButton`, `SegmentedButtonPreference.setLabelInsideButton` (`f004903a08af679cf5118e9a3946017150c716bb`, branch `sovereignos-2026091900-r2`; authored from a fetch-only local copy of the five touched files; `git am` exit 0; the five files sha256-identical to the authoring worktree; paths are relative to the `frameworks/base` repository root, first attempt with tree-root paths failed and was aborted cleanly) |
@@ -175,6 +176,30 @@ Evidence: 17 host tests pass against the two new classes (fetched from the
 server tree), and three mutation runs fail the tests as intended. Not
 compiled: the Bluetooth module, the Kotlin tests, the API file. The
 `setAirPodsMetadata` declaration was compiled on its own with the tree's `aidl`.
+
+### What patch 0007 does (ADR-125)
+
+Adds `BluetoothDevice#setAirPodsAudioRoute(boolean away)` (`@SystemApi`), backed by
+`IBluetooth#setAirPodsAudioRoute`, so the AirPods app can take the AirPods out of the
+active A2DP/HFP slots while both pods are out of the ears, without `MODIFY_AUDIO_ROUTING`.
+Three guarantees:
+
+- only a registered device: `AdapterServiceBinder` enforces
+  `org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY`, and `AdapterService` runs the change
+  only for a bonded device registered through `setAirPodsIdentity`
+  (`AirPodsIdentityTracker.runIfRegistered`);
+- only what it removed: `AirPodsRouteTracker` records the slots (A2DP, HFP) on which the
+  device was active when removed; the restore touches only those, and only where the slot is
+  still free (no other classic device, LE Audio device or hearing aid took it). It never selects
+  another device;
+- restored on every exit: the record is dropped on A2DP/HFP disconnect, unbond and adapter off
+  (`ActiveDeviceManager.resetState`), and a binder death recipient restores the route when the
+  calling process dies.
+
+New files: `AirPodsRouteTracker.java` and its host-runnable test (12 tests, four mutations
+fail them as intended, one of them caught by a neighbouring test, see the plan record), plus
+three binder tests in `AdapterServiceBinderTest.kt`. Not compiled: the Bluetooth module, the
+Kotlin tests, the API file.
 
 ### What patch 0001 does (its registration and SDP mechanism is superseded, see Corrections)
 
