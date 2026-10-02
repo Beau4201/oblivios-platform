@@ -45,6 +45,25 @@ single AOSP rebuild follows all planned AirPods work.
   files verified by sha256. Any later change here must be copied over the same
   way and re-verified before a build.
 
+## AirPodsApp real session (Plan 7A, ADR-124)
+
+`app/src/org/sovereignos/airpods/app/`: `AirPodsSocketOpener` (reflection on the hidden `BluetoothDevice#createL2capSocket(int)`, PSM `0x1001`, under the single-package
+hidden-API allow-list), `AirPodsSession` (one reader thread, opening frames 200 ms apart, the notification request repeated until battery and listening mode arrived, nine malformed
+frames in a row end it), `AirPodsSessionHost` (main-thread owner of the session, retry with backoff, the wait for the page request), `AirPodsSessionService` (foreground service of type
+`connectedDevice`), `SessionCommandSink` (typed commands; Off first enables the AirPods' "Allow Off" option; the comfort settings show the written value), `EarDetectionStore` (the value the
+phone last wrote, app-private, because this pair never reports it), `AirPodsStateStore.transform` (atomic read-modify-write). Pure logic in `app/src/.../ui/` (`SessionReducer`,
+`AirPodsRecognition`, `Backoff`), host checks `tools/run-host-checks.sh` and `tools/run-store-stress.sh` (needs `BUILD_HOST`; runs once with the lock and once without, which must fail).
+New permissions: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, and the privileged `START_FOREGROUND_SERVICES_FROM_BACKGROUND` (named in the privapp allow-list).
+Built into images `2026100202` to `2026100204` (`2026100204` not flashed at the time of writing). Threat review: `docs/architecture/airpods-session-threat-review.md` in
+`sovereignos-foundation`. The codec it uses is `core/airpods-core.jar` (see its section above; frames are documented in `docs/research/airpods-aap-protocol-facts.md`).
+
+## Probe (`probe/`, Plan 7A task 3)
+
+A debug tool, never in an image: `m AirPodsProbe` builds it, `adb install` installs it on a userdebug device. It opens the accessory channel on the owner's pair and logs frame kinds
+(hex only for the kinds the codec acts on; the device-information frame, with serial numbers, is never printed). It reaches the hidden method only while the owner has set
+`hidden_api_blacklist_exemptions` to `Landroid/bluetooth/BluetoothDevice;->createL2capSocket` and the probe process was started afterwards. `cmds` accepts `mode:1..3`, `ca:0|1`, `ear:0|1`
+and `raw:<hex>` (a frame as hex without spaces). Used on 2026-10-02 for `AIR-121` to `AIR-123`.
+
 ## AirPodsApp native device page provider (Plan 6B, ADR-122)
 
 `app/src/org/sovereignos/airpods/ui/` (pure Java, host-tested with `app/test/.../UiLogicCheck.java`: `AirPodsUiState`,
