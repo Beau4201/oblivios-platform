@@ -35,6 +35,7 @@ class AirPodsConfigService : Service() {
 
     private fun respond(device: DeviceInfo, callback: IGetDeviceSettingsConfigCallback) {
         Callers.enforceSettings()
+        device.bluetoothAddress?.let { AirPodsSessionHost.awaitFirstControls(this, it, PAGE_WAIT_MS) }
         val state = AirPodsStateStore.state
         val address = state.address
         if (address == null || !address.equals(device.bluetoothAddress, ignoreCase = true)) {
@@ -45,5 +46,10 @@ class AirPodsConfigService : Service() {
             return
         }
         callback.onResult(DeviceSettingsConfigServiceStatus(true), factory.config(state))
+    }
+
+    private companion object {
+        /** How long a page request may wait for a session that is being set up (see awaitFirstControls). */
+        const val PAGE_WAIT_MS = 1_500L
     }
 }

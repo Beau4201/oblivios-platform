@@ -43,6 +43,35 @@ internal object AirPodsSessionHost {
         return AirPodsRecognition.matches(uuids)
     }
 
+    /**
+     * For the binder thread that answers Settings' request for the page: Settings reads the list of
+     * items once, so if the AirPods are connected but the session has not reported the listening mode
+     * yet (the process was just started, or the link just came up), wait for it, at most
+     * [timeoutMs]. Based on the real link state, not on a flag that could race with the process start.
+     */
+    fun awaitFirstControls(context: Context, address: String, timeoutMs: Long) {
+        if (AirPodsUiState.Feature.LISTENING_MODE in AirPodsStateStore.state.supported) return
+        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return
+        val device = try {
+            adapter.getRemoteDevice(address)
+        } catch (e: IllegalArgumentException) {
+            return
+        }
+        if (!device.isConnected || !recognised(device)) return
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val listener = AirPodsStateStore.Listener { _, new ->
+            if (AirPodsUiState.Feature.LISTENING_MODE in new.supported) latch.countDown()
+        }
+        AirPodsStateStore.addListener(listener)
+        try {
+            if (AirPodsUiState.Feature.LISTENING_MODE !in AirPodsStateStore.state.supported) {
+                latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            }
+        } finally {
+            AirPodsStateStore.removeListener(listener)
+        }
+    }
+
     /** The BR/EDR link of a bonded device came up (receiver). */
     fun onLinkUp(context: Context, device: BluetoothDevice) {
         if (!recognised(device)) return
@@ -131,7 +160,8 @@ internal object AirPodsSessionHost {
         Log.i(TAG, "session ended: $reason")
         val device = target
         when (reason) {
-            AirPodsSession.Reason.CLOSED_BY_US,
+            // We closed it because the link went down; if the link came up again meanwhile, start over.
+            AirPodsSession.Reason.CLOSED_BY_US -> if (device == null) stopService() else connect()
             AirPodsSession.Reason.UNSUPPORTED,
             AirPodsSession.Reason.PEER_MISBEHAVED -> stopService()
             AirPodsSession.Reason.CONNECT_FAILED,

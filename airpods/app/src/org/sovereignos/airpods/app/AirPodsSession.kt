@@ -10,6 +10,7 @@ import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.ui.SessionReducer
 import org.sovereignos.airpods.validation.AapCodec
 import org.sovereignos.airpods.validation.AirPodsValidationException
+import org.sovereignos.airpods.validation.BatteryStatus
 import org.sovereignos.airpods.validation.UnrecognisedMessage
 
 /**
@@ -34,6 +35,7 @@ internal class AirPodsSession(
     }
 
     @Volatile private var closed = false
+    @Volatile private var batterySeen = false
     @Volatile private var socket: BluetoothSocket? = null
     private var output: OutputStream? = null
     private val writeLock = Any()
@@ -81,6 +83,7 @@ internal class AirPodsSession(
             s.connect()
             output = s.outputStream
             sendOpeningFrames()
+            Thread({ requestAgainUntilBattery() }, "AirPodsSession-refresh").apply { isDaemon = true }.start()
             reason = readLoop(s.inputStream)
         } catch (e: IOException) {
             reason = if (closed) Reason.CLOSED_BY_US else Reason.CONNECT_FAILED
@@ -98,11 +101,42 @@ internal class AirPodsSession(
         }
     }
 
-    /** The order of the opening frames is one decision, taken from the capture on a real pair. */
+    /**
+     * The order of the opening frames is one decision, taken from the capture on a real pair, and so is
+     * the gap: the capture sent them 200 ms apart. Sent back to back, the AirPods answered with the
+     * settings but never sent the battery (found on the device on 2026-10-02: no rings on the page).
+     */
     private fun sendOpeningFrames() {
         send(AapCodec.handshake())
+        pause()
         send(AapCodec.hostCapabilities())
+        pause()
         send(AapCodec.requestNotifications())
+    }
+
+    /**
+     * Right after the link comes up the AirPods may not send the battery with the settings (seen on
+     * the device on 2026-10-02: no battery for a minute); a second notification request returns it
+     * (AIR-123, order hcnn). Asked again every 3 s, at most five times, until a battery frame came.
+     */
+    private fun requestAgainUntilBattery() {
+        repeat(REREQUESTS) {
+            try {
+                Thread.sleep(REREQUEST_GAP_MS)
+            } catch (e: InterruptedException) {
+                return
+            }
+            if (closed || batterySeen) return
+            send(AapCodec.requestNotifications())
+        }
+    }
+
+    private fun pause() {
+        try {
+            Thread.sleep(OPENING_GAP_MS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
     }
 
     private fun readLoop(input: InputStream): Reason {
@@ -120,6 +154,7 @@ internal class AirPodsSession(
             val message = try {
                 AapCodec.decode(buffer.copyOf(n))
             } catch (e: AirPodsValidationException) {
+                if (isDebuggableBuild()) Log.d(TAG, "rejected: " + e.message)
                 if (++malformedInARow > MAX_MALFORMED_IN_A_ROW) {
                     Log.w(TAG, "peer sends malformed frames, closing")
                     return Reason.PEER_MISBEHAVED
@@ -127,7 +162,9 @@ internal class AirPodsSession(
                 continue
             }
             malformedInARow = 0
+            if (isDebuggableBuild()) Log.d(TAG, "frame " + message.javaClass.simpleName)
             if (message is UnrecognisedMessage) continue
+            if (message is BatteryStatus) batterySeen = true
             if (!published) {
                 published = true
                 AirPodsStateStore.update(SessionReducer.connected(address))
@@ -147,5 +184,10 @@ internal class AirPodsSession(
         /** The longest frame we act on is 22 bytes; the device information frame is about 250. */
         private const val READ_BUFFER = 2048
         private const val MAX_MALFORMED_IN_A_ROW = 8
+
+        /** Gap between the opening frames, as in the capture (AIR-123). */
+        private const val OPENING_GAP_MS = 200L
+        private const val REREQUESTS = 5
+        private const val REREQUEST_GAP_MS = 3_000L
     }
 }
