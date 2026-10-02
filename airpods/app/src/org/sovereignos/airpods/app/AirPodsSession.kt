@@ -11,6 +11,8 @@ import org.sovereignos.airpods.ui.SessionReducer
 import org.sovereignos.airpods.validation.AapCodec
 import org.sovereignos.airpods.validation.AirPodsValidationException
 import org.sovereignos.airpods.validation.BatteryStatus
+import org.sovereignos.airpods.validation.ConversationAwarenessLevel
+import org.sovereignos.airpods.validation.EarState
 import org.sovereignos.airpods.validation.ListeningModeState
 import org.sovereignos.airpods.validation.UnrecognisedMessage
 
@@ -33,6 +35,8 @@ internal class AirPodsSession(
     /** Called on the session thread. */
     interface Listener {
         fun onPublished(session: AirPodsSession)
+        fun onEars(session: AirPodsSession, inEar: Int)
+        fun onConversation(session: AirPodsSession, level: Int)
         fun onEnded(session: AirPodsSession, reason: Reason)
     }
 
@@ -175,6 +179,11 @@ internal class AirPodsSession(
                 AirPodsStateStore.update(SessionReducer.connected(address, earDetectionKept))
                 listener.onPublished(this)
             }
+            if (message is EarState) {
+                val inEar = listOf(message.primary(), message.secondary()).count { it == EarState.Placement.IN_EAR }
+                listener.onEars(this, inEar)
+            }
+            if (message is ConversationAwarenessLevel) listener.onConversation(this, message.level())
             AirPodsStateStore.transform { SessionReducer.apply(it, message) }
         }
         return Reason.CLOSED_BY_US

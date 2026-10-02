@@ -30,6 +30,8 @@ internal object AirPodsSessionHost {
     private var session: AirPodsSession? = null
     private var attempt = 0
     private var sinkBeforeSession: AirPodsCommandSink? = null
+    private var ears: EarDetectionController? = null
+    private var duck: ConversationDuckController? = null
     private val retry = Runnable { connect() }
 
     /** True while a published session exists. The debug input stays quiet then. */
@@ -137,6 +139,10 @@ internal object AirPodsSessionHost {
         val earDetection = service?.let { EarDetectionStore.read(it.applicationContext, address) } ?: true
         val s = AirPodsSession(device, address, opener, earDetection, listener)
         session = s
+        service?.let { ears = EarDetectionController(it.applicationContext, device, earDetection) }
+        // The conversation awareness switch value arrives with the AirPods' first reports; the controller
+        // follows the state store from then on, so it starts with the switch off.
+        service?.let { duck = ConversationDuckController(it.applicationContext, false) }
         s.start()
     }
 
@@ -151,6 +157,21 @@ internal object AirPodsSessionHost {
             }
         }
 
+        override fun onEars(session: AirPodsSession, inEar: Int) {
+            main.post {
+                if (this@AirPodsSessionHost.session === session) {
+                    ears?.onEars(inEar)
+                    if (inEar == 0) duck?.onPodsOut()
+                }
+            }
+        }
+
+        override fun onConversation(session: AirPodsSession, level: Int) {
+            main.post {
+                if (this@AirPodsSessionHost.session === session) duck?.onLevel(level)
+            }
+        }
+
         override fun onEnded(session: AirPodsSession, reason: AirPodsSession.Reason) {
             main.post { ended(session, reason) }
         }
@@ -158,6 +179,10 @@ internal object AirPodsSessionHost {
 
     private fun ended(ended: AirPodsSession, reason: AirPodsSession.Reason) {
         if (session !== ended) return
+        ears?.end()
+        ears = null
+        duck?.end()
+        duck = null
         session = null
         if (live) {
             live = false

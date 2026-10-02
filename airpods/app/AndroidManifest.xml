@@ -8,6 +8,7 @@
          permission, and every Guardian permission. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- The session runs in a foreground service of type connectedDevice so the process is not
          frozen as a cached app (a cached app does not run). The service is started from the
          broadcast receiver and at process start, both in the background, which needs the privileged
@@ -47,9 +48,11 @@
             android:grantUriPermissions="true" />
 
         <!-- Starts the process, the AirPods session and the retry of pending metadata writes when an
-             AirPods' link comes up or goes away or its bond changes. All three are protected
-             broadcasts (only the system can send them); the
-             Bluetooth process sends them as its own uid, so the receiver must be exported. -->
+             AirPods' link comes up or goes away or its bond changes, and once after boot (the
+             process then finds a link that came up while the phone was still locked: those
+             broadcasts are not delivered before the first unlock). All four are protected
+             broadcasts (only the system can send them); the Bluetooth process sends the first three
+             as its own uid, so the receiver must be exported. -->
         <receiver
             android:name=".app.ConnectionReceiver"
             android:exported="true">
@@ -57,6 +60,7 @@
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
                 <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
                 <action android:name="android.bluetooth.device.action.BOND_STATE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
     </application>
