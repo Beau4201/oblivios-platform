@@ -1,6 +1,7 @@
 package org.sovereignos.airpods.ui;
 
 import org.sovereignos.airpods.ui.AirPodsUiState.Feature;
+import org.sovereignos.airpods.validation.AdaptiveLevelSetting;
 import org.sovereignos.airpods.validation.AirPodsMessage;
 import org.sovereignos.airpods.validation.BatteryStatus;
 import org.sovereignos.airpods.validation.ConversationAwarenessSetting;
@@ -13,8 +14,8 @@ import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode;
  * it (the feature set is evidence, not a model table), so a model without conversation awareness
  * never shows the switch. The ear detection switch is the exception: this pair never reports that
  * setting (AIR-123), so it is offered from the start with a value we keep ourselves. Adaptive mode
- * is not offered yet: an "adaptive" report clears the
- * selection instead of throwing. Frames that do not change the UI return the same instance.
+ * is offered once the pair reports it or reports its strength (ADR-126). Frames that do not change
+ * the UI return the same instance.
  */
 public final class SessionReducer {
     private SessionReducer() {}
@@ -32,8 +33,14 @@ public final class SessionReducer {
         if (!s.isConnected()) return s;
         if (m instanceof BatteryStatus b) return battery(s, b);
         if (m instanceof ListeningModeState l) {
-            ListeningMode shown = l.mode() == ListeningMode.ADAPTIVE ? null : l.mode();
-            return s.toBuilder().listeningMode(shown).feature(Feature.LISTENING_MODE).build();
+            // A report of adaptive mode proves the pair has it, so the button is offered with it.
+            AirPodsUiState.Builder b = s.toBuilder().listeningMode(l.mode()).feature(Feature.LISTENING_MODE);
+            if (l.mode() == ListeningMode.ADAPTIVE) b.feature(Feature.ADAPTIVE_MODE);
+            return b.build();
+        }
+        if (m instanceof AdaptiveLevelSetting) {
+            // Only pairs that have adaptive mode report its strength: offer the button, change nothing else.
+            return s.toBuilder().feature(Feature.ADAPTIVE_MODE).build();
         }
         if (m instanceof EarDetectionSetting e) {
             return s.toBuilder().earDetection(e.enabled()).feature(Feature.EAR_DETECTION).build();

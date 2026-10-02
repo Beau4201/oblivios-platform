@@ -49,8 +49,16 @@ public final class SessionLogicCheck {
         AirPodsUiState off = feed(m, "04 00 04 00 09 00 0D 01 00 00 00");
         check(off.listeningMode == ListeningMode.OFF, "off");
         AirPodsUiState ad = feed(m, "04 00 04 00 09 00 0D 04 00 00 00");
-        check(ad.listeningMode == null && ad.supported.contains(Feature.LISTENING_MODE)
-                && !ad.supported.contains(Feature.ADAPTIVE_MODE), "adaptive clears the selection, does not throw");
+        check(ad.listeningMode == ListeningMode.ADAPTIVE && ad.supported.contains(Feature.LISTENING_MODE)
+                && ad.supported.contains(Feature.ADAPTIVE_MODE), "adaptive is shown and the button is offered with it");
+        check(ListeningModeToggles.modes(ad).equals(List.of(ListeningMode.OFF, ListeningMode.TRANSPARENCY, ListeningMode.ADAPTIVE, ListeningMode.ANC)),
+                "four buttons in the iPhone's order once adaptive is reported");
+        AirPodsUiState strength = feed(m, "04 00 04 00 09 00 2E 32 00 00 00");
+        check(strength.supported.contains(Feature.ADAPTIVE_MODE) && strength.listeningMode == ListeningMode.TRANSPARENCY,
+                "the adaptive strength report offers the button without changing the mode");
+        check(feed(strength, "04 00 04 00 09 00 0D 04 00 00 00").listeningMode == ListeningMode.ADAPTIVE, "adaptive after the offer");
+        check(feed(feed(ad, "04 00 04 00 09 00 0D 02 00 00 00"), "04 00 04 00 09 00 0D 04 00 00 00").listeningMode == ListeningMode.ADAPTIVE,
+                "adaptive after noise cancel and back");
         AirPodsUiState e = feed(m, "04 00 04 00 09 00 0A 01 00 00 00");
         check(e.earDetection && e.supported.contains(Feature.EAR_DETECTION), "ear detection on");
         check(!feed(e, "04 00 04 00 09 00 0A 02 00 00 00").earDetection, "ear detection off");

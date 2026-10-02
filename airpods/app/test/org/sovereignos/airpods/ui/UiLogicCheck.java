@@ -79,7 +79,8 @@ public final class UiLogicCheck {
         List<ListeningMode> three = ListeningModeToggles.modes(st);
         check(three.equals(List.of(ListeningMode.OFF, ListeningMode.TRANSPARENCY, ListeningMode.ANC)), "three modes in design order");
         AirPodsUiState ad = full().feature(Feature.ADAPTIVE_MODE).build();
-        check(ListeningModeToggles.modes(ad).size() == 4 && ListeningModeToggles.modes(ad).get(3) == ListeningMode.ADAPTIVE, "adaptive is the fourth");
+        check(ListeningModeToggles.modes(ad).equals(List.of(ListeningMode.OFF, ListeningMode.TRANSPARENCY, ListeningMode.ADAPTIVE, ListeningMode.ANC)), "adaptive sits before noise cancel");
+        check(ListeningModeToggles.indexOf(ListeningModeToggles.modes(ad), ListeningMode.ANC) == 3, "noise cancel is last with adaptive");
         check(ListeningModeToggles.indexOf(three, ListeningMode.ANC) == 2, "index of ANC");
         check(ListeningModeToggles.indexOf(three, ListeningMode.ADAPTIVE) == -1, "adaptive absent");
         check(ListeningModeToggles.indexOf(three, null) == -1, "null mode");

@@ -6,7 +6,7 @@ import java.util.List;
 import org.sovereignos.airpods.ui.AirPodsUiState.Feature;
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode;
 
-/** The buttons of the listening-mode toggle, in the order of the approved design. */
+/** The buttons of the listening-mode toggle in the iPhone's order: Off, Transparency, Adaptive (when the pair has it), Noise cancel (ADR-126). */
 public final class ListeningModeToggles {
     private ListeningModeToggles() {}
 
@@ -14,8 +14,8 @@ public final class ListeningModeToggles {
         List<ListeningMode> m = new ArrayList<>();
         m.add(ListeningMode.OFF);
         m.add(ListeningMode.TRANSPARENCY);
-        m.add(ListeningMode.ANC);
         if (s.supported.contains(Feature.ADAPTIVE_MODE)) m.add(ListeningMode.ADAPTIVE);
+        m.add(ListeningMode.ANC);
         return Collections.unmodifiableList(m);
     }
 

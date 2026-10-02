@@ -9,3 +9,5 @@ JAR="$HERE/core/airpods-core.jar"
 javac -d "$OUT" -cp "$JAR" "$HERE"/app/src/org/sovereignos/airpods/ui/*.java "$HERE"/app/test/org/sovereignos/airpods/ui/*.java
 java -ea -cp "$OUT:$JAR" org.sovereignos.airpods.ui.UiLogicCheck
 java -ea -cp "$OUT:$JAR" org.sovereignos.airpods.ui.SessionLogicCheck
+java -ea -cp "$OUT:$JAR" org.sovereignos.airpods.ui.EarDetectionCheck
+java -ea -cp "$OUT:$JAR" org.sovereignos.airpods.ui.ConversationAwarenessCheck
