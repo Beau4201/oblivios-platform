@@ -1,0 +1,21 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// Debug capture tool for the AirPods accessory protocol (Plan 7A task 4). Not in PRODUCT_PACKAGES:
+// it is built on demand and installed with adb. It reaches the hidden BluetoothDevice method through
+// the debug-only allow-list setting hidden_api_blacklist_exemptions, which the owner sets for the
+// capture and clears afterwards.
+android_app {
+    name: "AirPodsProbe",
+    manifest: "AndroidManifest.xml",
+    srcs: ["src/**/*.java"],
+    static_libs: ["airpods-core-prebuilt"],
+    sdk_version: "system_current",
+    optimize: {
+        enabled: false,
+    },
+    dex_preopt: {
+        enabled: false,
+    },
+}

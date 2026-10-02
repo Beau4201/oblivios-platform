@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug tool, never part of an image: built with `m AirPodsProbe` and installed with adb on a
+     userdebug device. It opens the AirPods accessory channel and logs what the AirPods send, to
+     capture real frames for the codec. Not added to PRODUCT_PACKAGES. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.sovereignos.airpods.probe">
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <application android:label="AirPodsProbe" android:allowBackup="false">
+        <activity android:name=".ProbeActivity" android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+    </application>
+</manifest>
