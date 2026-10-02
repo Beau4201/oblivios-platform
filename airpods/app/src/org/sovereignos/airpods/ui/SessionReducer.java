@@ -11,7 +11,8 @@ import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode;
 /**
  * Turns decoded frames into the UI state. A control is offered only once the device has reported
  * it (the feature set is evidence, not a model table), so a model without conversation awareness
- * never shows the switch. Adaptive mode is not offered yet: an "adaptive" report clears the
+ * never shows the switch, and the off button appears only once the device has reported off.
+ * Adaptive mode is not offered yet: an "adaptive" report clears the
  * selection instead of throwing. Frames that do not change the UI return the same instance.
  */
 public final class SessionReducer {
@@ -27,7 +28,10 @@ public final class SessionReducer {
         if (m instanceof BatteryStatus b) return battery(s, b);
         if (m instanceof ListeningModeState l) {
             ListeningMode shown = l.mode() == ListeningMode.ADAPTIVE ? null : l.mode();
-            return s.toBuilder().listeningMode(shown).feature(Feature.LISTENING_MODE).build();
+            AirPodsUiState.Builder b = s.toBuilder().listeningMode(shown).feature(Feature.LISTENING_MODE);
+            // A device that reports off allows off; one that never does keeps the button hidden.
+            if (l.mode() == ListeningMode.OFF) b.feature(Feature.OFF_MODE);
+            return b.build();
         }
         if (m instanceof EarDetectionSetting e) {
             return s.toBuilder().earDetection(e.enabled()).feature(Feature.EAR_DETECTION).build();

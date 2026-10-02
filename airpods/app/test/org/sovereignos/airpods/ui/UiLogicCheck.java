@@ -34,7 +34,7 @@ public final class UiLogicCheck {
                 .listeningMode(ListeningMode.ANC)
                 .earDetection(true)
                 .conversationAwareness(false)
-                .features(Feature.LISTENING_MODE, Feature.EAR_DETECTION, Feature.CONVERSATION_AWARENESS);
+                .features(Feature.LISTENING_MODE, Feature.OFF_MODE, Feature.EAR_DETECTION, Feature.CONVERSATION_AWARENESS);
     }
 
     public static void main(String[] args) {
@@ -104,7 +104,7 @@ public final class UiLogicCheck {
         check(NativePageLayout.items(onlyEar).stream().noneMatch(i -> i.settingId == NativePageLayout.ID_CONVERSATION), "unsupported switch hidden, not disabled");
 
         // ---- DebugStateParser
-        AirPodsUiState p = DebugStateParser.parse("addr=AA:BB:CC:DD:EE:FF;l=80;r=82;c=100;lc=0;rc=0;cc=1;mode=ANC;ear=1;conv=0;feat=LISTENING_MODE,EAR_DETECTION,CONVERSATION_AWARENESS");
+        AirPodsUiState p = DebugStateParser.parse("addr=AA:BB:CC:DD:EE:FF;l=80;r=82;c=100;lc=0;rc=0;cc=1;mode=ANC;ear=1;conv=0;feat=LISTENING_MODE,OFF_MODE,EAR_DETECTION,CONVERSATION_AWARENESS");
         check(p.equals(st), "parser round trip");
         check(!DebugStateParser.parse(null).isConnected() && !DebugStateParser.parse("").isConnected() && !DebugStateParser.parse("off").isConnected(), "empty and off");
         check(DebugStateParser.parse("addr=AA:BB:CC:DD:EE:FF;mode=-").listeningMode == null, "mode dash is unknown");

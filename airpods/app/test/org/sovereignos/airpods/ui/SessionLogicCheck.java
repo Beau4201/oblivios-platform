@@ -55,6 +55,15 @@ public final class SessionLogicCheck {
         check(c.conversationAwareness && c.supported.contains(Feature.CONVERSATION_AWARENESS), "conversation on");
         check(!feed(c, "04 00 04 00 09 00 28 02 00 00 00").conversationAwareness, "conversation off");
 
+        // the off button is offered only after the device has reported off (a pair refused it)
+        check(ListeningModeToggles.modes(m).equals(List.of(ListeningMode.TRANSPARENCY, ListeningMode.ANC)),
+                "two buttons until the device reports off");
+        check(!m.supported.contains(Feature.OFF_MODE), "off not allowed by default");
+        check(off.supported.contains(Feature.OFF_MODE)
+                && ListeningModeToggles.modes(off).equals(List.of(ListeningMode.OFF, ListeningMode.TRANSPARENCY, ListeningMode.ANC)),
+                "off offered once reported");
+        check(feed(off, "04 00 04 00 09 00 0D 02 00 00 00").supported.contains(Feature.OFF_MODE), "off stays offered for the session");
+
         // nothing else changes the UI, and nothing changes a disconnected state
         check(feed(c, "04 00 04 00 06 00 00 02") == c, "ear state is not shown");
         check(feed(c, "04 00 04 00 1D 00 00 02 D5 00") == c, "unrecognised frame");

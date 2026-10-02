@@ -133,7 +133,7 @@ internal class AirPodsSession(
                 AirPodsStateStore.update(SessionReducer.connected(address))
                 listener.onPublished(this)
             }
-            AirPodsStateStore.update(SessionReducer.apply(AirPodsStateStore.state, message))
+            AirPodsStateStore.transform { SessionReducer.apply(it, message) }
         }
         return Reason.CLOSED_BY_US
     }

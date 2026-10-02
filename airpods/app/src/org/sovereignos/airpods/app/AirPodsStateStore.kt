@@ -16,17 +16,25 @@ object AirPodsStateStore {
     var state: AirPodsUiState = AirPodsUiState.DISCONNECTED
         private set
 
-    /** Returns false when nothing changed. Listeners run on the caller's thread. */
-    fun update(next: AirPodsUiState): Boolean {
-        val old = synchronized(lock) {
-            if (next == state) return false
+    /**
+     * Atomic read-modify-write: the session's reader thread and the command sink both change the
+     * state, so a change that depends on the current state must be made here, not from a copy read
+     * outside. Returns false when nothing changed. Listeners run on the caller's thread.
+     */
+    fun transform(change: (AirPodsUiState) -> AirPodsUiState): Boolean {
+        val (old, next) = synchronized(lock) {
             val previous = state
-            state = next
-            previous
+            val updated = change(previous)
+            if (updated == previous) return false
+            state = updated
+            previous to updated
         }
         for (listener in listeners) listener.onStateChanged(old, next)
         return true
     }
+
+    /** Returns false when nothing changed. Listeners run on the caller's thread. */
+    fun update(next: AirPodsUiState): Boolean = transform { next }
 
     fun addListener(listener: Listener) {
         listeners.addIfAbsent(listener)
