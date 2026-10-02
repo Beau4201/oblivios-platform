@@ -12,7 +12,7 @@ public final class ListeningModeToggles {
 
     public static List<ListeningMode> modes(AirPodsUiState s) {
         List<ListeningMode> m = new ArrayList<>();
-        if (s.supported.contains(Feature.OFF_MODE)) m.add(ListeningMode.OFF);
+        m.add(ListeningMode.OFF);
         m.add(ListeningMode.TRANSPARENCY);
         m.add(ListeningMode.ANC);
         if (s.supported.contains(Feature.ADAPTIVE_MODE)) m.add(ListeningMode.ADAPTIVE);

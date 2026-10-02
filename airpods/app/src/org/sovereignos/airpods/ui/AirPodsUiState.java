@@ -16,11 +16,6 @@ public final class AirPodsUiState {
     /** What the exact model and firmware supports (design 5.1: unsupported controls are hidden). */
     public enum Feature {
         LISTENING_MODE,
-        /**
-         * The AirPods accept "off". Some pairs refuse it (a pair answered a request for off with noise
-         * cancel on 2026-10-02), so the off button is offered only after the device has reported off.
-         */
-        OFF_MODE,
         ADAPTIVE_MODE,
         EAR_DETECTION,
         CONVERSATION_AWARENESS,

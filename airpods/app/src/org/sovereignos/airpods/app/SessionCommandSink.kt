@@ -1,5 +1,6 @@
 package org.sovereignos.airpods.app
 
+import android.content.Context
 import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.ui.ListeningModeToggles
 import org.sovereignos.airpods.ui.SessionReducer
@@ -15,10 +16,24 @@ import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
  * it (they answer every request, and refuse what they do not allow); the two comfort settings are
  * not reported after a write, so the written value is applied.
  */
-internal class SessionCommandSink(private val session: AirPodsSession) : AirPodsCommandSink {
+internal class SessionCommandSink(
+    private val session: AirPodsSession,
+    private val context: Context?,
+) : AirPodsCommandSink {
     override fun setListeningMode(mode: ListeningMode): Boolean {
         val state = AirPodsStateStore.state
         if (!state.isConnected || mode !in ListeningModeToggles.modes(state)) return false
+        if (mode == ListeningMode.OFF) {
+            // A pair with the off option disabled refuses off and answers with another mode (AIR-123);
+            // asking for off is the owner's intent, so allow it first. Idempotent when already allowed.
+            if (!session.send(AapCodec.setAllowOffOption(true))) return false
+            try {
+                Thread.sleep(ALLOW_OFF_GAP_MS)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+        }
         return session.send(AapCodec.setListeningMode(mode))
     }
 
@@ -43,6 +58,15 @@ internal class SessionCommandSink(private val session: AirPodsSession) : AirPods
         // the setting does change, a new connection reads the new value), so the written value is
         // shown now and the next connection reads the real one.
         AirPodsStateStore.transform { SessionReducer.apply(it, written) }
+        val address = state.address
+        if (feature == AirPodsUiState.Feature.EAR_DETECTION && context != null && address != null) {
+            EarDetectionStore.write(context, address, enabled)
+        }
         return true
+    }
+
+    private companion object {
+        /** Pause between "allow off" and "off", as between the opening frames (AIR-123). */
+        const val ALLOW_OFF_GAP_MS = 200L
     }
 }

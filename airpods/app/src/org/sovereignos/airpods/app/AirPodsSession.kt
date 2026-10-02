@@ -11,6 +11,7 @@ import org.sovereignos.airpods.ui.SessionReducer
 import org.sovereignos.airpods.validation.AapCodec
 import org.sovereignos.airpods.validation.AirPodsValidationException
 import org.sovereignos.airpods.validation.BatteryStatus
+import org.sovereignos.airpods.validation.ListeningModeState
 import org.sovereignos.airpods.validation.UnrecognisedMessage
 
 /**
@@ -24,6 +25,7 @@ internal class AirPodsSession(
     private val device: BluetoothDevice,
     private val address: String,
     private val opener: AirPodsSocketOpener,
+    private val earDetectionKept: Boolean,
     private val listener: Listener,
 ) {
     enum class Reason { CLOSED_BY_US, UNSUPPORTED, CONNECT_FAILED, STREAM_ENDED, PEER_MISBEHAVED }
@@ -36,6 +38,7 @@ internal class AirPodsSession(
 
     @Volatile private var closed = false
     @Volatile private var batterySeen = false
+    @Volatile private var modeSeen = false
     @Volatile private var socket: BluetoothSocket? = null
     private var output: OutputStream? = null
     private val writeLock = Any()
@@ -83,7 +86,7 @@ internal class AirPodsSession(
             s.connect()
             output = s.outputStream
             sendOpeningFrames()
-            Thread({ requestAgainUntilBattery() }, "AirPodsSession-refresh").apply { isDaemon = true }.start()
+            Thread({ requestAgainUntilComplete() }, "AirPodsSession-refresh").apply { isDaemon = true }.start()
             reason = readLoop(s.inputStream)
         } catch (e: IOException) {
             reason = if (closed) Reason.CLOSED_BY_US else Reason.CONNECT_FAILED
@@ -115,18 +118,19 @@ internal class AirPodsSession(
     }
 
     /**
-     * Right after the link comes up the AirPods may not send the battery with the settings (seen on
-     * the device on 2026-10-02: no battery for a minute); a second notification request returns it
-     * (AIR-123, order hcnn). Asked again every 3 s, at most five times, until a battery frame came.
+     * Right after the link comes up the AirPods may send only part of what they know (seen on the
+     * device on 2026-10-02: once the settings without the battery, once the battery and the settings
+     * three seconds later); a second notification request returns the battery (AIR-123, order hcnn).
+     * Asked again every 3 s, at most five times, until a battery and a listening mode frame came.
      */
-    private fun requestAgainUntilBattery() {
+    private fun requestAgainUntilComplete() {
         repeat(REREQUESTS) {
             try {
                 Thread.sleep(REREQUEST_GAP_MS)
             } catch (e: InterruptedException) {
                 return
             }
-            if (closed || batterySeen) return
+            if (closed || (batterySeen && modeSeen)) return
             send(AapCodec.requestNotifications())
         }
     }
@@ -165,9 +169,10 @@ internal class AirPodsSession(
             if (isDebuggableBuild()) Log.d(TAG, "frame " + message.javaClass.simpleName)
             if (message is UnrecognisedMessage) continue
             if (message is BatteryStatus) batterySeen = true
+            if (message is ListeningModeState) modeSeen = true
             if (!published) {
                 published = true
-                AirPodsStateStore.update(SessionReducer.connected(address))
+                AirPodsStateStore.update(SessionReducer.connected(address, earDetectionKept))
                 listener.onPublished(this)
             }
             AirPodsStateStore.transform { SessionReducer.apply(it, message) }

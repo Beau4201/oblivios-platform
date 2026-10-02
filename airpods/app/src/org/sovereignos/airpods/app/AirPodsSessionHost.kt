@@ -20,6 +20,7 @@ import org.sovereignos.airpods.ui.Backoff
  */
 internal object AirPodsSessionHost {
     private const val TAG = "AirPodsHost"
+    private const val SETTLE_MS = 300L
 
     private val main = Handler(Looper.getMainLooper())
     private val opener: AirPodsSocketOpener = HiddenL2capOpener
@@ -64,8 +65,12 @@ internal object AirPodsSessionHost {
         }
         AirPodsStateStore.addListener(listener)
         try {
-            if (AirPodsUiState.Feature.LISTENING_MODE !in AirPodsStateStore.state.supported) {
+            if (AirPodsUiState.Feature.LISTENING_MODE !in AirPodsStateStore.state.supported &&
                 latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            ) {
+                // The settings arrive as one burst a few milliseconds apart; let the rest of it land
+                // (a page laid out between the mode and the conversation awareness frame lacks a row).
+                Thread.sleep(SETTLE_MS)
             }
         } finally {
             AirPodsStateStore.removeListener(listener)
@@ -128,7 +133,9 @@ internal object AirPodsSessionHost {
             retryOrStop(device)
             return
         }
-        val s = AirPodsSession(device, device.address.uppercase(), opener, listener)
+        val address = device.address.uppercase()
+        val earDetection = service?.let { EarDetectionStore.read(it.applicationContext, address) } ?: true
+        val s = AirPodsSession(device, address, opener, earDetection, listener)
         session = s
         s.start()
     }
@@ -140,7 +147,7 @@ internal object AirPodsSessionHost {
                 attempt = 0
                 live = true
                 sinkBeforeSession = AirPodsCommands.sink
-                AirPodsCommands.sink = SessionCommandSink(session)
+                AirPodsCommands.sink = SessionCommandSink(session, service?.applicationContext)
             }
         }
 

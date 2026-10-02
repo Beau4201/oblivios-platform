@@ -25,8 +25,10 @@ public final class SessionLogicCheck {
     }
 
     public static void main(String[] args) {
-        AirPodsUiState s0 = SessionReducer.connected(ADDR);
-        check(s0.isConnected() && s0.supported.isEmpty() && s0.leftPercent == -1 && s0.listeningMode == null, "connected is empty");
+        AirPodsUiState s0 = SessionReducer.connected(ADDR, true);
+        check(s0.isConnected() && s0.supported.equals(java.util.Set.of(Feature.EAR_DETECTION)) && s0.earDetection
+                && s0.leftPercent == -1 && s0.listeningMode == null, "connected offers only ear detection, with the kept value");
+        check(!SessionReducer.connected(ADDR, false).earDetection, "kept ear detection value is used");
 
         // battery: left 100 discharging, right 99 charging, case 17 discharging (documented sample)
         AirPodsUiState s1 = feed(s0, "04 00 04 00 04 00 03 04 01 64 02 01 02 01 63 01 01 08 01 11 02 01");
@@ -39,8 +41,9 @@ public final class SessionLogicCheck {
         AirPodsUiState s3 = feed(s2, "04 00 04 00 04 00 01 02 01 FF 04 01");
         check(s3.rightPercent == -1 && !s3.rightCharging && s3.leftPercent == 100, "disconnected pod");
 
-        // controls appear with the first report of each setting
+        // the listening mode and conversation awareness appear with the first report of each
         check(!s1.supported.contains(Feature.LISTENING_MODE), "no mode before a report");
+        check(!s1.supported.contains(Feature.CONVERSATION_AWARENESS), "no conversation switch before a report");
         AirPodsUiState m = feed(s1, "04 00 04 00 09 00 0D 03 00 00 00");
         check(m.listeningMode == ListeningMode.TRANSPARENCY && m.supported.contains(Feature.LISTENING_MODE), "mode report");
         AirPodsUiState off = feed(m, "04 00 04 00 09 00 0D 01 00 00 00");
@@ -55,14 +58,9 @@ public final class SessionLogicCheck {
         check(c.conversationAwareness && c.supported.contains(Feature.CONVERSATION_AWARENESS), "conversation on");
         check(!feed(c, "04 00 04 00 09 00 28 02 00 00 00").conversationAwareness, "conversation off");
 
-        // the off button is offered only after the device has reported off (a pair refused it)
-        check(ListeningModeToggles.modes(m).equals(List.of(ListeningMode.TRANSPARENCY, ListeningMode.ANC)),
-                "two buttons until the device reports off");
-        check(!m.supported.contains(Feature.OFF_MODE), "off not allowed by default");
-        check(off.supported.contains(Feature.OFF_MODE)
-                && ListeningModeToggles.modes(off).equals(List.of(ListeningMode.OFF, ListeningMode.TRANSPARENCY, ListeningMode.ANC)),
-                "off offered once reported");
-        check(feed(off, "04 00 04 00 09 00 0D 02 00 00 00").supported.contains(Feature.OFF_MODE), "off stays offered for the session");
+        // three buttons in the design's order once the device has reported a mode
+        check(ListeningModeToggles.modes(m).equals(List.of(ListeningMode.OFF, ListeningMode.TRANSPARENCY, ListeningMode.ANC)),
+                "off, transparency, noise cancel");
 
         // nothing else changes the UI, and nothing changes a disconnected state
         check(feed(c, "04 00 04 00 06 00 00 02") == c, "ear state is not shown");

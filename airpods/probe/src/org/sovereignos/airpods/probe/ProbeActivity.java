@@ -23,7 +23,7 @@ import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode;
  * adb shell am start -n org.sovereignos.airpods.probe/.ProbeActivity --es address AA:BB:CC:DD:EE:FF
  *   --ei seconds 30 --es order hcn --es cmds mode:3,ca:1
  * order: h handshake, c host capabilities, n request notifications, in the given order, 200 ms apart.
- * cmds: sent from second 8 on, 3 s apart: mode:1..3 (off, anc, transparency), ca:0|1, ear:0|1.
+ * cmds: sent from second 8 on, 3 s apart: mode:1..3 (off, anc, transparency), ca:0|1, ear:0|1, raw:<hex>.
  * Everything goes to logcat tag AirPodsProbe. A frame is printed in hex only if it is a kind the
  * codec acts on (opcode 4, 6, 9) or has no standard header; a device information frame (opcode 0x1D,
  * serial numbers) is never printed, only its length.
@@ -144,6 +144,11 @@ public final class ProbeActivity extends Activity {
                 f = AapCodec.setConversationAwareness(kv[1].equals("1"));
             } else if (kv[0].equals("ear")) {
                 f = AapCodec.setEarDetection(kv[1].equals("1"));
+            } else if (kv[0].equals("raw")) {
+                // raw:<hex without spaces>, for example raw:04000400090034010000 00 (a control frame)
+                String h = kv[1];
+                f = new byte[h.length() / 2];
+                for (int i = 0; i < f.length; i++) f[i] = (byte) Integer.parseInt(h.substring(2 * i, 2 * i + 2), 16);
             } else {
                 continue;
             }
