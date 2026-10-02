@@ -2,19 +2,20 @@
 
 ## airpods-core.jar
 
-- Source: `sovereignos-services` commit `92d29b75abe310b68a18024aafd3c3c24dec2f24`
-  (`master`, "airpods: make fuzz test generate structurally valid frames").
+- Source: `sovereignos-services` commit `1de2180a629b7458e4e49b5d2f8058a62332ee2d`
+  (`master`, "airpods: replace the placeholder frame parser with a codec for the real accessory protocol").
 - Build command: `./gradlew :airpods-core:clean :airpods-core:test :airpods-core:jar --offline`
   (Java 21 toolchain, zero runtime dependencies: `airpods-core/build.gradle.kts`
   lists only test dependencies). Output `airpods-core-0.1.0-SNAPSHOT.jar`,
   vendored under the name `airpods-core.jar`.
-- Tests at that commit: 7 classes, 22 tests, 0 failures, 0 errors, 0 skipped.
-- SHA-256: `324091f9bafadc0b2b6105a830d17f88835c0868b0a3bd97b2c0965538801a55`.
+- Tests at that commit: 25 tests, 0 failures, 0 errors, 0 skipped (`AapCodecTest`, `AapCodecFuzzTest`, the
+  state-machine and contract tests); the codec was mutation-checked (6 of 7 mutations killed, the seventh is equivalent).
+- SHA-256: `51873678013d12e60aaf07859198f7427147b5b65e392b6ee2af3ab10d46ee75`.
   Rebuilt from clean a second time with the same command: same hash.
-- 18 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
+- 25 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
   class-file major version 65, the same as the vendored `guardian-core.jar`.
-- Vendored 2026-09-29. Re-vendor whenever `airpods-core` changes, and record the
-  new commit and hash here.
+- Replaces the jar of 2026-09-29 (`324091f9...`), whose parser decoded an invented format that no AirPods sends.
+  Vendored 2026-10-02. Re-vendor whenever `airpods-core` changes, and record the new commit and hash here.
 
 ## AirPodsApp (`app/`)
 
