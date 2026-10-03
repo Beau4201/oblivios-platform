@@ -105,12 +105,12 @@ public final class UiLogicCheck {
         check("action_buttons".equals(items.get(1).builtinKey), "action buttons kept");
         check(items.get(2).kind == NativePageLayout.Kind.LISTENING_TOGGLE && items.get(2).groupIndex == NativePageLayout.GROUP_LISTENING, "toggle group 0");
         check(items.get(3).groupIndex == NativePageLayout.GROUP_COMFORT && items.get(4).groupIndex == NativePageLayout.GROUP_COMFORT
-                && items.get(5).groupIndex == NativePageLayout.GROUP_COMFORT && items.get(5).kind == NativePageLayout.Kind.DUCK_LEVEL_TOGGLE,
+                && items.get(5).groupIndex == NativePageLayout.GROUP_DUCK && items.get(5).kind == NativePageLayout.Kind.DUCK_LEVEL_TOGGLE,
                 "switches and the lowered-volume choice in group 1");
         check(items.get(6).groupIndex == null && items.get(7).groupIndex == null, "builtins have no group");
         List<NativePageLayout.Item> withLink = NativePageLayout.items(full().feature(Feature.ALL_SETTINGS_PAGE).build());
         check(withLink.size() == 9 && withLink.get(6).settingId == NativePageLayout.ID_ALL_SETTINGS
-                && withLink.get(6).kind == NativePageLayout.Kind.ALL_SETTINGS_LINK && withLink.get(6).groupIndex == NativePageLayout.GROUP_COMFORT, "link after the switches and the choice");
+                && withLink.get(6).kind == NativePageLayout.Kind.ALL_SETTINGS_LINK && withLink.get(6).groupIndex == null, "flat link after the switches and the choice");
         AirPodsUiState bare = full().features().build();
         check(NativePageLayout.items(bare).size() == 4, "no features: only builtins");
         AirPodsUiState onlyEar = full().features(Feature.EAR_DETECTION).build();

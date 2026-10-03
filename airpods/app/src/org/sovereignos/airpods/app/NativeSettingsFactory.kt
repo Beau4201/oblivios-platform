@@ -49,10 +49,11 @@ internal class NativeSettingsFactory(private val context: Context) {
         return DeviceSettingsConfig(
             mainContentItems = items,
             moreSettingsItems = emptyList(),
-            // Indexes of NativePageLayout.GROUP_LISTENING and GROUP_COMFORT.
+            // Indexes of NativePageLayout.GROUP_LISTENING, GROUP_COMFORT and GROUP_DUCK.
             settingGroups = listOf(
                 DeviceSettingGroup(context.getString(R.string.airpods_group_listening)),
                 DeviceSettingGroup(context.getString(R.string.airpods_group_comfort)),
+                DeviceSettingGroup(context.getString(R.string.airpods_duck_title)),
             ),
         )
     }
