@@ -1,0 +1,60 @@
+From 620cbdeef1b45b2590d3705fcdd770c13352308c Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sat, 3 Oct 2026 21:47:06 +0200
+Subject: [PATCH] airpods: rename the nested duck record that clashes with
+ java.lang.Record
+
+Error Prone rejects a nested class named Record (JavaLangClash), which stopped
+the Bluetooth module build. Rename it to Ducked.
+---
+ .../bluetooth/btservice/AirPodsDuckTracker.java        | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/android/app/src/com/android/bluetooth/btservice/AirPodsDuckTracker.java b/android/app/src/com/android/bluetooth/btservice/AirPodsDuckTracker.java
+index 3c89ffe93f..791cff352d 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AirPodsDuckTracker.java
++++ b/android/app/src/com/android/bluetooth/btservice/AirPodsDuckTracker.java
+@@ -37,11 +37,11 @@ final class AirPodsDuckTracker {
+     /** No volume change. */
+     static final int NONE = -1;
+ 
+-    private static final class Record {
++    private static final class Ducked {
+         final int original;
+         final int lowered;
+ 
+-        Record(int original, int lowered) {
++        Ducked(int original, int lowered) {
+             this.original = original;
+             this.lowered = lowered;
+         }
+@@ -50,7 +50,7 @@ final class AirPodsDuckTracker {
+     private final Object mLock = new Object();
+ 
+     @GuardedBy("mLock")
+-    private final Map<String, Record> mDucked = new HashMap<>();
++    private final Map<String, Ducked> mDucked = new HashMap<>();
+ 
+     /**
+      * Records and returns the volume index to go to, or {@link #NONE} when nothing is to be done:
+@@ -69,7 +69,7 @@ final class AirPodsDuckTracker {
+             if (target >= current) {
+                 return NONE;
+             }
+-            mDucked.put(address, new Record(current, target));
++            mDucked.put(address, new Ducked(current, target));
+             return target;
+         }
+     }
+@@ -80,7 +80,7 @@ final class AirPodsDuckTracker {
+      */
+     int restore(String address, int current) {
+         synchronized (mLock) {
+-            Record record = mDucked.remove(address);
++            Ducked record = mDucked.remove(address);
+             if (record == null || current != record.lowered) {
+                 return NONE;
+             }
+-- 
+2.39.5
+

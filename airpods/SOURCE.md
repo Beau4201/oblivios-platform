@@ -139,6 +139,8 @@ build server's `platform-primary` checkout.
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0006` | ADR-119: `BluetoothDevice#setAirPodsMetadata`, the narrow metadata setter behind `MANAGE_AIRPODS_IDENTITY` (`e4b12de12490582d60b3c57832750a9c113ea9bd`; `git am` exit 0; the ten touched files sha256-identical to the authoring worktree) |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0007` | ADR-125: `BluetoothDevice#setAirPodsAudioRoute`, the narrow audio-route call behind `MANAGE_AIRPODS_IDENTITY` (`237cae40557f` on branch `sovereignos-airpods-identity` on top of `e4b12de124`; `git am` exit 0; the nine touched files sha256-identical to the authoring worktree; not yet compiled, the module build is the first compile) |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0008` | ADR-125: keep the caller's binder referenced in the route watch, so the death link survives garbage collection of the BinderProxy (`b8a00afbd2` on branch `sovereignos-airpods-identity` on top of `237cae4055`; `git am` exit 0; `AdapterService.java` sha256-identical to the authoring worktree; found on the device, `AIR-137`: force-stop while routed away did not restore the route) |
+| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0009` | ADR-127: `BluetoothDevice#setAirPodsMusicDuck`, the narrow music-volume call behind `MANAGE_AIRPODS_IDENTITY` (`cca0669ee0` on branch `sovereignos-airpods-identity` on top of `b8a00afbd2`; `git am` exit 0; the nine touched files sha256-identical to the authoring worktree; compiled only after patch `0010`) |
+| `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0010` | ADR-127: rename the nested duck record that Error Prone rejected (`JavaLangClash`), found by the first module build of `0009` (`620cbdeef1`; `git am` exit 0; file sha256-identical; module build `Build Succeeded: 40 steps`, 0 failed) |
 | `vendor/adevtool` | `6ebe8024291a5c003f0615a896574afbb9cbf29b` | `patches/vendor-adevtool/0001` | ADR-118: `AirPodsApp` and its two sysconfig modules in `common/device-common.mk` (`4438b3d305f765315672db8cc94e85923b692f9d`, branch `sovereignos-airpods-identity`, created from `sovereignos-2026091900`; authored from a fetch-only local copy of the one touched file, `git am` exit 0, resulting file sha256 equal to the worktree's) |
 | `vendor/adevtool` | `4438b3d305f765315672db8cc94e85923b692f9d` | `patches/vendor-adevtool/0002` | ADR-120: `PRODUCT_PACKAGES_DEBUG += AirPodsDebugHarness AirPodsProbeNoPerm AirPodsProbeBtPriv` in `common/device-common.mk`, so the userdebug-only validation harness never reaches a `user` image (`9b0e6172643f76714f76b1be8c6ad986ae4dde35`, branch `sovereignos-airpods-identity`; authored from a fetch-only local copy of the one touched file; `git am` exit 0; resulting file sha256 `3451d24107b6de4e534d337036c90756911b83b25e5c1272a2953786c33fd336`, equal to the authoring worktree's; the lynx version pin was moved to this commit, backup `adevtool-version-check.mk.pre-harness`) |
 | `frameworks/base` | `c013345b2161` | `patches/frameworks-base/0001` | ADR-121: opt-in `DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON`, `ToggleModel.labelInsideButton`, `SegmentedButtonPreference.setLabelInsideButton` (`f004903a08af679cf5118e9a3946017150c716bb`, branch `sovereignos-2026091900-r2`; authored from a fetch-only local copy of the five touched files; `git am` exit 0; the five files sha256-identical to the authoring worktree; paths are relative to the `frameworks/base` repository root, first attempt with tree-root paths failed and was aborted cleanly) |
@@ -208,6 +210,20 @@ recipient. The link lives on the `BinderProxy`, so it was lost when the proxy wa
 the route was never restored when the AirPods app died. The watch entry now keeps the token and unlinks
 from it. Found on the device (`AIR-137`), not by a host check: the death semantics need a real binder.
 Not compiled until the next module build.
+
+### What patches 0009 and 0010 do (ADR-127)
+
+`BluetoothDevice#setAirPodsMusicDuck(boolean duck, int percent)` (`@SystemApi`), backed by
+`IBluetooth#setAirPodsMusicDuck`. The audio hardening of this OS ignores an app's own volume calls
+(`AIR-153`), so the AirPods app cannot lower the music while the owner speaks; the Bluetooth process is
+exempt by uid. Guarantees: only a bonded device registered through `setAirPodsIdentity` and active as
+A2DP; `percent` is one of 20, 35, 50, 70 (`AirPodsDuckTracker.isValidPercent`); the volume is only
+lowered (target below the current volume, never below the stream minimum), one index at a time under
+its own lock; it is given back only if the volume is still the value this call set (an owner change
+wins); also on caller death (the death watch is shared with `0007`/`0008` and keeps the token), when the
+AirPods are routed away (restore first), on A2DP disconnect, unbond and adapter off. Host-run tests
+(13) and eight mutations cover `AirPodsDuckTracker`; the fade and the binder path are covered by the
+module build and by `AIR-154` on the device. Patch `0010` only renames a nested class.
 
 ### What patch 0001 does (its registration and SDP mechanism is superseded, see Corrections)
 
