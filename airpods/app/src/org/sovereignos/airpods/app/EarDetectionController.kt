@@ -34,6 +34,9 @@ internal class EarDetectionController(
 
     @Volatile private var ended = false
 
+    // Worker thread only.
+    private var lastPlayKeyMs = -PLAY_SETTLE_MS
+
     init {
         AirPodsStateStore.addListener(this)
     }
@@ -90,15 +93,29 @@ internal class EarDetectionController(
                     pauseIfPlaying()
                     waitUntilSilent()
                 }
-                Action.RESUME -> if (!audio.isMusicActive) sendKey(KeyEvent.KEYCODE_MEDIA_PLAY)
+                Action.RESUME -> {
+                    // The policy returns RESUME only for a pause of ours, so isMusicActive is not a
+                    // gate here: an app keeps its stream open for about 12 s after a pause (measured
+                    // 2026-10-03), so it still reads "active" and the resume was skipped. A play key
+                    // sent to a session that already plays does nothing.
+                    lastPlayKeyMs = SystemClock.uptimeMillis()
+                    sendKey(KeyEvent.KEYCODE_MEDIA_PLAY)
+                }
                 Action.ROUTE_AWAY -> route(true)
                 Action.ROUTE_BACK -> route(false)
             }
         }
     }
 
+    /**
+     * isMusicActive lags behind a play key: the stream turns active about 2 s later (measured), so
+     * for [PLAY_SETTLE_MS] after our own play key the music counts as playing.
+     */
+    private fun isPlaying(): Boolean =
+        audio.isMusicActive || SystemClock.uptimeMillis() - lastPlayKeyMs < PLAY_SETTLE_MS
+
     private fun pauseIfPlaying(): Boolean {
-        if (!audio.isMusicActive) return false
+        if (!isPlaying()) return false
         sendKey(KeyEvent.KEYCODE_MEDIA_PAUSE)
         return true
     }
@@ -137,5 +154,6 @@ internal class EarDetectionController(
         const val MIN_GAP_MS = 100L
         const val SILENCE_POLLS = 20
         const val SILENCE_POLL_MS = 25L
+        const val PLAY_SETTLE_MS = 3000L
     }
 }
