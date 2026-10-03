@@ -49,11 +49,12 @@ internal class NativeSettingsFactory(private val context: Context) {
         return DeviceSettingsConfig(
             mainContentItems = items,
             moreSettingsItems = emptyList(),
-            // Indexes of NativePageLayout.GROUP_LISTENING, GROUP_COMFORT and GROUP_DUCK.
+            // Indexes of NativePageLayout.GROUP_LISTENING, GROUP_COMFORT, GROUP_DUCK and GROUP_AUDIO.
             settingGroups = listOf(
                 DeviceSettingGroup(context.getString(R.string.airpods_group_listening)),
                 DeviceSettingGroup(context.getString(R.string.airpods_group_comfort)),
                 DeviceSettingGroup(context.getString(R.string.airpods_duck_title)),
+                DeviceSettingGroup(context.getString(R.string.airpods_group_audio)),
             ),
         )
     }
@@ -61,6 +62,7 @@ internal class NativeSettingsFactory(private val context: Context) {
     fun settings(state: AirPodsUiState): List<DeviceSetting> =
         NativePageLayout.items(state)
             .filter { it.kind != NativePageLayout.Kind.BUILTIN }
+            .filter { it.kind != NativePageLayout.Kind.DUCK_LEVEL_TOGGLE || NativePageLayout.showsDuck(state) }
             .map { toSetting(it, state) }
 
     private fun toSetting(item: NativePageLayout.Item, state: AirPodsUiState): DeviceSetting {

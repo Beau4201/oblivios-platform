@@ -150,7 +150,7 @@ internal object AirPodsSessionHost {
         service?.let { ears = EarDetectionController(it.applicationContext, device, earDetection) }
         // The conversation awareness switch value arrives with the AirPods' first reports; the controller
         // follows the state store from then on, so it starts with the switch off.
-        service?.let { duck = ConversationDuckController(it.applicationContext, false) }
+        service?.let { duck = ConversationDuckController(it.applicationContext, device, false) }
         s.start()
     }
 

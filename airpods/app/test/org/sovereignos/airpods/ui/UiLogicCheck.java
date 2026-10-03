@@ -107,7 +107,12 @@ public final class UiLogicCheck {
         check(items.get(3).groupIndex == NativePageLayout.GROUP_COMFORT && items.get(4).groupIndex == NativePageLayout.GROUP_COMFORT
                 && items.get(5).groupIndex == NativePageLayout.GROUP_DUCK && items.get(5).kind == NativePageLayout.Kind.DUCK_LEVEL_TOGGLE,
                 "switches and the lowered-volume choice in group 1");
-        check(items.get(6).groupIndex == null && items.get(7).groupIndex == null, "builtins have no group");
+        check(items.get(6).groupIndex == NativePageLayout.GROUP_AUDIO && items.get(7).groupIndex == null,
+                "the profiles sit in the Audio group, the footer has no group");
+        check(!NativePageLayout.showsDuck(full().conversationAwareness(false).build())
+                && NativePageLayout.showsDuck(full().conversationAwareness(true).build()), "the volume choice follows the switch");
+        check(!NativePageLayout.showsDuck(full().conversationAwareness(true).features(Feature.EAR_DETECTION).build()),
+                "no volume choice without conversation awareness support");
         List<NativePageLayout.Item> withLink = NativePageLayout.items(full().feature(Feature.ALL_SETTINGS_PAGE).build());
         check(withLink.size() == 9 && withLink.get(6).settingId == NativePageLayout.ID_ALL_SETTINGS
                 && withLink.get(6).kind == NativePageLayout.Kind.ALL_SETTINGS_LINK && withLink.get(6).groupIndex == null, "flat link after the switches and the choice");

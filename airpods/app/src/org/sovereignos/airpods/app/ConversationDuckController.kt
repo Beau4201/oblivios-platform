@@ -1,5 +1,6 @@
 package org.sovereignos.airpods.app
 
+import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.media.AudioManager
 import android.util.Log
@@ -12,13 +13,16 @@ import org.sovereignos.airpods.ui.ConversationAwarenessPolicy.Action
 /**
  * Conversation awareness like on an iPhone (ADR-125): when the owner speaks the music volume goes
  * down, and when the AirPods say the conversation is over it comes back. The rules are in
- * [ConversationAwarenessPolicy]; this class only executes them. It touches STREAM_MUSIC only, lowers
- * it only while music is playing, and gives it back only if it is still the value this class set, so
- * a change the owner made meanwhile wins. `AudioManager` volume calls need no permission. One worker
- * thread, in order; one controller per session.
+ * [ConversationAwarenessPolicy]; this class only executes them. The audio hardening of this OS
+ * ignores an app's own `AudioManager` volume calls (AIR-153), so the volume change is made by the
+ * one narrow platform call [BluetoothDevice.setAirPodsMusicDuck] (ADR-127), which lowers the music
+ * to the share the owner chose, only while these AirPods are the active output, and gives it back
+ * only if the volume is still the value it set. This class lowers only while music is playing.
+ * One worker thread, in order; one controller per session.
  */
 internal class ConversationDuckController(
     context: Context,
+    private val device: BluetoothDevice,
     enabled: Boolean,
 ) : AirPodsStateStore.Listener {
     private val audio = context.getSystemService(AudioManager::class.java)
@@ -28,8 +32,7 @@ internal class ConversationDuckController(
     @Volatile private var ended = false
 
     // Worker thread only.
-    private var original = NONE
-    private var lowered = NONE
+    private var ducked = false
 
     init {
         AirPodsStateStore.addListener(this)
@@ -80,46 +83,27 @@ internal class ConversationDuckController(
     }
 
     private fun lower() {
-        if (original != NONE || !audio.isMusicActive) return
-        val now = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
-        val min = audio.getStreamMinVolume(AudioManager.STREAM_MUSIC)
-        val target = maxOf(min, (now * AirPodsStateStore.state.duckPercent + 50) / 100)
-        if (target >= now) return
-        original = now
-        lowered = target
-        if (isDebuggableBuild()) Log.d(TAG, "lower $now -> $target")
-        fade(now, target)
+        if (ducked || !audio.isMusicActive) return
+        val percent = AirPodsStateStore.state.duckPercent
+        ducked = call(true, percent)
+        if (isDebuggableBuild()) Log.d(TAG, "lower to $percent percent: $ducked")
     }
 
     private fun giveBack() {
-        val back = original
-        if (back == NONE) return
-        original = NONE
-        val current = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
-        if (isDebuggableBuild()) Log.d(TAG, "give back, now $current, was $back")
-        if (current == lowered) fade(lowered, back)
+        if (!ducked) return
+        ducked = false
+        val ok = call(false, 0)
+        if (isDebuggableBuild()) Log.d(TAG, "give back: $ok")
     }
 
-    /** One index at a time, so the change is a short fade and not a jump. */
-    private fun fade(from: Int, to: Int) {
-        val step = if (to > from) 1 else -1
-        var volume = from
-        while (volume != to) {
-            volume += step
-            audio.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0)
-            try {
-                Thread.sleep(FADE_STEP_MS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                audio.setStreamVolume(AudioManager.STREAM_MUSIC, to, 0)
-                return
-            }
+    private fun call(duck: Boolean, percent: Int): Boolean =
+        try {
+            device.setAirPodsMusicDuck(duck, percent)
+        } catch (e: SecurityException) {
+            false
         }
-    }
 
     private companion object {
         const val TAG = "AirPodsDuck"
-        const val NONE = -1
-        const val FADE_STEP_MS = 40L
     }
 }

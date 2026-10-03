@@ -5,6 +5,7 @@
          resource so it follows the system language (design D5). -->
     <string name="airpods_group_listening">Listening mode</string>
     <string name="airpods_group_comfort">Comfort</string>
+    <string name="airpods_group_audio">Audio</string>
     <string name="airpods_mode_off">Off</string>
     <string name="airpods_mode_transparency">Transparency</string>
     <string name="airpods_mode_noise_cancel">Noise cancel</string>

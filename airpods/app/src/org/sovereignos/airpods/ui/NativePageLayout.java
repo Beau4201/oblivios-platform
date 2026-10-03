@@ -36,6 +36,7 @@ public final class NativePageLayout {
     public static final int GROUP_LISTENING = 0;
     public static final int GROUP_COMFORT = 1;
     public static final int GROUP_DUCK = 2;
+    public static final int GROUP_AUDIO = 3;
 
     public static final class Item {
         public final int settingId;
@@ -75,9 +76,20 @@ public final class NativePageLayout {
             // Flat: a link after the duck group would repeat the Comfort title.
             out.add(new Item(ID_ALL_SETTINGS, Kind.ALL_SETTINGS_LINK, null, null));
         }
-        out.add(builtin(ID_PROFILES, "bluetooth_profiles"));
+        // A titled group of its own: Settings draws no spacing under the buttons of the duck group
+        // unless a titled category follows, and the profile switches sit right below it.
+        out.add(new Item(ID_PROFILES, Kind.BUILTIN, "bluetooth_profiles", GROUP_AUDIO));
         out.add(builtin(ID_FOOTER, "device_details_footer"));
         return Collections.unmodifiableList(out);
+    }
+
+    /**
+     * The volume choice is shown only while the conversation awareness switch is on. The config
+     * always lists it (Settings reads the config once); the provider leaves the setting out while
+     * the switch is off, and Settings then removes the row and the empty group.
+     */
+    public static boolean showsDuck(AirPodsUiState s) {
+        return s.supported.contains(Feature.CONVERSATION_AWARENESS) && s.conversationAwareness;
     }
 
     private static Item builtin(int id, String key) {
