@@ -1,0 +1,78 @@
+From b8a00afbd22327c8af3cfa9d2f9e8db5e76b358c Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sat, 3 Oct 2026 21:10:19 +0200
+Subject: [PATCH] airpods: keep the caller's binder referenced while the
+ AirPods are routed away
+
+A death link lives on the BinderProxy. The route watch stored only the death
+recipient, so once the proxy was garbage collected the link was gone and the
+route was never restored when the AirPods app died (seen on the device: the
+app was force-stopped while routed away and the AirPods stayed out of the
+active slots). Keep the token in the watch entry and unlink from it.
+---
+ .../bluetooth/btservice/AdapterService.java   | 28 +++++++++++++------
+ 1 file changed, 20 insertions(+), 8 deletions(-)
+
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterService.java b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+index 5bcd5120fb..481f4d2e7a 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterService.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+@@ -323,7 +323,19 @@ public class AdapterService extends Service {
+ 
+     // SovereignOS ADR-125: one death recipient per AirPods address that was routed away, so the
+     // route is restored if the calling process dies.
+-    private final Map<String, IBinder.DeathRecipient> mAirPodsRouteWatch = new HashMap<>();
++    // The entry keeps the caller's binder itself: a death link lives on the BinderProxy, and when
++    // the proxy is garbage collected the link is gone, so a recipient alone would never fire.
++    private static final class AirPodsRouteWatch {
++        final IBinder token;
++        final IBinder.DeathRecipient recipient;
++
++        AirPodsRouteWatch(IBinder token, IBinder.DeathRecipient recipient) {
++            this.token = token;
++            this.recipient = recipient;
++        }
++    }
++
++    private final Map<String, AirPodsRouteWatch> mAirPodsRouteWatch = new HashMap<>();
+ 
+     /**
+      * Predicate that tests if the given {@link BluetoothDevice} is well-known to be used for
+@@ -2405,7 +2417,7 @@ public class AdapterService extends Service {
+                         return watchAirPodsRoute(device, token)
+                                 && mActiveDeviceManager.routeAirPodsAway(device);
+                     }
+-                    unwatchAirPodsRoute(address, token);
++                    unwatchAirPodsRoute(address);
+                     return mActiveDeviceManager.routeAirPodsBack(device);
+                 });
+     }
+@@ -2430,19 +2442,19 @@ public class AdapterService extends Service {
+                 Log.w(TAG, "AirPods route: caller already dead, not routing away");
+                 return false;
+             }
+-            mAirPodsRouteWatch.put(address, recipient);
++            mAirPodsRouteWatch.put(address, new AirPodsRouteWatch(token, recipient));
+             return true;
+         }
+     }
+ 
+-    private void unwatchAirPodsRoute(String address, IBinder token) {
++    private void unwatchAirPodsRoute(String address) {
+         synchronized (mAirPodsRouteWatch) {
+-            IBinder.DeathRecipient recipient = mAirPodsRouteWatch.remove(address);
+-            if (recipient != null) {
++            AirPodsRouteWatch watch = mAirPodsRouteWatch.remove(address);
++            if (watch != null) {
+                 try {
+-                    token.unlinkToDeath(recipient, 0);
++                    watch.token.unlinkToDeath(watch.recipient, 0);
+                 } catch (java.util.NoSuchElementException e) {
+-                    // linked through another proxy of the same binder; the death callback is then a no-op
++                    // already unlinked, for example because the caller died meanwhile
+                 }
+             }
+         }
+-- 
+2.39.5
+
