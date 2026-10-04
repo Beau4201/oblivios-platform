@@ -39,9 +39,9 @@ public final class ConversationAwarenessCheck {
         is(p.onLevel(0x04), "the transparency capture: 04 gives it back", Action.RESTORE);
         is(p.onLevel(0x04), "a repeated 04 changes nothing");
 
-        // Only 01/02 lower and only 04/08/09 give back; every other value (including 03, 05 and 0B,
+        // Only 01/02 lower and only 04/06/08/09 give back; every other value (including 03, 05 and 0B,
         // which occur inside a conversation) changes nothing, lowered or not.
-        for (int level : new int[] {0x00, 0x03, 0x05, 0x06, 0x07, 0x0A, 0x0B, 0x0C, 0x20, 0xFF}) {
+        for (int level : new int[] {0x00, 0x03, 0x05, 0x07, 0x0A, 0x0B, 0x0C, 0x20, 0xFF}) {
             ConversationAwarenessPolicy q = new ConversationAwarenessPolicy(true);
             is(q.onLevel(level), "idle, unseen level " + level);
             q.onLevel(0x01);
@@ -78,6 +78,12 @@ public final class ConversationAwarenessCheck {
         for (int level : new int[] {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x08, 0x09, 0x0A, 0xFF}) {
             check(ConversationAwarenessPolicy.silenceMillis(level) == 8000L, "after " + level + " the wait is 8 s");
         }
+        // A one-word utterance (probe 2026-10-04, twice): 01 and then 06 three seconds later.
+        p = new ConversationAwarenessPolicy(true);
+        is(p.onLevel(0x01), "a one-word utterance starts", Action.DUCK);
+        is(p.onLevel(0x06), "06 ends a one-word utterance", Action.RESTORE);
+        is(p.onLevel(0x06), "a repeated 06 changes nothing");
+        is(new ConversationAwarenessPolicy(true).onLevel(0x06), "06 when nothing was lowered changes nothing");
         // A very short utterance: 01 and one more frame, no end level. The silence timeout gives it back.
         p = new ConversationAwarenessPolicy(true);
         p.onLevel(0x01);
