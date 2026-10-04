@@ -2,16 +2,15 @@
 
 ## airpods-core.jar
 
-- Source: `sovereignos-services` commit `b45b72b` (`master`, "airpods: decode the conversation awareness level and the adaptive strength from captured frames"; the codec itself came with `1de2180`). Re-vendored 2026-10-02 with `ConversationAwarenessLevel` and `AdaptiveLevelSetting`.
+- Source: `sovereignos-services` commit `1f46416` (`master`, "airpods: decode the device information, encode the adaptive strength, press and hold and rename frames"). Re-vendored 2026-10-04 with `DeviceInformation` and the three new encoders.
 - Build command: `./gradlew :airpods-core:clean :airpods-core:test :airpods-core:jar --offline`
   (Java 21 toolchain, zero runtime dependencies: `airpods-core/build.gradle.kts`
   lists only test dependencies). Output `airpods-core-0.1.0-SNAPSHOT.jar`,
   vendored under the name `airpods-core.jar`.
-- Tests at that commit: 36 tests, 0 failures (`AapCodecTest`, `AapCodecFuzzTest`, `AapCodecConversationTest`, the
-  state-machine and contract tests); the new decoders were mutation-checked (5 of 5 killed on a scratch copy; the adaptive range is checked in two layers on purpose, so that mutation changes both).
-- SHA-256: `771d85ba1dc687fbbe4fbbfcc85d4afa0c13bfc11286f5e3c25c796b98629703`.
+- Tests at that commit: 49 tests, 0 failures (`AapCodecPlan7bTest` added: frames, bounds and a fuzz of the device information decoder); the new code was mutation-checked on the committed source (Task 2 step 8 of the Plan 7B plan).
+- SHA-256: `07249a4430f3aea2742201839ada3a904a032b179731e2b9c7e6412b8c9465fc`.
   Rebuilt from clean a second time with the same command: same hash.
-- 27 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
+- 28 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
   class-file major version 65, the same as the vendored `guardian-core.jar`.
 - Replaces the jar of 2026-09-29 (`324091f9...`), whose parser decoded an invented format that no AirPods sends.
   Vendored 2026-10-02. Re-vendor whenever `airpods-core` changes, and record the new commit and hash here.
