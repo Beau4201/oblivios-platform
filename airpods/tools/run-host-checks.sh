@@ -13,3 +13,4 @@ java -ea -cp "$OUT:$JAR" org.sovereignos.airpods.ui.EarDetectionCheck
 java -ea -cp "$OUT:$JAR" org.sovereignos.airpods.ui.ConversationAwarenessCheck
 java -ea -cp "$OUT:$JAR" org.sovereignos.airpods.ui.Plan7bCheck
 java -ea -cp "$OUT:$JAR" org.sovereignos.airpods.ui.ConnectionSheetCheck
+java -ea -cp "$OUT:$JAR" org.sovereignos.airpods.ui.Plan9Check

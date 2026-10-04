@@ -4,6 +4,8 @@ import org.sovereignos.airpods.ui.AirPodsUiState.Feature;
 import org.sovereignos.airpods.validation.AdaptiveLevelSetting;
 import org.sovereignos.airpods.validation.AirPodsMessage;
 import org.sovereignos.airpods.validation.BatteryStatus;
+import org.sovereignos.airpods.validation.CallManagementReport;
+import org.sovereignos.airpods.validation.ControlReport;
 import org.sovereignos.airpods.validation.ConversationAwarenessSetting;
 import org.sovereignos.airpods.validation.DeviceInformation;
 import org.sovereignos.airpods.validation.EarDetectionSetting;
@@ -36,6 +38,7 @@ public final class SessionReducer {
         return new AirPodsUiState.Builder().address(address).earDetection(seed.earDetection())
                 .duckPercent(seed.duckPercent())
                 .pressHoldModes(seed.pressHoldModes())
+                .controls(seed.controls())
                 .percents(-1, -1, seed.casePercent()).charging(false, false, seed.caseCharging())
                 .features(Feature.EAR_DETECTION, Feature.ALL_SETTINGS_PAGE, Feature.PRESS_AND_HOLD, Feature.RENAME)
                 .build();
@@ -59,6 +62,12 @@ public final class SessionReducer {
         }
         if (m instanceof EarDetectionSetting e) {
             return s.toBuilder().earDetection(e.enabled()).feature(Feature.EAR_DETECTION).build();
+        }
+        if (m instanceof ControlReport r) {
+            return s.toBuilder().control(r.control(), r.value()).build();
+        }
+        if (m instanceof CallManagementReport c) {
+            return s.toBuilder().callManagement(c.first(), c.second()).build();
         }
         if (m instanceof ConversationAwarenessSetting c) {
             return s.toBuilder().conversationAwareness(c.enabled())

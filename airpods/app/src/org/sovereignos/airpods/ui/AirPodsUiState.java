@@ -1,10 +1,13 @@
 package org.sovereignos.airpods.ui;
 
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.sovereignos.airpods.validation.AirPodsControl;
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode;
 
 /**
@@ -52,6 +55,14 @@ public final class AirPodsUiState {
     public final String firmware;
     /** The modes the stem cycles through, as last written; empty when unknown, fewer than two while the owner is still choosing. */
     public final Set<ListeningMode> pressHoldModes;
+    /**
+     * The value of each {@link AirPodsControl} the page knows: what the pair reported, or for a control
+     * it never reports the last value written from this phone. A control that is absent is unknown.
+     */
+    public final Map<AirPodsControl, Integer> controls;
+    /** The two data bytes of the call management setting (control 0x24), -1 when unknown. */
+    public final int callFirst;
+    public final int callSecond;
     public final Set<Feature> supported;
 
     public static final AirPodsUiState DISCONNECTED = new Builder().build();
@@ -78,6 +89,15 @@ public final class AirPodsUiState {
         if (b.firmware != null && !FIRMWARE.matcher(b.firmware).matches()) {
             throw new IllegalArgumentException("bad firmware");
         }
+        for (Map.Entry<AirPodsControl, Integer> e : b.controls.entrySet()) {
+            if (e.getValue() == null || !e.getKey().accepts(e.getValue())) {
+                throw new IllegalArgumentException("bad control value");
+            }
+        }
+        if (b.callFirst < -1 || b.callFirst > 255 || b.callSecond < -1 || b.callSecond > 255
+                || (b.callFirst == -1) != (b.callSecond == -1)) {
+            throw new IllegalArgumentException("bad call management");
+        }
         address = b.address;
         leftPercent = b.left;
         rightPercent = b.right;
@@ -95,9 +115,20 @@ public final class AirPodsUiState {
         Set<ListeningMode> holds = EnumSet.noneOf(ListeningMode.class);
         holds.addAll(b.pressHold);
         pressHoldModes = Collections.unmodifiableSet(holds);
+        Map<AirPodsControl, Integer> known = new EnumMap<>(AirPodsControl.class);
+        known.putAll(b.controls);
+        controls = Collections.unmodifiableMap(known);
+        callFirst = b.callFirst;
+        callSecond = b.callSecond;
         Set<Feature> copy = EnumSet.noneOf(Feature.class);
         copy.addAll(b.features);
         supported = Collections.unmodifiableSet(copy);
+    }
+
+    /** The value of one control, or -1 when it is not known. */
+    public int controlValue(AirPodsControl control) {
+        Integer v = controls.get(control);
+        return v == null ? -1 : v;
     }
 
     public boolean isConnected() {
@@ -116,6 +147,8 @@ public final class AirPodsUiState {
                 .adaptivePercent(adaptivePercent)
                 .deviceInformation(modelNumber, firmware)
                 .pressHoldModes(pressHoldModes)
+                .controls(controls)
+                .callManagement(callFirst, callSecond)
                 .features(supported.toArray(new Feature[0]));
     }
 
@@ -138,6 +171,9 @@ public final class AirPodsUiState {
                 && Objects.equals(modelNumber, s.modelNumber)
                 && Objects.equals(firmware, s.firmware)
                 && pressHoldModes.equals(s.pressHoldModes)
+                && controls.equals(s.controls)
+                && callFirst == s.callFirst
+                && callSecond == s.callSecond
                 && supported.equals(s.supported);
     }
 
@@ -145,7 +181,8 @@ public final class AirPodsUiState {
     public int hashCode() {
         return Objects.hash(address, leftPercent, rightPercent, casePercent, leftCharging,
                 rightCharging, caseCharging, listeningMode, earDetection, conversationAwareness,
-                duckPercent, adaptivePercent, modelNumber, firmware, pressHoldModes, supported);
+                duckPercent, adaptivePercent, modelNumber, firmware, pressHoldModes, controls, callFirst, callSecond,
+                supported);
     }
 
     public static final class Builder {
@@ -164,6 +201,9 @@ public final class AirPodsUiState {
         private String model;
         private String firmware;
         private final Set<ListeningMode> pressHold = EnumSet.noneOf(ListeningMode.class);
+        private final Map<AirPodsControl, Integer> controls = new EnumMap<>(AirPodsControl.class);
+        private int callFirst = -1;
+        private int callSecond = -1;
         private final Set<Feature> features = EnumSet.noneOf(Feature.class);
 
         public Builder address(String a) {
@@ -221,6 +261,26 @@ public final class AirPodsUiState {
         public Builder pressHoldModes(Set<ListeningMode> modes) {
             pressHold.clear();
             pressHold.addAll(modes);
+            return this;
+        }
+
+        /** Sets the value of one control; validated in {@link #build()}. */
+        public Builder control(AirPodsControl control, int value) {
+            controls.put(control, value);
+            return this;
+        }
+
+        /** Replaces all control values. */
+        public Builder controls(Map<AirPodsControl, Integer> values) {
+            controls.clear();
+            controls.putAll(values);
+            return this;
+        }
+
+        /** Both -1 when unknown. */
+        public Builder callManagement(int first, int second) {
+            callFirst = first;
+            callSecond = second;
             return this;
         }
 

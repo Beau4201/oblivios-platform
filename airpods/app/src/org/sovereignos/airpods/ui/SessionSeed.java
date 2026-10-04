@@ -1,6 +1,10 @@
 package org.sovereignos.airpods.ui;
 
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Set;
+import org.sovereignos.airpods.validation.AirPodsControl;
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode;
 
 /**
@@ -10,13 +14,27 @@ import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode;
  * did). {@code pressHoldMask} is the last complete selection written (see {@link PressAndHoldChoices#mask}),
  * 0 when none was.
  */
-public record SessionSeed(boolean earDetection, int duckPercent, int casePercent, boolean caseCharging, int pressHoldMask) {
+public record SessionSeed(boolean earDetection, int duckPercent, int casePercent, boolean caseCharging, int pressHoldMask,
+        Map<AirPodsControl, Integer> controls) {
     public SessionSeed {
         if (!DuckLevels.isValid(duckPercent)) throw new IllegalArgumentException("bad lowered volume");
         if (casePercent < -1 || casePercent > 100) throw new IllegalArgumentException("bad case percent");
         if (pressHoldMask != 0 && PressAndHoldChoices.fromMask(pressHoldMask).isEmpty()) {
             throw new IllegalArgumentException("bad press and hold mask");
         }
+        Map<AirPodsControl, Integer> copy = new EnumMap<>(AirPodsControl.class);
+        copy.putAll(controls);
+        controls = Collections.unmodifiableMap(copy);
+        for (Map.Entry<AirPodsControl, Integer> e : controls.entrySet()) {
+            if (e.getValue() == null || !e.getKey().accepts(e.getValue())) {
+                throw new IllegalArgumentException("bad control value");
+            }
+        }
+    }
+
+    /** A seed without stored control values. */
+    public SessionSeed(boolean earDetection, int duckPercent, int casePercent, boolean caseCharging, int pressHoldMask) {
+        this(earDetection, duckPercent, casePercent, caseCharging, pressHoldMask, Map.of());
     }
 
     /** A seed without a press and hold selection. */
@@ -30,6 +48,6 @@ public record SessionSeed(boolean earDetection, int duckPercent, int casePercent
 
     /** No stored values: the AirPods' own default for ear detection, the default lowered volume, no case, nothing chosen. */
     public static SessionSeed fresh(boolean earDetection) {
-        return new SessionSeed(earDetection, DuckLevels.DEFAULT, -1, false, 0);
+        return new SessionSeed(earDetection, DuckLevels.DEFAULT, -1, false, 0, Map.of());
     }
 }

@@ -35,6 +35,8 @@ public final class EarDetectionPolicy {
     private int inEar = UNKNOWN;
     private boolean pausedByUs;
     private boolean routedAway;
+    /** "Play sound" is running: the AirPods stay in the audio slots, whatever the pods report. */
+    private boolean finding;
 
     public EarDetectionPolicy(boolean enabled) {
         this.enabled = enabled;
@@ -82,11 +84,27 @@ public final class EarDetectionPolicy {
     /** The session ended: restore a route we removed. */
     public synchronized List<Action> end() {
         pausedByUs = false;
+        finding = false;
         return routeBack();
     }
 
+    /**
+     * "Play sound" starts (ADR-134): the AirPods must be in the audio slots for the tone to reach them, so a
+     * route we removed is put back, and no route is removed until {@link #endFind()}.
+     */
+    public synchronized List<Action> startFind() {
+        finding = true;
+        return routeBack();
+    }
+
+    /** "Play sound" ended: the route goes away again if the switch is on and no pod is in an ear. */
+    public synchronized List<Action> endFind() {
+        finding = false;
+        return enabled && inEar == 0 ? routeAway() : List.of();
+    }
+
     private List<Action> routeAway() {
-        if (routedAway) return List.of();
+        if (routedAway || finding) return List.of();
         routedAway = true;
         return List.of(Action.ROUTE_AWAY);
     }
