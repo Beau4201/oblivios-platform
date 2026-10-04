@@ -99,6 +99,7 @@ class AirPodsSettingsFragment : PreferenceFragmentCompat() {
         listeningGroup.addPreference(description)
         adaptive = SliderPreference(ctx).apply {
             key = "adaptive_strength"
+            isPersistent = false // the state store is the only source of truth, not SharedPreferences
             setTitle(R.string.airpods_adaptive_title)
             setSummary(R.string.airpods_adaptive_summary)
             min = 0
@@ -125,6 +126,7 @@ class AirPodsSettingsFragment : PreferenceFragmentCompat() {
         duckGroup = category(screen, "duck", R.string.airpods_duck_title)
         duck = SliderPreference(ctx).apply {
             key = "duck_percent"
+            isPersistent = false
             setTitle(R.string.airpods_duck_title)
             setSummary(R.string.airpods_duck_summary)
             min = DuckLevels.MIN
@@ -209,6 +211,7 @@ class AirPodsSettingsFragment : PreferenceFragmentCompat() {
     private fun switchRow(key: String, @StringRes title: Int, @StringRes summary: Int, @DrawableRes icon: Int, feature: Feature) =
         SwitchPreferenceCompat(requireContext()).apply {
             this.key = key
+            isPersistent = false
             setTitle(title)
             setSummary(summary)
             this.icon = tinted(icon)
