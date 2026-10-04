@@ -25,6 +25,7 @@ object AirPodsRuntime {
         val app = context.applicationContext
         writer = AirPodsMetadataWriter(app).also { AirPodsStateStore.addListener(it) }
         AirPodsStateStore.addListener(CaseBatteryRecorder(app))
+        AirPodsStateStore.addListener(ConnectionSheetTrigger(app))
         if (isDebuggableBuild()) DebugStateObserver(app).start()
         // A process that starts while the AirPods are connected (it was killed, or Settings bound us)
         // has to find the link itself: no connection event will come for a link that is already up.

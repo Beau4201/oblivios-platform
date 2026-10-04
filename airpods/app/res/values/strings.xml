@@ -56,4 +56,13 @@
     <string name="airpods_model_title">Model number</string>
     <string name="airpods_firmware_title">Firmware</string>
     <string name="airpods_unknown">Unknown</string>
+    <!-- Connection sheet (Plan 7B). -->
+    <string name="airpods_sheet_title">AirPods connected</string>
+    <string name="airpods_sheet_settings">Settings</string>
+    <string name="airpods_sheet_mode_noise_cancel">Noise cancellation on</string>
+    <string name="airpods_sheet_mode_transparency">Transparency on</string>
+    <string name="airpods_sheet_mode_adaptive">Adaptive on</string>
+    <string name="airpods_sheet_mode_off">Listening mode off</string>
+    <string name="airpods_sheet_channel">AirPods popup</string>
+    <string name="airpods_sheet_notification_text">Tap to see the battery and the listening mode</string>
 </resources>

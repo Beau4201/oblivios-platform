@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The connection sheet (ADR-129, owner's yes recorded in Task 7): our own notification opens our own
+         sheet over the lock screen. Neither permission is privileged and neither gives data access. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- The session runs in a foreground service of type connectedDevice so the process is not
          frozen as a cached app (a cached app does not run). The service is started from the
          broadcast receiver and at process start, both in the background, which needs the privileged
@@ -49,6 +53,16 @@
             android:exported="false"
             android:label="@string/airpods_page_title"
             android:theme="@style/Theme.SubSettingsBase.Expressive" />
+
+        <!-- The connection sheet: not exported; opened only by our own full-screen-intent notification. -->
+        <activity
+            android:name=".app.ConnectionSheetActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirPodsSheet" />
 
         <!-- Keeps the process alive while the recognised AirPods are connected; not exported. -->
         <service
