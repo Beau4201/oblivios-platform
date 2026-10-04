@@ -114,7 +114,8 @@ internal class NativeSettingsFactory(private val context: Context) {
         val builder = MultiTogglePreference.Builder()
             .setTitle(context.getString(R.string.airpods_duck_title))
             .setAllowChangingState(true)
-            .setState(maxOf(0, DuckLevels.indexOf(state.duckPercent)))
+            // Display only: the nearest of the four buttons; the own page has the exact slider.
+            .setState(DuckLevels.nearestIndex(state.duckPercent))
         for (percent in DuckLevels.options()) {
             builder.addToggleInfo(
                 ToggleInfo.Builder()

@@ -2,6 +2,7 @@ package org.sovereignos.airpods.app
 
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.bluetooth.BluetoothStatusCodes
 import android.util.Log
 import java.io.IOException
 import java.io.InputStream
@@ -72,6 +73,17 @@ internal class AirPodsSession(
             false
         }
     }
+
+    /**
+     * The phone's own name for the pair. The pair's rename does not change the phone's cached name
+     * (AIR-162), so the page sets the alias as well. False when the platform refuses or the permission is gone.
+     */
+    fun setPhoneName(name: String): Boolean =
+        try {
+            device.setAlias(name) == BluetoothStatusCodes.SUCCESS
+        } catch (e: SecurityException) {
+            false
+        }
 
     private fun run() {
         var reason = Reason.STREAM_ENDED

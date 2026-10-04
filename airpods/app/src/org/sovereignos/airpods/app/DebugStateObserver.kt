@@ -76,6 +76,24 @@ internal class DebugStateObserver(private val context: Context) :
             AirPodsStateStore.update(state.toBuilder().duckPercent(percent).build())
             return true
         }
+
+        override fun setAdaptiveStrength(percent: Int): Boolean {
+            val state = AirPodsStateStore.state
+            if (!state.isConnected || percent !in 0..100) return false
+            val kept = org.sovereignos.airpods.ui.AdaptiveSteps.percentOf(org.sovereignos.airpods.ui.AdaptiveSteps.stepOf(percent))
+            AirPodsStateStore.update(state.toBuilder().adaptivePercent(kept).build())
+            return true
+        }
+
+        override fun setPressAndHold(modes: Set<ListeningMode>): Boolean {
+            val state = AirPodsStateStore.state
+            if (!state.isConnected) return false
+            AirPodsStateStore.update(state.toBuilder().pressHoldModes(modes).build())
+            return true
+        }
+
+        override fun rename(name: String): Boolean =
+            AirPodsStateStore.state.isConnected && org.sovereignos.airpods.validation.AapCodec.isValidName(name)
     }
 
     companion object {

@@ -1,9 +1,11 @@
 package org.sovereignos.airpods.app
 
 import android.content.Context
+import org.sovereignos.airpods.ui.AdaptiveSteps
 import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.ui.DuckLevels
 import org.sovereignos.airpods.ui.ListeningModeToggles
+import org.sovereignos.airpods.ui.PressAndHoldChoices
 import org.sovereignos.airpods.ui.SessionReducer
 import org.sovereignos.airpods.validation.AapCodec
 import org.sovereignos.airpods.validation.AirPodsMessage
@@ -12,10 +14,11 @@ import org.sovereignos.airpods.validation.EarDetectionSetting
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
 
 /**
- * Sends the typed commands of Settings' page to the live session. A command is accepted only if the
- * state says the control exists. The listening mode changes the state only when the AirPods report
- * it (they answer every request, and refuse what they do not allow); the two comfort settings are
- * not reported after a write, so the written value is applied.
+ * Sends the typed commands of Settings' page and of our own page to the live session. A command is
+ * accepted only if the state says the control exists. The listening mode changes the state only when
+ * the AirPods report it (they answer every request, and refuse what they do not allow); the comfort
+ * settings, press and hold and the adaptive strength are not reported after a write, so the written
+ * value is applied (the next session reads the real adaptive strength, AIR-164).
  */
 internal class SessionCommandSink(
     private val session: AirPodsSession,
@@ -75,6 +78,48 @@ internal class SessionCommandSink(
         }
         if (context != null) DuckLevelStore.write(context, percent)
         AirPodsStateStore.transform { it.toBuilder().duckPercent(percent).build() }
+        return true
+    }
+
+    override fun setAdaptiveStrength(percent: Int): Boolean {
+        val state = AirPodsStateStore.state
+        if (!state.isConnected || AirPodsUiState.Feature.ADAPTIVE_MODE !in state.supported || percent !in 0..100) {
+            return false
+        }
+        if (!session.send(AapCodec.setAdaptiveLevel(percent))) return false
+        // The pair rounds to 0, 50 or 100 and reports it only in the next session's burst (AIR-164):
+        // show the position the pair will keep.
+        val kept = AdaptiveSteps.percentOf(AdaptiveSteps.stepOf(percent))
+        AirPodsStateStore.transform { it.toBuilder().adaptivePercent(kept).build() }
+        return true
+    }
+
+    override fun setPressAndHold(modes: Set<ListeningMode>): Boolean {
+        val state = AirPodsStateStore.state
+        if (!state.isConnected || AirPodsUiState.Feature.PRESS_AND_HOLD !in state.supported) return false
+        if (!PressAndHoldChoices.offered(state).containsAll(modes)) return false
+        if (PressAndHoldChoices.complete(modes)) {
+            if (!session.send(AapCodec.setPressAndHoldModes(modes))) return false
+            val address = state.address
+            if (context != null && address != null) {
+                PressAndHoldStore.write(context, address, PressAndHoldChoices.mask(modes))
+            }
+        } else if (PressAndHoldChoices.complete(state.pressHoldModes)) {
+            // Going from a complete selection to fewer than two is refused (the page checks first).
+            return false
+        }
+        AirPodsStateStore.transform { it.toBuilder().pressHoldModes(modes).build() }
+        return true
+    }
+
+    override fun rename(name: String): Boolean {
+        val state = AirPodsStateStore.state
+        if (!state.isConnected || AirPodsUiState.Feature.RENAME !in state.supported || !AapCodec.isValidName(name)) {
+            return false
+        }
+        if (!session.send(AapCodec.rename(name))) return false
+        // The pair does not change the phone's cached name (AIR-162): set the phone's alias as well.
+        session.setPhoneName(name)
         return true
     }
 

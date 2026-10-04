@@ -143,7 +143,7 @@ internal object AirPodsSessionHost {
             SessionSeed.fresh(earDetection)
         } else {
             val case = CaseBatteryStore.read(ctx, address)
-            SessionSeed(earDetection, DuckLevelStore.read(ctx), case.first, case.second)
+            SessionSeed(earDetection, DuckLevelStore.read(ctx), case.first, case.second, PressAndHoldStore.read(ctx, address))
         }
         val s = AirPodsSession(device, address, opener, seed, listener)
         session = s

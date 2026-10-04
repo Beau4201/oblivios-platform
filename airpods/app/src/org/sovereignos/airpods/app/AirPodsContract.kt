@@ -5,7 +5,7 @@ internal object AirPodsContract {
     const val ACTION_DEVICE_SETTINGS = "org.sovereignos.airpods.action.DEVICE_SETTINGS"
     const val SETTINGS_PACKAGE = "com.android.settings"
 
-    // Activity of Plan 6C; the link row only exists when the layout enables ALL_SETTINGS_PAGE.
+    // Our own page (Plan 7B); the link row only exists when the layout enables ALL_SETTINGS_PAGE.
     const val ALL_SETTINGS_ACTIVITY = "org.sovereignos.airpods.app.AllSettingsActivity"
 
     const val ICON_LEFT = "content://org.sovereignos.airpods.icons/v1/left"

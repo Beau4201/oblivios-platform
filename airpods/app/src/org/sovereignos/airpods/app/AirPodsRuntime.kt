@@ -66,6 +66,7 @@ class ConnectionReceiver : BroadcastReceiver() {
                     AirPodsSessionHost.onLinkDown(device.address)
                     // The stored case value never outlives the bond.
                     CaseBatteryStore.forget(context.applicationContext, device.address)
+                    PressAndHoldStore.forget(context.applicationContext, device.address)
                 }
         }
     }
