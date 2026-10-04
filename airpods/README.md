@@ -9,27 +9,39 @@ and `docs/superpowers/specs/2026-09-29-airpods-settings-ui-design.md` in
 ## Layout
 
 - `core/` — vendored `airpods-core.jar`. Provenance in `SOURCE.md`.
-- `app/` — `AirPodsApp`, the first-party priv-app (`org.sovereignos.airpods`).
-  Currently a scaffold: manifest, build file, privapp allow-list, the
-  single-package hidden-API sysconfig entry, and one string resource. The
-  services, providers and pages are Plan 6.
+- `app/` — `AirPodsApp`, the first-party priv-app (`org.sovereignos.airpods`):
+  the real accessory-protocol session in a foreground service, the native
+  Settings page provider (config and per-item settings), the ear detection and
+  conversation awareness controllers, the stores (ear detection, volume choice,
+  last case battery), and the pure UI logic under `app/src/.../ui/` that the host
+  checks run (`tools/run-host-checks.sh`). Own pages and the connection sheet are Plan 7B.
+- `probe/` — debug-only capture tool (`org.sovereignos.airpods.probe`), see `SOURCE.md`.
 - `tools/check-no-hardcoded-text.sh` — fails on user-visible text that is not a string resource.
 - `tools/check-devicesettings-vendoring.sh` — fails when the vendored DeviceSettings contract (`app/src/.../devicesettings/`) differs from the build tree.
 - `debug-harness/` — userdebug-only validation apps (ADR-120), never in `user` builds.
-- `patches/` — AOSP source patches (Bluetooth module identity and client
-  wrapper). Provenance and apply instructions in `SOURCE.md`.
+- `patches/` — AOSP source patches (Bluetooth module: identity, client wrapper,
+  metadata setter, audio route, music duck). Provenance and apply instructions in `SOURCE.md`.
 
 ## Signing and privilege posture (ADR-118)
 
 `AirPodsApp` is not platform-signed and not `platform_apis`. It is a
 privileged app compiled against `system_current`. It holds one privileged
-permission, `org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY`, and it is
+permission, `org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY`, plus
+`BLUETOOTH_CONNECT`, the foreground-service permissions and `RECEIVE_BOOT_COMPLETED`
+(normal; added in Plan 7A-2 for the start after a reboot), and it is
 named in `hidden-api-whitelisted-app-*.xml` so that only this package may use
 the hidden `BluetoothSocket` constructor. It does not hold
-`BLUETOOTH_PRIVILEGED` (ADR-117).
+`BLUETOOTH_PRIVILEGED` (ADR-117), `MODIFY_AUDIO_ROUTING` or
+`MODIFY_AUDIO_SETTINGS_PRIVILEGED` (ADR-125, ADR-127): moving the audio to the phone and
+lowering the music volume are two narrow `@SystemApi` calls in the Bluetooth module behind
+`MANAGE_AIRPODS_IDENTITY` (patches `0007` to `0010`).
 
-## Not built or run yet
+## Built and run
 
-Nothing in this package has been compiled. Per the owner's directive there is
-one AOSP rebuild after all planned AirPods work; until then only static checks
-run. `PRODUCT_PACKAGES` wiring is a separate patch (Plan 3 Task 6).
+The package is built into the `lynx` images (`PRODUCT_PACKAGES` wiring is a
+`vendor/adevtool` patch, see `SOURCE.md`) and runs on the owner's device; the last
+flashed image is `2026100210` (2026-10-04). Device evidence is in
+`docs/quality/validation-matrix.md` (rows `AIR-111` to `AIR-159`) in `sovereignos-foundation`.
+An app-only change cannot be installed with `adb install` (a system app update needs an
+fs-verity signature), so every change is an image build. Open items: the matrix rows marked
+Open, the conversation awareness timing (level `06` is in the source and in no image yet) and Plan 7B.
