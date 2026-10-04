@@ -1,0 +1,122 @@
+From 97ef1dd24a3b9bb52fc5cab530e583429a870859 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 4 Oct 2026 14:17:07 +0200
+Subject: [PATCH] airpods: accept a music duck percent from 10 to 90
+
+The owner chose a continuous slider for how loud the music stays while they speak (Plan 7B), so setAirPodsMusicDuck takes any integer from 10 to 90 instead of 20, 35, 50 or 70. Every other limit stays: STREAM_MUSIC only, only while the registered device is the active A2DP device, only lowering, never below the stream minimum, restore only if the volume is still the value this call set, restore on caller death, disconnect, unbond and adapter off.
+---
+ .../app/aidl/android/bluetooth/IBluetooth.aidl  |  2 +-
+ .../btservice/ActiveDeviceManager.java          |  2 +-
+ .../bluetooth/btservice/AdapterService.java     |  2 +-
+ .../bluetooth/btservice/AirPodsDuckTracker.java |  7 +++++--
+ .../btservice/AirPodsDuckTrackerTest.java       | 17 ++++++++++++++---
+ .../java/android/bluetooth/BluetoothDevice.java |  2 +-
+ 6 files changed, 23 insertions(+), 9 deletions(-)
+
+diff --git a/android/app/aidl/android/bluetooth/IBluetooth.aidl b/android/app/aidl/android/bluetooth/IBluetooth.aidl
+index a0700c3c2e..695a913922 100644
+--- a/android/app/aidl/android/bluetooth/IBluetooth.aidl
++++ b/android/app/aidl/android/bluetooth/IBluetooth.aidl
+@@ -224,7 +224,7 @@ interface IBluetooth {
+     // For the AirPods music duck (ADR-127). Also requires
+     // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
+     // AdapterServiceBinder). The device must be bonded, registered and the active A2DP device;
+-    // percent is one of 20, 35, 50, 70. The token is a binder of the caller: if it dies while the
++    // percent is an integer from 10 to 90. The token is a binder of the caller: if it dies while the
+     // volume is lowered, it is given back.
+     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
+     boolean setAirPodsMusicDuck(in BluetoothDevice device, in boolean duck, in int percent, in IBinder token, in AttributionSource attributionSource);
+diff --git a/android/app/src/com/android/bluetooth/btservice/ActiveDeviceManager.java b/android/app/src/com/android/bluetooth/btservice/ActiveDeviceManager.java
+index 299db6aeac..846e0c8498 100644
+--- a/android/app/src/com/android/bluetooth/btservice/ActiveDeviceManager.java
++++ b/android/app/src/com/android/bluetooth/btservice/ActiveDeviceManager.java
+@@ -1945,7 +1945,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
+     }
+ 
+     /**
+-     * SovereignOS ADR-127: lowers the music stream to {@code percent} (20, 35, 50 or 70) of its
++     * SovereignOS ADR-127: lowers the music stream to {@code percent} (10 to 90) of its
+      * current volume while {@code device} is the active A2DP device, one index at a time. Never
+      * raises the volume and never goes below the stream minimum. The audio hardening ignores this
+      * from an app; this runs in the Bluetooth process, which it exempts by uid.
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterService.java b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+index 781a22a447..f33d01fa36 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterService.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+@@ -2431,7 +2431,7 @@ public class AdapterService extends Service {
+      * SovereignOS ADR-127: lowers ({@code duck}) or gives back the music volume of the active
+      * AirPods while the owner speaks. The caller (AdapterServiceBinder) has already enforced
+      * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
+-     * accepted. {@code percent} must be 20, 35, 50 or 70. If {@code token} dies while the volume is
++     * accepted. {@code percent} must be an integer from 10 to 90. If {@code token} dies while the volume is
+      * lowered, it is given back.
+      *
+      * @return true when the request was applied or there was nothing to do; false when refused
+diff --git a/android/app/src/com/android/bluetooth/btservice/AirPodsDuckTracker.java b/android/app/src/com/android/bluetooth/btservice/AirPodsDuckTracker.java
+index 791cff352d..b85d31a51d 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AirPodsDuckTracker.java
++++ b/android/app/src/com/android/bluetooth/btservice/AirPodsDuckTracker.java
+@@ -29,9 +29,12 @@ import java.util.Map;
+  * change wins). In memory only; one record per address.
+  */
+ final class AirPodsDuckTracker {
+-    /** The shares of the current volume that stay, in percent (the owner's four choices). */
++    /** The lowest and the highest share of the current volume that may stay, in percent (the owner's slider). */
++    static final int MIN_PERCENT = 10;
++    static final int MAX_PERCENT = 90;
++
+     static boolean isValidPercent(int percent) {
+-        return percent == 20 || percent == 35 || percent == 50 || percent == 70;
++        return percent >= MIN_PERCENT && percent <= MAX_PERCENT;
+     }
+ 
+     /** No volume change. */
+diff --git a/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsDuckTrackerTest.java b/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsDuckTrackerTest.java
+index f2f01c7ae3..f7d6b79079 100644
+--- a/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsDuckTrackerTest.java
++++ b/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsDuckTrackerTest.java
+@@ -61,14 +61,25 @@ public class AirPodsDuckTrackerTest {
+     }
+ 
+     @Test
+-    public void duck_refusesAnyPercentButTheFourChoices() {
+-        for (int bad : new int[] {-1, 0, 19, 21, 34, 36, 49, 51, 69, 71, 100, 101}) {
++    public void duck_refusesAPercentOutsideTheSliderRange() {
++        for (int bad : new int[] {Integer.MIN_VALUE, -1, 0, 1, 9, 91, 99, 100, 101, Integer.MAX_VALUE}) {
+             assertThat(mTracker.duck(A, 10, 0, bad)).isEqualTo(NONE);
++            assertThat(AirPodsDuckTracker.isValidPercent(bad)).isFalse();
+         }
+         assertThat(mTracker.isDucked(A)).isFalse();
+-        for (int ok : new int[] {20, 35, 50, 70}) {
++    }
++
++    @Test
++    public void duck_acceptsEveryPercentOfTheSliderRange() {
++        for (int ok = 10; ok <= 90; ok++) {
+             assertThat(AirPodsDuckTracker.isValidPercent(ok)).isTrue();
+         }
++        assertThat(mTracker.duck(A, 100, 0, 10)).isEqualTo(10);
++        assertThat(mTracker.restore(A, 10)).isEqualTo(100);
++        assertThat(mTracker.duck(A, 100, 0, 63)).isEqualTo(63);
++        assertThat(mTracker.restore(A, 63)).isEqualTo(100);
++        assertThat(mTracker.duck(A, 100, 0, 90)).isEqualTo(90);
++        assertThat(mTracker.restore(A, 90)).isEqualTo(100);
+     }
+ 
+     @Test
+diff --git a/framework/java/android/bluetooth/BluetoothDevice.java b/framework/java/android/bluetooth/BluetoothDevice.java
+index 124e8297e8..33c024c1fc 100644
+--- a/framework/java/android/bluetooth/BluetoothDevice.java
++++ b/framework/java/android/bluetooth/BluetoothDevice.java
+@@ -3466,7 +3466,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
+     /**
+      * Lowers ({@code duck} true) or gives back the music volume while this <em>bonded</em> device,
+      * which must be registered as an AirPods accessory through {@link #setAirPodsIdentity} and be the
+-     * active A2DP device, is heard. {@code percent} must be one of 20, 35, 50 or 70 and is the share
++     * active A2DP device, is heard. {@code percent} must be an integer from 10 to 90 and is the share
+      * of the current volume that stays; the volume is never raised and never goes below the stream
+      * minimum. The volume is given back only if it is still the value this call set, and also when
+      * the profile disconnects, the bond is removed, Bluetooth is turned off, or the calling process
+-- 
+2.39.5
+
