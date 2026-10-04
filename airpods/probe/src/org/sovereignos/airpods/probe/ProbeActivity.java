@@ -26,8 +26,8 @@ import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode;
  * cmds: sent from second 8 on, 3 s apart: mode:1..3 (off, anc, transparency), ca:0|1, ear:0|1, raw:<hex>.
  * Everything goes to logcat tag AirPodsProbe. A frame is printed in hex (up to 64 bytes) unless its opcode is one that
  * carries serial numbers, addresses or keys: 0x1D device information, 0x2E connected devices, 0x31 keys, 0x0E audio
- * source, 0x10 and 0x11 smart routing. Those are logged as their length only. Opcode 0x17 (sensor feature descriptors) is
- * printed in full (up to 600 bytes) to decode the head-tracking channel. Plan 8 needs the other opcodes in full to
+ * source, 0x10 and 0x11 smart routing. Those are logged as their length only. Opcodes 0x17 (sensor feature descriptors) and 0x53 (equalizer) are
+ * printed in full (up to 600 bytes) to decode the head-tracking channel and to resend the equalizer exactly. Plan 8 needs the other opcodes in full to
  * find the controls the pair reports.
  */
 public final class ProbeActivity extends Activity {
@@ -147,7 +147,7 @@ public final class ProbeActivity extends Activity {
             decoded = "REJECTED " + e.getMessage();
         }
         Log.i(TAG, "+" + t + " ms recv len=" + n + " opcode=" + (opcode < 0 ? "none" : String.format("0x%04X", opcode))
-                + (showHex ? " hex=" + hex(buf, Math.min(n, opcode == 0x17 ? 600 : 64)) : "") + " -> " + decoded
+                + (showHex ? " hex=" + hex(buf, Math.min(n, (opcode == 0x17 || opcode == 0x53) ? 600 : 64)) : "") + " -> " + decoded
                 + (opcode == 0x1D ? " info=" + describeDeviceInfo(buf, n) : ""));
     }
 
