@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="org.sovereignos.airpods">
 
     <!-- Every permission here is justified in
@@ -34,6 +35,20 @@
         <service
             android:name=".app.AirPodsSettingsService"
             android:exported="false" />
+
+        <!-- Brought in by the androidx libraries of SettingsLib: exported and not needed (no baseline profile is installed
+             at run time). Removed so that the only exported component of the app stays ConnectionReceiver. -->
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:node="remove" />
+
+        <!-- Our own AirPods page. Not exported: Settings (system uid) opens it with an explicit intent
+             from the "All AirPods settings" row of its device page. -->
+        <activity
+            android:name=".app.AllSettingsActivity"
+            android:exported="false"
+            android:label="@string/airpods_page_title"
+            android:theme="@style/Theme.SubSettingsBase.Expressive" />
 
         <!-- Keeps the process alive while the recognised AirPods are connected; not exported. -->
         <service

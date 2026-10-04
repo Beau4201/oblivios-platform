@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three rings, left to right Left, Case, Right, like the header of Settings' own device page: the
+     header stays left-to-right in RTL on purpose (design section 7). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="16dp"
+    android:layoutDirection="ltr"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+        <org.sovereignos.airpods.app.BatteryRingView
+            android:id="@+id/ring_left"
+            android:layout_width="80dp"
+            android:layout_height="90dp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="sans-serif-medium"
+            android:lineHeight="24dp"
+            android:text="@string/airpods_left"
+            android:textColor="@color/settingslib_materialColorOnSurface"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+        <org.sovereignos.airpods.app.BatteryRingView
+            android:id="@+id/ring_case"
+            android:layout_width="80dp"
+            android:layout_height="90dp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="sans-serif-medium"
+            android:lineHeight="24dp"
+            android:text="@string/airpods_case"
+            android:textColor="@color/settingslib_materialColorOnSurface"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+        <org.sovereignos.airpods.app.BatteryRingView
+            android:id="@+id/ring_right"
+            android:layout_width="80dp"
+            android:layout_height="90dp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="sans-serif-medium"
+            android:lineHeight="24dp"
+            android:text="@string/airpods_right"
+            android:textColor="@color/settingslib_materialColorOnSurface"
+            android:textSize="16sp" />
+    </LinearLayout>
+</LinearLayout>

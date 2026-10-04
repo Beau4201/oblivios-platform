@@ -21,4 +21,39 @@
     <!-- Notification of the foreground service that keeps the AirPods session alive. -->
     <string name="airpods_notification_channel">AirPods connection</string>
     <string name="airpods_notification_title">AirPods connected</string>
+    <!-- Our own page (Plan 7B). English source strings. -->
+    <string name="airpods_page_title">AirPods settings</string>
+    <string name="airpods_not_connected">AirPods are not connected</string>
+    <string name="airpods_left">Left</string>
+    <string name="airpods_right">Right</string>
+    <string name="airpods_case">Case</string>
+    <string name="airpods_left_earbud">Left earbud</string>
+    <string name="airpods_right_earbud">Right earbud</string>
+    <string name="airpods_case_name">Case</string>
+    <string name="airpods_ring_charging">%1$s, %2$d percent, charging</string>
+    <string name="airpods_ring_discharging">%1$s, %2$d percent, not charging</string>
+    <string name="airpods_ring_unknown">%1$s, battery level unknown</string>
+    <string name="airpods_mode_off_description">No processing. You hear the world and your audio as they are.</string>
+    <string name="airpods_mode_transparency_description">Lets outside sound in so voices and traffic stay natural.</string>
+    <string name="airpods_mode_adaptive_description">Adjusts how much outside sound comes in as your surroundings change.</string>
+    <string name="airpods_mode_noise_cancel_description">Blocks steady background noise such as engines and fans.</string>
+    <string name="airpods_mode_unknown_description">The listening mode is not known yet.</string>
+    <string name="airpods_adaptive_title">Adaptive strength</string>
+    <string name="airpods_adaptive_summary">Between transparency and noise cancel</string>
+    <string name="airpods_duck_summary">How loud the music stays while you speak</string>
+    <string name="airpods_group_sound">Sound and controls</string>
+    <string name="airpods_press_hold_title">Press and hold</string>
+    <string name="airpods_press_hold_unset">Not set from this phone yet</string>
+    <string name="airpods_press_hold_dialog_title">Press and hold cycles through</string>
+    <string name="airpods_press_hold_footer">Choose at least two modes. The AirPods do not report this setting, so this shows what you chose last on this phone.</string>
+    <string name="airpods_done">Done</string>
+    <string name="airpods_group_about">About</string>
+    <string name="airpods_name_title">Name</string>
+    <string name="airpods_name_dialog_title">Rename AirPods</string>
+    <string name="airpods_name_dialog_positive">Rename</string>
+    <string name="airpods_name_dialog_negative">Cancel</string>
+    <string name="airpods_name_invalid">Use 1 to 32 bytes of ordinary text, without spaces at the start or the end.</string>
+    <string name="airpods_model_title">Model number</string>
+    <string name="airpods_firmware_title">Firmware</string>
+    <string name="airpods_unknown">Unknown</string>
 </resources>
