@@ -2,15 +2,15 @@
 
 ## airpods-core.jar
 
-- Source: `sovereignos-services` commit `1f46416` (`master`, "airpods: decode the device information, encode the adaptive strength, press and hold and rename frames"). Re-vendored 2026-10-04 with `DeviceInformation` and the three new encoders.
+- Source: `sovereignos-services` commit `f1dee3f` (`master`, "airpods: encode and decode the comfort and sound controls and the call management setting"). Re-vendored 2026-10-04 with `AirPodsControl`, `ControlReport`, `CallManagementReport` and `setControl`.
 - Build command: `./gradlew :airpods-core:clean :airpods-core:test :airpods-core:jar --offline`
   (Java 21 toolchain, zero runtime dependencies: `airpods-core/build.gradle.kts`
   lists only test dependencies). Output `airpods-core-0.1.0-SNAPSHOT.jar`,
   vendored under the name `airpods-core.jar`.
-- Tests at that commit: 49 tests, 0 failures (`AapCodecPlan7bTest` added: frames, bounds and a fuzz of the device information decoder); the new code was mutation-checked on the committed source (Task 2 step 8 of the Plan 7B plan).
-- SHA-256: `07249a4430f3aea2742201839ada3a904a032b179731e2b9c7e6412b8c9465fc`.
+- Tests at that commit: 57 tests, 0 failures (`AapCodecControlsTest` added: the frames of `AIR-180` and `AIR-182`, the ranges, the identifiers, an out-of-range report that stays unrecognised); three mutations of the new code each failed the suite (Task 3 step 5 of the Plan 9 plan).
+- SHA-256: `64f391a21536725b0f87dfc0576056e5126747b1e2d65a8cc0a4d3ae5c1ddfb3`.
   Rebuilt from clean a second time with the same command: same hash.
-- 28 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
+- 31 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
   class-file major version 65, the same as the vendored `guardian-core.jar`.
 - Replaces the jar of 2026-09-29 (`324091f9...`), whose parser decoded an invented format that no AirPods sends.
   Vendored 2026-10-02. Re-vendor whenever `airpods-core` changes, and record the new commit and hash here.
