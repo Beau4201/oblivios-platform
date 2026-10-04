@@ -1,0 +1,332 @@
+From aa99aa81f35eae12add65e335afe6aa40677aacd Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 4 Oct 2026 18:36:28 +0200
+Subject: [PATCH] airpods: add BluetoothDevice#setAirPodsAlias behind
+ MANAGE_AIRPODS_IDENTITY
+
+BluetoothDevice#setAlias needs BLUETOOTH_PRIVILEGED or a companion device
+association, so the AirPods app could rename the pair but not the phone's
+own name for it (the Name row kept the old value). Add a narrow setter
+instead, in the pattern of setAirPodsMetadata: only for a device that is
+bonded and registered through setAirPodsIdentity, only for a name of 1 to 32
+UTF-8 bytes of visible text (the rule of the app's own validation), on the
+registry lock the metadata setter already uses, behind the signature or
+privileged permission MANAGE_AIRPODS_IDENTITY. It changes no other device
+property.
+---
+ .../aidl/android/bluetooth/IBluetooth.aidl    |  6 ++
+ .../bluetooth/btservice/AdapterService.java   | 26 +++++++++
+ .../btservice/AdapterServiceBinder.java       | 22 ++++++++
+ .../btservice/AirPodsAliasPolicy.java         | 56 +++++++++++++++++++
+ .../btservice/AdapterServiceBinderTest.kt     | 27 +++++++++
+ .../btservice/AirPodsAliasPolicyTest.java     | 56 +++++++++++++++++++
+ framework/api/system-current.txt              |  1 +
+ .../android/bluetooth/BluetoothDevice.java    | 28 ++++++++++
+ 8 files changed, 222 insertions(+)
+ create mode 100644 android/app/src/com/android/bluetooth/btservice/AirPodsAliasPolicy.java
+ create mode 100644 android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsAliasPolicyTest.java
+
+diff --git a/android/app/aidl/android/bluetooth/IBluetooth.aidl b/android/app/aidl/android/bluetooth/IBluetooth.aidl
+index 695a913922..cfeb54907b 100644
+--- a/android/app/aidl/android/bluetooth/IBluetooth.aidl
++++ b/android/app/aidl/android/bluetooth/IBluetooth.aidl
+@@ -213,6 +213,12 @@ interface IBluetooth {
+     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
+     boolean setAirPodsMetadata(in BluetoothDevice device, in int key, in byte[] value, in AttributionSource attributionSource);
+ 
++    // For the AirPods alias (ADR-135). Also requires
++    // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime
++    // (enforced in AdapterServiceBinder). The device must be bonded and registered.
++    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
++    boolean setAirPodsAlias(in BluetoothDevice device, in String alias, in AttributionSource attributionSource);
++
+     // For the AirPods audio route (ADR-125). Also requires
+     // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
+     // AdapterServiceBinder, see setAirPodsIdentity above for why the annotation cannot carry it).
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterService.java b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+index f33d01fa36..454bdc4374 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterService.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+@@ -2493,6 +2493,32 @@ public class AdapterService extends Service {
+         }
+     }
+ 
++    /**
++     * Sets the alias of a bonded device that the AirPods app has registered (ADR-135). The caller
++     * (AdapterServiceBinder) has already enforced org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY.
++     *
++     * @return true when the alias now equals {@code alias}; false when the name is outside {@link
++     *     AirPodsAliasPolicy}, the device is not bonded or not registered, or its properties are not
++     *     known.
++     */
++    public boolean setAirPodsAlias(BluetoothDevice device, String alias) {
++        if (!AirPodsAliasPolicy.isAllowed(alias)) {
++            Log.w(TAG, "setAirPodsAlias: rejected alias");
++            return false;
++        }
++        return mAirPodsIdentity.runIfRegistered(
++                device.getAddress(),
++                () -> getBondState(device) == BOND_BONDED,
++                () -> {
++                    DeviceProperties properties = mRemoteDevices.getDeviceProperties(device);
++                    if (properties == null) {
++                        return false;
++                    }
++                    properties.setAlias(device, alias);
++                    return true;
++                });
++    }
++
+     private void logManufacturerInfo(BluetoothDevice device, int key, byte[] bytesValue) {
+         String callingApp = getPackageManager().getNameForUid(Binder.getCallingUid());
+         String manufacturerName = "";
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java b/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java
+index d7f4177709..939cad908c 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java
+@@ -1538,6 +1538,28 @@ class AdapterServiceBinder extends IBluetooth.Stub {
+         return service.setAirPodsMusicDuck(device, duck, percent, token);
+     }
+ 
++    /**
++     * Sets the alias of a bonded, registered AirPods device (ADR-135). Scoped to the caller holding
++     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY, never a general BLUETOOTH_PRIVILEGED holder;
++     * the name rule and the bond and registration checks are in {@link
++     * AdapterService#setAirPodsAlias}.
++     */
++    @Override
++    public boolean setAirPodsAlias(
++            BluetoothDevice device, String alias, AttributionSource source) {
++        requireNonNull(device);
++        requireNonNull(alias);
++        var service = getServiceAndEnforceCallerUserAndConnect(source, "setAirPodsAlias");
++        if (service == null) {
++            return false;
++        }
++
++        service.enforceCallingOrSelfPermission(
++                "org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY", null);
++
++        return service.setAirPodsAlias(device, alias);
++    }
++
+     @Override
+     public byte[] getMetadata(BluetoothDevice device, int key, AttributionSource source) {
+         requireNonNull(device);
+diff --git a/android/app/src/com/android/bluetooth/btservice/AirPodsAliasPolicy.java b/android/app/src/com/android/bluetooth/btservice/AirPodsAliasPolicy.java
+new file mode 100644
+index 0000000000..2a7b09684d
+--- /dev/null
++++ b/android/app/src/com/android/bluetooth/btservice/AirPodsAliasPolicy.java
+@@ -0,0 +1,56 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.bluetooth.btservice;
++
++import java.nio.charset.StandardCharsets;
++
++/**
++ * SovereignOS ADR-135: what {@link AdapterService#setAirPodsAlias} may write. The rule is the one of
++ * the AirPods app's {@code AapCodec.isValidName}: 1 to {@value #MAX_BYTES} UTF-8 bytes of visible text,
++ * no leading or trailing white space, and none of the control, format, private-use, surrogate,
++ * unassigned, line-separator or paragraph-separator characters.
++ */
++final class AirPodsAliasPolicy {
++    static final int MAX_BYTES = 32;
++
++    private AirPodsAliasPolicy() {}
++
++    static boolean isAllowed(String alias) {
++        if (alias == null) {
++            return false;
++        }
++        int bytes = alias.getBytes(StandardCharsets.UTF_8).length;
++        if (bytes < 1 || bytes > MAX_BYTES || !alias.equals(alias.strip())) {
++            return false;
++        }
++        for (int i = 0; i < alias.length(); i += Character.charCount(alias.codePointAt(i))) {
++            switch (Character.getType(alias.codePointAt(i))) {
++                case Character.CONTROL,
++                        Character.FORMAT,
++                        Character.PRIVATE_USE,
++                        Character.SURROGATE,
++                        Character.UNASSIGNED,
++                        Character.LINE_SEPARATOR,
++                        Character.PARAGRAPH_SEPARATOR -> {
++                    return false;
++                }
++                default -> {}
++            }
++        }
++        return true;
++    }
++}
+diff --git a/android/app/tests/unit/src/com/android/bluetooth/btservice/AdapterServiceBinderTest.kt b/android/app/tests/unit/src/com/android/bluetooth/btservice/AdapterServiceBinderTest.kt
+index bb4e7d5e14..1e662fa15e 100644
+--- a/android/app/tests/unit/src/com/android/bluetooth/btservice/AdapterServiceBinderTest.kt
++++ b/android/app/tests/unit/src/com/android/bluetooth/btservice/AdapterServiceBinderTest.kt
+@@ -534,7 +534,34 @@ class AdapterServiceBinderTest {
+         verify(service).setAirPodsMusicDuck(device, false, 0, token)
+     }
+ 
++    @Test
++    fun setAirPodsAlias_serviceUnavailable_returnsFalse() {
++        doReturn(false).whenever(service).isAvailable
++        assertThat(binder.setAirPodsAlias(device, AIRPODS_ALIAS, source)).isFalse()
++        verify(service, never()).setAirPodsAlias(any(), any())
++    }
++
++    @Test
++    fun setAirPodsAlias_withoutIdentityPermission_throwsSecurityException() {
++        doThrow(SecurityException("MANAGE_AIRPODS_IDENTITY permission required"))
++            .whenever(service)
++            .enforceCallingOrSelfPermission(eq(MANAGE_AIRPODS_IDENTITY), anyOrNull())
++        assertThrows(SecurityException::class.java) {
++            binder.setAirPodsAlias(device, AIRPODS_ALIAS, source)
++        }
++        verify(service, never()).setAirPodsAlias(any(), any())
++    }
++
++    @Test
++    fun setAirPodsAlias_withIdentityPermission_forwardsToService() {
++        doReturn(true).whenever(service).setAirPodsAlias(device, AIRPODS_ALIAS)
++        assertThat(binder.setAirPodsAlias(device, AIRPODS_ALIAS, source)).isTrue()
++        verify(service).setAirPodsAlias(device, AIRPODS_ALIAS)
++    }
++
+     companion object {
++        // SovereignOS ADR-135
++        private const val AIRPODS_ALIAS = "AirPods Test"
+         // Transport constants from BluetoothDevice
+         private const val INVALID_TRANSPORT_NEGATIVE = -1
+         private const val INVALID_TRANSPORT_POSITIVE = 3
+diff --git a/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsAliasPolicyTest.java b/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsAliasPolicyTest.java
+new file mode 100644
+index 0000000000..92d1387523
+--- /dev/null
++++ b/android/app/tests/unit/src/com/android/bluetooth/btservice/AirPodsAliasPolicyTest.java
+@@ -0,0 +1,56 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.bluetooth.btservice;
++
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++import androidx.test.ext.junit.runners.AndroidJUnit4;
++import androidx.test.filters.SmallTest;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++
++/** Tests for {@link AirPodsAliasPolicy} (ADR-135). */
++@SmallTest
++@RunWith(AndroidJUnit4.class)
++public class AirPodsAliasPolicyTest {
++    @Test
++    public void acceptsVisibleTextOfOneToThirtyTwoBytes() {
++        assertTrue(AirPodsAliasPolicy.isAllowed("AirPods Test"));
++        assertTrue(AirPodsAliasPolicy.isAllowed("A"));
++        assertTrue(AirPodsAliasPolicy.isAllowed("x".repeat(32)));
++        assertTrue(AirPodsAliasPolicy.isAllowed("é".repeat(16)));
++        assertTrue(AirPodsAliasPolicy.isAllowed("a b"));
++    }
++
++    @Test
++    public void refusesWhatIsOutsideTheRule() {
++        assertFalse(AirPodsAliasPolicy.isAllowed(null));
++        assertFalse(AirPodsAliasPolicy.isAllowed(""));
++        assertFalse(AirPodsAliasPolicy.isAllowed("x".repeat(33)));
++        assertFalse(AirPodsAliasPolicy.isAllowed("é".repeat(17)));
++        assertFalse(AirPodsAliasPolicy.isAllowed(" a"));
++        assertFalse(AirPodsAliasPolicy.isAllowed("a "));
++        assertFalse(AirPodsAliasPolicy.isAllowed("a\tb"));
++        assertFalse(AirPodsAliasPolicy.isAllowed("a\nb"));
++        assertFalse(AirPodsAliasPolicy.isAllowed("a​b"));
++        assertFalse(AirPodsAliasPolicy.isAllowed("a b"));
++        assertFalse(AirPodsAliasPolicy.isAllowed("ab"));
++        assertFalse(AirPodsAliasPolicy.isAllowed("a\ud800b"));
++    }
++}
+diff --git a/framework/api/system-current.txt b/framework/api/system-current.txt
+index 249685d66f..90a8cccedc 100644
+--- a/framework/api/system-current.txt
++++ b/framework/api/system-current.txt
+@@ -272,6 +272,7 @@ package android.bluetooth {
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}, conditional=true) public boolean removeBond();
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public int requestAudioPolicyAsSink(@NonNull android.bluetooth.BluetoothSinkAudioPolicy);
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public int setActiveAudioDevicePolicy(int);
++    method @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) public boolean setAirPodsAlias(@NonNull String);
+     method @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) public boolean setAirPodsAudioRoute(boolean);
+     method @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) public boolean setAirPodsIdentity(boolean);
+     method @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) public boolean setAirPodsMetadata(int, @NonNull byte[]);
+diff --git a/framework/java/android/bluetooth/BluetoothDevice.java b/framework/java/android/bluetooth/BluetoothDevice.java
+index 33c024c1fc..0ae4f46bb2 100644
+--- a/framework/java/android/bluetooth/BluetoothDevice.java
++++ b/framework/java/android/bluetooth/BluetoothDevice.java
+@@ -3497,6 +3497,34 @@ public final class BluetoothDevice implements Parcelable, Attributable {
+         }
+     }
+ 
++    /**
++     * Sets the alias of this <em>bonded</em> device, which must currently be registered as an AirPods
++     * accessory through {@link #setAirPodsIdentity} (ADR-135). The name must be 1 to 32 UTF-8 bytes of
++     * visible text without leading or trailing white space; anything else is refused.
++     *
++     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
++     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
++     * not require {@code BLUETOOTH_PRIVILEGED} or a companion device association.
++     *
++     * @param alias the new name
++     * @return true when the alias now equals {@code alias}; false when refused or on error
++     */
++    @Hide
++    @SystemApi
++    @RequiresBluetoothConnectPermission
++    @RequiresPermission(BLUETOOTH_CONNECT)
++    public boolean setAirPodsAlias(@NonNull String alias) {
++        if (DBG) log("setAirPodsAlias()");
++        requireNonNull(alias);
++        try {
++            return callServiceIfEnabled(
++                    s -> s.setAirPodsAlias(this, alias, mAttributionSource), false);
++        } catch (SecurityException se) {
++            GmsCompat.catchOrRethrow(se);
++            return false;
++        }
++    }
++
+     /**
+      * Get a keyed metadata for this {@link BluetoothDevice} as {@link String}
+      *
+-- 
+2.39.5
+
