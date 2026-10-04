@@ -4,10 +4,11 @@ import java.util.List;
 
 /**
  * When to lower and give back the music volume while the owner speaks (ADR-125). The AirPods signal a
- * conversation with a level byte (opcode 0x4B). Both captures show 01 and 02 when speech starts, 03
- * to 05 while it goes on, 0B and 04 near the end and 08 and 09 when it is over. So: lower on 01 or 02,
- * give back on 08 or 09 only, and change nothing for any other value, so a value we have not seen
- * cannot make the volume flap. Pure: it returns actions and executes none. One lock.
+ * conversation with a level byte (opcode 0x4B). The captures show 01 and 02 when speech starts, 03
+ * to 05 while it goes on, and 0B then 04 at the end, followed by 08 and 09 only when the pods switch
+ * the listening mode back (in transparency the sequence ends at 04: capture 2026-10-04). So: lower on
+ * 01 or 02, give back on 04, 08 or 09, and change nothing for any other value, so a value we have
+ * not seen cannot make the volume flap. Pure: it returns actions and executes none. One lock.
  */
 public final class ConversationAwarenessPolicy {
     public enum Action {
@@ -32,7 +33,7 @@ public final class ConversationAwarenessPolicy {
             lowered = true;
             return List.of(Action.DUCK);
         }
-        if ((level == 8 || level == 9) && lowered) {
+        if ((level == 4 || level == 8 || level == 9) && lowered) {
             lowered = false;
             return List.of(Action.RESTORE);
         }

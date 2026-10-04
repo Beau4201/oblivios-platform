@@ -14,7 +14,8 @@ public final class ConversationAwarenessCheck {
     }
 
     public static void main(String[] args) {
-        // The captured conversations (2026-10-02): idle 09, then 01 02 03 05 03 0B 04 08 09.
+        // The captured conversations: 2026-10-02 idle 09, then 01 02 03 05 03 0B 04 08 09; 2026-10-04
+        // (transparency) 01 02 03 0B 04 and nothing after it.
         ConversationAwarenessPolicy p = new ConversationAwarenessPolicy(true);
         is(p.onLevel(0x09), "idle at the start of a session");
         is(p.onLevel(0x01), "speech starts", Action.DUCK);
@@ -23,16 +24,24 @@ public final class ConversationAwarenessCheck {
         is(p.onLevel(0x05), "speech goes on");
         is(p.onLevel(0x03), "speech goes on");
         is(p.onLevel(0x0B), "near the end the volume stays lowered");
-        is(p.onLevel(0x04), "near the end the volume stays lowered");
-        is(p.onLevel(0x08), "over", Action.RESTORE);
+        is(p.onLevel(0x04), "over at 04, where the transparency capture ends", Action.RESTORE);
+        is(p.onLevel(0x08), "08 after 04 changes nothing");
         is(p.onLevel(0x09), "idle again");
         is(p.onLevel(0x01), "a second conversation", Action.DUCK);
         is(p.onLevel(0x01), "a repeated start does not lower twice");
         is(p.onLevel(0x09), "over by 09 as well", Action.RESTORE);
+        is(p.onLevel(0x01), "a third conversation", Action.DUCK);
+        is(p.onLevel(0x08), "over by 08 as well", Action.RESTORE);
+        p = new ConversationAwarenessPolicy(true);
+        p.onLevel(0x01);
+        p.onLevel(0x03);
+        is(p.onLevel(0x0B), "the transparency capture: 0B keeps it lowered");
+        is(p.onLevel(0x04), "the transparency capture: 04 gives it back", Action.RESTORE);
+        is(p.onLevel(0x04), "a repeated 04 changes nothing");
 
-        // Only 01/02 lower and only 08/09 give back; every other value (including 03 to 05 and 0B, which
-        // occur inside a conversation) changes nothing, lowered or not.
-        for (int level : new int[] {0x00, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0A, 0x0B, 0x0C, 0x20, 0xFF}) {
+        // Only 01/02 lower and only 04/08/09 give back; every other value (including 03, 05 and 0B,
+        // which occur inside a conversation) changes nothing, lowered or not.
+        for (int level : new int[] {0x00, 0x03, 0x05, 0x06, 0x07, 0x0A, 0x0B, 0x0C, 0x20, 0xFF}) {
             ConversationAwarenessPolicy q = new ConversationAwarenessPolicy(true);
             is(q.onLevel(level), "idle, unseen level " + level);
             q.onLevel(0x01);
