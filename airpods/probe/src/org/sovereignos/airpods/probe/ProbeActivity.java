@@ -169,7 +169,8 @@ public final class ProbeActivity extends Activity {
             while (j < n && buf[j] >= 0x20 && buf[j] <= 0x7E) j++;
             String s = new String(buf, i, j - i, java.nio.charset.StandardCharsets.US_ASCII);
             boolean safe = s.matches("A[0-9]{4}") || s.equals("Apple Inc.") || s.equals(bondName)
-                    || (s.length() <= 8 && s.matches("[0-9][0-9A-Za-z.]*"));
+                    || (s.length() <= 8 && s.matches("[0-9][0-9A-Za-z.]*"))
+                    || idx == 4 || idx == 5 || idx == 7; // the two versions and the updater app, never serial numbers
             sb.append(idx).append(':').append(s.length()).append(safe ? "=" + s : "").append(' ');
             idx++;
             i = j + 1;
