@@ -58,7 +58,7 @@ Built into images `2026100202` to `2026100204` (`2026100204` not flashed at the 
 ## Probe (`probe/`, Plan 7A task 3)
 
 A debug tool, never in an image: `m AirPodsProbe` builds it, `adb install` installs it on a userdebug device. It opens the accessory channel on the owner's pair and logs frame kinds
-(hex only for the kinds the codec acts on; the device-information frame, with serial numbers, is never printed). It reaches the hidden method only while the owner has set
+(hex, up to 64 bytes, for every opcode except 0x1D, 0x2E, 0x31, 0x0E, 0x10 and 0x11, which carry serial numbers, addresses or keys and are logged as their length only). It reaches the hidden method only while the owner has set
 `hidden_api_blacklist_exemptions` to `Landroid/bluetooth/BluetoothDevice;->createL2capSocket` and the probe process was started afterwards. `cmds` accepts `mode:1..3`, `ca:0|1`, `ear:0|1`
 and `raw:<hex>` (a frame as hex without spaces). Used on 2026-10-02 for `AIR-121` to `AIR-123`.
 
