@@ -382,6 +382,7 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             ControlRows.Kind.SWITCH -> SwitchPreferenceCompat(ctx).apply {
                 key = "control_" + control.name
                 isPersistent = false
+                icon = tinted(ControlTexts.icon(control))
                 setTitle(ControlTexts.title(control))
                 setSummary(ControlTexts.summary(control))
                 setOnPreferenceChangeListener { _, value ->
@@ -393,6 +394,7 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             ControlRows.Kind.CHOICE -> ListPreference(ctx).apply {
                 key = "control_" + control.name
                 isPersistent = false
+                icon = tinted(ControlTexts.icon(control))
                 setTitle(ControlTexts.title(control))
                 setDialogTitle(ControlTexts.title(control))
                 val labels = ControlTexts.choiceLabels(control)
@@ -406,6 +408,7 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             ControlRows.Kind.SLIDER -> SliderPreference(ctx).apply {
                 key = "control_" + control.name
                 isPersistent = false
+                icon = tinted(ControlTexts.icon(control))
                 setTitle(ControlTexts.title(control))
                 setSummary(ControlTexts.summary(control))
                 min = control.min()
@@ -421,6 +424,13 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
     }
 
     private fun showControl(row: ControlRows.Row, pref: Preference, value: Int) {
+        // A control the pair never reports has no value until the owner sets one from this phone: say so, so that
+        // an off switch or a slider at zero does not read as a value.
+        if (value < 0 && !row.reportedByPair() && row.kind() != ControlRows.Kind.CHOICE) {
+            pref.setSummary(R.string.airpods_press_hold_unset)
+        } else if (row.kind() != ControlRows.Kind.CHOICE) {
+            pref.setSummary(ControlTexts.summary(row.control()))
+        }
         when (row.kind()) {
             ControlRows.Kind.SWITCH -> (pref as SwitchPreferenceCompat).isChecked = ControlRows.isOn(row, value)
             ControlRows.Kind.CHOICE -> {

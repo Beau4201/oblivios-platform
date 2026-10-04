@@ -149,6 +149,7 @@ internal object AirPodsSessionHost {
                 ControlStore.readAll(ctx, address),
             )
         }
+        if (isDebuggableBuild()) Log.d(TAG, "seeded controls " + seed.controls())
         val s = AirPodsSession(device, address, opener, seed, listener)
         session = s
         service?.let { ears = EarDetectionController(it.applicationContext, device, earDetection) }

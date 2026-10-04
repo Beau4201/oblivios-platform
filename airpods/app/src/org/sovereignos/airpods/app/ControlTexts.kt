@@ -1,5 +1,6 @@
 package org.sovereignos.airpods.app
 
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import org.sovereignos.airpods.R
 import org.sovereignos.airpods.validation.AirPodsControl
@@ -36,6 +37,23 @@ internal object ControlTexts {
         AirPodsControl.CASE_TONE -> R.string.airpods_case_tone_summary
         AirPodsControl.SLEEP_DETECTION -> R.string.airpods_sleep_summary
         AirPodsControl.CASE_TONE_VOLUME -> R.string.airpods_case_tone_volume_summary
+    }
+
+    /** The row icon, like the other rows of the page, so that the texts of one group line up. */
+    @DrawableRes
+    fun icon(control: AirPodsControl): Int = when (control) {
+        AirPodsControl.PERSONALIZED_VOLUME -> R.drawable.ic_airpods_sound
+        AirPodsControl.CHIME_VOLUME -> R.drawable.ic_airpods_music
+        AirPodsControl.PRESS_SPEED,
+        AirPodsControl.PRESS_HOLD_DURATION,
+        AirPodsControl.SWIPE_MODE,
+        AirPodsControl.SWIPE_INTERVAL,
+        AirPodsControl.GAIN_SWIPE -> R.drawable.ic_airpods_squeeze
+        AirPodsControl.MICROPHONE -> R.drawable.ic_airpods_voice
+        AirPodsControl.SLEEP_DETECTION -> R.drawable.ic_airpods_wave
+        AirPodsControl.CONNECT_AUTOMATICALLY -> R.drawable.ic_airpods_phone
+        AirPodsControl.CASE_TONE,
+        AirPodsControl.CASE_TONE_VOLUME -> R.drawable.ic_airpods_tune
     }
 
     /** The label of each value of a choice row, in the order of [org.sovereignos.airpods.ui.ControlRows.Row.choices]. */

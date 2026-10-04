@@ -1,6 +1,7 @@
 package org.sovereignos.airpods.app
 
 import android.content.Context
+import android.util.Log
 import org.sovereignos.airpods.ui.AdaptiveSteps
 import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.ui.ControlRows
@@ -131,6 +132,7 @@ internal class SessionCommandSink(
     override fun setControl(control: AirPodsControl, value: Int): Boolean {
         val state = AirPodsStateStore.state
         if (!state.isConnected || !control.accepts(value) || !ControlRows.offered(state, control)) return false
+        if (isDebuggableBuild()) Log.d(TAG, "setControl " + control + " " + value)
         if (!session.send(AapCodec.setControl(control, value))) return false
         // The pair reports most of these only in the burst of the next session and some never (AIR-179):
         // show the written value now and keep it for the next session.
@@ -162,6 +164,7 @@ internal class SessionCommandSink(
         get() = find?.playing ?: false
 
     private companion object {
+        const val TAG = "AirPodsCommands"
         const val MAX_BYTE = 255
 
         /** Pause between "allow off" and "off", as between the opening frames (AIR-123). */
