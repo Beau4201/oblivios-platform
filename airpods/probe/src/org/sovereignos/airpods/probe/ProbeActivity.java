@@ -32,6 +32,9 @@ public final class ProbeActivity extends Activity {
     private static final String TAG = "AirPodsProbe";
     private static final int PSM = 0x1001;
 
+    /** Name of the bonded device found by --es name, to tell whether the name field of the device information equals it. */
+    private String bondName;
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -43,6 +46,7 @@ public final class ProbeActivity extends Activity {
             for (BluetoothDevice d : getSystemService(BluetoothManager.class).getAdapter().getBondedDevices()) {
                 if (d.getName() != null && d.getName().contains(name)) {
                     found = d.getAddress();
+                    bondName = d.getName();
                     break;
                 }
             }
@@ -141,7 +145,36 @@ public final class ProbeActivity extends Activity {
             decoded = "REJECTED " + e.getMessage();
         }
         Log.i(TAG, "+" + t + " ms recv len=" + n + " opcode=" + (opcode < 0 ? "none" : String.format("0x%04X", opcode))
-                + (showHex ? " hex=" + hex(buf, Math.min(n, 32)) : "") + " -> " + decoded);
+                + (showHex ? " hex=" + hex(buf, Math.min(n, 32)) : "") + " -> " + decoded
+                + (opcode == 0x1D ? " info=" + describeDeviceInfo(buf, n) : ""));
+    }
+
+    /**
+     * The device information frame as field lengths, with the content only of the fields that look
+     * like a model number (A and four digits), the vendor or a short version string. Everything else,
+     * serial numbers included, is printed as its length only. Fields are the NUL-terminated printable
+     * runs after the header, in the order of the third-party notes: name, model number, vendor,
+     * serial, two versions, hardware revision, updater app, left serial, right serial, version.
+     */
+    private String describeDeviceInfo(byte[] buf, int n) {
+        StringBuilder sb = new StringBuilder();
+        int i = 6;
+        int idx = 0;
+        while (i < n && idx < 14) {
+            if (buf[i] < 0x20 || buf[i] > 0x7E) {
+                i++;
+                continue;
+            }
+            int j = i;
+            while (j < n && buf[j] >= 0x20 && buf[j] <= 0x7E) j++;
+            String s = new String(buf, i, j - i, java.nio.charset.StandardCharsets.US_ASCII);
+            boolean safe = s.matches("A[0-9]{4}") || s.equals("Apple Inc.") || s.equals(bondName)
+                    || (s.length() <= 8 && s.matches("[0-9][0-9A-Za-z.]*"));
+            sb.append(idx).append(':').append(s.length()).append(safe ? "=" + s : "").append(' ');
+            idx++;
+            i = j + 1;
+        }
+        return sb.toString().trim();
     }
 
     private void sendCommands(OutputStream out, String cmds, long t0) {
