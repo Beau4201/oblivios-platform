@@ -5,8 +5,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.sovereignos.airpods.probe">
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- AIR-148 capture only (ScanActivity): granted with pm grant for the run, revoked afterwards. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
     <application android:label="AirPodsProbe" android:allowBackup="false">
         <activity android:name=".ProbeActivity" android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity android:name=".ScanActivity" android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>
 </manifest>
