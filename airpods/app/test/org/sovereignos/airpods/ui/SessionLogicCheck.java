@@ -26,8 +26,9 @@ public final class SessionLogicCheck {
 
     public static void main(String[] args) {
         AirPodsUiState s0 = SessionReducer.connected(ADDR, true);
-        check(s0.isConnected() && s0.supported.equals(java.util.Set.of(Feature.EAR_DETECTION)) && s0.earDetection
-                && s0.leftPercent == -1 && s0.listeningMode == null, "connected offers only ear detection, with the kept value");
+        check(s0.isConnected() && s0.supported.equals(java.util.Set.of(Feature.EAR_DETECTION, Feature.ALL_SETTINGS_PAGE, Feature.PRESS_AND_HOLD, Feature.RENAME))
+                && s0.earDetection && s0.leftPercent == -1 && s0.listeningMode == null,
+                "connected offers only the controls that need no report, with the kept ear detection value");
         check(!SessionReducer.connected(ADDR, false).earDetection, "kept ear detection value is used");
 
         // battery: left 100 discharging, right 99 charging, case 17 discharging (documented sample)

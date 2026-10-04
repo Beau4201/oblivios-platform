@@ -51,11 +51,14 @@ public final class UiLogicCheck {
         check(st.duckPercent == DuckLevels.DEFAULT && DuckLevels.DEFAULT == 50, "default lowered volume");
         check(full().duckPercent(20).build().duckPercent == 20 && !st.equals(full().duckPercent(20).build()), "lowered volume is part of the state");
         rejects(() -> full().duckPercent(0).build(), "lowered volume 0");
-        rejects(() -> full().duckPercent(55).build(), "lowered volume 55");
+        check(full().duckPercent(55).build().duckPercent == 55 && full().duckPercent(10).build().duckPercent == 10
+                && full().duckPercent(90).build().duckPercent == 90, "lowered volume is any value from 10 to 90");
+        rejects(() -> full().duckPercent(9).build(), "lowered volume 9");
+        rejects(() -> full().duckPercent(91).build(), "lowered volume 91");
         check(DuckLevels.options().equals(List.of(20, 35, 50, 70)) && DuckLevels.indexOf(50) == 2 && DuckLevels.indexOf(55) == -1
                 && DuckLevels.at(3) == 70 && DuckLevels.at(4) == null && DuckLevels.at(-1) == null, "lowered volume choices");
         check(full().duckPercent(70).build().toBuilder().build().duckPercent == 70, "toBuilder keeps the lowered volume");
-        rejects(() -> new SessionSeed(true, 55, -1, false), "seed with a bad lowered volume");
+        rejects(() -> new SessionSeed(true, 91, -1, false), "seed with a bad lowered volume");
         rejects(() -> new SessionSeed(true, 50, 101, false), "seed with a bad case percent");
         rejects(() -> new SessionSeed(true, 50, -2, false), "seed with case percent -2");
         rejects(() -> full().listeningMode(ListeningMode.ADAPTIVE).build(), "adaptive without feature");

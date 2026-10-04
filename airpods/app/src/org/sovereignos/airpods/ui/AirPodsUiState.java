@@ -19,10 +19,16 @@ public final class AirPodsUiState {
         ADAPTIVE_MODE,
         EAR_DETECTION,
         CONVERSATION_AWARENESS,
-        ALL_SETTINGS_PAGE
+        ALL_SETTINGS_PAGE,
+        PRESS_AND_HOLD,
+        RENAME
     }
 
     private static final Pattern ADDRESS = Pattern.compile("([0-9A-F]{2}:){5}[0-9A-F]{2}");
+    // The same patterns as DeviceInformation in airpods-core; checked again here because this state
+    // also takes values from the debug input.
+    private static final Pattern MODEL = Pattern.compile("A[0-9]{4}");
+    private static final Pattern FIRMWARE = Pattern.compile("[0-9A-Za-z._-]{1,32}");
 
     /** Upper-case address of the recognised, connected AirPods, or null. */
     public final String address;
@@ -36,8 +42,16 @@ public final class AirPodsUiState {
     public final ListeningMode listeningMode;
     public final boolean earDetection;
     public final boolean conversationAwareness;
-    /** Percent of the volume that stays while the owner speaks (conversation awareness); one of {@link DuckLevels}. */
+    /** Percent of the volume that stays while the owner speaks (conversation awareness): 10 to 90 ({@link DuckLevels}). */
     public final int duckPercent;
+    /** The adaptive strength last read or written, -1 when unknown (the pair keeps 0, 50 or 100). */
+    public final int adaptivePercent;
+    /** Model number from the device information, or null. */
+    public final String modelNumber;
+    /** Firmware version from the device information, or null. */
+    public final String firmware;
+    /** The modes the stem cycles through, as last written; empty when unknown, fewer than two while the owner is still choosing. */
+    public final Set<ListeningMode> pressHoldModes;
     public final Set<Feature> supported;
 
     public static final AirPodsUiState DISCONNECTED = new Builder().build();
@@ -55,6 +69,15 @@ public final class AirPodsUiState {
         if (!DuckLevels.isValid(b.duck)) {
             throw new IllegalArgumentException("bad lowered volume");
         }
+        if (b.adaptive < -1 || b.adaptive > 100) {
+            throw new IllegalArgumentException("bad adaptive strength");
+        }
+        if (b.model != null && !MODEL.matcher(b.model).matches()) {
+            throw new IllegalArgumentException("bad model number");
+        }
+        if (b.firmware != null && !FIRMWARE.matcher(b.firmware).matches()) {
+            throw new IllegalArgumentException("bad firmware");
+        }
         address = b.address;
         leftPercent = b.left;
         rightPercent = b.right;
@@ -66,6 +89,12 @@ public final class AirPodsUiState {
         earDetection = b.ear;
         conversationAwareness = b.conversation;
         duckPercent = b.duck;
+        adaptivePercent = b.adaptive;
+        modelNumber = b.model;
+        firmware = b.firmware;
+        Set<ListeningMode> holds = EnumSet.noneOf(ListeningMode.class);
+        holds.addAll(b.pressHold);
+        pressHoldModes = Collections.unmodifiableSet(holds);
         Set<Feature> copy = EnumSet.noneOf(Feature.class);
         copy.addAll(b.features);
         supported = Collections.unmodifiableSet(copy);
@@ -84,6 +113,9 @@ public final class AirPodsUiState {
                 .earDetection(earDetection)
                 .conversationAwareness(conversationAwareness)
                 .duckPercent(duckPercent)
+                .adaptivePercent(adaptivePercent)
+                .deviceInformation(modelNumber, firmware)
+                .pressHoldModes(pressHoldModes)
                 .features(supported.toArray(new Feature[0]));
     }
 
@@ -102,6 +134,10 @@ public final class AirPodsUiState {
                 && earDetection == s.earDetection
                 && conversationAwareness == s.conversationAwareness
                 && duckPercent == s.duckPercent
+                && adaptivePercent == s.adaptivePercent
+                && Objects.equals(modelNumber, s.modelNumber)
+                && Objects.equals(firmware, s.firmware)
+                && pressHoldModes.equals(s.pressHoldModes)
                 && supported.equals(s.supported);
     }
 
@@ -109,7 +145,7 @@ public final class AirPodsUiState {
     public int hashCode() {
         return Objects.hash(address, leftPercent, rightPercent, casePercent, leftCharging,
                 rightCharging, caseCharging, listeningMode, earDetection, conversationAwareness,
-                duckPercent, supported);
+                duckPercent, adaptivePercent, modelNumber, firmware, pressHoldModes, supported);
     }
 
     public static final class Builder {
@@ -124,6 +160,10 @@ public final class AirPodsUiState {
         private boolean ear;
         private boolean conversation;
         private int duck = DuckLevels.DEFAULT;
+        private int adaptive = -1;
+        private String model;
+        private String firmware;
+        private final Set<ListeningMode> pressHold = EnumSet.noneOf(ListeningMode.class);
         private final Set<Feature> features = EnumSet.noneOf(Feature.class);
 
         public Builder address(String a) {
@@ -162,6 +202,25 @@ public final class AirPodsUiState {
 
         public Builder duckPercent(int p) {
             duck = p;
+            return this;
+        }
+
+        public Builder adaptivePercent(int p) {
+            adaptive = p;
+            return this;
+        }
+
+        /** Both null when unknown. */
+        public Builder deviceInformation(String modelNumber, String firmwareVersion) {
+            model = modelNumber;
+            firmware = firmwareVersion;
+            return this;
+        }
+
+        /** Replaces the whole selection. */
+        public Builder pressHoldModes(Set<ListeningMode> modes) {
+            pressHold.clear();
+            pressHold.addAll(modes);
             return this;
         }
 
