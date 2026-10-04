@@ -3,12 +3,16 @@ package org.sovereignos.airpods.app
 import android.content.Context
 import org.sovereignos.airpods.ui.AdaptiveSteps
 import org.sovereignos.airpods.ui.AirPodsUiState
+import org.sovereignos.airpods.ui.ControlRows
 import org.sovereignos.airpods.ui.DuckLevels
 import org.sovereignos.airpods.ui.ListeningModeToggles
 import org.sovereignos.airpods.ui.PressAndHoldChoices
 import org.sovereignos.airpods.ui.SessionReducer
 import org.sovereignos.airpods.validation.AapCodec
+import org.sovereignos.airpods.validation.AirPodsControl
 import org.sovereignos.airpods.validation.AirPodsMessage
+import org.sovereignos.airpods.validation.CallManagementReport
+import org.sovereignos.airpods.validation.ControlReport
 import org.sovereignos.airpods.validation.ConversationAwarenessSetting
 import org.sovereignos.airpods.validation.EarDetectionSetting
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
@@ -23,6 +27,7 @@ import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
 internal class SessionCommandSink(
     private val session: AirPodsSession,
     private val context: Context?,
+    private val find: FindSoundController?,
 ) : AirPodsCommandSink {
     override fun setListeningMode(mode: ListeningMode): Boolean {
         val state = AirPodsStateStore.state
@@ -123,7 +128,42 @@ internal class SessionCommandSink(
         return true
     }
 
+    override fun setControl(control: AirPodsControl, value: Int): Boolean {
+        val state = AirPodsStateStore.state
+        if (!state.isConnected || !control.accepts(value) || !ControlRows.offered(state, control)) return false
+        if (!session.send(AapCodec.setControl(control, value))) return false
+        // The pair reports most of these only in the burst of the next session and some never (AIR-179):
+        // show the written value now and keep it for the next session.
+        val address = state.address
+        if (context != null && address != null) ControlStore.write(context, address, control, value)
+        AirPodsStateStore.transform { SessionReducer.apply(it, ControlReport(control, value)) }
+        return true
+    }
+
+    override fun setCallManagement(first: Int, second: Int): Boolean {
+        val state = AirPodsStateStore.state
+        // Offered only once the pair has reported the setting, like the controls it reports.
+        if (!state.isConnected || state.callFirst < 0 || first !in 0..MAX_BYTE || second !in 0..MAX_BYTE) return false
+        if (!session.send(AapCodec.setCallManagement(first, second))) return false
+        AirPodsStateStore.transform { SessionReducer.apply(it, CallManagementReport(first, second)) }
+        return true
+    }
+
+    override fun playSound(): Boolean = find?.start() ?: false
+
+    override fun stopSound() {
+        find?.stop()
+    }
+
+    override val soundAvailable: Boolean
+        get() = find?.available() ?: false
+
+    override val soundPlaying: Boolean
+        get() = find?.playing ?: false
+
     private companion object {
+        const val MAX_BYTE = 255
+
         /** Pause between "allow off" and "off", as between the opening frames (AIR-123). */
         const val ALLOW_OFF_GAP_MS = 200L
     }

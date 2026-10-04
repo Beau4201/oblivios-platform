@@ -1,6 +1,7 @@
 package org.sovereignos.airpods.app
 
 import org.sovereignos.airpods.ui.AirPodsUiState
+import org.sovereignos.airpods.validation.AirPodsControl
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
 
 /** Where clicks from Settings' device page and from our own page go. */
@@ -24,6 +25,22 @@ interface AirPodsCommandSink {
 
     /** Renames the AirPods and the phone's own name for them. The text is validated again here. */
     fun rename(name: String): Boolean
+
+    /** Writes one control of the pair (Plan 9). Refused when the value is outside its range or the control is not offered. */
+    fun setControl(control: AirPodsControl, value: Int): Boolean
+
+    /** The call management setting: the two data bytes of one choice of [org.sovereignos.airpods.ui.CallChoices]. */
+    fun setCallManagement(first: Int, second: Int): Boolean
+
+    /** Starts "Play sound" through the AirPods; false when it may not start. Waits for the audio route: not on the main thread. */
+    fun playSound(): Boolean
+
+    fun stopSound()
+
+    /** True when "Play sound" may start now: no pod is in an ear. */
+    val soundAvailable: Boolean
+
+    val soundPlaying: Boolean
 }
 
 object AirPodsCommands {
@@ -43,5 +60,17 @@ object AirPodsCommands {
         override fun setPressAndHold(modes: Set<ListeningMode>): Boolean = false
 
         override fun rename(name: String): Boolean = false
+
+        override fun setControl(control: AirPodsControl, value: Int): Boolean = false
+
+        override fun setCallManagement(first: Int, second: Int): Boolean = false
+
+        override fun playSound(): Boolean = false
+
+        override fun stopSound() = Unit
+
+        override val soundAvailable: Boolean = false
+
+        override val soundPlaying: Boolean = false
     }
 }

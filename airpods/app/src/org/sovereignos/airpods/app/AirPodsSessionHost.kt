@@ -33,6 +33,7 @@ internal object AirPodsSessionHost {
     private var sinkBeforeSession: AirPodsCommandSink? = null
     private var ears: EarDetectionController? = null
     private var duck: ConversationDuckController? = null
+    private var find: FindSoundController? = null
     private val retry = Runnable { connect() }
 
     /** True while a published session exists. The debug input stays quiet then. */
@@ -143,7 +144,10 @@ internal object AirPodsSessionHost {
             SessionSeed.fresh(earDetection)
         } else {
             val case = CaseBatteryStore.read(ctx, address)
-            SessionSeed(earDetection, DuckLevelStore.read(ctx), case.first, case.second, PressAndHoldStore.read(ctx, address))
+            SessionSeed(
+                earDetection, DuckLevelStore.read(ctx), case.first, case.second, PressAndHoldStore.read(ctx, address),
+                ControlStore.readAll(ctx, address),
+            )
         }
         val s = AirPodsSession(device, address, opener, seed, listener)
         session = s
@@ -151,6 +155,7 @@ internal object AirPodsSessionHost {
         // The conversation awareness switch value arrives with the AirPods' first reports; the controller
         // follows the state store from then on, so it starts with the switch off.
         service?.let { duck = ConversationDuckController(it.applicationContext, device, false) }
+        service?.let { find = FindSoundController(it.applicationContext, ears) }
         s.start()
     }
 
@@ -161,7 +166,7 @@ internal object AirPodsSessionHost {
                 attempt = 0
                 live = true
                 sinkBeforeSession = AirPodsCommands.sink
-                AirPodsCommands.sink = SessionCommandSink(session, service?.applicationContext)
+                AirPodsCommands.sink = SessionCommandSink(session, service?.applicationContext, find)
             }
         }
 
@@ -169,6 +174,7 @@ internal object AirPodsSessionHost {
             main.post {
                 if (this@AirPodsSessionHost.session === session) {
                     ears?.onEars(inEar)
+                    find?.onEars(inEar)
                     if (inEar == 0) duck?.onPodsOut()
                 }
             }
@@ -191,6 +197,8 @@ internal object AirPodsSessionHost {
         ears = null
         duck?.end()
         duck = null
+        find?.end()
+        find = null
         session = null
         if (live) {
             live = false

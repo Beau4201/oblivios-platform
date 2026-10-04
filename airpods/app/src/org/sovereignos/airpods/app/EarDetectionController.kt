@@ -6,8 +6,12 @@ import android.media.AudioManager
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.ui.EarDetectionPolicy
@@ -52,6 +56,31 @@ internal class EarDetectionController(
         if (new.isConnected && new.earDetection != old.earDetection) {
             submit { execute(policy.setEnabled(new.earDetection)) }
         }
+    }
+
+    /**
+     * "Play sound" starts (ADR-134): the route we removed is put back before the tone, and kept until
+     * [endFind]. Waits for the route call, at most [FIND_WAIT_S] seconds; false when it did not finish.
+     */
+    fun beginFind(): Boolean {
+        if (ended) return false
+        return try {
+            worker.submit(Callable { execute(policy.startFind()); true }).get(FIND_WAIT_S, TimeUnit.SECONDS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        } catch (e: ExecutionException) {
+            false
+        } catch (e: TimeoutException) {
+            false
+        } catch (e: RejectedExecutionException) {
+            false
+        }
+    }
+
+    /** "Play sound" ended: the route goes away again when both pods are still out and the switch is on. */
+    fun endFind() {
+        submit { execute(policy.endFind()) }
     }
 
     /** The session is over: restore a route we removed, then stop. */
@@ -155,5 +184,6 @@ internal class EarDetectionController(
         const val SILENCE_POLLS = 20
         const val SILENCE_POLL_MS = 25L
         const val PLAY_SETTLE_MS = 3000L
+        const val FIND_WAIT_S = 3L
     }
 }
