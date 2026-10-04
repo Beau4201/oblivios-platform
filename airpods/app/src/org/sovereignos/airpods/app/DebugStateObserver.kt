@@ -7,8 +7,10 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import org.sovereignos.airpods.ui.AirPodsUiState
+import org.sovereignos.airpods.ui.ControlRows
 import org.sovereignos.airpods.ui.DuckLevels
 import org.sovereignos.airpods.ui.DebugStateParser
+import org.sovereignos.airpods.validation.AirPodsControl
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
 
 /**
@@ -94,6 +96,31 @@ internal class DebugStateObserver(private val context: Context) :
 
         override fun rename(name: String): Boolean =
             AirPodsStateStore.state.isConnected && org.sovereignos.airpods.validation.AapCodec.isValidName(name)
+
+        override fun setControl(control: AirPodsControl, value: Int): Boolean {
+            val state = AirPodsStateStore.state
+            if (!ControlRows.offered(state, control) || !control.accepts(value)) return false
+            AirPodsStateStore.update(state.toBuilder().control(control, value).build())
+            return true
+        }
+
+        override fun setCallManagement(first: Int, second: Int): Boolean {
+            val state = AirPodsStateStore.state
+            if (!state.isConnected || state.callFirst < 0 || first !in 0..MAX_BYTE || second !in 0..MAX_BYTE) return false
+            AirPodsStateStore.update(state.toBuilder().callManagement(first, second).build())
+            return true
+        }
+
+        // The debug input has no audio session: Play sound is never available through it.
+        override fun playSound(): Boolean = false
+
+        override fun stopSound() = Unit
+
+        override val soundAvailable: Boolean = false
+
+        override val soundPlaying: Boolean = false
+
+        private const val MAX_BYTE = 255
     }
 
     companion object {
