@@ -74,6 +74,10 @@ public final class ConversationAwarenessCheck {
         is(new ConversationAwarenessPolicy(true).end(), "end when nothing was lowered");
         is(new ConversationAwarenessPolicy(true).onPodsOut(), "pods out when nothing was lowered");
 
+        check(ConversationAwarenessPolicy.silenceMillis(0x0B) == 1000L, "after 0B the wait is 1 s");
+        for (int level : new int[] {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x08, 0x09, 0x0A, 0xFF}) {
+            check(ConversationAwarenessPolicy.silenceMillis(level) == 8000L, "after " + level + " the wait is 8 s");
+        }
         // A very short utterance: 01 and one more frame, no end level. The silence timeout gives it back.
         p = new ConversationAwarenessPolicy(true);
         p.onLevel(0x01);

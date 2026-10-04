@@ -45,7 +45,7 @@ internal class ConversationDuckController(
     fun onLevel(level: Int) {
         submit {
             execute(policy.onLevel(level))
-            rearmSilence()
+            rearmSilence(level)
         }
     }
 
@@ -90,14 +90,19 @@ internal class ConversationDuckController(
 
     /**
      * A very short utterance makes the pods send no end level (capture 2026-10-04): while the volume
-     * is lowered, a level that does not follow within [SILENCE_MS] ends the conversation. The longest
-     * gap seen inside one is 5.4 s, so a restore never cuts into one that is going on.
+     * is lowered, a level that does not follow ends the conversation: after 1 s when the last level was
+     * 0B (04 always follows it within 0.22 s), else after 8 s (the longest gap seen inside a
+     * conversation is 5.4 s, so a restore never cuts into one that is going on).
      */
-    private fun rearmSilence() {
+    private fun rearmSilence(level: Int) {
         silence?.cancel(false)
         silence = if (ducked) {
             try {
-                worker.schedule({ execute(policy.onSilence()) }, SILENCE_MS, TimeUnit.MILLISECONDS)
+                worker.schedule(
+                    { execute(policy.onSilence()) },
+                    ConversationAwarenessPolicy.silenceMillis(level),
+                    TimeUnit.MILLISECONDS,
+                )
             } catch (e: RejectedExecutionException) {
                 null
             }
@@ -129,6 +134,6 @@ internal class ConversationDuckController(
 
     private companion object {
         const val TAG = "AirPodsDuck"
-        const val SILENCE_MS = 8000L
+
     }
 }

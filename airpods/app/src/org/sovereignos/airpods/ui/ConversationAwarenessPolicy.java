@@ -58,6 +58,15 @@ public final class ConversationAwarenessPolicy {
     }
 
     /**
+     * How long to wait for the next level before {@link #onSilence()}: 1 s after 0B, because 04 follows
+     * 0B after 0.21 to 0.22 s in every capture, so a 0B with nothing after it is the end; 8 s after any
+     * other level, where the longest gap seen inside a conversation is 5.4 s.
+     */
+    public static long silenceMillis(int lastLevel) {
+        return lastLevel == 0x0B ? 1000L : 8000L;
+    }
+
+    /**
      * No level arrived for the silence timeout while lowered. A very short utterance makes the pods
      * send only 01 and one more frame and never an end (capture 2026-10-04), so the volume must not
      * depend on an end level alone.
