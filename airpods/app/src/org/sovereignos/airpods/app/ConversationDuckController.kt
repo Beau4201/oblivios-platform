@@ -5,6 +5,8 @@ import android.content.Context
 import android.media.AudioManager
 import android.util.Log
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.RejectedExecutionException
 import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.ui.ConversationAwarenessPolicy
@@ -27,12 +29,13 @@ internal class ConversationDuckController(
 ) : AirPodsStateStore.Listener {
     private val audio = context.getSystemService(AudioManager::class.java)
     private val policy = ConversationAwarenessPolicy(enabled)
-    private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "AirPodsDuck").apply { isDaemon = true } }
+    private val worker = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "AirPodsDuck").apply { isDaemon = true } }
 
     @Volatile private var ended = false
 
     // Worker thread only.
     private var ducked = false
+    private var silence: ScheduledFuture<*>? = null
 
     init {
         AirPodsStateStore.addListener(this)
@@ -40,7 +43,10 @@ internal class ConversationDuckController(
 
     /** A conversation level (0 to 255) from the session thread. */
     fun onLevel(level: Int) {
-        submit { execute(policy.onLevel(level)) }
+        submit {
+            execute(policy.onLevel(level))
+            rearmSilence()
+        }
     }
 
     /** Both pods are out of the ears. */
@@ -82,6 +88,24 @@ internal class ConversationDuckController(
         }
     }
 
+    /**
+     * A very short utterance makes the pods send no end level (capture 2026-10-04): while the volume
+     * is lowered, a level that does not follow within [SILENCE_MS] ends the conversation. The longest
+     * gap seen inside one is 5.4 s, so a restore never cuts into one that is going on.
+     */
+    private fun rearmSilence() {
+        silence?.cancel(false)
+        silence = if (ducked) {
+            try {
+                worker.schedule({ execute(policy.onSilence()) }, SILENCE_MS, TimeUnit.MILLISECONDS)
+            } catch (e: RejectedExecutionException) {
+                null
+            }
+        } else {
+            null
+        }
+    }
+
     private fun lower() {
         if (ducked || !audio.isMusicActive) return
         val percent = AirPodsStateStore.state.duckPercent
@@ -105,5 +129,6 @@ internal class ConversationDuckController(
 
     private companion object {
         const val TAG = "AirPodsDuck"
+        const val SILENCE_MS = 8000L
     }
 }

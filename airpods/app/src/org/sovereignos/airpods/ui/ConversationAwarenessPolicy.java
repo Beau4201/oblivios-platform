@@ -57,6 +57,15 @@ public final class ConversationAwarenessPolicy {
         return giveBack();
     }
 
+    /**
+     * No level arrived for the silence timeout while lowered. A very short utterance makes the pods
+     * send only 01 and one more frame and never an end (capture 2026-10-04), so the volume must not
+     * depend on an end level alone.
+     */
+    public synchronized List<Action> onSilence() {
+        return giveBack();
+    }
+
     private List<Action> giveBack() {
         if (!lowered) return List.of();
         lowered = false;

@@ -74,6 +74,19 @@ public final class ConversationAwarenessCheck {
         is(new ConversationAwarenessPolicy(true).end(), "end when nothing was lowered");
         is(new ConversationAwarenessPolicy(true).onPodsOut(), "pods out when nothing was lowered");
 
+        // A very short utterance: 01 and one more frame, no end level. The silence timeout gives it back.
+        p = new ConversationAwarenessPolicy(true);
+        p.onLevel(0x01);
+        p.onLevel(0x02);
+        is(p.onSilence(), "silence while lowered gives the volume back", Action.RESTORE);
+        is(p.onSilence(), "a second silence changes nothing");
+        is(new ConversationAwarenessPolicy(true).onSilence(), "silence when nothing was lowered");
+        p = new ConversationAwarenessPolicy(true);
+        p.onLevel(0x01);
+        p.onLevel(0x04);
+        is(p.onSilence(), "silence after the end changes nothing");
+        is(p.onLevel(0x01), "a new conversation after a silence restore lowers again", Action.DUCK);
+
         for (int bad : new int[] {-1, 256}) {
             boolean threw = false;
             try {
