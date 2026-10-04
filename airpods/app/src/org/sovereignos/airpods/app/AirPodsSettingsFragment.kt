@@ -76,10 +76,18 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
     private lateinit var findRow: Preference
     private val controlPrefs = LinkedHashMap<ControlRows.Row, Preference>()
     private val ticker = Handler(Looper.getMainLooper())
+    private var lastSound = NO_SOUND_STATE
     private val tick = object : Runnable {
-        // The ear state and a sound that ended by itself do not reach the state store: look again every second.
+        // The ear state and a sound that ended by itself do not reach the state store: look every second, but draw
+        // the page only when Play sound changed. A page that redraws every second never becomes idle, which
+        // uiautomator needs (found on the device on 2026-10-05: "could not get idle state").
         override fun run() {
-            render(AirPodsStateStore.state)
+            val sink = AirPodsCommands.sink
+            val now = (if (sink.soundPlaying) 1 else 0) or (if (sink.soundAvailable) 2 else 0)
+            if (now != lastSound) {
+                lastSound = now
+                render(AirPodsStateStore.state)
+            }
             ticker.postDelayed(this, TICK_MS)
         }
     }
@@ -240,6 +248,7 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
         super.onStart()
         AirPodsStateStore.addListener(storeListener)
         render(AirPodsStateStore.state)
+        lastSound = NO_SOUND_STATE
         ticker.postDelayed(tick, TICK_MS)
     }
 
@@ -537,5 +546,6 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
         const val ICON_DP = 24
         const val NAME_INPUT_CHARS = 64
         const val TICK_MS = 1_000L
+        const val NO_SOUND_STATE = -1
     }
 }
