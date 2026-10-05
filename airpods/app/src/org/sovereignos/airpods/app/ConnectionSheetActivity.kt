@@ -14,16 +14,15 @@ import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
 
 /**
- * The connection sheet: the three rings, the current listening mode, Done and Settings. Shown over the
- * lock screen (`showWhenLocked`), not exported, closed when the link drops. Settings opens our own page
- * and asks to unlock first when the phone is locked.
+ * The connection sheet: the three rings with their battery levels, the current listening mode, Done and
+ * Settings. Started only on an unlocked phone, not shown over the lock screen, not exported, closed when the
+ * link drops. Settings opens our own page and asks to unlock first if the phone locked meanwhile.
  */
 class ConnectionSheetActivity : Activity() {
     private val storeListener = AirPodsStateStore.Listener { _, new -> runOnUiThread { bind(new) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setShowWhenLocked(true)
         setContentView(R.layout.airpods_sheet)
         findViewById<View>(R.id.sheet_root).setOnClickListener { finish() }
         findViewById<View>(R.id.sheet_card).setOnClickListener { }
@@ -55,6 +54,9 @@ class ConnectionSheetActivity : Activity() {
         findViewById<BatteryRingView>(R.id.ring_left).set(BatteryRingView.Kind.LEFT, state.leftPercent, state.leftCharging)
         findViewById<BatteryRingView>(R.id.ring_case).set(BatteryRingView.Kind.CASE, state.casePercent, state.caseCharging)
         findViewById<BatteryRingView>(R.id.ring_right).set(BatteryRingView.Kind.RIGHT, state.rightPercent, state.rightCharging)
+        findViewById<TextView>(R.id.ring_left_label).text = label(R.string.airpods_left, state.leftPercent)
+        findViewById<TextView>(R.id.ring_case_label).text = label(R.string.airpods_case, state.casePercent)
+        findViewById<TextView>(R.id.ring_right_label).text = label(R.string.airpods_right, state.rightPercent)
         val mode = findViewById<TextView>(R.id.sheet_mode)
         val text = modeText(state.listeningMode)
         if (text == null) {
@@ -64,6 +66,10 @@ class ConnectionSheetActivity : Activity() {
             mode.setText(text)
         }
     }
+
+    /** The ring's name with its battery level, or the name alone while the level is not known (percent -1). */
+    private fun label(@StringRes name: Int, percent: Int): String =
+        if (percent < 0) getString(name) else getString(R.string.airpods_ring_label, getString(name), percent)
 
     @StringRes
     private fun modeText(mode: ListeningMode?): Int? = when (mode) {

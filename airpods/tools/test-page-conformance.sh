@@ -12,9 +12,9 @@ density, width_px = 2.625, 1080
 k = (width_px / density) / 350.2
 els = [e for e in json.load(open(metrics))["elements"] if e["screen"] == "airpods-settings-page" and e["text"] and e["text"] != "9:41"]
 
-def dump(path, edit=lambda e: e):
+def dump(path, edit=lambda e: e, added=None):
     nodes = ['<node text="" bounds="[0,0][1080,2400]" />']
-    for e in els:
+    for e in els + ([added] if added else []):
         e = edit(dict(e))
         if e is None:
             continue
@@ -27,11 +27,20 @@ dump(work + "/ok.xml")
 dump(work + "/moved.xml", lambda e: {**e, "y": e["y"] + 10} if e["text"] == "Comfort" else e)
 dump(work + "/shifted.xml", lambda e: {**e, "x": e["x"] + 9} if e["text"] == "Comfort" else e)
 dump(work + "/taller.xml", lambda e: {**e, "h": e["h"] + 8} if e["text"] == "Comfort" else e)
+# A row the mock does not have, placed between "Comfort" and the next matched text, which is pushed down by 30:
+# the spacing of that pair is not compared, everything else still is.
+comfort = next(e for e in els if e["text"] == "Comfort")
+below = [e["y"] for e in els if e["y"] > comfort["y"]]
+dump(work + "/added-row.xml", lambda e: {**e, "y": e["y"] + 30} if e["y"] > comfort["y"] else e,
+     {**comfort, "text": "Added row", "y": comfort["y"] + 1})
+dump(work + "/added-row-moved.xml", lambda e: {**e, "y": e["y"] + 30} if e["y"] > comfort["y"] and e["text"] != "Automatic ear detection"
+     else {**e, "y": e["y"] + 40} if e["text"] == "Automatic ear detection" else e, {**comfort, "text": "Added row", "y": comfort["y"] + 1})
 dump(work + "/missing.xml", lambda e: e if e["text"] in ("Comfort", "Listening mode") else None)
 PY
 CHECK="python3 $HERE/check-page-conformance.py --metrics $METRICS --screen airpods-settings-page --density 2.625"
 $CHECK --dump "$WORK/ok.xml" > /dev/null || { echo "FAIL: the dump built from the metrics must pass"; exit 1; }
-for bad in moved shifted taller missing; do
+$CHECK --dump "$WORK/added-row.xml" > /dev/null || { echo "FAIL: a row added since the mock must not be a violation"; exit 1; }
+for bad in moved shifted taller missing added-row-moved; do
   if $CHECK --dump "$WORK/$bad.xml" > /dev/null; then echo "FAIL: $bad must be rejected"; exit 1; fi
 done
-echo "page conformance check: 1 pass case and 4 reject cases behave"
+echo "page conformance check: 2 pass cases and 5 reject cases behave"

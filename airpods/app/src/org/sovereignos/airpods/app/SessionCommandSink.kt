@@ -132,7 +132,7 @@ internal class SessionCommandSink(
 
     override fun setControl(control: AirPodsControl, value: Int): Boolean {
         val state = AirPodsStateStore.state
-        if (!state.isConnected || !control.accepts(value) || !ControlRows.offered(state, control)) return false
+        if (!state.isConnected || !ControlRows.allowed(control, value) || !ControlRows.offered(state, control)) return false
         if (isDebuggableBuild()) Log.d(TAG, "setControl " + control + " " + value)
         if (!session.send(AapCodec.setControl(control, value))) return false
         // The pair reports most of these only in the burst of the next session and some never (AIR-179):

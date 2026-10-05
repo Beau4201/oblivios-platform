@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The section heading of our own page (AIR-166, ADR-137). It is Settings' expressive category layout without the
+     icon frame and the summary, placed as the approved mock-up draws it: 16 dp from the left edge, a 36 dp high
+     title and 16 dp above it. Settings' own layout puts the title at 24 dp and 19 dp high. The title style, and with
+     it the font and colour, still come from Settings. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:filterTouchesWhenObscured="false"
+    android:orientation="vertical"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="16dp"
+    android:theme="?expressivePreferenceCategoryTheme">
+
+    <TextView
+        android:id="@android:id/title"
+        style="?expressivePreferenceCategoryTitleStyle"
+        android:layout_height="36dp"
+        android:gravity="center_vertical" />
+</LinearLayout>

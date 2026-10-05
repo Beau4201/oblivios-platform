@@ -109,8 +109,14 @@ public final class Plan9Check {
         Row gain = ControlRows.of(AirPodsControl.GAIN_SWIPE);
         check(ControlRows.toggled(gain, 1) == 0 && ControlRows.toggled(gain, 0) == 1, "gain swipe is 0 and 1");
         Row chime = ControlRows.of(AirPodsControl.CHIME_VOLUME);
-        check(ControlRows.snapped(chime, 52) == 50 && ControlRows.snapped(chime, 53) == 55 && ControlRows.snapped(chime, -4) == 0
-                && ControlRows.snapped(chime, 400) == 100, "snap to the step inside the range");
+        check(ControlRows.snapped(chime, 52) == 50 && ControlRows.snapped(chime, 53) == 55 && ControlRows.snapped(chime, -4) == 15
+                && ControlRows.snapped(chime, 0) == 15 && ControlRows.snapped(chime, 10) == 15
+                && ControlRows.snapped(chime, 400) == 100, "snap to the step inside the range, never below 15 (AIR-188)");
+        check(chime.lowest() == 15 && !ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 10) && !ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 0)
+                && ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 15) && ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 100)
+                && !ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 101), "a chime command below 15 is refused");
+        check(ControlRows.allowed(AirPodsControl.CASE_TONE_VOLUME, 0) && ControlRows.allowed(AirPodsControl.SLEEP_DETECTION, 1)
+                && !ControlRows.allowed(AirPodsControl.SLEEP_DETECTION, 7), "other controls keep their own range");
         check(ControlRows.visible(seeded, AirPodsControl.CASE_TONE_VOLUME), "volume visible while the tone is on");
         check(ControlRows.visible(connected(), AirPodsControl.CASE_TONE_VOLUME), "volume visible while the tone is unknown");
         AirPodsUiState off = seeded.toBuilder().control(AirPodsControl.CASE_TONE, 2).build();

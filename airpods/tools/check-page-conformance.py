@@ -5,7 +5,8 @@ The mock-up is drawn at 350.2 css px for a phone of the real width, so css value
 k = width_dp / 350.2. The page scrolls and the toolbar collapses, so the absolute y is not compared; the
 check compares the height of each matched text, the left edge of left-aligned texts and the vertical
 distance between consecutive matched texts. Texts are matched by their exact string in top to bottom
-order. Fonts and colours are not checked here (they come from the Settings components).
+order. A pair of matched texts with another real text between them (a row added since the mock) is not
+compared for spacing. Fonts and colours are not checked here (they come from the Settings components).
 """
 import argparse
 import json
@@ -75,7 +76,9 @@ def main():
             ok = abs(dx) <= a.tol_pos
             bad += not ok
             print("%-5s left    %-34s real %6.1f mock %6.1f delta %+5.1f dp" % ("ok" if ok else "FAIL", e["text"][:34], nd["x"], e["x"] * k, dx))
-        if previous is not None:
+        # A real text between two matched texts that the mock does not have (a row added since the mock) makes
+        # the distance differ by design, so that pair is not compared.
+        if previous is not None and not any(n is not nd and i not in used and previous[1]["y"] < n["y"] < nd["y"] for i, n in enumerate(nodes)):
             pe, pn = previous
             dy = (nd["y"] - pn["y"]) - (e["y"] - pe["y"]) * k
             ok = abs(dy) <= a.tol_pos

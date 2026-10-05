@@ -24,6 +24,7 @@
             android:layout_marginTop="8dp"
             android:fontFamily="sans-serif-medium"
             android:lineHeight="24dp"
+            android:id="@+id/ring_left_label"
             android:text="@string/airpods_left"
             android:textColor="@color/settingslib_materialColorOnSurface"
             android:textSize="16sp" />
@@ -45,6 +46,7 @@
             android:layout_marginTop="8dp"
             android:fontFamily="sans-serif-medium"
             android:lineHeight="24dp"
+            android:id="@+id/ring_case_label"
             android:text="@string/airpods_case"
             android:textColor="@color/settingslib_materialColorOnSurface"
             android:textSize="16sp" />
@@ -66,6 +68,7 @@
             android:layout_marginTop="8dp"
             android:fontFamily="sans-serif-medium"
             android:lineHeight="24dp"
+            android:id="@+id/ring_right_label"
             android:text="@string/airpods_right"
             android:textColor="@color/settingslib_materialColorOnSurface"
             android:textSize="16sp" />

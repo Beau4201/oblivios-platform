@@ -30,8 +30,13 @@ public final class ControlRows {
         CASE
     }
 
+    /**
+     * {@code lowest} is the smallest value a slider offers and a command may carry. It is at least the
+     * control's own minimum: the pair ignores chime volume writes below 15 (AIR-188, ADR-137), so the slider
+     * must not offer them and the sink must not send them.
+     */
     public record Row(AirPodsControl control, Kind kind, Group group, boolean reportedByPair, int onValue, int offValue,
-            List<Integer> choices, int step) {
+            List<Integer> choices, int step, int lowest) {
         public Row {
             choices = List.copyOf(choices);
             if (kind == Kind.SWITCH && (!control.accepts(onValue) || !control.accepts(offValue) || onValue == offValue)) {
@@ -46,25 +51,32 @@ public final class ControlRows {
             if (kind == Kind.SLIDER && (step < 1 || control.max() % step != 0 || control.min() % step != 0)) {
                 throw new IllegalArgumentException("bad step for " + control);
             }
+            if (kind == Kind.SLIDER && (lowest < control.min() || lowest > control.max() || lowest % step != 0)) {
+                throw new IllegalArgumentException("bad lowest value for " + control);
+            }
         }
     }
 
     private static Row sw(AirPodsControl c, Group g, boolean reported, int on, int off) {
-        return new Row(c, Kind.SWITCH, g, reported, on, off, List.of(), 1);
+        return new Row(c, Kind.SWITCH, g, reported, on, off, List.of(), 1, c.min());
     }
 
     private static Row choice(AirPodsControl c, Group g, boolean reported, Integer... values) {
-        return new Row(c, Kind.CHOICE, g, reported, 0, 0, List.of(values), 1);
+        return new Row(c, Kind.CHOICE, g, reported, 0, 0, List.of(values), 1, c.min());
     }
 
     private static Row slider(AirPodsControl c, Group g, boolean reported, int step) {
-        return new Row(c, Kind.SLIDER, g, reported, 0, 0, List.of(), step);
+        return slider(c, g, reported, step, c.min());
+    }
+
+    private static Row slider(AirPodsControl c, Group g, boolean reported, int step, int lowest) {
+        return new Row(c, Kind.SLIDER, g, reported, 0, 0, List.of(), step, lowest);
     }
 
     /** All rows in page order; the groups are contiguous. */
     public static final List<Row> ROWS = List.of(
             sw(AirPodsControl.PERSONALIZED_VOLUME, Group.SOUND, true, 1, 2),
-            slider(AirPodsControl.CHIME_VOLUME, Group.SOUND, true, 5),
+            slider(AirPodsControl.CHIME_VOLUME, Group.SOUND, true, 5, 15),
             choice(AirPodsControl.PRESS_SPEED, Group.STEMS, true, 0, 1, 2),
             choice(AirPodsControl.PRESS_HOLD_DURATION, Group.STEMS, true, 0, 1, 2),
             sw(AirPodsControl.SWIPE_MODE, Group.STEMS, true, 1, 2),
@@ -121,7 +133,17 @@ public final class ControlRows {
     /** The slider value closest to the request that the control accepts, a multiple of the step. */
     public static int snapped(Row row, int requested) {
         if (row.kind() != Kind.SLIDER) throw new IllegalArgumentException("not a slider");
-        int clamped = Math.max(row.control().min(), Math.min(row.control().max(), requested));
+        int clamped = Math.max(row.lowest(), Math.min(row.control().max(), requested));
         return Math.round((float) clamped / row.step()) * row.step();
+    }
+
+    /**
+     * True when the value may be sent: the control accepts it and, for a slider row, it is not below the
+     * row's lowest value. A control without a row (a switch or a list value) only has to be accepted.
+     */
+    public static boolean allowed(AirPodsControl control, int value) {
+        if (!control.accepts(value)) return false;
+        Row r = of(control);
+        return r == null || r.kind() != Kind.SLIDER || value >= r.lowest();
     }
 }

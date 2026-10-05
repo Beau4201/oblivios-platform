@@ -2,6 +2,9 @@ package org.sovereignos.airpods.app
 
 import android.app.AlertDialog
 import android.bluetooth.BluetoothManager
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -202,6 +205,19 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             }
         }
         findGroup.addPreference(findRow)
+        // Apple's network is reachable only through the owner's Apple ID on Apple's own site (ADR-137): the row opens
+        // that site in the browser and sends nothing from the app.
+        findGroup.addPreference(
+            Preference(ctx).apply {
+                key = "find_my"
+                setTitle(R.string.airpods_find_my_title)
+                setSummary(R.string.airpods_find_my_summary)
+                setOnPreferenceClickListener {
+                    openFindMy()
+                    true
+                }
+            },
+        )
         pageFooter = FooterPreference(ctx).apply {
             key = "page_footer"
             setSummary(R.string.airpods_page_footer)
@@ -257,6 +273,7 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
     private fun category(screen: androidx.preference.PreferenceScreen, key: String, @StringRes title: Int): PreferenceCategory =
         PreferenceCategory(requireContext()).apply {
             this.key = key
+            layoutResource = R.layout.airpods_category
             setTitle(title)
             screen.addPreference(this)
         }
@@ -401,7 +418,7 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
                 icon = tinted(ControlTexts.icon(control))
                 setTitle(ControlTexts.title(control))
                 setSummary(ControlTexts.summary(control))
-                min = control.min()
+                min = row.lowest()
                 max = control.max()
                 sliderIncrement = row.step()
                 showSliderValue = true
@@ -431,8 +448,19 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             }
             ControlRows.Kind.SLIDER -> {
                 val slider = pref as SliderPreference
-                if (value >= 0 && slider.value != value) slider.value = value
+                // A value below the slider's lowest (a stored value the pair ignored) is shown as the lowest.
+                val shown = maxOf(value, row.lowest())
+                if (value >= 0 && slider.value != shown) slider.value = shown
             }
+        }
+    }
+
+    /** A constant URL in an ordinary view intent without extras; a phone without a browser shows nothing. */
+    private fun openFindMy() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(FIND_MY_URL)).addCategory(Intent.CATEGORY_BROWSABLE))
+        } catch (e: ActivityNotFoundException) {
+            android.util.Log.w("AirPodsPage", "no browser for Find My")
         }
     }
 
@@ -548,5 +576,6 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
         const val TICK_MS = 1_000L
         const val MODE_GAP_DP = 16
         const val NO_SOUND_STATE = -1
+        const val FIND_MY_URL = "https://www.icloud.com/find"
     }
 }
