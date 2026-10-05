@@ -48,6 +48,18 @@ internal object AirPodsSessionHost {
         return AirPodsRecognition.matches(uuids)
     }
 
+    /** True when the address is a bonded AirPods (the candidate test of [recognised]); false for anything else or without the grant. */
+    fun recognisedAddress(context: Context, address: String): Boolean {
+        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return false
+        return try {
+            recognised(adapter.getRemoteDevice(address))
+        } catch (e: IllegalArgumentException) {
+            false
+        } catch (e: SecurityException) {
+            false
+        }
+    }
+
     /**
      * For the binder thread that answers Settings' request for the page: Settings reads the list of
      * items once, so if the AirPods are connected but the session has not reported the listening mode
@@ -84,6 +96,7 @@ internal object AirPodsSessionHost {
     /** The BR/EDR link of a bonded device came up (receiver). */
     fun onLinkUp(context: Context, device: BluetoothDevice) {
         if (!recognised(device)) return
+        Log.i(TAG, "link up, session " + (if (session != null) "exists" else "none"))
         target = device
         attempt = 0
         try {
@@ -98,6 +111,7 @@ internal object AirPodsSessionHost {
     fun onLinkDown(address: String) {
         val t = target ?: return
         if (!t.address.equals(address, ignoreCase = true)) return
+        Log.i(TAG, "link down, session " + (if (session != null) "open, closing" else "none"))
         target = null
         main.removeCallbacks(retry)
         val s = session
@@ -214,6 +228,7 @@ internal object AirPodsSessionHost {
             AirPodsSession.Reason.UNSUPPORTED,
             AirPodsSession.Reason.PEER_MISBEHAVED -> stopService()
             AirPodsSession.Reason.CONNECT_FAILED,
+            AirPodsSession.Reason.NO_FRAME,
             AirPodsSession.Reason.STREAM_ENDED -> if (device == null) stopService() else retryOrStop(device)
         }
     }

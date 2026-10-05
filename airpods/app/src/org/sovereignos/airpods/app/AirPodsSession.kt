@@ -31,7 +31,8 @@ internal class AirPodsSession(
     private val seed: SessionSeed,
     private val listener: Listener,
 ) {
-    enum class Reason { CLOSED_BY_US, UNSUPPORTED, CONNECT_FAILED, STREAM_ENDED, PEER_MISBEHAVED }
+    /** NO_FRAME: the channel opened but no frame we act on arrived in time (AIR-193); the host retries like a failed connect. */
+    enum class Reason { CLOSED_BY_US, UNSUPPORTED, CONNECT_FAILED, STREAM_ENDED, PEER_MISBEHAVED, NO_FRAME }
 
     /** Called on the session thread. */
     interface Listener {
@@ -44,7 +45,14 @@ internal class AirPodsSession(
     @Volatile private var closed = false
     @Volatile private var batterySeen = false
     @Volatile private var modeSeen = false
+
+    /** True once the first frame we act on was decoded and the state published. */
+    @Volatile private var published = false
+
+    /** Set by the watchdog when it closes a channel that stayed silent. */
+    @Volatile private var silent = false
     @Volatile private var socket: BluetoothSocket? = null
+    private var startedAt = 0L
     private var output: OutputStream? = null
     private val writeLock = Any()
 
@@ -88,6 +96,8 @@ internal class AirPodsSession(
 
     private fun run() {
         var reason = Reason.STREAM_ENDED
+        startedAt = System.nanoTime()
+        Log.i(TAG, "session started")
         try {
             val s = try {
                 opener.open(device, AAP_PSM)
@@ -105,6 +115,7 @@ internal class AirPodsSession(
             output = s.outputStream
             sendOpeningFrames()
             Thread({ requestAgainUntilComplete() }, "AirPodsSession-refresh").apply { isDaemon = true }.start()
+            Thread({ closeIfSilent() }, "AirPodsSession-watchdog").apply { isDaemon = true }.start()
             reason = readLoop(s.inputStream)
         } catch (e: IOException) {
             reason = if (closed) Reason.CLOSED_BY_US else Reason.CONNECT_FAILED
@@ -117,8 +128,33 @@ internal class AirPodsSession(
             } catch (e: IOException) {
                 // already closed
             }
+            if (silent && !closed && reason != Reason.UNSUPPORTED) reason = Reason.NO_FRAME
             if (closed && reason != Reason.UNSUPPORTED) reason = Reason.CLOSED_BY_US
+            Log.i(TAG, "session closed: " + reason + " after " + elapsedMs() + " ms")
             listener.onEnded(this, reason)
+        }
+    }
+
+    private fun elapsedMs(): Long = (System.nanoTime() - startedAt) / 1_000_000L
+
+    /**
+     * A channel that opens and then stays silent never ends on its own: the read blocks and the host ignores the next
+     * connection while a session exists (AIR-193, a session of 5 minutes without a frame). If no frame we act on arrived
+     * in [FIRST_FRAME_TIMEOUT_MS], close the socket; the read then fails and [run] reports [Reason.NO_FRAME].
+     */
+    private fun closeIfSilent() {
+        try {
+            Thread.sleep(FIRST_FRAME_TIMEOUT_MS)
+        } catch (e: InterruptedException) {
+            return
+        }
+        if (closed || published) return
+        Log.w(TAG, "no frame within " + FIRST_FRAME_TIMEOUT_MS + " ms, closing")
+        silent = true
+        try {
+            socket?.close()
+        } catch (e: IOException) {
+            // already closed
         }
     }
 
@@ -163,7 +199,6 @@ internal class AirPodsSession(
 
     private fun readLoop(input: InputStream): Reason {
         val buffer = ByteArray(READ_BUFFER)
-        var published = false
         var malformedInARow = 0
         while (!closed) {
             val n = try {
@@ -190,6 +225,7 @@ internal class AirPodsSession(
             if (message is ListeningModeState) modeSeen = true
             if (!published) {
                 published = true
+                Log.i(TAG, "first frame after " + elapsedMs() + " ms")
                 AirPodsStateStore.update(SessionReducer.connected(address, seed))
                 listener.onPublished(this)
             }
@@ -217,5 +253,8 @@ internal class AirPodsSession(
         private const val OPENING_GAP_MS = 200L
         private const val REREQUESTS = 5
         private const val REREQUEST_GAP_MS = 3_000L
+
+        /** A healthy pair sent its first frame within 0.5 s (AIR-193); the rest of the burst follows within seconds. */
+        private const val FIRST_FRAME_TIMEOUT_MS = 8_000L
     }
 }
