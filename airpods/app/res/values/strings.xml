@@ -44,7 +44,7 @@
     <string name="airpods_group_sound">Sound and controls</string>
     <string name="airpods_press_hold_title">Press and hold</string>
     <string name="airpods_press_hold_unset">Not set from this phone yet</string>
-    <string name="airpods_press_hold_dialog_title">Press and hold cycles through</string>
+    <string name="airpods_press_hold_dialog_title">Press and hold cycles through (at least two)</string>
     <string name="airpods_done">Done</string>
     <string name="airpods_group_about">About</string>
     <string name="airpods_name_title">Name</string>

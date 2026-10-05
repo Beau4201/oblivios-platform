@@ -1,5 +1,6 @@
 package org.sovereignos.airpods.app
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.PowerManager
 import android.media.AudioManager
 import android.util.Log
 import org.sovereignos.airpods.R
@@ -14,11 +16,12 @@ import org.sovereignos.airpods.ui.AirPodsUiState
 import org.sovereignos.airpods.ui.ConnectionSheetPolicy
 
 /**
- * Opens [ConnectionSheetActivity] once per connection through a notification with a full-screen intent
- * (ADR-129): no scan, no background activity start permission, the protected `ACL_CONNECTED` broadcast
- * is what brought the session up. Needs `POST_NOTIFICATIONS` and `USE_FULL_SCREEN_INTENT`; without the
- * notification permission nothing is shown and nothing else changes. The notification text is generic
- * (no battery value on the lock screen).
+ * Shows [ConnectionSheetActivity] once per connection when the case opens and the AirPods connect (ADR-129, ADR-136).
+ * On an unlocked, awake phone the sheet is started directly, which needs the privileged
+ * `START_ACTIVITIES_FROM_BACKGROUND`; on a locked or dark screen it is the full-screen intent of the notification
+ * (`USE_FULL_SCREEN_INTENT`). The notification (`POST_NOTIFICATIONS`) is also the record: tapping it opens Settings'
+ * device details. No scan: the protected `ACL_CONNECTED` broadcast is what brought the session up. The notification
+ * text is generic (no battery value on the lock screen).
  */
 internal class ConnectionSheetTrigger(private val context: Context) : AirPodsStateStore.Listener {
     private val policy = ConnectionSheetPolicy()
@@ -37,10 +40,25 @@ internal class ConnectionSheetTrigger(private val context: Context) : AirPodsSta
     /** False while the phone is in a call or ringing. */
     private fun isQuiet(): Boolean = context.getSystemService(AudioManager::class.java).mode == AudioManager.MODE_NORMAL
 
+    /** True while the phone is awake and not locked: the sheet can be shown straight away. */
+    private fun unlockedAndInteractive(): Boolean =
+        context.getSystemService(PowerManager::class.java).isInteractive &&
+            !context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+
+    private fun startSheet() {
+        try {
+            context.startActivity(Intent(context, ConnectionSheetActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "the sheet could not be started: " + e.javaClass.simpleName)
+        }
+    }
+
     private fun show(address: String?) {
+        val direct = unlockedAndInteractive()
+        if (direct) startSheet()
         val manager = manager()
         if (!manager.areNotificationsEnabled()) {
-            if (isDebuggableBuild()) Log.d(TAG, "notifications are off, no sheet")
+            if (isDebuggableBuild()) Log.d(TAG, "notifications are off, no notification")
             return
         }
         manager.createNotificationChannel(
@@ -59,7 +77,7 @@ internal class ConnectionSheetTrigger(private val context: Context) : AirPodsSta
             .setCategory(Notification.CATEGORY_STATUS)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentIntent(if (address != null) deviceDetails(address) else open)
-            .setFullScreenIntent(open, true)
+            .apply { if (!direct) setFullScreenIntent(open, true) }
             .setAutoCancel(true)
             .setTimeoutAfter(TIMEOUT_MS)
             .build()

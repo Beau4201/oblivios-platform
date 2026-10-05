@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    <!-- ADR-136: ConnectionSheetTrigger starts the app's own sheet when the case opens and the phone is unlocked. -->
+    <uses-permission android:name="android.permission.START_ACTIVITIES_FROM_BACKGROUND" />
 
     <!-- Needed to hand Settings a persistable read grant on the icon URIs (package visibility). -->
     <queries>
