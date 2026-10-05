@@ -42,6 +42,17 @@ android_app {
     ],
     sdk_version: "system_current",
     privileged: true,
+    required: [
+        "default-permissions-org.sovereignos.airpods.xml",
+    ],
+}
+
+// The default grant of BLUETOOTH_CONNECT (the app has no screen that asks for it). Read from
+// /system/etc/default-permissions by DefaultPermissionGrantPolicy, as for PrintRecommendationService.
+prebuilt_etc {
+    name: "default-permissions-org.sovereignos.airpods.xml",
+    src: "default-permissions-org.sovereignos.airpods.xml",
+    sub_dir: "default-permissions",
 }
 
 prebuilt_etc {

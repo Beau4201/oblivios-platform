@@ -37,6 +37,11 @@ class AirPodsConfigService : Service() {
 
     private fun respond(device: DeviceInfo, callback: IGetDeviceSettingsConfigCallback) {
         Callers.enforceSettings()
+        if (!runsInThisUser()) {
+            // Settings of another user (the Duress decoy) gets no AirPods rows.
+            callback.onResult(DeviceSettingsConfigServiceStatus(false), DeviceSettingsConfig(emptyList(), emptyList()))
+            return
+        }
         device.bluetoothAddress?.let { AirPodsSessionHost.awaitFirstControls(this, it, PAGE_WAIT_MS) }
         val state = AirPodsStateStore.state
         val address = state.address

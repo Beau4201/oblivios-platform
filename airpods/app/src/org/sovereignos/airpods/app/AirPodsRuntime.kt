@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 
 /**
  * Build.IS_DEBUGGABLE is @hide (@UnsupportedAppUsage) and not in the system API stubs, which the
@@ -15,13 +16,19 @@ import android.os.Looper
  */
 internal fun isDebuggableBuild(): Boolean = Build.TYPE != "user"
 
+/**
+ * The app works only for the system user (the owner). The default grant of BLUETOOTH_CONNECT reaches every user, and
+ * the Duress decoy user must not show or drive the owner's AirPods.
+ */
+internal fun runsInThisUser(): Boolean = Process.myUserHandle().isSystem
+
 /** Wires the process once: the metadata writer, and the debug input in debuggable builds only. */
 object AirPodsRuntime {
     private var writer: AirPodsMetadataWriter? = null
 
     @Synchronized
     fun start(context: Context) {
-        if (writer != null) return
+        if (!runsInThisUser() || writer != null) return
         val app = context.applicationContext
         writer = AirPodsMetadataWriter(app).also { AirPodsStateStore.addListener(it) }
         AirPodsStateStore.addListener(CaseBatteryRecorder(app))
@@ -54,6 +61,7 @@ class AirPodsApplication : Application() {
  */
 class ConnectionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (!runsInThisUser()) return
         AirPodsRuntime.start(context)
         AirPodsRuntime.onConnectionEvent()
         val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
