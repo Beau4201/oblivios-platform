@@ -74,7 +74,14 @@ internal object AirPodsSessionHost {
         } catch (e: IllegalArgumentException) {
             return
         }
-        if (!device.isConnected || !recognised(device)) return
+        // A revoked BLUETOOTH_CONNECT makes both calls throw. The exception would travel through Binder to Settings
+        // and crash it (found on the device 2026-10-05, AIR-156 d): no grant, nothing to wait for.
+        val ready = try {
+            device.isConnected && recognised(device)
+        } catch (e: SecurityException) {
+            false
+        }
+        if (!ready) return
         val latch = java.util.concurrent.CountDownLatch(1)
         val listener = AirPodsStateStore.Listener { _, new ->
             if (AirPodsUiState.Feature.LISTENING_MODE in new.supported) latch.countDown()
