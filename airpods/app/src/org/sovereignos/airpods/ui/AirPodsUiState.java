@@ -67,6 +67,23 @@ public final class AirPodsUiState {
 
     public static final AirPodsUiState DISCONNECTED = new Builder().build();
 
+    private static final AirPodsUiState LAYOUT_ONLY = new Builder()
+            .feature(Feature.LISTENING_MODE)
+            .feature(Feature.EAR_DETECTION)
+            .feature(Feature.CONVERSATION_AWARENESS)
+            .feature(Feature.ALL_SETTINGS_PAGE)
+            .build();
+
+    /**
+     * Not connected, with the features of the rows that a recognised pair shows on Settings' device page. It is
+     * used only to list the rows: Settings reads the list once when the page opens, so a page opened while the pair
+     * was away or the session was still starting must still list every row (AIR-194). The values come later from the
+     * provider; while there is no session it publishes no setting and Settings hides the rows.
+     */
+    public static AirPodsUiState layoutOnly() {
+        return LAYOUT_ONLY;
+    }
+
     private AirPodsUiState(Builder b) {
         if (b.address != null && !ADDRESS.matcher(b.address).matches()) {
             throw new IllegalArgumentException("bad address");

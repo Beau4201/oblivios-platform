@@ -7,6 +7,7 @@ import android.os.RemoteCallbackList
 import android.os.RemoteException
 import com.android.settingslib.bluetooth.devicesettings.ActionSwitchPreferenceState
 import com.android.settingslib.bluetooth.devicesettings.DeviceInfo
+import com.android.settingslib.bluetooth.devicesettings.DeviceSetting
 import com.android.settingslib.bluetooth.devicesettings.DeviceSettingState
 import com.android.settingslib.bluetooth.devicesettings.DeviceSettingsProviderServiceStatus
 import com.android.settingslib.bluetooth.devicesettings.IDeviceSettingsListener
@@ -25,7 +26,11 @@ import org.sovereignos.airpods.ui.NativePageLayout
 class AirPodsSettingsService : Service() {
     private val factory by lazy { NativeSettingsFactory(this) }
     private val listeners = RemoteCallbackList<IDeviceSettingsListener>()
-    private val storeListener = AirPodsStateStore.Listener { _, new -> push(new) }
+    // While the session is up the settings carry its values; when it ends an empty list hides the rows again, so the
+    // page never shows a value that is no longer true (AIR-194, AIR-156).
+    private val storeListener = AirPodsStateStore.Listener { old, new ->
+        if (new.isConnected) push(new) else old.address?.let { pushTo(it, emptyList()) }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -50,7 +55,12 @@ class AirPodsSettingsService : Service() {
             Callers.enforceSettings()
             val address = device.bluetoothAddress ?: return
             listeners.register(callback, address.uppercase())
-            push(AirPodsStateStore.state)
+            val state = AirPodsStateStore.state
+            if (state.isConnected && state.address.equals(address, ignoreCase = true)) {
+                push(state)
+            } else {
+                pushTo(address.uppercase(), emptyList())
+            }
         }
 
         override fun unregisterDeviceSettingsListener(device: DeviceInfo, callback: IDeviceSettingsListener) {
@@ -62,7 +72,13 @@ class AirPodsSettingsService : Service() {
             Callers.enforceSettings()
             val state = AirPodsStateStore.state
             val address = state.address
-            if (address == null || !address.equals(device.bluetoothAddress, ignoreCase = true)) return
+            if (address == null || !address.equals(device.bluetoothAddress, ignoreCase = true)) {
+                // No session: nothing was applied. Settings greys the row after a click until the provider publishes
+                // again, so publish the empty list, which removes the row instead of leaving a selection that was
+                // never set (AIR-156 d).
+                device.bluetoothAddress?.let { pushTo(it.uppercase(), emptyList()) }
+                return
+            }
             val sink = AirPodsCommands.sink
             val pref = params.preferenceState
             when (params.settingId) {
@@ -86,7 +102,10 @@ class AirPodsSettingsService : Service() {
 
     private fun push(state: AirPodsUiState) {
         val address = state.address ?: return
-        val settings = factory.settings(state)
+        pushTo(address, factory.settings(state))
+    }
+
+    private fun pushTo(address: String, settings: List<DeviceSetting>) {
         val count = listeners.beginBroadcast()
         try {
             for (i in 0 until count) {

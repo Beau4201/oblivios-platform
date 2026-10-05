@@ -119,6 +119,12 @@ public final class UiLogicCheck {
         List<NativePageLayout.Item> withLink = NativePageLayout.items(full().feature(Feature.ALL_SETTINGS_PAGE).build());
         check(withLink.size() == 9 && withLink.get(6).settingId == NativePageLayout.ID_ALL_SETTINGS
                 && withLink.get(6).kind == NativePageLayout.Kind.ALL_SETTINGS_LINK && withLink.get(6).groupIndex == null, "flat link after the switches and the choice");
+        // The page of a recognised pair that has no session still lists every row (AIR-194): Settings reads the list once.
+        AirPodsUiState layout = AirPodsUiState.layoutOnly();
+        check(!layout.isConnected() && layout.address == null, "the layout state is not connected and has no address");
+        check(java.util.Arrays.equals(NativePageLayout.items(layout).stream().mapToInt(i -> i.settingId).toArray(),
+                withLink.stream().mapToInt(i -> i.settingId).toArray()),
+                "the layout state lists the same rows as a connected pair with the link");
         AirPodsUiState bare = full().features().build();
         check(NativePageLayout.items(bare).size() == 4, "no features: only builtins");
         AirPodsUiState onlyEar = full().features(Feature.EAR_DETECTION).build();
