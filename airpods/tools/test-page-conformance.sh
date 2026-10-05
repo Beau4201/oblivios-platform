@@ -35,12 +35,17 @@ dump(work + "/added-row.xml", lambda e: {**e, "y": e["y"] + 30} if e["y"] > comf
      {**comfort, "text": "Added row", "y": comfort["y"] + 1})
 dump(work + "/added-row-moved.xml", lambda e: {**e, "y": e["y"] + 30} if e["y"] > comfort["y"] and e["text"] != "Automatic ear detection"
      else {**e, "y": e["y"] + 40} if e["text"] == "Automatic ear detection" else e, {**comfort, "text": "Added row", "y": comfort["y"] + 1})
+# A mock row the page dropped: its text is gone and everything below moves up by 22, so the spacing of the pair
+# around the gap differs by design and is not compared.
+gone = next(e for e in els if e["text"] == "Pause when you take one out")
+dump(work + "/dropped-row.xml", lambda e: None if e["text"] == gone["text"] else {**e, "y": e["y"] - 22} if e["y"] > gone["y"] else e)
 dump(work + "/missing.xml", lambda e: e if e["text"] in ("Comfort", "Listening mode") else None)
 PY
 CHECK="python3 $HERE/check-page-conformance.py --metrics $METRICS --screen airpods-settings-page --density 2.625"
 $CHECK --dump "$WORK/ok.xml" > /dev/null || { echo "FAIL: the dump built from the metrics must pass"; exit 1; }
 $CHECK --dump "$WORK/added-row.xml" > /dev/null || { echo "FAIL: a row added since the mock must not be a violation"; exit 1; }
+$CHECK --dump "$WORK/dropped-row.xml" > /dev/null || { echo "FAIL: a row dropped since the mock must not be a violation"; exit 1; }
 for bad in moved shifted taller missing added-row-moved; do
   if $CHECK --dump "$WORK/$bad.xml" > /dev/null; then echo "FAIL: $bad must be rejected"; exit 1; fi
 done
-echo "page conformance check: 2 pass cases and 5 reject cases behave"
+echo "page conformance check: 3 pass cases and 5 reject cases behave"
