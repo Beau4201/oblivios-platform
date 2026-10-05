@@ -55,8 +55,6 @@ public final class UiLogicCheck {
                 && full().duckPercent(90).build().duckPercent == 90, "lowered volume is any value from 10 to 90");
         rejects(() -> full().duckPercent(9).build(), "lowered volume 9");
         rejects(() -> full().duckPercent(91).build(), "lowered volume 91");
-        check(DuckLevels.options().equals(List.of(20, 35, 50, 70)) && DuckLevels.indexOf(50) == 2 && DuckLevels.indexOf(55) == -1
-                && DuckLevels.at(3) == 70 && DuckLevels.at(4) == null && DuckLevels.at(-1) == null, "lowered volume choices");
         check(full().duckPercent(70).build().toBuilder().build().duckPercent == 70, "toBuilder keeps the lowered volume");
         rejects(() -> new SessionSeed(true, 91, -1, false), "seed with a bad lowered volume");
         rejects(() -> new SessionSeed(true, 50, 101, false), "seed with a bad case percent");
@@ -103,22 +101,18 @@ public final class UiLogicCheck {
         // ---- NativePageLayout
         List<NativePageLayout.Item> items = NativePageLayout.items(st);
         int[] ids = items.stream().mapToInt(i -> i.settingId).toArray();
-        check(java.util.Arrays.equals(ids, new int[] {2, 6, 1001, 50001, 50002, 50004, 14, 19}), "order without link: " + java.util.Arrays.toString(ids));
+        check(java.util.Arrays.equals(ids, new int[] {2, 6, 1001, 50001, 50002, 14, 19}), "order without link: " + java.util.Arrays.toString(ids));
         check(items.get(0).kind == NativePageLayout.Kind.BUILTIN && "advanced_bluetooth_device_header".equals(items.get(0).builtinKey), "header key");
         check("action_buttons".equals(items.get(1).builtinKey), "action buttons kept");
         check(items.get(2).kind == NativePageLayout.Kind.LISTENING_TOGGLE && items.get(2).groupIndex == NativePageLayout.GROUP_LISTENING, "toggle group 0");
-        check(items.get(3).groupIndex == NativePageLayout.GROUP_COMFORT && items.get(4).groupIndex == NativePageLayout.GROUP_COMFORT
-                && items.get(5).groupIndex == NativePageLayout.GROUP_DUCK && items.get(5).kind == NativePageLayout.Kind.DUCK_LEVEL_TOGGLE,
-                "switches and the lowered-volume choice in group 1");
-        check(items.get(6).groupIndex == NativePageLayout.GROUP_AUDIO && items.get(7).groupIndex == null,
+        check(items.get(3).groupIndex == NativePageLayout.GROUP_COMFORT && items.get(4).groupIndex == NativePageLayout.GROUP_COMFORT,
+                "the two switches in group 1");
+        check(items.get(5).groupIndex == NativePageLayout.GROUP_AUDIO && items.get(6).groupIndex == null,
                 "the profiles sit in the Audio group, the footer has no group");
-        check(!NativePageLayout.showsDuck(full().conversationAwareness(false).build())
-                && NativePageLayout.showsDuck(full().conversationAwareness(true).build()), "the volume choice follows the switch");
-        check(!NativePageLayout.showsDuck(full().conversationAwareness(true).features(Feature.EAR_DETECTION).build()),
-                "no volume choice without conversation awareness support");
+        check(NativePageLayout.GROUP_AUDIO == 2, "three groups: listening, comfort, audio");
         List<NativePageLayout.Item> withLink = NativePageLayout.items(full().feature(Feature.ALL_SETTINGS_PAGE).build());
-        check(withLink.size() == 9 && withLink.get(6).settingId == NativePageLayout.ID_ALL_SETTINGS
-                && withLink.get(6).kind == NativePageLayout.Kind.ALL_SETTINGS_LINK && withLink.get(6).groupIndex == null, "flat link after the switches and the choice");
+        check(withLink.size() == 8 && withLink.get(5).settingId == NativePageLayout.ID_ALL_SETTINGS
+                && withLink.get(5).kind == NativePageLayout.Kind.ALL_SETTINGS_LINK && withLink.get(5).groupIndex == null, "flat link after the switches");
         // The page of a recognised pair that has no session still lists every row (AIR-194): Settings reads the list once.
         AirPodsUiState layout = AirPodsUiState.layoutOnly();
         check(!layout.isConnected() && layout.address == null, "the layout state is not connected and has no address");
@@ -129,7 +123,6 @@ public final class UiLogicCheck {
         check(NativePageLayout.items(bare).size() == 4, "no features: only builtins");
         AirPodsUiState onlyEar = full().features(Feature.EAR_DETECTION).build();
         check(NativePageLayout.items(onlyEar).stream().noneMatch(i -> i.settingId == NativePageLayout.ID_CONVERSATION), "unsupported switch hidden, not disabled");
-        check(NativePageLayout.items(onlyEar).stream().noneMatch(i -> i.settingId == NativePageLayout.ID_DUCK), "no lowered-volume choice without conversation awareness");
 
         // ---- DebugStateParser
         AirPodsUiState p = DebugStateParser.parse("addr=AA:BB:CC:DD:EE:FF;l=80;r=82;c=100;lc=0;rc=0;cc=1;mode=ANC;ear=1;conv=0;feat=LISTENING_MODE,EAR_DETECTION,CONVERSATION_AWARENESS");

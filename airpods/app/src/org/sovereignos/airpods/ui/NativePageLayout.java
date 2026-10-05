@@ -9,7 +9,7 @@ import org.sovereignos.airpods.ui.AirPodsUiState.Feature;
  * Items of Settings' own device page, in order. Built-in items name a Settings preference key
  * (reorder only); app items are served by our provider. Items without a group stay flat; items
  * with the same consecutive group index form one titled category (Settings reads the titles from
- * the config's group list, so GROUP_LISTENING, GROUP_COMFORT and GROUP_DUCK are indexes into that list).
+ * the config's group list, so GROUP_LISTENING, GROUP_COMFORT and GROUP_AUDIO are indexes into that list).
  */
 public final class NativePageLayout {
     public enum Kind {
@@ -17,7 +17,6 @@ public final class NativePageLayout {
         LISTENING_TOGGLE,
         EAR_DETECTION_SWITCH,
         CONVERSATION_SWITCH,
-        DUCK_LEVEL_TOGGLE,
         ALL_SETTINGS_LINK
     }
 
@@ -31,12 +30,10 @@ public final class NativePageLayout {
     public static final int ID_EAR = 50001;
     public static final int ID_CONVERSATION = 50002;
     public static final int ID_ALL_SETTINGS = 50003;
-    public static final int ID_DUCK = 50004;
 
     public static final int GROUP_LISTENING = 0;
     public static final int GROUP_COMFORT = 1;
-    public static final int GROUP_DUCK = 2;
-    public static final int GROUP_AUDIO = 3;
+    public static final int GROUP_AUDIO = 2;
 
     public static final class Item {
         public final int settingId;
@@ -67,29 +64,15 @@ public final class NativePageLayout {
         }
         if (s.supported.contains(Feature.CONVERSATION_AWARENESS)) {
             out.add(new Item(ID_CONVERSATION, Kind.CONVERSATION_SWITCH, null, GROUP_COMFORT));
-            // The choice is the owner's, not the AirPods'. It has its own titled group: Settings
-            // draws the title (so the four buttons are labelled) and the spacing around it, which
-            // buttons stacked directly under a switch card did not get (owner, 2026-10-03).
-            out.add(new Item(ID_DUCK, Kind.DUCK_LEVEL_TOGGLE, null, GROUP_DUCK));
         }
         if (s.supported.contains(Feature.ALL_SETTINGS_PAGE)) {
-            // Flat: a link after the duck group would repeat the Comfort title.
+            // Flat: a link after the Comfort group would repeat its title.
             out.add(new Item(ID_ALL_SETTINGS, Kind.ALL_SETTINGS_LINK, null, null));
         }
-        // A titled group of its own: Settings draws no spacing under the buttons of the duck group
-        // unless a titled category follows, and the profile switches sit right below it.
+        // A titled group of its own: Settings draws the title and the spacing above the profile switches.
         out.add(new Item(ID_PROFILES, Kind.BUILTIN, "bluetooth_profiles", GROUP_AUDIO));
         out.add(builtin(ID_FOOTER, "device_details_footer"));
         return Collections.unmodifiableList(out);
-    }
-
-    /**
-     * The volume choice is shown only while the conversation awareness switch is on. The config
-     * always lists it (Settings reads the config once); the provider leaves the setting out while
-     * the switch is off, and Settings then removes the row and the empty group.
-     */
-    public static boolean showsDuck(AirPodsUiState s) {
-        return s.supported.contains(Feature.CONVERSATION_AWARENESS) && s.conversationAwareness;
     }
 
     private static Item builtin(int id, String key) {

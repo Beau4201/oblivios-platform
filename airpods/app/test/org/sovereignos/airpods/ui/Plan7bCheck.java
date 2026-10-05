@@ -42,15 +42,9 @@ public final class Plan7bCheck {
         rejects(() -> AdaptiveSteps.percentOf(3), "step 3");
         rejects(() -> AdaptiveSteps.percentOf(-1), "step -1");
 
-        // ---- DuckLevels: a slider from 10 to 90, the native page keeps four buttons
+        // ---- DuckLevels: a slider from 10 to 90
         check(DuckLevels.MIN == 10 && DuckLevels.MAX == 90, "range");
         check(!DuckLevels.isValid(9) && DuckLevels.isValid(10) && DuckLevels.isValid(55) && DuckLevels.isValid(90) && !DuckLevels.isValid(91), "range edges");
-        check(DuckLevels.nearestIndex(10) == 0 && DuckLevels.nearestIndex(20) == 0 && DuckLevels.nearestIndex(27) == 0
-                && DuckLevels.nearestIndex(28) == 1 && DuckLevels.nearestIndex(35) == 1 && DuckLevels.nearestIndex(42) == 1
-                && DuckLevels.nearestIndex(43) == 2 && DuckLevels.nearestIndex(50) == 2 && DuckLevels.nearestIndex(60) == 2
-                && DuckLevels.nearestIndex(61) == 3 && DuckLevels.nearestIndex(63) == 3 && DuckLevels.nearestIndex(90) == 3,
-                "nearest button, ties to the lower");
-        check(DuckLevels.options().equals(List.of(20, 35, 50, 70)) && DuckLevels.indexOf(63) == -1 && DuckLevels.at(3) == 70, "buttons unchanged");
 
         // ---- PressAndHoldChoices
         check(PressAndHoldChoices.next(set(), ListeningMode.ANC, true).equals(set(ListeningMode.ANC)), "first choice is kept as a partial selection");

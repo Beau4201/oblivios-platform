@@ -19,7 +19,6 @@ import com.android.settingslib.bluetooth.devicesettings.MultiTogglePreference
 import com.android.settingslib.bluetooth.devicesettings.ToggleInfo
 import org.sovereignos.airpods.R
 import org.sovereignos.airpods.ui.AirPodsUiState
-import org.sovereignos.airpods.ui.DuckLevels
 import org.sovereignos.airpods.ui.ListeningModeToggles
 import org.sovereignos.airpods.ui.NativePageLayout
 import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode
@@ -49,11 +48,10 @@ internal class NativeSettingsFactory(private val context: Context) {
         return DeviceSettingsConfig(
             mainContentItems = items,
             moreSettingsItems = emptyList(),
-            // Indexes of NativePageLayout.GROUP_LISTENING, GROUP_COMFORT, GROUP_DUCK and GROUP_AUDIO.
+            // Indexes of NativePageLayout.GROUP_LISTENING, GROUP_COMFORT and GROUP_AUDIO.
             settingGroups = listOf(
                 DeviceSettingGroup(context.getString(R.string.airpods_group_listening)),
                 DeviceSettingGroup(context.getString(R.string.airpods_group_comfort)),
-                DeviceSettingGroup(context.getString(R.string.airpods_duck_title)),
                 DeviceSettingGroup(context.getString(R.string.airpods_group_audio)),
             ),
         )
@@ -62,7 +60,6 @@ internal class NativeSettingsFactory(private val context: Context) {
     fun settings(state: AirPodsUiState): List<DeviceSetting> =
         NativePageLayout.items(state)
             .filter { it.kind != NativePageLayout.Kind.BUILTIN }
-            .filter { it.kind != NativePageLayout.Kind.DUCK_LEVEL_TOGGLE || NativePageLayout.showsDuck(state) }
             .map { toSetting(it, state) }
 
     private fun toSetting(item: NativePageLayout.Item, state: AirPodsUiState): DeviceSetting {
@@ -80,7 +77,6 @@ internal class NativeSettingsFactory(private val context: Context) {
                 R.drawable.ic_airpods_voice,
                 state.conversationAwareness,
             )
-            NativePageLayout.Kind.DUCK_LEVEL_TOGGLE -> duckToggle(state)
             NativePageLayout.Kind.ALL_SETTINGS_LINK -> linkRow()
             NativePageLayout.Kind.BUILTIN -> error("built-in items have no provider setting")
         }
@@ -99,27 +95,6 @@ internal class NativeSettingsFactory(private val context: Context) {
                 ToggleInfo.Builder()
                     .setLabel(context.getString(labelOf(mode)))
                     // Settings requires an icon; with the opt-in below it is not drawn.
-                    .setIcon(Bitmap.createBitmap(iconPx, iconPx, Bitmap.Config.ARGB_8888))
-                    .setExtras(Bundle().apply {
-                        putBoolean(DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON, true)
-                    })
-                    .build()
-            )
-        }
-        return builder.build()
-    }
-
-    /** How loud the music stays while the owner speaks: four buttons, like the listening mode group. */
-    private fun duckToggle(state: AirPodsUiState): MultiTogglePreference {
-        val builder = MultiTogglePreference.Builder()
-            .setTitle(context.getString(R.string.airpods_duck_title))
-            .setAllowChangingState(true)
-            // Display only: the nearest of the four buttons; the own page has the exact slider.
-            .setState(DuckLevels.nearestIndex(state.duckPercent))
-        for (percent in DuckLevels.options()) {
-            builder.addToggleInfo(
-                ToggleInfo.Builder()
-                    .setLabel(context.getString(R.string.airpods_duck_option, percent))
                     .setIcon(Bitmap.createBitmap(iconPx, iconPx, Bitmap.Config.ARGB_8888))
                     .setExtras(Bundle().apply {
                         putBoolean(DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON, true)

@@ -26,7 +26,6 @@ class ConnectionSheetActivity : Activity() {
         setContentView(R.layout.airpods_sheet)
         findViewById<View>(R.id.sheet_root).setOnClickListener { finish() }
         findViewById<View>(R.id.sheet_card).setOnClickListener { }
-        findViewById<Button>(R.id.sheet_done).setOnClickListener { finish() }
         findViewById<Button>(R.id.sheet_settings).setOnClickListener { openSettings() }
         val surface = getColor(ThemeR.color.settingslib_materialColorSurfaceContainerHigh)
         for (id in intArrayOf(R.id.ring_left, R.id.ring_case, R.id.ring_right)) {

@@ -42,13 +42,6 @@
             android:gravity="end"
             android:orientation="horizontal">
             <Button
-                android:id="@+id/sheet_done"
-                style="@android:style/Widget.DeviceDefault.Button.Borderless.Colored"
-                android:textColor="@color/settingslib_materialColorPrimary"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/airpods_done" />
-            <Button
                 android:id="@+id/sheet_settings"
                 style="@android:style/Widget.DeviceDefault.Button.Borderless.Colored"
                 android:textColor="@color/settingslib_materialColorPrimary"

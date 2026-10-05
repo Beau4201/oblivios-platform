@@ -14,7 +14,6 @@ import com.android.settingslib.bluetooth.devicesettings.IDeviceSettingsListener
 import com.android.settingslib.bluetooth.devicesettings.IDeviceSettingsProviderService
 import com.android.settingslib.bluetooth.devicesettings.MultiTogglePreferenceState
 import org.sovereignos.airpods.ui.AirPodsUiState
-import org.sovereignos.airpods.ui.DuckLevels
 import org.sovereignos.airpods.ui.ListeningModeToggles
 import org.sovereignos.airpods.ui.NativePageLayout
 
@@ -91,9 +90,6 @@ class AirPodsSettingsService : Service() {
                 }
                 NativePageLayout.ID_CONVERSATION -> if (pref is ActionSwitchPreferenceState) {
                     sink.setFeature(AirPodsUiState.Feature.CONVERSATION_AWARENESS, pref.checked)
-                }
-                NativePageLayout.ID_DUCK -> if (pref is MultiTogglePreferenceState) {
-                    DuckLevels.at(pref.state)?.let { sink.setDuckPercent(it) }
                 }
             }
             push(AirPodsStateStore.state)
