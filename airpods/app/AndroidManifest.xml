@@ -10,9 +10,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- The notification of the foreground service below. The connection sheet itself posts no notification and
-         uses no full-screen intent (ADR-137). Not privileged; it gives no data access. -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- POST_NOTIFICATIONS is deliberately absent: the app shows no notification, not even the one the
+         foreground service below must carry (the owner wants none; a service without the grant keeps
+         running and its notification is not shown). The connection sheet uses no notification and no
+         full-screen intent (ADR-137). -->
     <!-- The session runs in a foreground service of type connectedDevice so the process is not
          frozen as a cached app (a cached app does not run). The service is started from the
          broadcast receiver and at process start, both in the background, which needs the privileged
