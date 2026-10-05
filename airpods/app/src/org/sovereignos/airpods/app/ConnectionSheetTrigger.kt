@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.media.AudioManager
 import android.util.Log
 import org.sovereignos.airpods.R
@@ -25,7 +26,7 @@ internal class ConnectionSheetTrigger(private val context: Context) : AirPodsSta
     override fun onStateChanged(old: AirPodsUiState, new: AirPodsUiState) {
         val action = synchronized(policy) { policy.onState(new, isQuiet()) }
         when (action) {
-            ConnectionSheetPolicy.Action.SHOW -> show()
+            ConnectionSheetPolicy.Action.SHOW -> show(new.address)
             ConnectionSheetPolicy.Action.CANCEL -> manager().cancel(NOTIFICATION_ID)
             ConnectionSheetPolicy.Action.NONE -> Unit
         }
@@ -36,7 +37,7 @@ internal class ConnectionSheetTrigger(private val context: Context) : AirPodsSta
     /** False while the phone is in a call or ringing. */
     private fun isQuiet(): Boolean = context.getSystemService(AudioManager::class.java).mode == AudioManager.MODE_NORMAL
 
-    private fun show() {
+    private fun show(address: String?) {
         val manager = manager()
         if (!manager.areNotificationsEnabled()) {
             if (isDebuggableBuild()) Log.d(TAG, "notifications are off, no sheet")
@@ -57,7 +58,7 @@ internal class ConnectionSheetTrigger(private val context: Context) : AirPodsSta
             .setContentText(context.getString(R.string.airpods_sheet_notification_text))
             .setCategory(Notification.CATEGORY_STATUS)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
-            .setContentIntent(open)
+            .setContentIntent(if (address != null) deviceDetails(address) else open)
             .setFullScreenIntent(open, true)
             .setAutoCancel(true)
             .setTimeoutAfter(TIMEOUT_MS)
@@ -65,7 +66,22 @@ internal class ConnectionSheetTrigger(private val context: Context) : AirPodsSta
         manager.notify(NOTIFICATION_ID, notification)
     }
 
+    /**
+     * Tapping the notification opens Settings' device details of the AirPods, like the notification of Settings itself
+     * (BluetoothKeyMissingReceiver): the action and the argument bundle are the ones Settings defines. The sheet stays
+     * the full-screen intent.
+     */
+    private fun deviceDetails(address: String): PendingIntent {
+        val args = Bundle().apply { putString("device_address", address) }
+        val intent = Intent(DEVICE_DETAILS_ACTION)
+            .setPackage("com.android.settings")
+            .putExtra(":settings:show_fragment_args", args)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     private companion object {
+        const val DEVICE_DETAILS_ACTION = "com.android.settings.BLUETOOTH_DEVICE_DETAIL_SETTINGS"
         const val TAG = "AirPodsSheet"
         const val CHANNEL = "airpods_popup"
         const val NOTIFICATION_ID = 2

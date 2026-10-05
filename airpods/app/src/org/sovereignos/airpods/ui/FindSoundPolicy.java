@@ -8,10 +8,10 @@ package org.sovereignos.airpods.ui;
  */
 public final class FindSoundPolicy {
     /** Gain of the tone as a fraction of full scale: the first step, the cap and the rise per step. */
-    public static final float START_GAIN = 0.02f;
-    public static final float MAX_GAIN = 0.5f;
-    public static final float STEP_FACTOR = 2.0f;
-    public static final long STEP_MS = 4_000L;
+    public static final float START_GAIN = 0.25f;
+    public static final float MAX_GAIN = 1.0f;
+    public static final float STEP_FACTOR = 1.6f;
+    public static final long STEP_MS = 2_000L;
     /** The tone ends by itself after this long. */
     public static final long MAX_DURATION_MS = 60_000L;
 
@@ -30,7 +30,7 @@ public final class FindSoundPolicy {
         return !allowed(connected, inEarCount) || elapsedMs >= MAX_DURATION_MS;
     }
 
-    /** The gain {@code elapsedMs} after the start: doubles every {@link #STEP_MS}, never above {@link #MAX_GAIN}. */
+    /** The gain {@code elapsedMs} after the start: rises by {@link #STEP_FACTOR} every {@link #STEP_MS}, never above {@link #MAX_GAIN}. */
     public static float gainAt(long elapsedMs) {
         if (elapsedMs < 0) return 0f;
         long steps = elapsedMs / STEP_MS;

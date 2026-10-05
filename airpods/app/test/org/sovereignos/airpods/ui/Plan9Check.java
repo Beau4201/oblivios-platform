@@ -128,7 +128,7 @@ public final class Plan9Check {
         check(FindSoundPolicy.mustStop(true, 0, FindSoundPolicy.MAX_DURATION_MS), "ends by itself");
         check(FindSoundPolicy.gainAt(0) == FindSoundPolicy.START_GAIN, "starts quiet");
         check(FindSoundPolicy.gainAt(-5) == 0f, "no gain before the start");
-        check(FindSoundPolicy.gainAt(FindSoundPolicy.STEP_MS) == FindSoundPolicy.START_GAIN * 2, "doubles after one step");
+        check(FindSoundPolicy.gainAt(FindSoundPolicy.STEP_MS) == FindSoundPolicy.START_GAIN * FindSoundPolicy.STEP_FACTOR, "rises by the factor after one step");
         Set<Float> steps = new HashSet<>();
         float last = 0;
         for (long t = 0; t <= FindSoundPolicy.MAX_DURATION_MS; t += 250) {

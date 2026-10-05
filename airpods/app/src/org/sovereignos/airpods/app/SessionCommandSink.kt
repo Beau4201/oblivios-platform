@@ -32,6 +32,7 @@ internal class SessionCommandSink(
 ) : AirPodsCommandSink {
     override fun setListeningMode(mode: ListeningMode): Boolean {
         val state = AirPodsStateStore.state
+        if (isDebuggableBuild()) Log.d(TAG, "setListeningMode " + mode + " connected=" + state.isConnected + " now=" + state.listeningMode)
         if (!state.isConnected || mode !in ListeningModeToggles.modes(state)) return false
         if (mode == ListeningMode.OFF) {
             // A pair with the off option disabled refuses off and answers with another mode (AIR-123);

@@ -184,7 +184,7 @@ internal class AirPodsSession(
                 continue
             }
             malformedInARow = 0
-            if (isDebuggableBuild()) Log.d(TAG, "frame " + message.javaClass.simpleName)
+            if (isDebuggableBuild()) Log.d(TAG, "frame " + message.javaClass.simpleName + (if (message is ListeningModeState) " " + message.mode() else ""))
             if (message is UnrecognisedMessage) continue
             if (message is BatteryStatus) batterySeen = true
             if (message is ListeningModeState) modeSeen = true

@@ -45,7 +45,6 @@
     <string name="airpods_press_hold_title">Press and hold</string>
     <string name="airpods_press_hold_unset">Not set from this phone yet</string>
     <string name="airpods_press_hold_dialog_title">Press and hold cycles through</string>
-    <string name="airpods_press_hold_footer">Press and hold: choose at least two modes. The AirPods do not report this setting, so this shows what you chose last on this phone.</string>
     <string name="airpods_done">Done</string>
     <string name="airpods_group_about">About</string>
     <string name="airpods_name_title">Name</string>
@@ -103,10 +102,9 @@
     <string name="airpods_choice_automatic">Automatic</string>
     <string name="airpods_choice_right">Always right</string>
     <string name="airpods_choice_left">Always left</string>
-    <string name="airpods_stored_footer">Microphone, automatic connection and case sounds: the AirPods do not report these settings. The page shows the last value set from this phone.</string>
     <string name="airpods_find_play">Play sound</string>
     <string name="airpods_find_stop">Stop sound</string>
     <string name="airpods_find_summary">Plays a rising sound through the AirPods</string>
     <string name="airpods_find_unavailable">Take both AirPods out of your ears first</string>
-    <string name="airpods_find_footer">Play sound: works only while the AirPods are connected to this phone, and stops by itself after a minute or when you put a pod in your ear. It is not Find My.</string>
+    <string name="airpods_page_footer">Press and hold, microphone, automatic connection and case sounds are not reported by the AirPods, so the page shows the last value set from this phone. Play sound works only while the AirPods are connected to this phone, stops by itself after a minute or when you put a pod in your ear, and is not Find My.</string>
 </resources>

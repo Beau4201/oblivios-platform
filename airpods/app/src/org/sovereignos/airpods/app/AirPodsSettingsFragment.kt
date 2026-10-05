@@ -21,6 +21,7 @@ import androidx.preference.SwitchPreferenceCompat
 import com.android.settingslib.widget.FooterPreference
 import com.android.settingslib.widget.SegmentedButtonPreference
 import com.android.settingslib.widget.SettingsBasePreferenceFragment
+import com.android.settingslib.widget.SpacePreference
 import com.android.settingslib.widget.SliderPreference
 import com.android.settingslib.widget.theme.R as ThemeR
 import java.util.concurrent.ExecutorService
@@ -63,7 +64,6 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
     private lateinit var duck: SliderPreference
     private lateinit var soundGroup: PreferenceCategory
     private lateinit var pressHold: Preference
-    private lateinit var pressHoldFooter: FooterPreference
     private lateinit var aboutGroup: PreferenceCategory
     private lateinit var name: Preference
     private lateinit var model: Preference
@@ -71,7 +71,7 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
     private lateinit var stemsGroup: PreferenceCategory
     private lateinit var callsGroup: PreferenceCategory
     private lateinit var caseGroup: PreferenceCategory
-    private lateinit var storedFooter: FooterPreference
+    private lateinit var pageFooter: FooterPreference
     private lateinit var findGroup: PreferenceCategory
     private lateinit var findRow: Preference
     private val controlPrefs = LinkedHashMap<ControlRows.Row, Preference>()
@@ -122,6 +122,8 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             }
         }
         listeningGroup.addPreference(listening)
+        // Room between the four buttons and their description: a SpacePreference is a section break of Settings' adapter.
+        listeningGroup.addPreference(SpacePreference(ctx, null).apply { setHeight((MODE_GAP_DP * resources.displayMetrics.density).toInt()) })
         description = Preference(ctx).apply {
             key = "listening_description"
             isSelectable = false
@@ -182,11 +184,6 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             }
         }
         soundGroup.addPreference(pressHold)
-        pressHoldFooter = FooterPreference(ctx).apply {
-            key = "press_hold_footer"
-            setSummary(R.string.airpods_press_hold_footer)
-        }
-        screen.addPreference(pressHoldFooter)
 
         stemsGroup = category(screen, "stems", R.string.airpods_group_stems)
         callsGroup = category(screen, "calls", R.string.airpods_group_calls)
@@ -196,11 +193,6 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             controlPrefs[row] = pref
             groupOf(row.group).addPreference(pref)
         }
-        storedFooter = FooterPreference(ctx).apply {
-            key = "stored_footer"
-            setSummary(R.string.airpods_stored_footer)
-        }
-        screen.addPreference(storedFooter)
         findGroup = category(screen, "find", R.string.airpods_group_find)
         findRow = Preference(ctx).apply {
             key = "find_sound"
@@ -210,12 +202,11 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             }
         }
         findGroup.addPreference(findRow)
-        screen.addPreference(
-            FooterPreference(ctx).apply {
-                key = "find_footer"
-                setSummary(R.string.airpods_find_footer)
-            },
-        )
+        pageFooter = FooterPreference(ctx).apply {
+            key = "page_footer"
+            setSummary(R.string.airpods_page_footer)
+        }
+        screen.addPreference(pageFooter)
 
         aboutGroup = category(screen, "about", R.string.airpods_group_about)
         name = Preference(ctx).apply {
@@ -318,7 +309,7 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             listening.setCheckedIndex(ListeningModeToggles.indexOf(modes, state.listeningMode))
             listening.isEnabled = state.listeningMode != null
             description.setSummary(descriptionOf(state.listeningMode))
-            adaptive.isVisible = Feature.ADAPTIVE_MODE in state.supported
+            adaptive.isVisible = Feature.ADAPTIVE_MODE in state.supported && state.listeningMode == ListeningMode.ADAPTIVE
             val step = AdaptiveSteps.stepOf(state.adaptivePercent)
             adaptive.isEnabled = step >= 0
             if (step >= 0 && adaptive.value != step) adaptive.value = step
@@ -337,14 +328,13 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
                 showControl(row, pref, state.controlValue(row.control))
             }
             soundGroup.isVisible = connected && (Feature.PRESS_AND_HOLD in state.supported || anyVisible(ControlRows.Group.SOUND))
-            pressHoldFooter.isVisible = connected && Feature.PRESS_AND_HOLD in state.supported
             pressHold.isVisible = Feature.PRESS_AND_HOLD in state.supported
             pressHold.setSummary(pressHoldSummary(state))
             comfortGroup.isVisible = connected
             stemsGroup.isVisible = connected && anyVisible(ControlRows.Group.STEMS)
             callsGroup.isVisible = connected && anyVisible(ControlRows.Group.CALLS)
             caseGroup.isVisible = connected && anyVisible(ControlRows.Group.CASE)
-            storedFooter.isVisible = connected && (callsGroup.isVisible || caseGroup.isVisible)
+            pageFooter.isVisible = connected
 
             findGroup.isVisible = connected
             val playing = AirPodsCommands.sink.soundPlaying
@@ -556,6 +546,7 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
         const val ICON_DP = 24
         const val NAME_INPUT_CHARS = 64
         const val TICK_MS = 1_000L
+        const val MODE_GAP_DP = 16
         const val NO_SOUND_STATE = -1
     }
 }

@@ -3,11 +3,15 @@ package org.sovereignos.airpods.app
 import android.content.Context
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
+import com.android.settingslib.widget.GroupSectionDividerMixin
 import org.sovereignos.airpods.R
 import org.sovereignos.airpods.ui.AirPodsUiState
 
-/** The header with the three rings, as a non-selectable preference at the top of the page. */
-class RingsPreference(context: Context) : Preference(context) {
+/**
+ * The header with the three rings, as a non-selectable preference at the top of the page. It is a section divider for
+ * Settings' group adapter, so it lies on the page colour like the header of the device details and gets no card.
+ */
+class RingsPreference(context: Context) : Preference(context), GroupSectionDividerMixin {
     private var state: AirPodsUiState = AirPodsUiState.DISCONNECTED
 
     init {
