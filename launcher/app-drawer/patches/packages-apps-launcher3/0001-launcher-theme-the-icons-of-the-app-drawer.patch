@@ -1,0 +1,29 @@
+From 78ff730b1c64d3bc4ce41390c7d2a08f6fde6aa1 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Tue, 6 Oct 2026 17:43:03 +0200
+Subject: [PATCH 1/3] launcher: theme the icons of the app drawer
+
+Upstream themes only the workspace, folders and the taskbar, so the drawer stays in the apps' own colours. The drawer now follows the home screen's themed icons.
+---
+ src/com/android/launcher3/BubbleTextView.java | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/com/android/launcher3/BubbleTextView.java b/src/com/android/launcher3/BubbleTextView.java
+index b544a23a1c..1c76eb55da 100644
+--- a/src/com/android/launcher3/BubbleTextView.java
++++ b/src/com/android/launcher3/BubbleTextView.java
+@@ -686,8 +686,10 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
+     }
+ 
+     protected boolean shouldUseTheme() {
++        // sovereignos: the app drawer follows the home screen's themed icons. Upstream themes only
++        // the workspace, folders and the taskbar, which leaves the drawer in the apps' own colours.
+         return mDisplay == DISPLAY_WORKSPACE || mDisplay == DISPLAY_FOLDER
+-                || mDisplay == DISPLAY_TASKBAR;
++                || mDisplay == DISPLAY_TASKBAR || mDisplay == DISPLAY_ALL_APPS;
+     }
+ 
+     /**
+-- 
+2.39.5
+

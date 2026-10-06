@@ -1,0 +1,801 @@
+From acaadb5c5e37007ee4fd3f6b9915b4904b6a9fde Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Tue, 6 Oct 2026 17:47:24 +0200
+Subject: [PATCH 3/3] launcher: show the app drawer as category groups
+
+The main list of the phone launcher becomes one container per category (two per row) with the first four apps as themed icons. A tap opens the group as a frosted card in the middle of the display over a blurred, dimmed drawer, with the stock folder timing. Search, the work tab, the taskbar and Private Space are unchanged. New code lives in allapps/category/; resources in their own file.
+---
+ res/layout/category_group_icon.xml            |   9 +
+ res/values/sovereignos_app_drawer.xml         |  30 ++
+ .../launcher3/AbstractFloatingView.java       |   5 +-
+ .../launcher3/allapps/AllAppsGridAdapter.java |   6 +-
+ .../allapps/AlphabeticalAppsList.java         |  58 +++-
+ .../launcher3/allapps/BaseAllAppsAdapter.java |  18 +-
+ .../allapps/category/CategoryGroupSheet.kt    | 269 ++++++++++++++++++
+ .../allapps/category/CategoryGroupView.kt     | 148 ++++++++++
+ .../allapps/category/CategoryGroups.kt        |  72 +++++
+ 9 files changed, 611 insertions(+), 4 deletions(-)
+ create mode 100644 res/layout/category_group_icon.xml
+ create mode 100644 res/values/sovereignos_app_drawer.xml
+ create mode 100644 src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
+ create mode 100644 src/com/android/launcher3/allapps/category/CategoryGroupView.kt
+ create mode 100644 src/com/android/launcher3/allapps/category/CategoryGroups.kt
+
+diff --git a/res/layout/category_group_icon.xml b/res/layout/category_group_icon.xml
+new file mode 100644
+index 0000000000..1e8e11a1cf
+--- /dev/null
++++ b/res/layout/category_group_icon.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright (C) 2026 SovereignOS. Licensed under the Apache License, Version 2.0. -->
++<com.android.launcher3.BubbleTextView xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:launcher="http://schemas.android.com/apk/res-auto"
++    style="@style/BaseIcon.AllApps"
++    android:id="@+id/icon"
++    launcher:iconDisplay="all_apps"
++    launcher:iconSizeOverride="@dimen/app_group_sheet_icon_size"
++    launcher:centerVertically="true" />
+diff --git a/res/values/sovereignos_app_drawer.xml b/res/values/sovereignos_app_drawer.xml
+new file mode 100644
+index 0000000000..a2e9a4d229
+--- /dev/null
++++ b/res/values/sovereignos_app_drawer.xml
+@@ -0,0 +1,30 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright (C) 2026 SovereignOS. Licensed under the Apache License, Version 2.0.
++     Resources of the app drawer groups, in their own file so upstream resource files stay untouched. -->
++<resources>
++    <!-- Name of the group that holds audio, video and image apps. -->
++    <string name="app_group_media">Media</string>
++
++    <!-- Id of the opened group card, so a device check can read its bounds. -->
++    <item type="id" name="category_group_card" />
++
++    <!-- Group container in the drawer -->
++    <dimen name="app_group_block_margin">8dp</dimen>
++    <dimen name="app_group_block_padding">16dp</dimen>
++    <dimen name="app_group_block_gap">12dp</dimen>
++    <dimen name="app_group_label_text_size">14sp</dimen>
++    <dimen name="app_group_label_padding_top">8dp</dimen>
++
++    <!-- Opened group -->
++    <dimen name="app_group_sheet_radius">48dp</dimen>
++    <dimen name="app_group_sheet_stroke">1dp</dimen>
++    <dimen name="app_group_sheet_elevation">24dp</dimen>
++    <dimen name="app_group_sheet_padding">14dp</dimen>
++    <dimen name="app_group_sheet_margin">18dp</dimen>
++    <dimen name="app_group_sheet_max_width">420dp</dimen>
++    <dimen name="app_group_sheet_title_size">30sp</dimen>
++    <dimen name="app_group_sheet_title_padding">12dp</dimen>
++    <dimen name="app_group_sheet_cell_height">132dp</dimen>
++    <dimen name="app_group_sheet_icon_size">88dp</dimen>
++    <dimen name="app_group_sheet_blur">22dp</dimen>
++</resources>
+diff --git a/src/com/android/launcher3/AbstractFloatingView.java b/src/com/android/launcher3/AbstractFloatingView.java
+index 4fd40958fa..fdb63addae 100644
+--- a/src/com/android/launcher3/AbstractFloatingView.java
++++ b/src/com/android/launcher3/AbstractFloatingView.java
+@@ -68,6 +68,7 @@ public abstract class AbstractFloatingView extends LinearLayout implements Touch
+             TYPE_OPTIONS_POPUP,
+             TYPE_ICON_SURFACE,
+             TYPE_OPTIONS_POPUP_DIALOG,
++            TYPE_CATEGORY_GROUP,
+             TYPE_PIN_WIDGET_FROM_EXTERNAL_POPUP,
+             TYPE_TASKBAR_EDUCATION_DIALOG,
+             TYPE_TASKBAR_ALL_APPS,
+@@ -110,6 +111,8 @@ public abstract class AbstractFloatingView extends LinearLayout implements Touch
+     public static final int TYPE_NUDGE = 1 << 24;
+     public static final int TYPE_TASKBAR_OVERFLOW = 1 << 25;
+     public static final int TYPE_DIALOG_LISTENER = 1 << 26;
++    // sovereignos: the opened group of the app drawer, see allapps/category/CategoryGroupSheet.
++    public static final int TYPE_CATEGORY_GROUP = 1 << 27;
+ 
+     public static final int TYPE_ALL = TYPE_FOLDER | TYPE_ACTION_POPUP
+             | TYPE_WIDGETS_BOTTOM_SHEET | TYPE_WIDGET_RESIZE_FRAME
+@@ -119,7 +122,7 @@ public abstract class AbstractFloatingView extends LinearLayout implements Touch
+             | TYPE_TASKBAR_EDUCATION_DIALOG | TYPE_TASKBAR_ALL_APPS | TYPE_OPTIONS_POPUP_DIALOG
+             | TYPE_ADD_TO_HOME_CONFIRMATION | TYPE_TASKBAR_OVERLAY_PROXY
+             | TYPE_TASKBAR_PINNING_POPUP | TYPE_PIN_IME_POPUP | TYPE_ONE_GRID_MIGRATION_EDU
+-            | TYPE_NUDGE | TYPE_TASKBAR_OVERFLOW | TYPE_DIALOG_LISTENER;
++            | TYPE_NUDGE | TYPE_TASKBAR_OVERFLOW | TYPE_DIALOG_LISTENER | TYPE_CATEGORY_GROUP;
+ 
+     // Type of popups which should be kept open during launcher rebind
+     public static final int TYPE_REBIND_SAFE = TYPE_WIDGETS_BOTTOM_SHEET
+diff --git a/src/com/android/launcher3/allapps/AllAppsGridAdapter.java b/src/com/android/launcher3/allapps/AllAppsGridAdapter.java
+index 64bc046ef0..d1163332e0 100644
+--- a/src/com/android/launcher3/allapps/AllAppsGridAdapter.java
++++ b/src/com/android/launcher3/allapps/AllAppsGridAdapter.java
+@@ -176,7 +176,8 @@ public class AllAppsGridAdapter extends BaseAllAppsAdapter {
+         protected int incrementTotalHeight(Adapter adapter, int position, int heightUntilLastPos) {
+             AllAppsGridAdapter.AdapterItem item = mApps.getAdapterItems().get(position);
+             // only account for the first icon in the row since they are the same size within a row
+-            return (isIconViewType(item.viewType) && item.rowAppIndex != 0)
++            return ((isIconViewType(item.viewType) || item.viewType == VIEW_TYPE_CATEGORY_GROUP)
++                    && item.rowAppIndex != 0)
+                     ? heightUntilLastPos
+                     : (heightUntilLastPos + mCachedSizes.get(item.viewType));
+         }
+@@ -212,6 +213,9 @@ public class AllAppsGridAdapter extends BaseAllAppsAdapter {
+                 return totalSpans;
+             }
+             int viewType = items.get(position).viewType;
++            if (viewType == VIEW_TYPE_CATEGORY_GROUP) {
++                return Math.max(1, totalSpans / CATEGORY_GROUPS_PER_ROW);
++            }
+             if (isIconViewType(viewType)) {
+                 return totalSpans / mAppsPerRow;
+             } else {
+diff --git a/src/com/android/launcher3/allapps/AlphabeticalAppsList.java b/src/com/android/launcher3/allapps/AlphabeticalAppsList.java
+index 33dc0cf50f..825806d28c 100644
+--- a/src/com/android/launcher3/allapps/AlphabeticalAppsList.java
++++ b/src/com/android/launcher3/allapps/AlphabeticalAppsList.java
+@@ -27,6 +27,9 @@ import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCH
+ import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_PRIVATE_SPACE_USER_INSTALLED_APPS_COUNT;
+ 
+ import android.content.Context;
++import android.content.pm.ApplicationInfo;
++import android.content.pm.LauncherApps;
++import android.content.pm.PackageManager;
+ import android.text.Spannable;
+ import android.text.SpannableString;
+ import android.text.style.ImageSpan;
+@@ -37,8 +40,11 @@ import androidx.annotation.VisibleForTesting;
+ import androidx.recyclerview.widget.DiffUtil;
+ 
+ import com.android.launcher3.Flags;
++import com.android.launcher3.Launcher;
+ import com.android.launcher3.R;
+ import com.android.launcher3.allapps.BaseAllAppsAdapter.AdapterItem;
++import com.android.launcher3.allapps.category.CategoryGroupItem;
++import com.android.launcher3.allapps.category.CategoryGroups;
+ import com.android.launcher3.model.data.AppInfo;
+ import com.android.launcher3.model.data.ItemInfo;
+ import com.android.launcher3.util.LabelComparator;
+@@ -46,6 +52,7 @@ import com.android.launcher3.views.ActivityContext;
+ 
+ import java.io.PrintWriter;
+ import java.util.ArrayList;
++import java.util.HashMap;
+ import java.util.List;
+ import java.util.Locale;
+ import java.util.Map;
+@@ -67,6 +74,10 @@ public class AlphabeticalAppsList implements AllAppsStore.OnUpdateListener {
+ 
+     private final PrivateProfileManager mPrivateProviderManager;
+ 
++    // sovereignos: ApplicationInfo.category of the apps, used to group the app drawer. Only known
++    // categories are cached, so an app whose installer sets its category later is read again.
++    private final Map<String, Integer> mCategoryCache = new HashMap<>();
++
+     /**
+      * Info about a fast scroller section, depending if sections are merged, the fast scroller
+      * sections will not be the same set as the section headers.
+@@ -314,7 +325,9 @@ public class AlphabeticalAppsList implements AllAppsStore.OnUpdateListener {
+                                     R.string.work_profile_edu_section), 0));
+                     Log.d(TAG, "Adding FastScrollSection for work edu card.");
+                 }
+-                position = addAppsWithSections(mApps, position);
++                position = showsCategoryGroups()
++                        ? addCategoryGroups(mApps, position)
++                        : addAppsWithSections(mApps, position);
+             }
+             if (Flags.enablePrivateSpace()) {
+                 position = addPrivateSpaceItems(position);
+@@ -344,6 +357,15 @@ public class AlphabeticalAppsList implements AllAppsStore.OnUpdateListener {
+                         || BaseAllAppsAdapter.isPrivateSpaceHeaderView(item.viewType)
+                         || BaseAllAppsAdapter.isPrivateSpaceSysAppsDividerView(item.viewType)) {
+                     numAppsInSection = 0;
++                } else if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_GROUP) {
++                    if (numAppsInSection % BaseAllAppsAdapter.CATEGORY_GROUPS_PER_ROW == 0) {
++                        numAppsInRow = 0;
++                        rowIndex++;
++                    }
++                    item.rowIndex = rowIndex;
++                    item.rowAppIndex = numAppsInRow;
++                    numAppsInSection++;
++                    numAppsInRow++;
+                 } else if (BaseAllAppsAdapter.isIconViewType(item.viewType)) {
+                     if (numAppsInSection % mNumAppsPerRowAllApps == 0) {
+                         numAppsInRow = 0;
+@@ -454,6 +476,40 @@ public class AlphabeticalAppsList implements AllAppsStore.OnUpdateListener {
+         return position;
+     }
+ 
++    /** Only the main list of the phone launcher is grouped; search, work and the taskbar are not. */
++    private boolean showsCategoryGroups() {
++        return mAllAppsStore != null && mWorkProviderManager == null
++                && mActivityContext instanceof Launcher;
++    }
++
++    private int addCategoryGroups(List<AppInfo> appList, int startPosition) {
++        List<CategoryGroupItem> groups = CategoryGroups.build(
++                mActivityContext.asContext(), appList, this::categoryOf);
++        mAdapterItems.addAll(groups);
++        return startPosition + groups.size();
++    }
++
++    private int categoryOf(AppInfo info) {
++        String key = info.user + "/" + info.getTargetPackage();
++        Integer cached = mCategoryCache.get(key);
++        if (cached != null) {
++            return cached;
++        }
++        int category = ApplicationInfo.CATEGORY_UNDEFINED;
++        try {
++            LauncherApps launcherApps =
++                    mActivityContext.asContext().getSystemService(LauncherApps.class);
++            category = launcherApps.getApplicationInfo(info.getTargetPackage(), 0, info.user)
++                    .category;
++        } catch (PackageManager.NameNotFoundException e) {
++            Log.d(TAG, "No application info for " + info.getTargetPackage());
++        }
++        if (category != ApplicationInfo.CATEGORY_UNDEFINED) {
++            mCategoryCache.put(key, category);
++        }
++        return category;
++    }
++
+     private int addAppsWithSections(List<AppInfo> appList, int startPosition) {
+         String lastSectionName = null;
+         boolean hasPrivateApps = false;
+diff --git a/src/com/android/launcher3/allapps/BaseAllAppsAdapter.java b/src/com/android/launcher3/allapps/BaseAllAppsAdapter.java
+index 54d42d1be7..b64e306015 100644
+--- a/src/com/android/launcher3/allapps/BaseAllAppsAdapter.java
++++ b/src/com/android/launcher3/allapps/BaseAllAppsAdapter.java
+@@ -40,6 +40,8 @@ import androidx.recyclerview.widget.RecyclerView;
+ 
+ import com.android.launcher3.BubbleTextView;
+ import com.android.launcher3.R;
++import com.android.launcher3.allapps.category.CategoryGroupItem;
++import com.android.launcher3.allapps.category.CategoryGroupView;
+ import com.android.launcher3.allapps.search.SearchAdapterProvider;
+ import com.android.launcher3.model.data.AppInfo;
+ import com.android.launcher3.popup.PopupContainerWithArrow;
+@@ -68,7 +70,12 @@ public abstract class BaseAllAppsAdapter
+     public static final int VIEW_TYPE_BOTTOM_VIEW_TO_SCROLL_TO = 1 << 8;
+     public static final int VIEW_TYPE_PRIVATE_SPACE_APP_ICON = 1 << 9;
+     public static final int VIEW_TYPE_PRIVATE_SPACE_RESULT = 1 << 10;
+-    public static final int NEXT_ID = 11;
++    // sovereignos: a category group of the app drawer, see allapps/category.
++    public static final int VIEW_TYPE_CATEGORY_GROUP = 1 << 11;
++    public static final int NEXT_ID = 12;
++
++    // sovereignos: category groups per row of the app drawer.
++    public static final int CATEGORY_GROUPS_PER_ROW = 2;
+ 
+     // Common view type masks
+     public static final int VIEW_TYPE_MASK_DIVIDER = VIEW_TYPE_ALL_APPS_DIVIDER;
+@@ -244,6 +251,8 @@ public abstract class BaseAllAppsAdapter
+                     return true;
+                 });
+                 return new ViewHolder(icon);
++            case VIEW_TYPE_CATEGORY_GROUP:
++                return new ViewHolder(new CategoryGroupView(mActivityContext.asContext()));
+             case VIEW_TYPE_EMPTY_SEARCH:
+                 return new ViewHolder(mLayoutInflater.inflate(R.layout.all_apps_empty_search,
+                         parent, false));
+@@ -314,6 +323,13 @@ public abstract class BaseAllAppsAdapter
+                 }
+                 break;
+             }
++            case VIEW_TYPE_CATEGORY_GROUP: {
++                CategoryGroupItem groupItem =
++                        (CategoryGroupItem) mApps.getAdapterItems().get(position);
++                ((CategoryGroupView) holder.itemView).bind(groupItem, mOnIconClickListener,
++                        mOnIconLongClickListener, mIconCustomActionsListener);
++                break;
++            }
+             case VIEW_TYPE_EMPTY_SEARCH: {
+                 AppInfo info = mApps.getAdapterItems().get(position).itemInfo;
+                 if (info != null) {
+diff --git a/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt b/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
+new file mode 100644
+index 0000000000..a740a3b055
+--- /dev/null
++++ b/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
+@@ -0,0 +1,269 @@
++/*
++ * Copyright (C) 2026 SovereignOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.launcher3.allapps.category
++
++import android.animation.Animator
++import android.animation.AnimatorListenerAdapter
++import android.animation.ValueAnimator
++import android.content.Context
++import android.graphics.Color
++import android.graphics.Rect
++import android.graphics.RenderEffect
++import android.graphics.Shader
++import android.graphics.Typeface
++import android.graphics.drawable.ColorDrawable
++import android.graphics.drawable.GradientDrawable
++import android.util.AttributeSet
++import android.util.Pair
++import android.util.TypedValue
++import android.view.Gravity
++import android.view.LayoutInflater
++import android.view.MotionEvent
++import android.view.View
++import android.view.ViewGroup
++import android.view.ViewParent
++import android.view.ViewTreeObserver
++import android.view.animation.AnimationUtils
++import android.widget.LinearLayout
++import android.widget.ScrollView
++import android.widget.TextView
++import com.android.launcher3.AbstractFloatingView
++import com.android.launcher3.BubbleTextView
++import com.android.launcher3.R
++import com.android.launcher3.allapps.ActivityAllAppsContainerView
++import com.android.launcher3.util.Themes
++import com.android.launcher3.views.BaseDragLayer
++import kotlin.math.min
++
++/**
++ * The opened drawer group: a frosted card in the middle of the display over a blurred, dimmed
++ * drawer. It grows out of the tapped container and back with the stock folder timing (200 ms,
++ * Material standard curve). Tap outside, back and home close it.
++ */
++class CategoryGroupSheet(context: Context, attrs: AttributeSet?) :
++    AbstractFloatingView(context, attrs) {
++
++    private val scrim = ColorDrawable(Color.BLACK).apply { alpha = 0 }
++    private val card = CardLayout(context)
++    private val titleView = TextView(context)
++    private val scroll = ScrollView(context)
++    private val rows = LinearLayout(context)
++    private val origin = Rect()
++    private var backdrop: View? = null
++    private var animator: ValueAnimator? = null
++    private var progress = 0f
++
++    init {
++        gravity = Gravity.CENTER
++        background = scrim
++        val res = resources
++        val surface = Themes.getAttrColor(context, R.attr.allAppsSurfaceHighest)
++        val text = Themes.getAttrColor(context, android.R.attr.textColorPrimary)
++        val pad = res.getDimensionPixelSize(R.dimen.app_group_sheet_padding)
++        card.id = R.id.category_group_card
++        card.orientation = LinearLayout.VERTICAL
++        card.setPadding(pad, pad, pad, pad)
++        card.background =
++            GradientDrawable(
++                    GradientDrawable.Orientation.TL_BR,
++                    intArrayOf(withAlpha(surface, 0xE0), withAlpha(surface, 0xB0), withAlpha(surface, 0xD0)),
++                )
++                .apply {
++                    cornerRadius = res.getDimension(R.dimen.app_group_sheet_radius)
++                    setStroke(res.getDimensionPixelSize(R.dimen.app_group_sheet_stroke), withAlpha(text, 0x30))
++                }
++        card.elevation = res.getDimension(R.dimen.app_group_sheet_elevation)
++        titleView.apply {
++            gravity = Gravity.CENTER
++            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
++            setTextSize(TypedValue.COMPLEX_UNIT_PX, res.getDimension(R.dimen.app_group_sheet_title_size))
++            setTextColor(text)
++            setPadding(0, res.getDimensionPixelSize(R.dimen.app_group_sheet_title_padding), 0,
++                res.getDimensionPixelSize(R.dimen.app_group_sheet_title_padding))
++        }
++        rows.orientation = LinearLayout.VERTICAL
++        scroll.isVerticalScrollBarEnabled = false
++        scroll.addView(rows)
++        card.addView(titleView, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
++        card.addView(scroll, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
++        val metrics = res.displayMetrics
++        val cardWidth =
++            min(
++                metrics.widthPixels - 2 * res.getDimensionPixelSize(R.dimen.app_group_sheet_margin),
++                res.getDimensionPixelSize(R.dimen.app_group_sheet_max_width),
++            )
++        addView(card, LayoutParams(cardWidth, LayoutParams.WRAP_CONTENT))
++    }
++
++    private fun bind(source: CategoryGroupView, item: CategoryGroupItem, backdrop: View?) {
++        this.backdrop = backdrop
++        titleView.text = item.title
++        val cardWidth = card.layoutParams.width - card.paddingLeft - card.paddingRight
++        val cellWidth = cardWidth / COLUMNS
++        val cellHeight = resources.getDimensionPixelSize(R.dimen.app_group_sheet_cell_height)
++        val inflater = LayoutInflater.from(context)
++        item.apps.chunked(COLUMNS).forEach { chunk ->
++            val row = LinearLayout(context)
++            row.gravity = Gravity.CENTER_HORIZONTAL
++            chunk.forEach { app ->
++                val icon = inflater.inflate(R.layout.category_group_icon, row, false) as BubbleTextView
++                icon.reset()
++                icon.applyFromApplicationInfo(app)
++                icon.setOnClickListener(closingAfter(source.iconClickListener()))
++                icon.setOnLongClickListener(source.iconLongClickListener())
++                icon.customActionsListener = source.customActionsListener()
++                row.addView(icon, LinearLayout.LayoutParams(cellWidth, cellHeight))
++            }
++            rows.addView(row, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
++        }
++    }
++
++    /** Runs [click] (it starts the app) and then closes the group without an animation. */
++    private fun closingAfter(click: OnClickListener?) =
++        OnClickListener { v ->
++            click?.onClick(v)
++            close(false)
++        }
++
++    private fun startOpen() {
++        mIsOpen = true
++        viewTreeObserver.addOnPreDrawListener(
++            object : ViewTreeObserver.OnPreDrawListener {
++                override fun onPreDraw(): Boolean {
++                    viewTreeObserver.removeOnPreDrawListener(this)
++                    apply(0f)
++                    animateTo(1f) {}
++                    return true
++                }
++            }
++        )
++    }
++
++    /** [p] is 0 when the card is the tapped container and 1 when it is fully open. */
++    private fun apply(p: Float) {
++        progress = p
++        scrim.alpha = (SCRIM_ALPHA * p).toInt()
++        val cardWidth = card.width.toFloat()
++        val cardHeight = card.height.toFloat()
++        if (cardWidth > 0f && cardHeight > 0f) {
++            card.pivotX = cardWidth / 2f
++            card.pivotY = cardHeight / 2f
++            card.scaleX = lerp(origin.width() / cardWidth, 1f, p)
++            card.scaleY = lerp(origin.height() / cardHeight, 1f, p)
++            card.translationX = lerp(origin.exactCenterX() - (card.left + cardWidth / 2f), 0f, p)
++            card.translationY = lerp(origin.exactCenterY() - (card.top + cardHeight / 2f), 0f, p)
++        }
++        card.alpha = min(1f, p * 3f)
++        val content = ((p - 0.3f) / 0.7f).coerceIn(0f, 1f)
++        titleView.alpha = content
++        scroll.alpha = content
++        val radius = resources.getDimension(R.dimen.app_group_sheet_blur) * p
++        backdrop?.setRenderEffect(
++            if (radius < 1f) null
++            else RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
++        )
++    }
++
++    private fun animateTo(target: Float, onDone: () -> Unit) {
++        animator?.cancel()
++        val a = ValueAnimator.ofFloat(progress, target)
++        a.duration = resources.getInteger(R.integer.config_materialFolderExpandDuration).toLong()
++        a.interpolator = AnimationUtils.loadInterpolator(context, R.interpolator.standard_interpolator)
++        a.addUpdateListener { apply(it.animatedValue as Float) }
++        a.addListener(
++            object : AnimatorListenerAdapter() {
++                private var cancelled = false
++
++                override fun onAnimationCancel(animation: Animator) {
++                    cancelled = true
++                }
++
++                override fun onAnimationEnd(animation: Animator) {
++                    if (!cancelled) onDone()
++                }
++            }
++        )
++        animator = a
++        a.start()
++    }
++
++    override fun handleClose(animate: Boolean) {
++        mIsOpen = false
++        if (animate) {
++            animateTo(0f) { finish() }
++        } else {
++            animator?.cancel()
++            finish()
++        }
++    }
++
++    private fun finish() {
++        backdrop?.setRenderEffect(null)
++        (parent as? ViewGroup)?.removeView(this)
++    }
++
++    override fun isOfType(type: Int): Boolean = (type and TYPE_CATEGORY_GROUP) != 0
++
++    override fun getAccessibilityTarget(): Pair<View, String>? =
++        Pair.create(card, titleView.text.toString())
++
++    override fun onControllerInterceptTouchEvent(ev: MotionEvent): Boolean {
++        if (ev.action == MotionEvent.ACTION_DOWN) {
++            val dragLayer = parent as? BaseDragLayer<*> ?: return false
++            if (!dragLayer.isEventOverView(card, ev)) {
++                close(true)
++                return true
++            }
++        }
++        return false
++    }
++
++    /** Caps the card at 80 % of the display height; the apps scroll inside the card. */
++    private class CardLayout(context: Context) : LinearLayout(context) {
++        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
++            val max = (resources.displayMetrics.heightPixels * MAX_HEIGHT_FRACTION).toInt()
++            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(max, MeasureSpec.AT_MOST))
++        }
++    }
++
++    companion object {
++        private const val COLUMNS = 3
++        private const val SCRIM_ALPHA = 115 // about 45 %
++        private const val MAX_HEIGHT_FRACTION = 0.8f
++
++        private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
++
++        private fun withAlpha(color: Int, alpha: Int) = (color and 0x00FFFFFF) or (alpha shl 24)
++
++        /** Opens the group of [item] over the drawer that holds [source]. */
++        @JvmStatic
++        fun show(source: CategoryGroupView, item: CategoryGroupItem) {
++            val ancestors = generateSequence<ViewParent>(source.parent) { (it as? View)?.parent }
++            val dragLayer = ancestors.filterIsInstance<BaseDragLayer<*>>().firstOrNull() ?: return
++            val sheet = CategoryGroupSheet(source.context, null)
++            sheet.bind(source, item, ancestors.filterIsInstance<ActivityAllAppsContainerView<*>>().firstOrNull())
++            dragLayer.getDescendantRectRelativeToSelf(source.blockView, sheet.origin)
++            dragLayer.addView(
++                sheet,
++                BaseDragLayer.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
++                    ignoreInsets = true
++                },
++            )
++            sheet.startOpen()
++        }
++    }
++}
+diff --git a/src/com/android/launcher3/allapps/category/CategoryGroupView.kt b/src/com/android/launcher3/allapps/category/CategoryGroupView.kt
+new file mode 100644
+index 0000000000..d77bd16be5
+--- /dev/null
++++ b/src/com/android/launcher3/allapps/category/CategoryGroupView.kt
+@@ -0,0 +1,148 @@
++/*
++ * Copyright (C) 2026 SovereignOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.launcher3.allapps.category
++
++import android.content.Context
++import android.graphics.Canvas
++import android.graphics.Paint
++import android.graphics.Typeface
++import android.text.TextUtils
++import android.util.AttributeSet
++import android.util.TypedValue
++import android.view.Gravity
++import android.view.View
++import android.widget.LinearLayout
++import android.widget.TextView
++import com.android.launcher3.R
++import com.android.launcher3.icons.BitmapInfo
++import com.android.launcher3.icons.FastBitmapDrawable
++import com.android.launcher3.model.data.AppInfo
++import com.android.launcher3.touch.CustomActionsListener
++import com.android.launcher3.util.Themes
++
++/**
++ * One group in the app drawer: a rounded tonal container with the first four apps of the group as
++ * themed icons, and the group name under it. A tap opens the group in a [CategoryGroupSheet].
++ */
++class CategoryGroupView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) :
++    LinearLayout(context, attrs) {
++
++    private val block = Block(context)
++    private val label = TextView(context)
++    private var item: CategoryGroupItem? = null
++    private var iconClick: OnClickListener? = null
++    private var iconLongClick: OnLongClickListener? = null
++    private var customActions: CustomActionsListener? = null
++
++    /** The rounded container, used as the origin of the open animation. */
++    val blockView: View
++        get() = block
++
++    init {
++        orientation = VERTICAL
++        val margin = resources.getDimensionPixelSize(R.dimen.app_group_block_margin)
++        addView(
++            block,
++            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
++                setMargins(margin, 0, margin, 0)
++            },
++        )
++        label.apply {
++            gravity = Gravity.CENTER_HORIZONTAL
++            isSingleLine = true
++            ellipsize = TextUtils.TruncateAt.END
++            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
++            setTextSize(
++                TypedValue.COMPLEX_UNIT_PX,
++                resources.getDimension(R.dimen.app_group_label_text_size),
++            )
++            setTextColor(Themes.getAttrColor(context, android.R.attr.textColorPrimary))
++            setPadding(0, resources.getDimensionPixelSize(R.dimen.app_group_label_padding_top), 0, 0)
++        }
++        addView(label, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
++        isClickable = true
++        isFocusable = true
++        setOnClickListener { item?.let { CategoryGroupSheet.show(this, it) } }
++    }
++
++    fun bind(
++        item: CategoryGroupItem,
++        iconClick: OnClickListener?,
++        iconLongClick: OnLongClickListener?,
++        customActions: CustomActionsListener?,
++    ) {
++        this.item = item
++        this.iconClick = iconClick
++        this.iconLongClick = iconLongClick
++        this.customActions = customActions
++        label.text = item.title
++        contentDescription = item.title
++        block.setApps(item.apps)
++    }
++
++    internal fun iconClickListener() = iconClick
++
++    internal fun iconLongClickListener() = iconLongClick
++
++    internal fun customActionsListener() = customActions
++
++    private class Block(context: Context) : View(context) {
++        private val paint =
++            Paint(Paint.ANTI_ALIAS_FLAG).apply {
++                color = Themes.getAttrColor(context, R.attr.groupHighlight)
++            }
++        private val radius =
++            resources.getDimension(R.dimen.all_apps_recycler_view_decorator_group_radius)
++        private val padding = resources.getDimensionPixelSize(R.dimen.app_group_block_padding)
++        private val gap = resources.getDimensionPixelSize(R.dimen.app_group_block_gap)
++        private var icons: List<FastBitmapDrawable> = emptyList()
++
++        fun setApps(apps: List<AppInfo>) {
++            icons = apps.take(ICONS_SHOWN).map { it.newIcon(context, BitmapInfo.FLAG_THEMED) }
++            layoutIcons()
++            invalidate()
++        }
++
++        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
++            val size = MeasureSpec.getSize(widthMeasureSpec)
++            setMeasuredDimension(size, size)
++        }
++
++        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
++            super.onSizeChanged(w, h, oldw, oldh)
++            layoutIcons()
++        }
++
++        private fun layoutIcons() {
++            val cell = (width - 2 * padding - gap) / 2
++            icons.forEachIndexed { i, icon ->
++                val left = padding + (i % 2) * (cell + gap)
++                val top = padding + (i / 2) * (cell + gap)
++                icon.setBounds(left, top, left + cell, top + cell)
++            }
++        }
++
++        override fun onDraw(canvas: Canvas) {
++            canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, paint)
++            icons.forEach { it.draw(canvas) }
++        }
++
++        private companion object {
++            const val ICONS_SHOWN = 4
++        }
++    }
++}
+diff --git a/src/com/android/launcher3/allapps/category/CategoryGroups.kt b/src/com/android/launcher3/allapps/category/CategoryGroups.kt
+new file mode 100644
+index 0000000000..8d5f0a9ae6
+--- /dev/null
++++ b/src/com/android/launcher3/allapps/category/CategoryGroups.kt
+@@ -0,0 +1,72 @@
++/*
++ * Copyright (C) 2026 SovereignOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.launcher3.allapps.category
++
++import android.content.Context
++import com.android.launcher3.R
++import com.android.launcher3.allapps.BaseAllAppsAdapter
++import com.android.launcher3.model.data.AppInfo
++import java.text.Collator
++
++/** The adapter item of one drawer group: a container with the group's apps. */
++class CategoryGroupItem(val group: AppGroup, val title: String, val apps: List<AppInfo>) :
++    BaseAllAppsAdapter.AdapterItem(BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_GROUP) {
++
++    override fun isSameAs(other: BaseAllAppsAdapter.AdapterItem?): Boolean =
++        other is CategoryGroupItem && other.group == group
++
++    override fun isContentSame(other: BaseAllAppsAdapter.AdapterItem): Boolean =
++        other is CategoryGroupItem &&
++            other.title == title &&
++            other.apps.size == apps.size &&
++            apps.indices.all {
++                apps[it].componentName == other.apps[it].componentName &&
++                    apps[it].user == other.apps[it].user
++            }
++}
++
++/** Builds the drawer group items: grouping, localized titles, cards sorted by title, Other last. */
++object CategoryGroups {
++
++    @JvmStatic
++    fun titleRes(group: AppGroup): Int =
++        when (group) {
++            AppGroup.GAMES -> R.string.topic_category_games
++            AppGroup.MEDIA -> R.string.app_group_media
++            AppGroup.SOCIAL -> R.string.topic_category_social
++            AppGroup.NEWS -> R.string.topic_category_news
++            AppGroup.MAPS -> R.string.topic_category_maps
++            AppGroup.PRODUCTIVITY -> R.string.topic_category_productivity
++            AppGroup.ACCESSIBILITY -> R.string.topic_category_accessibility
++            AppGroup.OTHER -> R.string.topic_category_other
++        }
++
++    @JvmStatic
++    fun build(
++        context: Context,
++        apps: List<AppInfo>,
++        categoryOf: (AppInfo) -> Int,
++    ): List<CategoryGroupItem> {
++        val collator = Collator.getInstance(context.resources.configuration.locales[0])
++        return AppGrouper.group(apps, categoryOf) { it.targetPackage.orEmpty() }
++            .map { CategoryGroupItem(it.group, context.getString(titleRes(it.group)), it.apps) }
++            .sortedWith(
++                compareBy<CategoryGroupItem> { it.group == AppGroup.OTHER }
++                    .thenComparator { a, b -> collator.compare(a.title, b.title) }
++            )
++    }
++}
+-- 
+2.39.5
+
