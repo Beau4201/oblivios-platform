@@ -8,8 +8,8 @@ manifest tag `2026091900`, read on 2026-10-06).
 
 The patches were authored in a disposable local git repository that held only
 the touched upstream files, then landed on the build server with `git am` as
-branch `sovereignos-app-drawer` of `packages/apps/Launcher3` (`0004` was added
-on top after the first device round; no history was rewritten). The files here
+branch `sovereignos-app-drawer` of `packages/apps/Launcher3` (`0004` and `0005` were
+added on top after device rounds; no history was rewritten). The files here
 were regenerated with `git format-patch` from that landed history, not copied
 from the local commits (`git am` gives different commit hashes). The author is
 the one recorded in each patch; the committer on the server is the generic
@@ -23,6 +23,7 @@ the one recorded in each patch; the committer on the server is the generic
 | `0002` | group apps by category | new `allapps/category/AppGrouper.kt`, new `AppGrouperTest.kt` | The drawer has no grouping upstream; `enabled_folders_in_all_apps` is declared but unused. Pure logic with seven unit tests. |
 | `0003` | show the app drawer as category groups | new `CategoryGroups.kt`, `CategoryGroupView.kt`, `CategoryGroupSheet.kt`, `res/layout/category_group_icon.xml`, `res/values/sovereignos_app_drawer.xml`; edits to `AbstractFloatingView.java` (5 lines), `BaseAllAppsAdapter.java` (18), `AlphabeticalAppsList.java` (58), `AllAppsGridAdapter.java` (6) | Same reason as `0002`: group items, the container view, the opened card, the grouped list and two-per-row spans. |
 | `0004` | fix the drawer groups after the first device round | `CategoryGroupView.kt`, `CategoryGroupSheet.kt`, `res/values/sovereignos_app_drawer.xml` | Fixes in code of `0003`: space above each container (the drawer clips its list below the first row), an app starts from its icon in the open card instead of after the card closed, the card icons use the stock folder icon size (66 dp, not 88 dp), the grip of the design. |
+| `0005` | rebind the drawer groups on every update | `CategoryGroups.kt` | A group draws its icons itself and compared equal when only an icon changed, so it kept the unthemed, default-shape icons of its first binding. Stock icon items always rebind (`AdapterItem.isContentSame`); a group now does too. |
 
 The constants and the one behaviour change in upstream files carry a `sovereignos:` comment saying why.
 
