@@ -1,0 +1,61 @@
+From 505c19b23fa416bcbc5de315510e7f38b0f4b798 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Tue, 6 Oct 2026 19:48:55 +0200
+Subject: [PATCH] launcher: load the themed icon of a drawer group in the
+ background
+
+A group draws its icons itself. An app whose themed icon is not cached yet, such as a generated one for an app without a monochrome icon, kept its own colours there while the opened card and search showed it themed. The group now asks the icon cache for it, once per binding, as BubbleTextView and the folder preview do.
+---
+ .../allapps/category/CategoryGroupView.kt     | 26 +++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/src/com/android/launcher3/allapps/category/CategoryGroupView.kt b/src/com/android/launcher3/allapps/category/CategoryGroupView.kt
+index b365e21aee..1f2f3eee4f 100644
+--- a/src/com/android/launcher3/allapps/category/CategoryGroupView.kt
++++ b/src/com/android/launcher3/allapps/category/CategoryGroupView.kt
+@@ -27,6 +27,8 @@ import android.view.Gravity
+ import android.view.View
+ import android.widget.LinearLayout
+ import android.widget.TextView
++import com.android.launcher3.LauncherAppState
++import com.android.launcher3.LauncherSettings.Favorites
+ import com.android.launcher3.R
+ import com.android.launcher3.icons.BitmapInfo
+ import com.android.launcher3.icons.FastBitmapDrawable
+@@ -112,11 +114,31 @@ class CategoryGroupView @JvmOverloads constructor(context: Context, attrs: Attri
+         private val padding = resources.getDimensionPixelSize(R.dimen.app_group_block_padding)
+         private val gap = resources.getDimensionPixelSize(R.dimen.app_group_block_gap)
+         private var icons: List<FastBitmapDrawable> = emptyList()
++        private var bound: List<AppInfo> = emptyList()
+ 
+-        fun setApps(apps: List<AppInfo>) {
+-            icons = apps.take(ICONS_SHOWN).map { it.newIcon(context, BitmapInfo.FLAG_THEMED) }
++        fun setApps(apps: List<AppInfo>, loadHighRes: Boolean = true) {
++            bound = apps
++            val current = apps.take(ICONS_SHOWN)
++            icons = current.map { it.newIcon(context, BitmapInfo.FLAG_THEMED) }
+             layoutIcons()
+             invalidate()
++            // An app whose themed icon is not cached yet (a generated one, for an app without a
++            // monochrome icon) is loaded in the background, as BubbleTextView.verifyHighRes and the
++            // folder preview do, and the icons are made again when it arrives. Once per binding, so
++            // a cache that cannot give the icon does not start requests in a loop.
++            if (!loadHighRes) return
++            for (app in current) {
++                if (app.matchingLookupFlag.isVisuallyLessThan(Favorites.DESKTOP_ICON_FLAG)) {
++                    LauncherAppState.getInstance(context)
++                        .iconCache
++                        .updateIconInBackground(
++                            context.mainExecutor,
++                            { if (bound === apps) setApps(apps, loadHighRes = false) },
++                            app,
++                            Favorites.DESKTOP_ICON_FLAG,
++                        )
++                }
++            }
+         }
+ 
+         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+-- 
+2.39.5
+

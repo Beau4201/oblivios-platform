@@ -8,7 +8,7 @@ manifest tag `2026091900`, read on 2026-10-06).
 
 The patches were authored in a disposable local git repository that held only
 the touched upstream files, then landed on the build server with `git am` as
-branch `sovereignos-app-drawer` of `packages/apps/Launcher3` (`0004` to `0006` were
+branch `sovereignos-app-drawer` of `packages/apps/Launcher3` (`0004` to `0007` were
 added on top after device rounds; no history was rewritten). The files here
 were regenerated with `git format-patch` from that landed history, not copied
 from the local commits (`git am` gives different commit hashes). The author is
@@ -25,6 +25,7 @@ the one recorded in each patch; the committer on the server is the generic
 | `0004` | fix the drawer groups after the first device round | `CategoryGroupView.kt`, `CategoryGroupSheet.kt`, `res/values/sovereignos_app_drawer.xml` | Fixes in code of `0003`: space above each container (the drawer clips its list below the first row), an app starts from its icon in the open card instead of after the card closed, the card icons use the stock folder icon size (66 dp, not 88 dp), the grip of the design. |
 | `0005` | rebind the drawer groups on every update | `CategoryGroups.kt` | A group draws its icons itself and compared equal when only an icon changed, so it kept the unthemed, default-shape icons of its first binding. Stock icon items always rebind (`AdapterItem.isContentSame`); a group now does too. |
 | `0006` | group every preinstalled app in System | `AppGrouper.kt`, `AppGrouperTest.kt`, `CategoryGroups.kt`, `res/values/sovereignos_app_drawer.xml` | Owner request (ADR-142): every preinstalled app (`AppInfo.runtimeStatusFlags & FLAG_SYSTEM_YES`) is in the System group whatever its category; the three fixed per-package groups of `0002` are removed. Nine unit tests, eight mutations. |
+| `0007` | load the themed icon of a drawer group in the background | `CategoryGroupView.kt` | A group draws its icons itself, so an app whose themed icon is not cached yet (a generated one, for an app without a monochrome icon) kept its own colours there. The group asks the icon cache for it, once per binding, as `BubbleTextView.verifyHighRes` and the folder preview (`PreviewItemManager`) do. |
 
 The constants and the one behaviour change in upstream files carry a `sovereignos:` comment saying why.
 
