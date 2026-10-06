@@ -1,0 +1,41 @@
+From a71e6514147b22be85332f4c237bdfa147a87435 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Tue, 6 Oct 2026 21:20:38 +0200
+Subject: [PATCH] launcher: fix the opened group in the dark theme and with a
+ large font
+
+The card took its surface from allAppsSurfaceHighest, which stayed light in the dark theme while the text turned light, so title and labels were hard to read. It now uses the surface of the group containers. The icon cells had a fixed height, so a large font let a label touch the icon of the next row; a cell is now at least that height and grows with its label.
+---
+ .../launcher3/allapps/category/CategoryGroupSheet.kt     | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt b/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
+index c9376c2b18..1d64607fd0 100644
+--- a/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
++++ b/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
+@@ -71,7 +71,9 @@ class CategoryGroupSheet(context: Context, attrs: AttributeSet?) :
+         gravity = Gravity.CENTER
+         background = scrim
+         val res = resources
+-        val surface = Themes.getAttrColor(context, R.attr.allAppsSurfaceHighest)
++        // The same surface colour as the group containers: it follows the day and night theme, and
++        // with it the text colour. allAppsSurfaceHighest stayed light in the dark theme.
++        val surface = Themes.getAttrColor(context, R.attr.groupHighlight)
+         val text = Themes.getAttrColor(context, android.R.attr.textColorPrimary)
+         val pad = res.getDimensionPixelSize(R.dimen.app_group_sheet_padding)
+         card.id = R.id.category_group_card
+@@ -143,7 +145,10 @@ class CategoryGroupSheet(context: Context, attrs: AttributeSet?) :
+                 icon.setOnClickListener(source.iconClickListener())
+                 icon.setOnLongClickListener(source.iconLongClickListener())
+                 icon.customActionsListener = source.customActionsListener()
+-                row.addView(icon, LinearLayout.LayoutParams(cellWidth, cellHeight))
++                // At least the cell height, taller when a larger font makes the label taller, so a
++                // label never touches the icon of the next row.
++                icon.minHeight = cellHeight
++                row.addView(icon, LinearLayout.LayoutParams(cellWidth, LayoutParams.WRAP_CONTENT))
+             }
+             rows.addView(row, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+         }
+-- 
+2.39.5
+
