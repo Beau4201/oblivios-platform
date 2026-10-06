@@ -1,0 +1,65 @@
+From 3b16da01aeee29f5f5498db14d184ab36b771d2b Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 7 Oct 2026 01:22:02 +0200
+Subject: [PATCH] launcher: size the cells of the opened group by their label
+
+The wrap_content cells of the previous change got a huge top padding, because BubbleTextView derives it from the height it is given when centerVertically is set. The cells no longer use centerVertically, so each is as tall as its icon and label, with space below.
+---
+ res/layout/category_group_icon.xml                       | 3 +--
+ res/values/sovereignos_app_drawer.xml                    | 1 -
+ .../launcher3/allapps/category/CategoryGroupSheet.kt     | 9 +++++----
+ 3 files changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/res/layout/category_group_icon.xml b/res/layout/category_group_icon.xml
+index 1e8e11a1cf..27e0d62a38 100644
+--- a/res/layout/category_group_icon.xml
++++ b/res/layout/category_group_icon.xml
+@@ -5,5 +5,4 @@
+     style="@style/BaseIcon.AllApps"
+     android:id="@+id/icon"
+     launcher:iconDisplay="all_apps"
+-    launcher:iconSizeOverride="@dimen/app_group_sheet_icon_size"
+-    launcher:centerVertically="true" />
++    launcher:iconSizeOverride="@dimen/app_group_sheet_icon_size" />
+diff --git a/res/values/sovereignos_app_drawer.xml b/res/values/sovereignos_app_drawer.xml
+index 6ae66436cb..0a61c44657 100644
+--- a/res/values/sovereignos_app_drawer.xml
++++ b/res/values/sovereignos_app_drawer.xml
+@@ -27,7 +27,6 @@
+     <dimen name="app_group_sheet_max_width">420dp</dimen>
+     <dimen name="app_group_sheet_title_size">30sp</dimen>
+     <dimen name="app_group_sheet_title_padding">12dp</dimen>
+-    <dimen name="app_group_sheet_cell_height">100dp</dimen>
+     <!-- The size of the icons in a stock folder (folderChildIconSizePx, 65.9 dp on lynx). -->
+     <dimen name="app_group_sheet_icon_size">66dp</dimen>
+     <dimen name="app_group_sheet_grip_width">36dp</dimen>
+diff --git a/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt b/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
+index 1d64607fd0..b0c4559a59 100644
+--- a/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
++++ b/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
+@@ -133,7 +133,7 @@ class CategoryGroupSheet(context: Context, attrs: AttributeSet?) :
+         titleView.text = item.title
+         val cardWidth = card.layoutParams.width - card.paddingLeft - card.paddingRight
+         val cellWidth = cardWidth / COLUMNS
+-        val cellHeight = resources.getDimensionPixelSize(R.dimen.app_group_sheet_cell_height)
++        val gap = resources.getDimensionPixelSize(R.dimen.app_group_block_gap)
+         val inflater = LayoutInflater.from(context)
+         item.apps.chunked(COLUMNS).forEach { chunk ->
+             val row = LinearLayout(context)
+@@ -145,9 +145,10 @@ class CategoryGroupSheet(context: Context, attrs: AttributeSet?) :
+                 icon.setOnClickListener(source.iconClickListener())
+                 icon.setOnLongClickListener(source.iconLongClickListener())
+                 icon.customActionsListener = source.customActionsListener()
+-                // At least the cell height, taller when a larger font makes the label taller, so a
+-                // label never touches the icon of the next row.
+-                icon.minHeight = cellHeight
++                // The cell is as tall as its icon and label, so a larger font makes it taller, with
++                // space below so a label never touches the icon of the next row. No centerVertically
++                // in the layout: BubbleTextView would size its padding from the height it is given.
++                icon.setPadding(icon.paddingLeft, 0, icon.paddingRight, gap)
+                 row.addView(icon, LinearLayout.LayoutParams(cellWidth, LayoutParams.WRAP_CONTENT))
+             }
+             rows.addView(row, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+-- 
+2.39.5
+
