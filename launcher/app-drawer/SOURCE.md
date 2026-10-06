@@ -8,7 +8,7 @@ manifest tag `2026091900`, read on 2026-10-06).
 
 The patches were authored in a disposable local git repository that held only
 the touched upstream files, then landed on the build server with `git am` as
-branch `sovereignos-app-drawer` of `packages/apps/Launcher3` (`0004` to `0009` were
+branch `sovereignos-app-drawer` of `packages/apps/Launcher3` (`0004` to `0010` were
 added on top after device rounds; no history was rewritten). The files here
 were regenerated with `git format-patch` from that landed history, not copied
 from the local commits (`git am` gives different commit hashes). The author is
@@ -28,6 +28,7 @@ the one recorded in each patch; the committer on the server is the generic
 | `0007` | load the themed icon of a drawer group in the background | `CategoryGroupView.kt` | A group draws its icons itself, so an app whose themed icon is not cached yet (a generated one, for an app without a monochrome icon) kept its own colours there. The group asks the icon cache for it, once per binding, as `BubbleTextView.verifyHighRes` and the folder preview (`PreviewItemManager`) do. |
 | `0008` | fix the opened group in the dark theme and with a large font | `CategoryGroupSheet.kt` | Found in the device round of 2026-10-06: the card surface (`allAppsSurfaceHighest`) stayed light in the dark theme while the text turned light; it now uses the surface of the group containers (`groupHighlight`). The icon cells had a fixed height, so with a font scale of 1.5 a label touched the next row; a cell is now at least that height and grows with its label. |
 | `0009` | size the cells of the opened group by their label | `CategoryGroupSheet.kt`, `category_group_icon.xml`, `sovereignos_app_drawer.xml` | `BubbleTextView.onMeasure` sizes its top padding from the height it is given when `centerVertically` is set, so a `wrap_content` cell got a huge padding (measured: cells of 950, 475 and 229 px). The layout no longer sets `centerVertically`; a cell is as tall as its icon and label, with 12 dp below. The fixed cell height dimension is removed. |
+| `0010` | fix the drawer groups after a code review | `AppGrouper.kt`, `AppGrouperTest.kt`, `CategoryGroups.kt`, `CategoryGroupSheet.kt`, `AllAppsGridAdapter.java` | Review of the final sources by an independent reviewer, each finding checked against upstream before it was taken: a group counts as a row and an item for accessibility (the row count was negative) and has two columns; the opened card removes its pre-draw listener from the observer it was added to and does not reopen a closed card (a stale listener could re-blur the drawer); the card ignores touches while it opens and closes (a second tap on the container launched an app); it announces itself, clears its blur when removed in any way and is never opened twice; the category of a system app is no longer read (a binder call per app and update). Not taken: a cached group row height (upstream caches the height of laid-out children), a fast scroller dereference (none found), the wider theming of the all-apps icons (intended, ADR-141). |
 
 The constants and the one behaviour change in upstream files carry a `sovereignos:` comment saying why.
 
@@ -44,8 +45,8 @@ so no upstream resource file changes.
 ## Verification so far
 
 - Seven unit tests of `AppGrouper`, run on the build server with
-  `tools/build-vm/test-app-grouper.sh` of `sovereignos-foundation`; after `0006`
-  nine tests, and eight mutations of the logic each fail them.
+  `tools/build-vm/test-app-grouper.sh` of `sovereignos-foundation`; after `0010`
+  ten tests, and nine mutations of the logic each fail them.
 - Type-check of the whole change against the tree's compiled Launcher3 classes
   with `tools/build-vm/launcher-drawer-typecheck/typecheck.sh`; a deliberately
   broken call fails it. It does not cover `BubbleTextView.java`, resource
