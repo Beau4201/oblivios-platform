@@ -8,9 +8,10 @@ in `sovereignos-foundation`, with the visual reference
 
 ## Layout
 
-- `patches/packages-apps-launcher3/` — three patches on Launcher3: `0001` themed
+- `patches/packages-apps-launcher3/` — four patches on Launcher3: `0001` themed
   icons in the drawer, `0002` the grouping logic and its unit test, `0003` the
-  group items, container view, opened card and adapter wiring.
+  group items, container view, opened card and adapter wiring, `0004` the fixes
+  after the first device round.
 - `SOURCE.md` — base commit, what each patch changes and why it diverges from
   upstream, rebase notes and the verification so far.
 
@@ -22,7 +23,7 @@ On the pinned base named in `SOURCE.md`:
 git -C packages/apps/Launcher3 am <path to this directory>/patches/packages-apps-launcher3/*.patch
 ```
 
-No patch of this package is applied without ADR-141, which names all three.
+No patch of this package is applied without ADR-141, which names all four.
 Never `git am` onto a build-server branch while a build runs.
 
 ## Scope

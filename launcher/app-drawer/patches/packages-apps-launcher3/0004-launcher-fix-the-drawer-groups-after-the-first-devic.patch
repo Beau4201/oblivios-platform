@@ -1,0 +1,104 @@
+From 5a8c4bd272039d945e1e88baf5145d5d771f8429 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Tue, 6 Oct 2026 18:33:55 +0200
+Subject: [PATCH] launcher: fix the drawer groups after the first device round
+
+Add space above each container so the first row clears the clip at the top of the list and a label no longer touches the next container. Start an app from its icon in the open card instead of closing the card first. Use the stock folder icon size in the card and add the grip of the design.
+---
+ res/values/sovereignos_app_drawer.xml         |  8 +++--
+ .../allapps/category/CategoryGroupSheet.kt    | 31 ++++++++++++++-----
+ .../allapps/category/CategoryGroupView.kt     |  4 ++-
+ 3 files changed, 33 insertions(+), 10 deletions(-)
+
+diff --git a/res/values/sovereignos_app_drawer.xml b/res/values/sovereignos_app_drawer.xml
+index a2e9a4d229..9f0baf4ca0 100644
+--- a/res/values/sovereignos_app_drawer.xml
++++ b/res/values/sovereignos_app_drawer.xml
+@@ -24,7 +24,11 @@
+     <dimen name="app_group_sheet_max_width">420dp</dimen>
+     <dimen name="app_group_sheet_title_size">30sp</dimen>
+     <dimen name="app_group_sheet_title_padding">12dp</dimen>
+-    <dimen name="app_group_sheet_cell_height">132dp</dimen>
+-    <dimen name="app_group_sheet_icon_size">88dp</dimen>
++    <dimen name="app_group_sheet_cell_height">100dp</dimen>
++    <!-- The size of the icons in a stock folder (folderChildIconSizePx, 65.9 dp on lynx). -->
++    <dimen name="app_group_sheet_icon_size">66dp</dimen>
++    <dimen name="app_group_sheet_grip_width">36dp</dimen>
++    <dimen name="app_group_sheet_grip_height">4dp</dimen>
++    <dimen name="app_group_sheet_grip_margin">4dp</dimen>
+     <dimen name="app_group_sheet_blur">22dp</dimen>
+ </resources>
+diff --git a/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt b/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
+index a740a3b055..c9376c2b18 100644
+--- a/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
++++ b/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
+@@ -98,6 +98,23 @@ class CategoryGroupSheet(context: Context, attrs: AttributeSet?) :
+         rows.orientation = LinearLayout.VERTICAL
+         scroll.isVerticalScrollBarEnabled = false
+         scroll.addView(rows)
++        card.addView(
++            View(context).apply {
++                background =
++                    GradientDrawable().apply {
++                        cornerRadius = res.getDimension(R.dimen.app_group_sheet_grip_height) / 2f
++                        setColor(withAlpha(text, 0x66))
++                    }
++            },
++            LinearLayout.LayoutParams(
++                    res.getDimensionPixelSize(R.dimen.app_group_sheet_grip_width),
++                    res.getDimensionPixelSize(R.dimen.app_group_sheet_grip_height),
++                )
++                .apply {
++                    gravity = Gravity.CENTER_HORIZONTAL
++                    topMargin = res.getDimensionPixelSize(R.dimen.app_group_sheet_grip_margin)
++                },
++        )
+         card.addView(titleView, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+         card.addView(scroll, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+         val metrics = res.displayMetrics
+@@ -123,7 +140,7 @@ class CategoryGroupSheet(context: Context, attrs: AttributeSet?) :
+                 val icon = inflater.inflate(R.layout.category_group_icon, row, false) as BubbleTextView
+                 icon.reset()
+                 icon.applyFromApplicationInfo(app)
+-                icon.setOnClickListener(closingAfter(source.iconClickListener()))
++                icon.setOnClickListener(source.iconClickListener())
+                 icon.setOnLongClickListener(source.iconLongClickListener())
+                 icon.customActionsListener = source.customActionsListener()
+                 row.addView(icon, LinearLayout.LayoutParams(cellWidth, cellHeight))
+@@ -132,12 +149,12 @@ class CategoryGroupSheet(context: Context, attrs: AttributeSet?) :
+         }
+     }
+ 
+-    /** Runs [click] (it starts the app) and then closes the group without an animation. */
+-    private fun closingAfter(click: OnClickListener?) =
+-        OnClickListener { v ->
+-            click?.onClick(v)
+-            close(false)
+-        }
++    // The app opens from its icon in the card, so the card stays until the drawer is hidden.
++    // Posted: the window visibility callback runs while the parent still iterates its children.
++    override fun onWindowVisibilityChanged(visibility: Int) {
++        super.onWindowVisibilityChanged(visibility)
++        if (visibility != VISIBLE && mIsOpen) post { close(false) }
++    }
+ 
+     private fun startOpen() {
+         mIsOpen = true
+diff --git a/src/com/android/launcher3/allapps/category/CategoryGroupView.kt b/src/com/android/launcher3/allapps/category/CategoryGroupView.kt
+index d77bd16be5..b365e21aee 100644
+--- a/src/com/android/launcher3/allapps/category/CategoryGroupView.kt
++++ b/src/com/android/launcher3/allapps/category/CategoryGroupView.kt
+@@ -58,7 +58,9 @@ class CategoryGroupView @JvmOverloads constructor(context: Context, attrs: Attri
+         addView(
+             block,
+             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+-                setMargins(margin, 0, margin, 0)
++                // The drawer clips its list a little below the first row, as stock icons start lower
++                // inside their cells. The space above also separates a label from the next container.
++                setMargins(margin, 2 * margin, margin, 0)
+             },
+         )
+         label.apply {
+-- 
+2.39.5
+
