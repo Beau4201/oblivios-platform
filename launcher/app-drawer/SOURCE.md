@@ -42,16 +42,31 @@ constants, `onCreateViewHolder` and `onBindViewHolder` of `BaseAllAppsAdapter`;
 in new files, so only these lines can conflict. Resources are in one new file,
 so no upstream resource file changes.
 
-## Verification so far
+## Verification
 
-- Seven unit tests of `AppGrouper`, run on the build server with
-  `tools/build-vm/test-app-grouper.sh` of `sovereignos-foundation`; after `0010`
-  ten tests, and nine mutations of the logic each fail them.
+- Unit tests of `AppGrouper` (ten after `0010`), run on the build server with
+  `tools/build-vm/test-app-grouper.sh` of `sovereignos-foundation`; nine
+  mutations of the logic each fail them.
 - Type-check of the whole change against the tree's compiled Launcher3 classes
   with `tools/build-vm/launcher-drawer-typecheck/typecheck.sh`; a deliberately
   broken call fails it. It does not cover `BubbleTextView.java`, resource
-  compilation or the layout file.
-- The build and the device evidence are not recorded here yet.
+  compilation or the layout file, and it cannot see layout or colour defects.
+- Module build of `Launcher3QuickStep` and `lynx-cur-userdebug` image builds
+  (`OFFICIAL_BUILD=true`, ccache) of images `2026100217` to `2026100222`, each
+  with `tools/build-vm/check-required-packages.sh` printing `all required
+  packages present` and zero failed steps. The build logs
+  `lynx-p10-gate-*.log` and `lynx-p10-image-*.log` are on the build server. The
+  last image, `2026100222`, carries patches `0001` to `0010` (branch
+  `sovereignos-app-drawer`, `HEAD` `448d8cbc2a`).
+- Device evidence on `lynx` (2026-10-06 and 2026-10-07): rows `DRW-001` to
+  `DRW-015` of `docs/quality/validation-matrix.md` in `sovereignos-foundation`.
+  Not run: `stallion`, work tab and Private Space, TalkBack, a 5-column grid,
+  other locales and RTL, dragging an icon out of the card.
+- Defects found only on the device, each fixed by a later patch: containers kept
+  the apps' own colours (`0005`, `0007`), the card stayed light in the dark theme
+  and its cells overlapped at font scale 1.5 (`0008`), the first fix for that
+  produced cells of 950, 475 and 229 px (`0009`), a second tap started an app and
+  the accessibility counts were wrong (`0010`).
 
 ## Assets and access
 
