@@ -15,6 +15,7 @@ import android.os.Looper
 import android.text.InputFilter
 import android.text.InputType
 import android.widget.EditText
+import android.widget.FrameLayout
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.preference.ListPreference
@@ -510,9 +511,16 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             setText(currentName(AirPodsStateStore.state))
             setSelection(text.length)
         }
+        // A custom view of an AlertDialog gets no side inset of its own, while the title sits 24 dp from the edge: wrap
+        // the field in a container with the same inset so the field and its line start under the title.
+        val inset = (NAME_DIALOG_INSET_DP * resources.displayMetrics.density).toInt()
+        val field = FrameLayout(requireContext()).apply {
+            setPadding(inset, 0, inset, 0)
+            addView(input, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        }
         val dialog = AlertDialog.Builder(requireContext())
             .setTitle(R.string.airpods_name_dialog_title)
-            .setView(input)
+            .setView(field)
             .setPositiveButton(R.string.airpods_name_dialog_positive, null)
             .setNegativeButton(R.string.airpods_name_dialog_negative, null)
             .create()
@@ -577,6 +585,9 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
         const val BUTTONS = 4
         const val ICON_DP = 24
         const val NAME_INPUT_CHARS = 64
+
+        /** The side inset of an AlertDialog title and buttons; the name field gets the same. */
+        const val NAME_DIALOG_INSET_DP = 24
         const val TICK_MS = 1_000L
         const val MODE_GAP_DP = 16
         const val NO_SOUND_STATE = -1
