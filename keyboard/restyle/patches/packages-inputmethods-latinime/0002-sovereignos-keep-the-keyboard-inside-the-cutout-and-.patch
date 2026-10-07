@@ -1,0 +1,310 @@
+From fa9a291b255c0b67d76fae71a70e5dac55cfe3b7 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 7 Oct 2026 19:36:46 +0200
+Subject: [PATCH 2/2] sovereignos: keep the keyboard inside the cutout and
+ system-bar insets in landscape
+
+The platform lays the input method window out inside the display cutout, so in landscape an empty strip beside the keyboard shows the app instead of the keyboard background. The window is now laid out under the cutout, where the platform pads its content root by the cutout and system-bar insets, so the keys stay where they were. The keyboard background moves from the input view, which is as tall as the screen, to the window background and is drawn from the top of the keyboard down over the whole width. The insets and the touchable region are computed in window coordinates, and the key preview, the popup panels and the gesture trail are placed relative to the content view that holds them. The measurement is recorded in docs/research/keyboard-landscape-inset-investigation.md. ADR-146.
+---
+ .../keyboard/MainKeyboardView.java            |  5 +-
+ .../keyboard/MoreKeysKeyboardView.java        |  3 +-
+ .../latin/KeyboardWindowBackground.java       | 72 +++++++++++++++++++
+ .../android/inputmethod/latin/LatinIME.java   | 53 ++++++++++++--
+ .../latin/utils/WindowContentOrigin.java      | 50 +++++++++++++
+ 5 files changed, 173 insertions(+), 10 deletions(-)
+ create mode 100644 java/src/com/android/inputmethod/latin/KeyboardWindowBackground.java
+ create mode 100644 java/src/com/android/inputmethod/latin/utils/WindowContentOrigin.java
+
+diff --git a/java/src/com/android/inputmethod/keyboard/MainKeyboardView.java b/java/src/com/android/inputmethod/keyboard/MainKeyboardView.java
+index fc8744ec6..96bb1e2ae 100644
+--- a/java/src/com/android/inputmethod/keyboard/MainKeyboardView.java
++++ b/java/src/com/android/inputmethod/keyboard/MainKeyboardView.java
+@@ -56,6 +56,7 @@ import com.android.inputmethod.latin.RichInputMethodSubtype;
+ import com.android.inputmethod.latin.SuggestedWords;
+ import com.android.inputmethod.latin.common.Constants;
+ import com.android.inputmethod.latin.common.CoordinateUtils;
++import com.android.inputmethod.latin.utils.WindowContentOrigin;
+ import com.android.inputmethod.latin.settings.DebugSettings;
+ import com.android.inputmethod.latin.utils.LanguageOnSpacebarUtils;
+ import com.android.inputmethod.latin.utils.TypefaceUtils;
+@@ -442,7 +443,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
+     }
+ 
+     private void locatePreviewPlacerView() {
+-        getLocationInWindow(mOriginCoords);
++        WindowContentOrigin.locate(this, mOriginCoords);
+         mDrawingPreviewPlacerView.setKeyboardViewGeometry(mOriginCoords, getWidth(), getHeight());
+     }
+ 
+@@ -483,7 +484,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
+         }
+ 
+         locatePreviewPlacerView();
+-        getLocationInWindow(mOriginCoords);
++        WindowContentOrigin.locate(this, mOriginCoords);
+         mKeyPreviewChoreographer.placeAndShowKeyPreview(key, keyboard.mIconsSet, getKeyDrawParams(),
+                 getWidth(), mOriginCoords, mDrawingPreviewPlacerView, isHardwareAccelerated());
+     }
+diff --git a/java/src/com/android/inputmethod/keyboard/MoreKeysKeyboardView.java b/java/src/com/android/inputmethod/keyboard/MoreKeysKeyboardView.java
+index 3acc11b59..d247d876d 100644
+--- a/java/src/com/android/inputmethod/keyboard/MoreKeysKeyboardView.java
++++ b/java/src/com/android/inputmethod/keyboard/MoreKeysKeyboardView.java
+@@ -32,6 +32,7 @@ import com.android.inputmethod.keyboard.internal.KeyDrawParams;
+ import com.android.inputmethod.latin.R;
+ import com.android.inputmethod.latin.common.Constants;
+ import com.android.inputmethod.latin.common.CoordinateUtils;
++import com.android.inputmethod.latin.utils.WindowContentOrigin;
+ 
+ /**
+  * A view that renders a virtual {@link MoreKeysKeyboard}. It handles rendering of keys and
+@@ -130,7 +131,7 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel
+         final int y = pointY - container.getMeasuredHeight() + container.getPaddingBottom()
+                 + getPaddingBottom();
+ 
+-        parentView.getLocationInWindow(mCoordinates);
++        WindowContentOrigin.locate(parentView, mCoordinates);
+         // Ensure the horizontal position of the panel does not extend past the parentView edges.
+         final int maxX = parentView.getMeasuredWidth() - container.getMeasuredWidth();
+         final int panelX = Math.max(0, Math.min(maxX, x)) + CoordinateUtils.x(mCoordinates);
+diff --git a/java/src/com/android/inputmethod/latin/KeyboardWindowBackground.java b/java/src/com/android/inputmethod/latin/KeyboardWindowBackground.java
+new file mode 100644
+index 000000000..c3aed0938
+--- /dev/null
++++ b/java/src/com/android/inputmethod/latin/KeyboardWindowBackground.java
+@@ -0,0 +1,72 @@
++/*
++ * Copyright (C) 2026 The SovereignOS Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.inputmethod.latin;
++
++import android.graphics.Canvas;
++import android.graphics.ColorFilter;
++import android.graphics.PixelFormat;
++import android.graphics.Rect;
++import android.graphics.drawable.Drawable;
++
++/**
++ * The keyboard background as the background of the whole input method window. The window is as
++ * tall as the screen, so the background is drawn only from {@link #setTop} down, and over the whole
++ * window width, which includes the margin under the display cutout. Nothing is drawn until the
++ * first {@link #setTop}.
++ */
++final class KeyboardWindowBackground extends Drawable {
++    private final Drawable mBackground;
++    private int mTop = Integer.MAX_VALUE;
++
++    KeyboardWindowBackground(final Drawable background) {
++        mBackground = background;
++    }
++
++    /** Sets the top of the keyboard in window coordinates. */
++    void setTop(final int top) {
++        if (top != mTop) {
++            mTop = top;
++            invalidateSelf();
++        }
++    }
++
++    @Override
++    public void draw(final Canvas canvas) {
++        final Rect bounds = getBounds();
++        final int top = Math.max(bounds.top, mTop);
++        if (top >= bounds.bottom) {
++            return;
++        }
++        mBackground.setBounds(bounds.left, top, bounds.right, bounds.bottom);
++        mBackground.draw(canvas);
++    }
++
++    @Override
++    public void setAlpha(final int alpha) {
++        mBackground.setAlpha(alpha);
++    }
++
++    @Override
++    public void setColorFilter(final ColorFilter colorFilter) {
++        mBackground.setColorFilter(colorFilter);
++    }
++
++    @Override
++    public int getOpacity() {
++        return PixelFormat.TRANSLUCENT;
++    }
++}
+diff --git a/java/src/com/android/inputmethod/latin/LatinIME.java b/java/src/com/android/inputmethod/latin/LatinIME.java
+index 728e4883f..3eb3c2ab7 100644
+--- a/java/src/com/android/inputmethod/latin/LatinIME.java
++++ b/java/src/com/android/inputmethod/latin/LatinIME.java
+@@ -32,6 +32,7 @@ import android.content.IntentFilter;
+ import android.content.res.Configuration;
+ import android.content.res.Resources;
+ import android.graphics.Color;
++import android.graphics.drawable.Drawable;
+ import android.inputmethodservice.InputMethodService;
+ import android.media.AudioManager;
+ import android.os.Build;
+@@ -156,6 +157,9 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+ 
+     // TODO: Move these {@link View}s to {@link KeyboardSwitcher}.
+     private View mInputView;
++    // sovereignos: see setInputView and onComputeInsets.
++    private KeyboardWindowBackground mWindowBackground;
++    private final int[] mInputViewLocation = new int[2];
+     private InsetsUpdater mInsetsUpdater;
+     private SuggestionStripView mSuggestionStripView;
+ 
+@@ -870,6 +874,18 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+     public void setInputView(final View view) {
+         super.setInputView(view);
+         mInputView = view;
++        // sovereignos: the keyboard background of the input view (its theme style) becomes the
++        // window background, drawn from the top of the keyboard down over the whole window width,
++        // cutout margin included. The input view is as tall as the screen, so it cannot carry it.
++        final Drawable keyboardBackground = view.getBackground();
++        if (keyboardBackground != null) {
++            view.setBackground(null);
++            mWindowBackground = new KeyboardWindowBackground(keyboardBackground);
++            getWindow().getWindow().setBackgroundDrawable(mWindowBackground);
++        } else {
++            mWindowBackground = null;
++            getWindow().getWindow().setBackgroundDrawable(null);
++        }
+         mInsetsUpdater = ViewOutlineProviderCompatUtils.setInsetsOutlineProvider(view);
+         updateSoftInputWindowLayoutParameters();
+         mSuggestionStripView = (SuggestionStripView)view.findViewById(R.id.suggestion_strip_view);
+@@ -1296,8 +1312,13 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+         if (isImeSuppressedByHardwareKeyboard() && !visibleKeyboardView.isShown()) {
+             // If there is a hardware keyboard and a visible software keyboard view has been hidden,
+             // no visual element will be shown on the screen.
+-            outInsets.contentTopInsets = inputHeight;
+-            outInsets.visibleTopInsets = inputHeight;
++            if (mWindowBackground != null) {
++                // sovereignos: nothing is visible, so the window background is not drawn either.
++                mWindowBackground.setTop(Integer.MAX_VALUE);
++            }
++            mInputView.getLocationInWindow(mInputViewLocation);
++            outInsets.contentTopInsets = mInputViewLocation[1] + inputHeight;
++            outInsets.visibleTopInsets = mInputViewLocation[1] + inputHeight;
+             mInsetsUpdater.setInsets(outInsets);
+             return;
+         }
+@@ -1306,17 +1327,26 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+                 ? mSuggestionStripView.getHeight() : 0;
+         final int visibleTopY = inputHeight - visibleKeyboardView.getHeight() - suggestionsHeight;
+         mSuggestionStripView.setMoreSuggestionsHeight(visibleTopY);
++        // sovereignos: the platform pads the content root of the window by the cutout and system-bar
++        // insets, so the input view may not start at the window origin. The insets and the touchable
++        // region are in window coordinates, and the keyboard background covers the whole window width.
++        mInputView.getLocationInWindow(mInputViewLocation);
++        final int windowOffsetY = mInputViewLocation[1];
++        if (mWindowBackground != null) {
++            mWindowBackground.setTop(windowOffsetY + visibleTopY);
++        }
+         // Need to set expanded touchable region only if a keyboard view is being shown.
+         if (visibleKeyboardView.isShown()) {
+             final int touchLeft = 0;
+-            final int touchTop = mKeyboardSwitcher.isShowingMoreKeysPanel() ? 0 : visibleTopY;
+-            final int touchRight = visibleKeyboardView.getWidth();
+-            final int touchBottom = inputHeight;
++            final int touchTop = mKeyboardSwitcher.isShowingMoreKeysPanel()
++                    ? 0 : windowOffsetY + visibleTopY;
++            final int touchRight = mInputView.getRootView().getWidth();
++            final int touchBottom = windowOffsetY + inputHeight;
+             outInsets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_REGION;
+             outInsets.touchableRegion.set(touchLeft, touchTop, touchRight, touchBottom);
+         }
+-        outInsets.contentTopInsets = visibleTopY;
+-        outInsets.visibleTopInsets = visibleTopY;
++        outInsets.contentTopInsets = windowOffsetY + visibleTopY;
++        outInsets.visibleTopInsets = windowOffsetY + visibleTopY;
+         mInsetsUpdater.setInsets(outInsets);
+     }
+ 
+@@ -1382,6 +1412,15 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+         // See {@link InputMethodService#setinputView(View)} and
+         // {@link SoftInputWindow#updateWidthHeight(WindowManager.LayoutParams)}.
+         final Window window = getWindow().getWindow();
++        // sovereignos: lay the window out under the display cutout. Otherwise the platform keeps it
++        // inside the cutout safe area and an empty strip is left beside the keyboard in landscape.
++        final WindowManager.LayoutParams windowParams = window.getAttributes();
++        if (windowParams.layoutInDisplayCutoutMode
++                != WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS) {
++            windowParams.layoutInDisplayCutoutMode =
++                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
++            window.setAttributes(windowParams);
++        }
+         ViewLayoutUtils.updateLayoutHeightOf(window, LayoutParams.MATCH_PARENT);
+         // This method may be called before {@link #setInputView(View)}.
+         if (mInputView != null) {
+diff --git a/java/src/com/android/inputmethod/latin/utils/WindowContentOrigin.java b/java/src/com/android/inputmethod/latin/utils/WindowContentOrigin.java
+new file mode 100644
+index 000000000..d4e70c74c
+--- /dev/null
++++ b/java/src/com/android/inputmethod/latin/utils/WindowContentOrigin.java
+@@ -0,0 +1,50 @@
++/*
++ * Copyright (C) 2026 The SovereignOS Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.inputmethod.latin.utils;
++
++import android.view.View;
++
++import com.android.inputmethod.latin.common.CoordinateUtils;
++
++/**
++ * sovereignos: the key previews, the more-keys and more-suggestions panels and the gesture trail are
++ * added to {@code android.R.id.content}, but upstream places them from
++ * {@link View#getLocationInWindow}. The two coordinate systems differ by the padding that the
++ * platform applies to the content root of the window (display cutout and system bars), which is
++ * zero as long as the window is laid out inside the cutout and not zero once it is laid out under it.
++ */
++public final class WindowContentOrigin {
++    // Used on the UI thread only.
++    private static final int[] sContentOrigin = CoordinateUtils.newInstance();
++
++    private WindowContentOrigin() {
++        // This utility class is not publicly instantiable.
++    }
++
++    /** Like {@link View#getLocationInWindow}, but relative to the content view of the window. */
++    public static void locate(final View view, final int[] outCoords) {
++        view.getLocationInWindow(outCoords);
++        final View content = view.getRootView().findViewById(android.R.id.content);
++        if (content == null) {
++            return;
++        }
++        content.getLocationInWindow(sContentOrigin);
++        CoordinateUtils.set(outCoords,
++                CoordinateUtils.x(outCoords) - CoordinateUtils.x(sContentOrigin),
++                CoordinateUtils.y(outCoords) - CoordinateUtils.y(sContentOrigin));
++    }
++}
+-- 
+2.39.5
+
