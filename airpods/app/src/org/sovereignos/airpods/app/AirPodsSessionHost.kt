@@ -26,7 +26,7 @@ internal object AirPodsSessionHost {
 
     /** A session that ran this long counts as a working link: the next retry starts at the shortest delay again. */
     private const val STABLE_SESSION_MS = 30_000L
-    private const val THIN_CHECK_MS = 6_000L
+    private const val THIN_CHECK_MS = 10_000L
 
     private val main = Handler(Looper.getMainLooper())
     private val opener: AirPodsSocketOpener = HiddenL2capOpener
@@ -128,8 +128,8 @@ internal object AirPodsSessionHost {
      * and re-requesting notifications resends none of it. A session that started before the audio connected got
      * the thin burst (no listening mode, no conversation awareness) and would show a page without them until the
      * link drops: restart it once, now that the audio is connected. The burst of a session that started just before
-     * the audio connected can still be full, so the check waits [THIN_CHECK_MS] (the settings arrive about 4 s
-     * after the start) and restarts only when the listening mode is still missing.
+     * the audio connected can still be full, so the check waits [THIN_CHECK_MS] (the settings arrived 4 to 9 s
+     * after the start on `lynx`) and restarts only when the listening mode is still missing.
      */
     fun onAudioConnected(context: Context, device: BluetoothDevice) {
         if (session == null) {
