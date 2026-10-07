@@ -1,5 +1,39 @@
 # Source record
 
+## Feature 2026-10-07: Duress Unlock Settings UI (`frameworks-base/0012`, `packages-apps-settings/0003`, `0004`)
+
+A Settings screen to set up, change and remove the decoy, as a second row below
+"Duress password" on the Device unlock page. Design:
+`docs/superpowers/specs/2026-10-07-duress-unlock-settings-ui-design.md`, plan:
+`docs/superpowers/plans/2026-10-07-duress-unlock-settings-ui.md` (both in
+`sovereignos-foundation`).
+
+- `frameworks-base/0012`: `ILockSettings#isDuressWipeCredential(ownerCredential,
+  candidate)`, appended last. Settings cannot tell whether a decoy PIN equals the
+  duress wipe PIN, and a decoy PIN equal to it would silently disable the wipe
+  because decoy routing replaces the verification response before the wipe hook
+  sees it. Needs the write permission and the owner credential; runs no wipe and
+  no routing; zeroizes both credentials.
+- `packages-apps-settings/0003`: `DuressUnlockFlow` (the order of set-up, change and
+  remove, no Android types) and `DuressUnlockFlowTest` (14 JUnit tests; ten
+  mutations of the flow each fail at least one).
+- `packages-apps-settings/0004`: the row (`order 1010`, system user only), the main
+  screen, the set-up and change screen, the Android adapter, strings in
+  `strings_sovereignos.xml` (not in the upstream `strings_ext.xml`), layout and
+  manifest entries.
+- Real branches: `frameworks/base` `sovereignos-2026091900-r2`, commit
+  `887d69072797` on top of `d0e538f28aac`; `packages/apps/Settings`
+  `sovereignos-2026091900`, commits `9e55d98fe45` and `54e69e46662` on top of
+  `d5b871d8aa3`. Authored in disposable local worktrees and landed with `git am`;
+  these patches are exported fresh from the landed commits and re-applied onto a
+  pristine copy of the base files (identical tree hashes).
+- Review: one independent reviewer, no blocking defect; its important findings
+  (Auto confirm unlock PIN length, the process kept foreground while the work runs,
+  rotation, zeroizing in system_server, a decoy left without a PIN, two surviving
+  test mutants) are fixed in these patches. The plan records each finding.
+- Compiled: no. Run on a device: no. Both wait for the one approved build and the
+  `DUR-*` rows of the validation matrix.
+
 ## Fix 2026-09-29: wrong PIN crashed SystemUI when the decoy user had been removed (`frameworks-base/0011`)
 
 Reported by the owner on `stallion` and `lynx`: after a wrong PIN the screen
