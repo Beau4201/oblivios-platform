@@ -19,6 +19,12 @@ public final class AirPodsAliasPolicyCheck {
         check(!AirPodsAliasPolicy.isAllowed("a b"), "line separator");
         check(!AirPodsAliasPolicy.isAllowed("ab"), "private use");
         check(!AirPodsAliasPolicy.isAllowed("a\uD800b"), "lone surrogate");
+        check(!AirPodsAliasPolicy.isAllowed("\u00A0"), "only a no-break space");
+        check(!AirPodsAliasPolicy.isAllowed("a\u00A0"), "trailing no-break space");
+        check(!AirPodsAliasPolicy.isAllowed("\u00A0a"), "leading no-break space");
+        check(!AirPodsAliasPolicy.isAllowed("\u3164"), "Hangul filler");
+        check(!AirPodsAliasPolicy.isAllowed("\u2800"), "Braille blank");
+        check(!AirPodsAliasPolicy.isAllowed("a\u3164b"), "a filler inside");
         check(AirPodsAliasPolicy.isAllowed("a b"), "inner space");
         check(AirPodsAliasPolicy.isAllowed("日本語のイヤホン"), "non-latin visible text");
         System.out.println("AirPodsAliasPolicyCheck passed");
