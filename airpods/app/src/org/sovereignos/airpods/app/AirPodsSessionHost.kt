@@ -26,6 +26,7 @@ internal object AirPodsSessionHost {
 
     /** A session that ran this long counts as a working link: the next retry starts at the shortest delay again. */
     private const val STABLE_SESSION_MS = 30_000L
+    private const val THIN_CHECK_MS = 6_000L
 
     private val main = Handler(Looper.getMainLooper())
     private val opener: AirPodsSocketOpener = HiddenL2capOpener
@@ -35,6 +36,7 @@ internal object AirPodsSessionHost {
     private var session: AirPodsSession? = null
     private var attempt = 0
     private var publishedAt = 0L
+    private var audioRestartDone = false
     private var sinkBeforeSession: AirPodsCommandSink? = null
     private var ears: EarDetectionController? = null
     private var duck: ConversationDuckController? = null
@@ -111,12 +113,40 @@ internal object AirPodsSessionHost {
         Log.i(TAG, "link up, session " + (if (session != null) "exists" else "none"))
         target = device
         attempt = 0
+        audioRestartDone = false
         try {
             context.startForegroundService(Intent(context, AirPodsSessionService::class.java))
         } catch (e: RuntimeException) {
             // For example the foreground-service start rule or a missing BLUETOOTH_CONNECT grant.
             Log.w(TAG, "foreground service not started: " + e.javaClass.simpleName)
         }
+    }
+
+    /**
+     * An audio profile (A2DP or hands-free) of this address connected (receiver). The pair sends its full settings
+     * burst only while the phone holds it as an audio device (protocol facts, "When the pair reports its settings"),
+     * and re-requesting notifications resends none of it. A session that started before the audio connected got
+     * the thin burst (no listening mode, no conversation awareness) and would show a page without them until the
+     * link drops: restart it once, now that the audio is connected. The burst of a session that started just before
+     * the audio connected can still be full, so the check waits [THIN_CHECK_MS] (the settings arrive about 4 s
+     * after the start) and restarts only when the listening mode is still missing.
+     */
+    fun onAudioConnected(address: String) {
+        val t = target ?: return
+        if (session == null || audioRestartDone || !t.address.equals(address, ignoreCase = true)) return
+        main.removeCallbacks(thinCheck)
+        main.postDelayed(thinCheck, THIN_CHECK_MS)
+    }
+
+    private val thinCheck = Runnable {
+        val s = session ?: return@Runnable
+        val state = AirPodsStateStore.state
+        if (audioRestartDone || !state.isConnected || AirPodsUiState.Feature.LISTENING_MODE in state.supported) {
+            return@Runnable
+        }
+        audioRestartDone = true
+        Log.i(TAG, "audio connected, the session still has no settings: restarting it")
+        s.close()
     }
 
     /** The link or the bond of this address is gone (receiver). */
@@ -126,6 +156,7 @@ internal object AirPodsSessionHost {
         Log.i(TAG, "link down, session " + (if (session != null) "open, closing" else "none"))
         target = null
         main.removeCallbacks(retry)
+        main.removeCallbacks(thinCheck)
         val s = session
         if (s != null) s.close() else stopService()
     }

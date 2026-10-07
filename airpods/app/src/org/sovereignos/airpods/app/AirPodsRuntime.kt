@@ -1,7 +1,10 @@
 package org.sovereignos.airpods.app
 
 import android.app.Application
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
+import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -79,6 +82,11 @@ class ConnectionReceiver : BroadcastReceiver() {
                 if (isBredr(intent)) AirPodsSessionHost.onLinkUp(context.applicationContext, device)
             BluetoothDevice.ACTION_ACL_DISCONNECTED ->
                 if (isBredr(intent)) AirPodsSessionHost.onLinkDown(device.address)
+            BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
+            BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED ->
+                if (intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED) == BluetoothProfile.STATE_CONNECTED) {
+                    AirPodsSessionHost.onAudioConnected(device.address)
+                }
             BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
                 when (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)) {
                     BluetoothDevice.BOND_NONE -> {
@@ -103,6 +111,8 @@ class ConnectionReceiver : BroadcastReceiver() {
             BluetoothDevice.ACTION_ACL_CONNECTED,
             BluetoothDevice.ACTION_ACL_DISCONNECTED,
             BluetoothDevice.ACTION_BOND_STATE_CHANGED,
+            BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
+            BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED,
             Intent.ACTION_BOOT_COMPLETED,
         )
     }
