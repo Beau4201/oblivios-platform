@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -36,6 +37,7 @@ object AirPodsRuntime {
         writer = AirPodsMetadataWriter(app).also { AirPodsStateStore.addListener(it) }
         AirPodsStateStore.addListener(CaseBatteryRecorder(app))
         AirPodsStateStore.addListener(ConnectionSheetTrigger(app))
+        registerBondReceiver(app)
         if (isDebuggableBuild()) DebugStateObserver(app).start()
         // A process that starts while the AirPods are connected (it was killed, or Settings bound us)
         // has to find the link itself: no connection event will come for a link that is already up.
@@ -48,10 +50,36 @@ object AirPodsRuntime {
         writer?.retry()
     }
 
-    /** The bond of this address is gone: the metadata the platform held for it is gone too. */
+    /**
+     * The bond of this address is gone: the metadata the platform held for it is gone too, and the stored values never
+     * outlive the bond. Called from [registerBondReceiver] on the main thread.
+     */
     @Synchronized
-    fun onUnbond(address: String) {
+    private fun onUnbonded(app: Context, address: String) {
+        AirPodsSessionHost.onLinkDown(address)
         writer?.forget(address)
+        CaseBatteryStore.forget(app, address)
+        PressAndHoldStore.forget(app, address)
+        ControlStore.forget(app, address)
+        EarDetectionStore.forget(app, address)
+    }
+
+    /**
+     * BOND_STATE_CHANGED cannot go to the manifest receiver: the system skips it for an app in the background
+     * ("Background execution not allowed", seen in `dumpsys activity broadcasts` on `lynx`, while the ACL and the audio
+     * profile broadcasts are delivered). A receiver registered by the running process is not subject to that. It is
+     * the same protected broadcast the Bluetooth process sends with the BLUETOOTH_CONNECT receiver permission.
+     */
+    private fun registerBondReceiver(app: Context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
+                if (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR) == BluetoothDevice.BOND_NONE) {
+                    onUnbonded(app, device.address)
+                }
+            }
+        }
+        app.registerReceiver(receiver, IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED), Context.RECEIVER_EXPORTED)
     }
 }
 
@@ -64,8 +92,8 @@ class AirPodsApplication : Application() {
 
 /**
  * Starts our process and the session when a bonded AirPods' Bluetooth link comes up or goes away.
- * All three are protected broadcasts that only the system can send, and the Bluetooth process
- * sends them as its own uid, so the receiver has to be exported. Only the BR/EDR link counts: the
+ * All of them are protected broadcasts that only the system can send, and the Bluetooth process
+ * sends the link and profile ones as its own uid, so the receiver has to be exported. Only the BR/EDR link counts: the
  * AirPods also have an LE link that comes and goes on its own.
  */
 class ConnectionReceiver : BroadcastReceiver() {
@@ -87,22 +115,6 @@ class ConnectionReceiver : BroadcastReceiver() {
                 if (intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED) == BluetoothProfile.STATE_CONNECTED) {
                     AirPodsSessionHost.onAudioConnected(context.applicationContext, device)
                 }
-            BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
-                when (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)) {
-                    BluetoothDevice.BOND_NONE -> {
-                        AirPodsSessionHost.onLinkDown(device.address)
-                        // The stored values never outlive the bond, and the platform drops the metadata with it.
-                        AirPodsRuntime.onUnbond(device.address)
-                        CaseBatteryStore.forget(context.applicationContext, device.address)
-                        PressAndHoldStore.forget(context.applicationContext, device.address)
-                        ControlStore.forget(context.applicationContext, device.address)
-                        EarDetectionStore.forget(context.applicationContext, device.address)
-                    }
-                    // A first pairing: the link came up while the bond was still forming, so no later ACL event comes.
-                    BluetoothDevice.BOND_BONDED ->
-                        if (device.isConnected) AirPodsSessionHost.onLinkUp(context.applicationContext, device)
-                }
-            }
         }
     }
 
@@ -110,7 +122,6 @@ class ConnectionReceiver : BroadcastReceiver() {
         val HANDLED_ACTIONS = setOf(
             BluetoothDevice.ACTION_ACL_CONNECTED,
             BluetoothDevice.ACTION_ACL_DISCONNECTED,
-            BluetoothDevice.ACTION_BOND_STATE_CHANGED,
             BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
             BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED,
             Intent.ACTION_BOOT_COMPLETED,

@@ -81,16 +81,16 @@
         <!-- Starts the process, the AirPods session and the retry of pending metadata writes when an
              AirPods' link comes up or goes away or its bond changes, and once after boot (the
              process then finds a link that came up while the phone was still locked: those
-             broadcasts are not delivered before the first unlock). All six are protected
-             broadcasts (only the system can send them); the Bluetooth process sends five
-             as its own uid, so the receiver must be exported. -->
+             broadcasts are not delivered before the first unlock). All five are protected
+             broadcasts (only the system can send them); the Bluetooth process sends four
+             as its own uid, so the receiver must be exported. BOND_STATE_CHANGED is not listed: the system
+             skips it for an app in the background, so AirPodsRuntime registers it for the running process. -->
         <receiver
             android:name=".app.ConnectionReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
                 <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
-                <action android:name="android.bluetooth.device.action.BOND_STATE_CHANGED" />
                 <!-- The pair sends its full settings burst only while the phone holds it as an audio device; a
                      session that started before the audio profiles connected got a thin one and is restarted. -->
                 <action android:name="android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED" />
