@@ -85,7 +85,7 @@ class ConnectionReceiver : BroadcastReceiver() {
             BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
             BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED ->
                 if (intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED) == BluetoothProfile.STATE_CONNECTED) {
-                    AirPodsSessionHost.onAudioConnected(device.address)
+                    AirPodsSessionHost.onAudioConnected(context.applicationContext, device)
                 }
             BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
                 when (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)) {

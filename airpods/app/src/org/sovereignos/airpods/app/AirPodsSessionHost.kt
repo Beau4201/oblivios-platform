@@ -108,12 +108,12 @@ internal object AirPodsSessionHost {
     }
 
     /** The BR/EDR link of a bonded device came up (receiver). */
-    fun onLinkUp(context: Context, device: BluetoothDevice) {
+    fun onLinkUp(context: Context, device: BluetoothDevice, resetRestart: Boolean = true) {
         if (!recognised(device)) return
         Log.i(TAG, "link up, session " + (if (session != null) "exists" else "none"))
         target = device
         attempt = 0
-        audioRestartDone = false
+        if (resetRestart) audioRestartDone = false
         try {
             context.startForegroundService(Intent(context, AirPodsSessionService::class.java))
         } catch (e: RuntimeException) {
@@ -131,9 +131,15 @@ internal object AirPodsSessionHost {
      * the audio connected can still be full, so the check waits [THIN_CHECK_MS] (the settings arrive about 4 s
      * after the start) and restarts only when the listening mode is still missing.
      */
-    fun onAudioConnected(address: String) {
+    fun onAudioConnected(context: Context, device: BluetoothDevice) {
+        if (session == null) {
+            // A first pairing: the bond completes before the service discovery has delivered the UUIDs, so the link-up
+            // of that moment did not recognise the pair. The audio profiles connect after the discovery.
+            if (target == null) onLinkUp(context, device, resetRestart = false)
+            return
+        }
         val t = target ?: return
-        if (session == null || audioRestartDone || !t.address.equals(address, ignoreCase = true)) return
+        if (audioRestartDone || !t.address.equals(device.address, ignoreCase = true)) return
         main.removeCallbacks(thinCheck)
         main.postDelayed(thinCheck, THIN_CHECK_MS)
     }
