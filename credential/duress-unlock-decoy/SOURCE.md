@@ -31,8 +31,9 @@ A Settings screen to set up, change and remove the decoy, as a second row below
   (Auto confirm unlock PIN length, the process kept foreground while the work runs,
   rotation, zeroizing in system_server, a decoy left without a PIN, two surviving
   test mutants) are fixed in these patches. The plan records each finding.
-- Compiled: no. Run on a device: no. Both wait for the one approved build and the
-  `DUR-*` rows of the validation matrix.
+- Compiled: yes, into the `lynx` `userdebug` image `2026100226` (built 2026-10-07 on the
+  tree at the commits above; `DUR-002`). Run on a device: no; the `DUR-003` to
+  `DUR-013` rows of the validation matrix wait for the flash.
 
 ## Fix 2026-09-29: wrong PIN crashed SystemUI when the decoy user had been removed (`frameworks-base/0011`)
 
