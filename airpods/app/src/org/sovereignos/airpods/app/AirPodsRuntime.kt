@@ -44,6 +44,12 @@ object AirPodsRuntime {
     fun onConnectionEvent() {
         writer?.retry()
     }
+
+    /** The bond of this address is gone: the metadata the platform held for it is gone too. */
+    @Synchronized
+    fun onUnbond(address: String) {
+        writer?.forget(address)
+    }
 }
 
 class AirPodsApplication : Application() {
@@ -62,6 +68,9 @@ class AirPodsApplication : Application() {
 class ConnectionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (!runsInThisUser()) return
+        // The receiver is exported (the Bluetooth process sends as its own uid); an explicit broadcast of any other
+        // action from another app must not run binder calls on the main thread.
+        if (intent.action !in HANDLED_ACTIONS) return
         AirPodsRuntime.start(context)
         AirPodsRuntime.onConnectionEvent()
         val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
@@ -70,15 +79,32 @@ class ConnectionReceiver : BroadcastReceiver() {
                 if (isBredr(intent)) AirPodsSessionHost.onLinkUp(context.applicationContext, device)
             BluetoothDevice.ACTION_ACL_DISCONNECTED ->
                 if (isBredr(intent)) AirPodsSessionHost.onLinkDown(device.address)
-            BluetoothDevice.ACTION_BOND_STATE_CHANGED ->
-                if (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR) == BluetoothDevice.BOND_NONE) {
-                    AirPodsSessionHost.onLinkDown(device.address)
-                    // The stored case value never outlives the bond.
-                    CaseBatteryStore.forget(context.applicationContext, device.address)
-                    PressAndHoldStore.forget(context.applicationContext, device.address)
-                    ControlStore.forget(context.applicationContext, device.address)
+            BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                when (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)) {
+                    BluetoothDevice.BOND_NONE -> {
+                        AirPodsSessionHost.onLinkDown(device.address)
+                        // The stored values never outlive the bond, and the platform drops the metadata with it.
+                        AirPodsRuntime.onUnbond(device.address)
+                        CaseBatteryStore.forget(context.applicationContext, device.address)
+                        PressAndHoldStore.forget(context.applicationContext, device.address)
+                        ControlStore.forget(context.applicationContext, device.address)
+                        EarDetectionStore.forget(context.applicationContext, device.address)
+                    }
+                    // A first pairing: the link came up while the bond was still forming, so no later ACL event comes.
+                    BluetoothDevice.BOND_BONDED ->
+                        if (device.isConnected) AirPodsSessionHost.onLinkUp(context.applicationContext, device)
                 }
+            }
         }
+    }
+
+    private companion object {
+        val HANDLED_ACTIONS = setOf(
+            BluetoothDevice.ACTION_ACL_CONNECTED,
+            BluetoothDevice.ACTION_ACL_DISCONNECTED,
+            BluetoothDevice.ACTION_BOND_STATE_CHANGED,
+            Intent.ACTION_BOOT_COMPLETED,
+        )
     }
 
     private fun isBredr(intent: Intent): Boolean =

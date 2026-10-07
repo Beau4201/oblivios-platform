@@ -29,7 +29,16 @@ object AirPodsStateStore {
             state = updated
             previous to updated
         }
-        for (listener in listeners) listener.onStateChanged(old, next)
+        // One failing listener must not keep the others from seeing the change; the first failure still propagates.
+        var failure: RuntimeException? = null
+        for (listener in listeners) {
+            try {
+                listener.onStateChanged(old, next)
+            } catch (e: RuntimeException) {
+                if (failure == null) failure = e
+            }
+        }
+        failure?.let { throw it }
         return true
     }
 

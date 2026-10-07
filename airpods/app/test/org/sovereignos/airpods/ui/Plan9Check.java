@@ -111,7 +111,8 @@ public final class Plan9Check {
         Row chime = ControlRows.of(AirPodsControl.CHIME_VOLUME);
         check(ControlRows.snapped(chime, 52) == 50 && ControlRows.snapped(chime, 53) == 55 && ControlRows.snapped(chime, -4) == 15
                 && ControlRows.snapped(chime, 0) == 15 && ControlRows.snapped(chime, 10) == 15
-                && ControlRows.snapped(chime, 400) == 100, "snap to the step inside the range, never below 15 (AIR-188)");
+                && ControlRows.snapped(chime, 400) == 100 && ControlRows.snapped(chime, 47) == 45,
+                "snap to the step inside the range, never below 15 (AIR-188); a value another phone set is shown on the grid");
         check(chime.lowest() == 15 && !ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 10) && !ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 0)
                 && ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 15) && ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 100)
                 && !ControlRows.allowed(AirPodsControl.CHIME_VOLUME, 101), "a chime command below 15 is refused");
@@ -134,6 +135,11 @@ public final class Plan9Check {
         check(FindSoundPolicy.mustStop(true, 0, FindSoundPolicy.MAX_DURATION_MS), "ends by itself");
         check(FindSoundPolicy.gainAt(0) == FindSoundPolicy.START_GAIN, "starts quiet");
         check(FindSoundPolicy.gainAt(-5) == 0f, "no gain before the start");
+        // The values measured on the device (AIR-190: 0.25, 0.40, 0.64, 1.00 every 2 s, 60 s at most). A change of
+        // the sound that reaches the ears is a decision of the owner and of the threat review (T24), not a tweak.
+        check(FindSoundPolicy.START_GAIN == 0.25f && FindSoundPolicy.MAX_GAIN == 1.0f && FindSoundPolicy.STEP_MS == 2_000L
+                && FindSoundPolicy.MAX_DURATION_MS == 60_000L && FindSoundPolicy.STEP_FACTOR == 1.6f, "the measured sound constants");
+        check(Math.abs(FindSoundPolicy.gainAt(4_000L) - 0.64f) < 1e-6f && FindSoundPolicy.gainAt(6_000L) == 1.0f, "the measured steps");
         check(FindSoundPolicy.gainAt(FindSoundPolicy.STEP_MS) == FindSoundPolicy.START_GAIN * FindSoundPolicy.STEP_FACTOR, "rises by the factor after one step");
         Set<Float> steps = new HashSet<>();
         float last = 0;

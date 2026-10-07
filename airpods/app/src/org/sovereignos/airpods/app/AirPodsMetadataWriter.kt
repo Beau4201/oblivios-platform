@@ -41,7 +41,20 @@ internal class AirPodsMetadataWriter(private val context: Context) : AirPodsStat
     private var written: AirPodsUiState = AirPodsUiState.DISCONNECTED
 
     override fun onStateChanged(old: AirPodsUiState, new: AirPodsUiState) {
-        sync(new)
+        // Listeners of two threads can be called out of order; the store holds the newest state, which is the one to write.
+        sync(AirPodsStateStore.state)
+    }
+
+    /**
+     * The bond of this address is gone and the platform dropped its metadata with it: a later pairing of the same
+     * address must set everything up again (icons, untethered flag, provider tags), not only the changed battery keys.
+     */
+    @Synchronized
+    fun forget(address: String) {
+        if (initializedFor.equals(address, ignoreCase = true)) {
+            initializedFor = null
+            written = AirPodsUiState.DISCONNECTED
+        }
     }
 
     /** Called on connection and bond events: repeats whatever did not succeed before. */

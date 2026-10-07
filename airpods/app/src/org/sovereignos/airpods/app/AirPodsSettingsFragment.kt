@@ -448,9 +448,13 @@ class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
             }
             ControlRows.Kind.SLIDER -> {
                 val slider = pref as SliderPreference
-                // A value below the slider's lowest (a stored value the pair ignored) is shown as the lowest.
-                val shown = maxOf(value, row.lowest())
-                if (value >= 0 && slider.value != shown) slider.value = shown
+                // A value below the slider's lowest (a stored value the pair ignored) or between two steps (another
+                // phone set 47 on a slider of steps of 5) is shown as the nearest step: the slider refuses a value off
+                // its grid.
+                if (value >= 0) {
+                    val shown = ControlRows.snapped(row, value)
+                    if (slider.value != shown) slider.value = shown
+                }
             }
         }
     }

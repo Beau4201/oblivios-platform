@@ -3,7 +3,8 @@ package org.sovereignos.airpods.ui;
 /**
  * The rules of "Play sound" (ADR-134): a rising tone through the connected AirPods so that a pod that
  * lies somewhere can be heard. It is allowed only while the pair reports that no pod is in an ear, it
- * starts very quiet, rises in steps to a fixed cap and ends by itself. It is not the iPhone's Find My,
+ * starts at a quarter of full scale (the first design, 0.02, was inaudible on the pods: AIR-190), rises in steps to
+ * full scale (the volume of the media stream is the real limit) and ends by itself. It is not the iPhone's Find My,
  * which runs through Apple's network and works without a connection (AIR-185).
  */
 public final class FindSoundPolicy {

@@ -67,12 +67,23 @@ internal class FindSoundController(
                 startedAt = SystemClock.elapsedRealtime()
                 playing = true
             }
-            t.setVolume(FindSoundPolicy.gainAt(0))
-            t.play()
+            try {
+                t.setVolume(FindSoundPolicy.gainAt(0))
+                t.play()
+            } catch (e: RuntimeException) {
+                // Not playing: leave no "playing" state and no track behind (the page would offer "Stop sound" for a
+                // sound that never started, with no tick to end it).
+                synchronized(lock) {
+                    playing = false
+                    track = null
+                }
+                t.release()
+                throw e
+            }
             main.postDelayed(tick, TICK_MS)
             routed = false
             return true
-        } catch (e: IllegalStateException) {
+        } catch (e: RuntimeException) {
             Log.w(TAG, "the sound could not start: " + e.javaClass.simpleName)
             return false
         } finally {

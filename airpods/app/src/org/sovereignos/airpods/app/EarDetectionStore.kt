@@ -16,4 +16,9 @@ internal object EarDetectionStore {
     fun write(context: Context, address: String, enabled: Boolean) {
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(address.uppercase(), enabled).apply()
     }
+
+    /** The bond is gone: a pair that is paired again starts from its own default (on), not from an old value. */
+    fun forget(context: Context, address: String) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().remove(address.uppercase()).apply()
+    }
 }

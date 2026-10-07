@@ -2,14 +2,14 @@
 
 ## airpods-core.jar
 
-- Source: `sovereignos-services` commit `f1dee3f` (`master`, "airpods: encode and decode the comfort and sound controls and the call management setting"). Re-vendored 2026-10-04 with `AirPodsControl`, `ControlReport`, `CallManagementReport` and `setControl`.
+- Source: `sovereignos-services` commit `b0672be` (`master`, "airpods: refuse names that end in a no-break space or draw nothing"). Re-vendored 2026-10-07 after the independent code review: `AapCodec.isValidName` now refuses a name that starts or ends in a separator such as a no-break space and a name with a Hangul filler or the Braille blank (it accepted names that look empty). Before that, `f1dee3f` of 2026-10-04 added `AirPodsControl`, `ControlReport`, `CallManagementReport` and `setControl`.
 - Build command: `./gradlew :airpods-core:clean :airpods-core:test :airpods-core:jar --offline`
   (Java 21 toolchain, zero runtime dependencies: `airpods-core/build.gradle.kts`
   lists only test dependencies). Output `airpods-core-0.1.0-SNAPSHOT.jar`,
   vendored under the name `airpods-core.jar`.
 - Tests at that commit: 57 tests, 0 failures (`AapCodecControlsTest` added: the frames of `AIR-180` and `AIR-182`, the ranges, the identifiers, an out-of-range report that stays unrecognised); three mutations of the new code each failed the suite (Task 3 step 5 of the Plan 9 plan).
-- SHA-256: `64f391a21536725b0f87dfc0576056e5126747b1e2d65a8cc0a4d3ae5c1ddfb3`.
-  Rebuilt from clean a second time with the same command: same hash.
+- SHA-256: `edd9a799ba7fcf86a9800bf92add1dab17819b0668d09954e3dec9907b08739b` (2026-10-07; the jar of `f1dee3f` was `64f391a2...`).
+  Rebuilt from clean a second time with the same command: same hash. 57 tests, 0 failures; the old `AapCodec` fails the new assertions of `AapCodecPlan7bTest.acceptsOnlyReasonableNames`.
 - 31 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
   class-file major version 65, the same as the vendored `guardian-core.jar`.
 - Replaces the jar of 2026-09-29 (`324091f9...`), whose parser decoded an invented format that no AirPods sends.

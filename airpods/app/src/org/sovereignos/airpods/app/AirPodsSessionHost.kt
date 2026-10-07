@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import org.sovereignos.airpods.ui.AirPodsRecognition
 import org.sovereignos.airpods.ui.AirPodsUiState
@@ -23,6 +24,9 @@ internal object AirPodsSessionHost {
     private const val TAG = "AirPodsHost"
     private const val SETTLE_MS = 300L
 
+    /** A session that ran this long counts as a working link: the next retry starts at the shortest delay again. */
+    private const val STABLE_SESSION_MS = 30_000L
+
     private val main = Handler(Looper.getMainLooper())
     private val opener: AirPodsSocketOpener = HiddenL2capOpener
 
@@ -30,6 +34,7 @@ internal object AirPodsSessionHost {
     private var target: BluetoothDevice? = null
     private var session: AirPodsSession? = null
     private var attempt = 0
+    private var publishedAt = 0L
     private var sinkBeforeSession: AirPodsCommandSink? = null
     private var ears: EarDetectionController? = null
     private var duck: ConversationDuckController? = null
@@ -154,7 +159,16 @@ internal object AirPodsSessionHost {
         if (session != null) return
         // The platform serves the L2CAP mode and the Device-ID answer of this peer only once it is
         // registered, so the registration comes before the first connection attempt.
-        if (!device.setAirPodsIdentity(true)) {
+        val registered = try {
+            device.setAirPodsIdentity(true)
+        } catch (e: SecurityException) {
+            // A revoked BLUETOOTH_CONNECT: no grant, no session (the exception would reach the main looper).
+            Log.w(TAG, "identity registration not allowed")
+            target = null
+            stopService()
+            return
+        }
+        if (!registered) {
             retryOrStop(device)
             return
         }
@@ -185,7 +199,9 @@ internal object AirPodsSessionHost {
         override fun onPublished(session: AirPodsSession) {
             main.post {
                 if (this@AirPodsSessionHost.session !== session) return@post
-                attempt = 0
+                // The backoff is not reset here: a peer that sends one frame and closes would be retried every 2 s
+                // for as long as the link is up. ended() resets it after a session that lasted (STABLE_SESSION_MS).
+                publishedAt = SystemClock.elapsedRealtime()
                 live = true
                 sinkBeforeSession = AirPodsCommands.sink
                 AirPodsCommands.sink = SessionCommandSink(session, service?.applicationContext, find)
@@ -215,6 +231,7 @@ internal object AirPodsSessionHost {
 
     private fun ended(ended: AirPodsSession, reason: AirPodsSession.Reason) {
         if (session !== ended) return
+        if (live && SystemClock.elapsedRealtime() - publishedAt >= STABLE_SESSION_MS) attempt = 0
         ears?.end()
         ears = null
         duck?.end()
@@ -242,7 +259,12 @@ internal object AirPodsSessionHost {
 
     /** Retries with a growing delay while the link is still up; otherwise the service stops. */
     private fun retryOrStop(device: BluetoothDevice) {
-        if (!device.isConnected) {
+        val connected = try {
+            device.isConnected
+        } catch (e: SecurityException) {
+            false
+        }
+        if (!connected) {
             target = null
             stopService()
             return

@@ -2,6 +2,7 @@ package org.sovereignos.airpods.app
 
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import java.lang.reflect.InvocationTargetException
 
 /** Opens the L2CAP channel of the accessory protocol. */
 internal fun interface AirPodsSocketOpener {
@@ -19,6 +20,12 @@ internal fun interface AirPodsSocketOpener {
 internal object HiddenL2capOpener : AirPodsSocketOpener {
     override fun open(device: BluetoothDevice, psm: Int): BluetoothSocket {
         val method = BluetoothDevice::class.java.getMethod("createL2capSocket", Int::class.javaPrimitiveType)
-        return method.invoke(device, psm) as BluetoothSocket
+        try {
+            return method.invoke(device, psm) as BluetoothSocket
+        } catch (e: InvocationTargetException) {
+            // The method exists and ran: its own failure (an IOException, a SecurityException) is a failed connect that
+            // is retried, not proof that the image lacks the method.
+            throw e.targetException ?: e
+        }
     }
 }

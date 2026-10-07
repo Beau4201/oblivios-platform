@@ -101,19 +101,23 @@ class AirPodsSettingsService : Service() {
         pushTo(address, factory.settings(state))
     }
 
+    // RemoteCallbackList allows one broadcast at a time: the session thread (state changes) and Settings' binder
+    // threads (register, update) both push, and a second beginBroadcast throws IllegalStateException.
     private fun pushTo(address: String, settings: List<DeviceSetting>) {
-        val count = listeners.beginBroadcast()
-        try {
-            for (i in 0 until count) {
-                if (listeners.getBroadcastCookie(i) != address) continue
-                try {
-                    listeners.getBroadcastItem(i).onDeviceSettingsChanged(settings)
-                } catch (e: RemoteException) {
-                    // The listener died; RemoteCallbackList drops it.
+        synchronized(listeners) {
+            val count = listeners.beginBroadcast()
+            try {
+                for (i in 0 until count) {
+                    if (listeners.getBroadcastCookie(i) != address) continue
+                    try {
+                        listeners.getBroadcastItem(i).onDeviceSettingsChanged(settings)
+                    } catch (e: RemoteException) {
+                        // The listener died; RemoteCallbackList drops it.
+                    }
                 }
+            } finally {
+                listeners.finishBroadcast()
             }
-        } finally {
-            listeners.finishBroadcast()
         }
     }
 }
