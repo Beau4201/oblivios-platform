@@ -32,8 +32,9 @@ A Settings screen to set up, change and remove the decoy, as a second row below
   rotation, zeroizing in system_server, a decoy left without a PIN, two surviving
   test mutants) are fixed in these patches. The plan records each finding.
 - Compiled: yes, into the `lynx` `userdebug` image `2026100226` (built 2026-10-07 on the
-  tree at the commits above; `DUR-002`). Run on a device: no; the `DUR-003` to
-  `DUR-013` rows of the validation matrix wait for the flash.
+  tree at the commits above; `DUR-002`). Run on a device: yes, on `lynx` on
+  2026-10-07; rows `DUR-003` to `DUR-013` of the validation matrix have evidence, with
+  the parts that were not run stated in each row.
 
 ## Fix 2026-09-29: wrong PIN crashed SystemUI when the decoy user had been removed (`frameworks-base/0011`)
 
