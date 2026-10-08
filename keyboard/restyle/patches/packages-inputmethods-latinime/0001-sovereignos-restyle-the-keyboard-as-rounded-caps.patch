@@ -1,9 +1,9 @@
-From 07d578f050296ba945e111261f75c63c5a9a9cb2 Mon Sep 17 00:00:00 2001
+From 40ac247c4d8691e92014794e6f40dbc898940e9f Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
-Date: Wed, 7 Oct 2026 19:28:00 +0200
+Date: Thu, 8 Oct 2026 03:18:23 +0200
 Subject: [PATCH 1/2] sovereignos: restyle the keyboard as rounded caps
 
-Upstream draws every key in the colour of the keyboard background, so the gaps between keys are invisible and the keys read as one surface. Each key is now its own rounded cap on a different tone with a bottom edge, the top of the keyboard is rounded, the suggestion dividers are visible, and the popups follow. The edge is the drawable padding, so a label centred on the key is centred on the cap. The action caps carry an intrinsic size because the enter and emoji keys scale their background by it. Text colours that lose contrast on the new fills are raised. Resources only; the keyboard background of the input view is moved to the window by the next patch. ADR-146.
+Upstream draws every key in the colour of the keyboard background, so the gaps between keys are invisible and the keys read as one surface. Each key is now its own rounded cap on a different tone with a bottom edge, the top of the keyboard is rounded, the suggestion dividers are visible, and the popups follow. The edge is the drawable padding, so a label centred on the key is centred on the cap. The action caps and the key preview carry an intrinsic size because the enter and emoji keys scale their background by it and the key preview scales its label by it. One tap on shift shows the letter tone, the hint letters keep 5 dp from the corner, the emoji panel keeps the rounded top and its caps keep off the screen edges, and the phone mode keys are functional keys. Text colours that lose contrast on the new fills are raised. Resources only; the keyboard background of the input view is moved to the window by the next patch. ADR-146.
 ---
  .../btn_keyboard_key_functional_lxx_dark.xml  |  4 +--
  .../btn_keyboard_key_functional_lxx_light.xml |  4 +--
@@ -31,8 +31,8 @@ Upstream draws every key in the colour of the keyboard background, so the gaps b
  .../drawable/sovereignos_key_cap_light.xml    | 18 +++++++++++++
  .../sovereignos_key_cap_pressed_dark.xml      | 24 +++++++++++++++++
  .../sovereignos_key_cap_pressed_light.xml     | 24 +++++++++++++++++
- .../drawable/sovereignos_key_preview_dark.xml | 18 +++++++++++++
- .../sovereignos_key_preview_light.xml         | 18 +++++++++++++
+ .../drawable/sovereignos_key_preview_dark.xml | 20 ++++++++++++++
+ .../sovereignos_key_preview_light.xml         | 20 ++++++++++++++
  .../sovereignos_keyboard_background_dark.xml  |  7 +++++
  .../sovereignos_keyboard_background_light.xml |  7 +++++
  .../drawable/sovereignos_popup_panel_dark.xml | 18 +++++++++++++
@@ -41,11 +41,15 @@ Upstream draws every key in the colour of the keyboard background, so the gaps b
  .../sovereignos_popup_selected_light.xml      |  6 +++++
  .../sovereignos_suggestion_divider_dark.xml   |  6 +++++
  .../sovereignos_suggestion_divider_light.xml  |  6 +++++
- java/res/values/colors.xml                    | 19 ++++++++-----
+ java/res/layout/emoji_palettes_view.xml       |  6 +++++
+ java/res/values/colors.xml                    | 23 +++++++++-------
+ java/res/values/config.xml                    |  2 +-
  java/res/values/sovereignos_keyboard.xml      | 24 +++++++++++++++++
  java/res/values/themes-lxx-dark.xml           | 24 +++++++++++++----
  java/res/values/themes-lxx-light.xml          | 24 +++++++++++++----
- 40 files changed, 516 insertions(+), 97 deletions(-)
+ java/res/xml/key_styles_common.xml            |  2 +-
+ java/res/xml/key_styles_number.xml            |  1 +
+ 44 files changed, 531 insertions(+), 101 deletions(-)
  create mode 100644 java/res/drawable/sovereignos_background_keyboard.xml
  create mode 100644 java/res/drawable/sovereignos_background_padtop.xml
  create mode 100644 java/res/drawable/sovereignos_key_cap_action_dark.xml
@@ -708,10 +712,10 @@ index 000000000..ac3a8a2f2
 +</layer-list>
 diff --git a/java/res/drawable/sovereignos_key_preview_dark.xml b/java/res/drawable/sovereignos_key_preview_dark.xml
 new file mode 100644
-index 000000000..2166dc926
+index 000000000..d0cf2615f
 --- /dev/null
 +++ b/java/res/drawable/sovereignos_key_preview_dark.xml
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,20 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
@@ -719,12 +723,14 @@ index 000000000..2166dc926
 +    android:paddingBottom="64dp">
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="4.5dp">
 +        <shape android:shape="rectangle">
++            <size android:width="48dp" android:height="70dp" />
 +            <solid android:color="@color/sovereignos_key_edge_dark" />
 +            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="6dp">
 +        <shape android:shape="rectangle">
++            <size android:width="48dp" android:height="70dp" />
 +            <solid android:color="@color/sovereignos_popup_dark" />
 +            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
 +        </shape>
@@ -732,10 +738,10 @@ index 000000000..2166dc926
 +</layer-list>
 diff --git a/java/res/drawable/sovereignos_key_preview_light.xml b/java/res/drawable/sovereignos_key_preview_light.xml
 new file mode 100644
-index 000000000..e0eb60872
+index 000000000..a4b71a1df
 --- /dev/null
 +++ b/java/res/drawable/sovereignos_key_preview_light.xml
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,20 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
@@ -743,12 +749,14 @@ index 000000000..e0eb60872
 +    android:paddingBottom="64dp">
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="4.5dp">
 +        <shape android:shape="rectangle">
++            <size android:width="48dp" android:height="70dp" />
 +            <solid android:color="@color/sovereignos_key_edge_light" />
 +            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="6dp">
 +        <shape android:shape="rectangle">
++            <size android:width="48dp" android:height="70dp" />
 +            <solid android:color="@color/sovereignos_popup_light" />
 +            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
 +        </shape>
@@ -876,11 +884,42 @@ index 000000000..fed01a371
 +    <size android:width="1dp" android:height="24dp" />
 +    <solid android:color="@color/sovereignos_suggestion_divider_light" />
 +</shape>
+diff --git a/java/res/layout/emoji_palettes_view.xml b/java/res/layout/emoji_palettes_view.xml
+index 7c5f6c0a6..d9cddda4c 100644
+--- a/java/res/layout/emoji_palettes_view.xml
++++ b/java/res/layout/emoji_palettes_view.xml
+@@ -67,6 +67,8 @@
+             android:layout_width="0dip"
+             android:layout_weight="12.5"
+             android:layout_height="match_parent"
++            android:layout_marginTop="4dp"
++            android:layout_marginRight="4dp"
+             android:hapticFeedbackEnabled="false"
+             android:soundEffectsEnabled="false"
+             android:contentDescription="@string/spoken_description_delete" />
+@@ -95,6 +97,8 @@
+             android:layout_weight="0.15"
+             android:gravity="center"
+             android:layout_height="match_parent"
++            android:layout_marginLeft="4dp"
++            android:layout_marginRight="4dp"
+             android:hapticFeedbackEnabled="false"
+             android:soundEffectsEnabled="false" />
+         <!-- TODO: Implement KeyView and replace this. -->
+@@ -126,6 +130,8 @@
+             android:layout_weight="0.15"
+             android:gravity="center"
+             android:layout_height="match_parent"
++            android:layout_marginLeft="4dp"
++            android:layout_marginRight="4dp"
+             android:hapticFeedbackEnabled="false"
+             android:soundEffectsEnabled="false" />
+     </LinearLayout>
 diff --git a/java/res/values/colors.xml b/java/res/values/colors.xml
-index 5453d51c1..1c58f9500 100644
+index 5453d51c1..d1922825a 100644
 --- a/java/res/values/colors.xml
 +++ b/java/res/values/colors.xml
-@@ -43,14 +43,19 @@
+@@ -43,27 +43,32 @@
      <!-- Color resources for LXX_Light theme.
           15%:0x26 70%:0xB3 75%:0xC0 80%:0xCC 85%:0xD9 90%:0xE6 -->
      <color name="key_text_color_lxx_light">#37474F</color>
@@ -905,7 +944,12 @@ index 5453d51c1..1c58f9500 100644
      <color name="gesture_trail_color_lxx_light">#4DB6AC</color>
      <color name="sliding_key_input_preview_color_lxx_light">#B34DB6AC</color>
      <color name="key_background_lxx_light">#ECEFF1</color>
-@@ -62,8 +67,8 @@
+     <color name="key_background_pressed_lxx_light">#2637474F</color>
+     <color name="suggested_word_background_selected_lxx_light">#2637474F</color>
+     <color name="gesture_floating_preview_color_lxx_light">#E6ECEFF1</color>
+-    <color name="emoji_tab_page_indicator_background_lxx_light">#E4E7E9</color>
++    <color name="emoji_tab_page_indicator_background_lxx_light">#00000000</color>
+     <!-- Color resources for LXX_Dark theme.
           10%:0x19 50%:0x80 70%:0xB3 75%:0xC0 80%:0xCC 85%:0xD9 90%:0xE6  -->
      <color name="key_text_color_lxx_dark">#CCFFFFFF</color>
      <color name="key_functional_text_color_lxx_dark">#CCFFFFFF</color>
@@ -916,6 +960,28 @@ index 5453d51c1..1c58f9500 100644
      <color name="language_on_spacebar_text_color_lxx_dark">#B3FFFFFF</color>
      <color name="highlight_color_lxx_dark">#80CBC4</color>
      <color name="auto_correct_color_lxx_dark">#FFFFFF</color>
+@@ -75,7 +80,7 @@
+     <color name="key_background_pressed_lxx_dark">#19FFFFFF</color>
+     <color name="suggested_word_background_selected_lxx_dark">#19FFFFFF</color>
+     <color name="gesture_floating_preview_color_lxx_dark">#E621272B</color>
+-    <color name="emoji_tab_page_indicator_background_lxx_dark">#21272B</color>
++    <color name="emoji_tab_page_indicator_background_lxx_dark">#00000000</color>
+     <!-- Color resources for setup wizard and tutorial -->
+     <color name="setup_background">#FFEBEBEB</color>
+     <color name="setup_text_dark">#FF707070</color>
+diff --git a/java/res/values/config.xml b/java/res/values/config.xml
+index cda7a38e5..9b9a407df 100644
+--- a/java/res/values/config.xml
++++ b/java/res/values/config.xml
+@@ -60,7 +60,7 @@
+     <fraction name="config_key_shifted_letter_hint_ratio_holo">35%</fraction>
+     <fraction name="config_key_shifted_letter_hint_ratio_lxx">35%</fraction>
+     <fraction name="config_language_on_spacebar_text_ratio">33.735%</fraction>
+-    <dimen name="config_key_hint_letter_padding">1dp</dimen>
++    <dimen name="config_key_hint_letter_padding">5dp</dimen>
+     <dimen name="config_key_shifted_letter_hint_padding">2dp</dimen>
+ 
+     <!-- For 5-row keyboard -->
 diff --git a/java/res/values/sovereignos_keyboard.xml b/java/res/values/sovereignos_keyboard.xml
 new file mode 100644
 index 000000000..84b3c9656
@@ -1072,6 +1138,31 @@ index 1b3283ffa..791a5aa38 100644
          <item name="suggestionStripOptions">autoCorrectBold|validTypedWordBold</item>
          <item name="colorValidTypedWord">@color/typed_word_color_lxx_light</item>
          <item name="colorTypedWord">@color/typed_word_color_lxx_light</item>
+diff --git a/java/res/xml/key_styles_common.xml b/java/res/xml/key_styles_common.xml
+index fbc44da38..86792f1ac 100644
+--- a/java/res/xml/key_styles_common.xml
++++ b/java/res/xml/key_styles_common.xml
+@@ -51,7 +51,7 @@
+             <key-style
+                 latin:styleName="shiftKeyStyle"
+                 latin:keySpec="!icon/shift_key_shifted|!code/key_shift"
+-                latin:backgroundType="stickyOff"
++                latin:backgroundType="stickyOn"
+                 latin:parentStyle="baseForShiftKeyStyle" />
+         </case>
+         <case
+diff --git a/java/res/xml/key_styles_number.xml b/java/res/xml/key_styles_number.xml
+index 911c2763d..2396d5773 100644
+--- a/java/res/xml/key_styles_number.xml
++++ b/java/res/xml/key_styles_number.xml
+@@ -30,6 +30,7 @@
+         latin:parentStyle="numKeyBaseStyle" />
+     <key-style
+         latin:styleName="numModeKeyStyle"
++        latin:backgroundType="functional"
+         latin:keyLabelFlags="fontNormal|followKeyLetterRatio|followFunctionalTextColor"
+         latin:parentStyle="numKeyBaseStyle" />
+     <key-style
 -- 
 2.39.5
 
