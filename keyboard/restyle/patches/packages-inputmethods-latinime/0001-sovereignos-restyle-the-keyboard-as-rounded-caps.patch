@@ -1,9 +1,9 @@
-From 0816b1a77d7953e33f13a304b4bd85238f991b62 Mon Sep 17 00:00:00 2001
+From 731facff8f747082b9169616fe86345c5dd21cf3 Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
-Date: Thu, 8 Oct 2026 14:20:11 +0200
+Date: Thu, 8 Oct 2026 14:44:09 +0200
 Subject: [PATCH 1/2] sovereignos: restyle the keyboard as rounded caps
 
-Upstream draws every key in the colour of the keyboard background, so the gaps between keys are invisible and the keys read as one surface. Each key is now its own rounded cap on a different tone with a bottom edge, the top of the keyboard is rounded, the suggestion dividers are visible, and the popups follow. The edge is the drawable padding, so a label centred on the key is centred on the cap. The action caps and the key preview carry an intrinsic size because the enter and emoji keys scale their background by it and the key preview scales its label by it. One tap on shift shows the letter tone, the hint letters keep 5 dp from the corner, the digits of the phone and number layouts are smaller in portrait and landscape, the emoji panel keeps the rounded top and its caps keep off the screen edges, and the phone mode keys are functional keys. Text colours that lose contrast on the new fills are raised. Resources only; the keyboard background of the input view is moved to the window by the next patch. ADR-146.
+Upstream draws every key in the colour of the keyboard background, so the gaps between keys are invisible and the keys read as one surface. Each key is now its own rounded cap on a different tone with a bottom edge, the top of the keyboard is rounded, the suggestion dividers are visible, and the popups follow. The edge is the drawable padding, so a label centred on the key is centred on the cap. The action caps and the key preview carry an intrinsic size because the enter and emoji keys scale their background by it and the key preview scales its label by it. One tap on shift shows the letter tone, the hint letters keep 5 dp from the corner, the digits of the phone and number layouts are smaller with their sub-labels kept off the cap edge, the emoji panel keeps the rounded top and its caps keep off the screen edges, and the phone mode keys are functional keys. Text colours that lose contrast on the new fills are raised. Resources only; the keyboard background of the input view is moved to the window by the next patch. ADR-146.
 ---
  .../btn_keyboard_key_functional_lxx_dark.xml  |  4 +--
  .../btn_keyboard_key_functional_lxx_light.xml |  4 +--
@@ -48,9 +48,10 @@ Upstream draws every key in the colour of the keyboard background, so the gaps b
  java/res/values/sovereignos_keyboard.xml      | 24 +++++++++++++++++
  java/res/values/themes-lxx-dark.xml           | 24 +++++++++++++----
  java/res/values/themes-lxx-light.xml          | 24 +++++++++++++----
+ java/res/values/themes-lxx.xml                |  2 +-
  java/res/xml/key_styles_common.xml            |  2 +-
  java/res/xml/key_styles_number.xml            |  1 +
- 45 files changed, 533 insertions(+), 103 deletions(-)
+ 46 files changed, 534 insertions(+), 104 deletions(-)
  create mode 100644 java/res/drawable/sovereignos_background_keyboard.xml
  create mode 100644 java/res/drawable/sovereignos_background_padtop.xml
  create mode 100644 java/res/drawable/sovereignos_key_cap_action_dark.xml
@@ -1161,6 +1162,19 @@ index 1b3283ffa..791a5aa38 100644
          <item name="suggestionStripOptions">autoCorrectBold|validTypedWordBold</item>
          <item name="colorValidTypedWord">@color/typed_word_color_lxx_light</item>
          <item name="colorTypedWord">@color/typed_word_color_lxx_light</item>
+diff --git a/java/res/values/themes-lxx.xml b/java/res/values/themes-lxx.xml
+index 463306b43..4462d3f56 100644
+--- a/java/res/values/themes-lxx.xml
++++ b/java/res/values/themes-lxx.xml
+@@ -34,7 +34,7 @@
+         <item name="keyHintLetterRatio">@fraction/config_key_hint_letter_ratio_lxx</item>
+         <item name="keyShiftedLetterHintRatio">@fraction/config_key_shifted_letter_hint_ratio_lxx</item>
+         <item name="keyLargeLetterRatio">@fraction/config_key_large_letter_ratio_lxx</item>
+-        <item name="keyLabelOffCenterRatio">-80%</item>
++        <item name="keyLabelOffCenterRatio">-150%</item>
+         <item name="keyHintLabelRatio">@fraction/config_key_hint_label_ratio_lxx</item>
+         <item name="keyHintLabelOffCenterRatio">300%</item>
+         <item name="keyLabelFlags">alignHintLabelToBottom</item>
 diff --git a/java/res/xml/key_styles_common.xml b/java/res/xml/key_styles_common.xml
 index fbc44da38..86792f1ac 100644
 --- a/java/res/xml/key_styles_common.xml
