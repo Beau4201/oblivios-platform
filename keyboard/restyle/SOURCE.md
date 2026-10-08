@@ -23,5 +23,5 @@ Upstream lines touched: the two `themes-lxx-*.xml` files (inputViewStyle, three 
 
 - `tools/build-vm/typecheck-latinime.sh`: `aapt2` compile and link of the resources plus `javac` of all sources, `typecheck: OK`; deliberately broken resources and Java print `typecheck: FAILED`.
 - `tools/keyboard/check-centring.py`: `centring: OK`; mutations of the padding, the cap inset and the action-cap size each fail it.
-- A source review of the diff (read-only) found five defects before landing; all are fixed. The platform behaviour the landscape fix relies on (padding of the content root once the window is laid out under the cutout) is verified in source, not on a device.
-- Device evidence: rows `KBD-*` of the validation matrix; none run yet.
+- A source review of the diff (read-only) found five defects before landing; all are fixed. The platform padding of the content root once the window is laid out under the cutout, on which the landscape fix relies, was confirmed on `lynx` (the emoji panel content starts at the cutout inset while the window spans the display).
+- Device evidence: rows `KBD-*` of the validation matrix. The first landing ran on `lynx` (image `2026100702`, 2026-10-08); the second landing, which fixes what that round found, has not been built.
