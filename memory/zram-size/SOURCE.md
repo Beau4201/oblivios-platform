@@ -6,9 +6,11 @@ GrapheneOS `vendor/adevtool`, build-server branch `sovereignos-airpods-identity`
 `9b0e6172643f76714f76b1be8c6ad986ae4dde35` (read 2026-10-08). The patch was authored in a
 disposable local git repository that held only the two touched files, whose blob hashes were
 compared with `git rev-parse HEAD:<path>` on the build server before the edit
-(`sysprop-inclusion.yml` `b01fc417`, `device-common.mk` `30d2fc16`). It has not been landed on
-the build server yet: landing happens together with the generated-file step below, right before
-the next candidate build, so no other build sees a half-applied change.
+(`sysprop-inclusion.yml` `b01fc417`, `device-common.mk` `30d2fc16`). Landed on the build server
+with `git am` on 2026-10-08 as `ccc1d8db81aea787eb81c7bb14d9f2ec58f13986`; the two files have the
+same blob hashes as the worktree (`ab73e1e5` and `53817507`). The generated-file and pin steps
+below were applied for `lynx` and `stallion` in the same session. Once landed, any build of
+either device needs both, so they belong together.
 
 ## Patches
 
@@ -38,8 +40,24 @@ for d in lynx stallion; do
 done
 ```
 
+Every commit in `vendor/adevtool` also stales the pin of each generated
+`vendor/google_devices/<device>/adevtool-version-check.mk` (it holds the exact `HEAD` of
+`vendor/adevtool`; a stale pin fails the build within a second with "vendor module is
+outdated"). Update the pin of every device that is built, keeping a copy
+(`docs/research/build-and-signing-engineering-notes.md`, "adevtool version pinning"):
+
+```sh
+N=$(git -C vendor/adevtool rev-parse HEAD); OLD=<the previous HEAD>
+for d in lynx stallion; do
+  f=vendor/google_devices/$d/adevtool-version-check.mk
+  test "$(grep -c $OLD $f)" = 1 && cp -p $f $f.pre-zram80 && sed -i "s/$OLD/$N/" $f
+done
+```
+
 After a build, `grep '^mmd.zram.size' <product-out>/product/etc/build.prop` must print exactly one
-line, `mmd.zram.size=80%`.
+line, `mmd.zram.size=80%`. The build script must run the package check and that grep only when
+the build exited 0: a failed build leaves the previous outputs in place and the check then
+reports a false pass (it did on 2026-10-08, after the stale pin).
 
 ## Rebase notes
 
@@ -66,5 +84,14 @@ The two entries removed from the inclusion list also cover `bluejay` and `oriole
 - The flash writeback ceiling does not grow with the zram size
   (`system/memory/mmd/src/zram/writeback.rs`, `calculate_idle_writeback_limit`: the limit is
   `used / total * max_bytes`, capped by `max_bytes` and the backing file).
-- Not run: a build with this patch, the check of the resulting `build.prop`, a `stallion` boot
-  with it, and the daily kill rate.
+- Build: `lynx-cur-userdebug`, `BUILD_NUMBER=2026100801`, `OFFICIAL_BUILD=true`, exit 0 after
+  about 3.5 minutes; `check-required-packages.sh` printed `all required packages present`;
+  `product/etc/build.prop` line 152 is the only `mmd.zram.size`, `=80%`. The first attempt failed
+  at once on the stale pin (above).
+- Device: image flashed to `lynx` without a wipe (`flashall` runs in fastbootd, reached with
+  `fastboot reboot fastboot`, not in the bootloader). Live, 69 s after boot:
+  `ro.build.version.incremental=2026100801`, `SwapTotal` 6112248 kB (80% of 7640316 kB) with
+  the DeviceConfig override removed beforehand (`cmd device_config get mmd_native zram.size` is
+  `null`), so the size comes from `build.prop`. Dropbox: no crash, ANR, tombstone or wtf entry
+  (strictmode only), 0 `am_kill` since boot.
+- Not run: a `stallion` build and boot with it, and the daily kill rate.
