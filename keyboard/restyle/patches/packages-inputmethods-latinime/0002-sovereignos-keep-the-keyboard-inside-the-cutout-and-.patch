@@ -1,6 +1,6 @@
-From 1a592d33da02b1c340f2c10fb1f54c99c179b8b0 Mon Sep 17 00:00:00 2001
+From a4170d706afb585f6697dcffcd878a7bd2ca1a24 Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
-Date: Thu, 8 Oct 2026 03:18:23 +0200
+Date: Thu, 8 Oct 2026 14:08:08 +0200
 Subject: [PATCH 2/2] sovereignos: keep the keyboard inside the cutout and
  system-bar insets in landscape
 
