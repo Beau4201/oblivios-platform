@@ -12,18 +12,26 @@ same blob hashes as the worktree (`ab73e1e5` and `53817507`). The generated-file
 below were applied for `lynx` and `stallion` in the same session. Once landed, any build of
 either device needs both, so they belong together.
 
+`0002` was authored the same way on top of `ccc1d8db` (the file blob `53817507` matched the
+server's before the edit) and landed with `git am` on 2026-10-09 as
+`c0fa4e994d2a783acad6772aa86eeac02168e24a`; `device-common.mk` has the blob `2e94e040` in the
+worktree and on the server. It only changes the value, so `product.prop` needs no further edit. The
+pin of `lynx` and `stallion` was updated to `c0fa4e99` (copies kept as
+`adevtool-version-check.mk.pre-zram100`).
+
 ## Patches
 
 | Patch | Subject | Files | Why it diverges from upstream |
 | --- | --- | --- | --- |
 | `0001` | raise the zram swap capacity to 80% of RAM | `config/device/common/sysprop-inclusion.yml` (two lines removed), `config/mk/google_devices/common/device-common.mk` (one property and a comment) | The stock value is `mmd.zram.size=50%`. Secure app spawning makes every app process about 43 MB larger and not shareable, so the swap fills about 30 s after unlock and lmkd kills apps. |
+| `0002` | raise the zram swap capacity from 80% to 100% of RAM | `config/mk/google_devices/common/device-common.mk` (the value and a comment) | lmkd counts free swap below 10% of the total as low, so only 90% of the capacity is usable. With the same load 80% was below that line 55% of the time and 100% never, at the same physical zram (see Verification). |
 
 ## Apply
 
 On the build server, with no build running:
 
 ```sh
-cd vendor/adevtool && git am <path>/memory/zram-size/patches/vendor-adevtool/0001-*.patch
+cd vendor/adevtool && git am <path>/memory/zram-size/patches/vendor-adevtool/000[12]-*.patch
 ```
 
 The adevtool output under `vendor/google_devices/<device>/sysprop/product.prop` is generated and
@@ -55,7 +63,7 @@ done
 ```
 
 After a build, `grep '^mmd.zram.size' <product-out>/product/etc/build.prop` must print exactly one
-line, `mmd.zram.size=80%`. The build script must run the package check and that grep only when
+line, `mmd.zram.size=100%` (`80%` for an image built from `0001` alone). The build script must run the package check and that grep only when
 the build exited 0: a failed build leaves the previous outputs in place and the check then
 reports a false pass (it did on 2026-10-08, after the stale pin).
 
@@ -66,7 +74,7 @@ Two lines of the inclusion list and one appended block. On a new base, check tha
 `product.prop` files and in `build.prop` of an earlier build) and that `mmd` still reads
 `mmd.zram.size` through `PerDeviceStringProp::ZramSize` (`system/memory/mmd/src/mmd_setup.rs`).
 The two entries removed from the inclusion list also cover `bluejay` and `oriole`
-(`3221225472`); those devices are not built here and would get 80% too.
+(`3221225472`); those devices are not built here and would get 100% too.
 
 ## Verification
 
@@ -94,4 +102,21 @@ The two entries removed from the inclusion list also cover `bluejay` and `oriole
   the DeviceConfig override removed beforehand (`cmd device_config get mmd_native zram.size` is
   `null`), so the size comes from `build.prop`. Dropbox: no crash, ANR, tombstone or wtf entry
   (strictmode only), 0 `am_kill` since boot.
-- Not run: a `stallion` build and boot with it, and the daily kill rate.
+- `0002`, load experiment on `lynx` (`userdebug`, `adb root`, 2026-10-09). The zram was reset live
+  (`swapoff`, `reset`, `disksize`, `swapon` with the `lz77eh` algorithm) to a percentage of
+  `MemTotal`, a freestanding test program pushed 4 GB of never-touched data to swap with
+  `MADV_PAGEOUT` (the stand-in for the dead boot-image copies of idle exec-spawned processes) and
+  held 400 MiB hot, and twelve apps were launched in turn for 300 s. One run per cell:
+
+  | zram | minimum free swap | time under 10% free | PSI full max | PSI some mean | physical zram |
+  | --- | --- | --- | --- | --- | --- |
+  | 50% (3730 MB) | 0 MB | 100% | 4.29 | 1.07 | 933 MB |
+  | 80% (5968 MB) | 219 MB | 55% | 1.67 | 0.17 | 1405 MB |
+  | 100% (7461 MB) | 1414 MB | 0% | 1.32 | 0.11 | 1452 MB |
+
+  With a 5.5 GB load every size was full, 64% of the time at 100%. Major faults were higher at 100%
+  (109942 against 57013); one run per cell cannot tell whether that is noise. The kill counts are
+  1 in every run: `lynx` has too few cached apps for lmkd to kill, so the effect on kills is not
+  measured there, only the swap-low state that triggers them.
+- Not run: a `stallion` build and boot with `0002`, the daily kill rate, and how much swap
+  `stallion` needs over a day (the plateau of `SwapFree` decides whether 100% is enough).

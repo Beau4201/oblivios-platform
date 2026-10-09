@@ -1,0 +1,41 @@
+From 08dcee91cdc8615c9aee3543e47cf8193b1f964d Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Fri, 9 Oct 2026 17:44:46 +0200
+Subject: [PATCH] memory: raise the zram swap capacity from 80% to 100% of RAM
+
+lmkd treats free swap below 10% of the total as low and then kills apps
+when memory is short, so only 90% of the capacity is usable. On a lynx
+with the same load of 4 GB of cold swap, 80% was below that line 55% of
+the time and 100% never, with the same physical zram (1405 MB against
+1452 MB). The stock 50% was below it all the time. zram is compressed RAM
+used only when filled, so the larger limit costs no memory until needed.
+---
+ config/mk/google_devices/common/device-common.mk | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
+index 5381750..2e94e04 100644
+--- a/config/mk/google_devices/common/device-common.mk
++++ b/config/mk/google_devices/common/device-common.mk
+@@ -90,7 +90,7 @@ PRODUCT_PACKAGES_DEBUG += \
+     AirPodsProbeNoPerm \
+     AirPodsProbeBtPriv
+ 
+-# SovereignOS: zram swap capacity of 80% of RAM instead of the stock 50% (ADR-150).
++# SovereignOS: zram swap capacity of 100% of RAM instead of the stock 50% (ADR-150).
+ # Secure app spawning makes every app process about 43 MB larger and not shareable with
+ # the zygote, so with 50% the swap is full about 30 s after unlock and lmkd kills apps.
+ # zram is compressed RAM that is used only when filled (about 4.5x measured), so the
+@@ -99,4 +99,8 @@ PRODUCT_PACKAGES_DEBUG += \
+ # mmd.zram.writeback.max_bytes and device_size. The stock value is dropped from
+ # sysprop-inclusion.yml because a second assignment with a different value fails
+ # post_process_props.py. Kept in the common file like Guardian and AirPods.
+-PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=80%
++# 100% and not 80%: lmkd treats free swap below 10% of the total as low, which is 90% of the
++# capacity usable. With a cold swap demand of 4 GB on top of the apps, 80% sat below that line
++# 55% of the time and 100% never, at the same physical zram (docs/research/
++# stallion-memory-pressure-investigation.md, "Zram capacity").
++PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%
+-- 
+2.56.0
+
