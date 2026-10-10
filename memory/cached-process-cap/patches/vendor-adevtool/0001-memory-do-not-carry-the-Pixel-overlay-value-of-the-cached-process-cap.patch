@@ -1,0 +1,31 @@
+From d9665a565a5620ec9da499fd9195b08401e1c83b Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sat, 10 Oct 2026 03:48:20 +0200
+Subject: [PATCH] memory: do not carry the Pixel overlay value of the cached
+ process cap
+
+The Pixel vendor overlay sets config_customizedMaxCachedProcesses to 1024 and a vendor
+overlay overrides the framework default, so the value cannot be changed in frameworks/base
+while this entry is carried. The framework value is set by the paired frameworks/base patch
+(ADR-151).
+---
+ config/device/common/overlay-inclusion.yml | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/config/device/common/overlay-inclusion.yml b/config/device/common/overlay-inclusion.yml
+index fc186bd7..09ef7cf5 100644
+--- a/config/device/common/overlay-inclusion.yml
++++ b/config/device/common/overlay-inclusion.yml
+@@ -392,7 +392,8 @@ filters:
+       - android:integer/config_autoBrightnessDarkeningLightDebounce = 2000
+       - android:integer/config_autoBrightnessDarkeningLightDebounce|*
+       - android:integer/config_cameraPrivacyLightAlsAveragingIntervalMillis|*
+-      - android:integer/config_customizedMaxCachedProcesses = 1024
++      # SovereignOS: config_customizedMaxCachedProcesses = 1024 is not carried; frameworks/base sets the
++      # value (a vendor overlay would override it). See memory/cached-process-cap.
+       - android:integer/config_datagram_wait_for_connected_state_timeout_millis = 180000
+       - android:integer/config_defaultAlarmVibrationIntensity = 3
+       - android:integer/config_defaultHapticFeedbackIntensity = 3
+-- 
+2.39.5
+
