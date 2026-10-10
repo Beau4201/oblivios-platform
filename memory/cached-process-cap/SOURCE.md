@@ -42,13 +42,18 @@ built; this is what a fresh `adevtool generate-all` would produce with the chang
 (not run here: it needs tens of GB of factory images):
 
 ```sh
+mkdir -p /srv/sovereignos/tmp-primary/cap48-backups
 for d in lynx stallion; do
   f=vendor/google_devices/$d/overlays/framework-res__${d}__auto_generated_rro_vendor/res/values/values.xml
   test "$(grep -c 'config_customizedMaxCachedProcesses">1024<' $f)" = 1
-  cp -p $f $f.pre-cap48 && sed -i '/config_customizedMaxCachedProcesses">1024</d' $f
+  cp -p $f /srv/sovereignos/tmp-primary/cap48-backups/$d-values.xml.pre-cap48 && sed -i '/config_customizedMaxCachedProcesses">1024</d' $f
   grep -c config_customizedMaxCachedProcesses $f   # must print 0
 done
 ```
+
+Never keep the backup inside the overlay's `res/` directory: Soong compiles every file under it as a
+resource and the build fails with `invalid file path '...values.xml.pre-cap48'` (found 2026-10-10,
+first `2026101001` attempt).
 
 Every commit in `vendor/adevtool` also stales the pin of each generated
 `vendor/google_devices/<device>/adevtool-version-check.mk`. Update it for every device that is built
@@ -64,8 +69,9 @@ done
 
 The steps above were applied for `lynx` and `stallion` on 2026-10-10: afterwards
 `grep -c config_customizedMaxCachedProcesses` is 0 in every `overlays/*/res/values/values.xml` of
-both devices, both pins hold `d9665a56`, and the `*.pre-cap48` copies differ from the live files
-by exactly that line and that hash.
+both devices, both pins hold `d9665a56`, and the backups differ from the live files by exactly that line and
+that hash. The overlay backups were first written next to the file and moved out of `res/` after the
+build failed on them; they are in `/srv/sovereignos/tmp-primary/cap48-backups/`.
 
 ## Verification
 
