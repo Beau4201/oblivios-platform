@@ -75,7 +75,12 @@ build failed on them; they are in `/srv/sovereignos/tmp-primary/cap48-backups/`.
 
 ## Verification
 
-Not built. After a build that exited 0, on the device:
+Built 2026-10-10 into `lynx-cur-userdebug` `2026101001` with `memory/zram-size` (`OFFICIAL_BUILD=true`,
+exit 0, `check-required-packages.sh` printed `all required packages present`). Read in the output
+directory: `framework-res.apk` has `config_customizedMaxCachedProcesses` 48, the vendor overlay APK
+`framework-res__lynx__auto_generated_rro_vendor.apk` has no such resource, `product/etc/build.prop` has
+one `mmd.zram.size=100%`. The first run failed on the backup file in `res/` (above); the second built
+`vendor` and `vbmeta`. Not flashed. After a flash, on the device:
 
 - `dumpsys activity settings` shows `mCustomizedMaxCachedProcesses=48` and
   `CUR_MAX_CACHED_PROCESSES=48`, with no `max_cached_processes` flag set
