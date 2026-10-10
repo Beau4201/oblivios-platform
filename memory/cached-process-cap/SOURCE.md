@@ -62,6 +62,11 @@ for d in lynx stallion; do
 done
 ```
 
+The steps above were applied for `lynx` and `stallion` on 2026-10-10: afterwards
+`grep -c config_customizedMaxCachedProcesses` is 0 in every `overlays/*/res/values/values.xml` of
+both devices, both pins hold `d9665a56`, and the `*.pre-cap48` copies differ from the live files
+by exactly that line and that hash.
+
 ## Verification
 
 Not built. After a build that exited 0, on the device:
