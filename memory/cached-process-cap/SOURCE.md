@@ -80,7 +80,8 @@ exit 0, `check-required-packages.sh` printed `all required packages present`). R
 directory: `framework-res.apk` has `config_customizedMaxCachedProcesses` 48, the vendor overlay APK
 `framework-res__lynx__auto_generated_rro_vendor.apk` has no such resource, `product/etc/build.prop` has
 one `mmd.zram.size=100%`. The first run failed on the backup file in `res/` (above); the second built
-`vendor` and `vbmeta`. Not flashed. After a flash, on the device:
+`vendor` and `vbmeta`. Flashed on `lynx` on 2026-10-10 (`MEM-013` read the first bullet below,
+`MEM-014` the third). Checks on a device:
 
 - `dumpsys activity settings` shows `mCustomizedMaxCachedProcesses=48` and
   `CUR_MAX_CACHED_PROCESSES=48`, with no `max_cached_processes` flag set
@@ -99,3 +100,11 @@ One entry of the inclusion list and one resource value. On a new base, check tha
 and that the Pixel vendor overlay still sets it (`grep -rn config_customizedMaxCachedProcesses
 vendor/google_devices/*/overlays`). If the entry returns to the inclusion list, the vendor value wins
 again and the build shows 1024.
+
+The inclusion list is an allow-list passed to the prebuilt `arsclib` (`src/blobs/overlays2.ts`),
+whose source is not in the tree. A plain `adevtool generate-all` with this change was never run
+(it needs the factory images), so it is not verified that the entry stays out of the generated
+overlay, nor how a later factory image with another value of this resource (`= 512`, say) is
+treated (silently dropped or an error). After a new `generate-all`, repeat the `grep -c` above.
+The no-kill window of 600 s restarts at every user unlock, not only the first
+(`UserController` calls `setLastUserUnlockingUptime`).

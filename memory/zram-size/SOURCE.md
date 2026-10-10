@@ -89,9 +89,17 @@ The two entries removed from the inclusion list also cover `bluejay` and `oriole
   against 1135 and 887 MB. `lynx` never ran out of swap in either configuration, so a reduction
   of lmkd kills is not measured. `stallion` is a `user` build and refuses the same override
   (`mmd_native/zram.size` is not on the DeviceConfig allowlist), so its effect needs a build.
-- The flash writeback ceiling does not grow with the zram size
-  (`system/memory/mmd/src/zram/writeback.rs`, `calculate_idle_writeback_limit`: the limit is
-  `used / total * max_bytes`, capped by `max_bytes` and the backing file).
+- Flash writeback: the images set `mmd.zram.writeback.limit.enabled=false`, so mmd applies no
+  per-run limit (`system/memory/mmd/src/zram/writeback.rs`: `update_writeback_limit` returns at
+  once, and `calculate_idle_writeback_limit`, which scales with used over total zram, is unused).
+  The 1 GiB backing file is the only bound. Whether 100% writes more to flash than 50% is not
+  measured (`MEM-005`). The comment of patch `0001` and its commit message still say the ceiling
+  does not grow with the size; that wording is inaccurate and is left in the landed commit
+  (changing it would stale the `adevtool` pin and need a rebuild); correct it the next time a
+  patch touches `device-common.mk`.
+- `0002` was built with `memory/cached-process-cap` into `lynx-cur-userdebug` `2026101001` and
+  flashed on `lynx` on 2026-10-10: `SwapTotal` 7640312 kB against `MemTotal` 7640316 kB
+  (`MEM-012`, `MEM-013`).
 - Build: `lynx-cur-userdebug`, `BUILD_NUMBER=2026100801`, `OFFICIAL_BUILD=true`, exit 0 after
   about 3.5 minutes; `check-required-packages.sh` printed `all required packages present`;
   `product/etc/build.prop` line 152 is the only `mmd.zram.size`, `=80%`. The first attempt failed
