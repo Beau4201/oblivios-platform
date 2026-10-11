@@ -51,6 +51,12 @@ def main():
     curated_suffixes = {r[0] for r in curated_services}
     curated_ids = {r[0] for r in curated_owners}
 
+    # Two records of the database can be the same company (one Wikidata item): the first id stands for both.
+    canonical = {}
+    for cid in sorted(bases):
+        if owner_id(cid):
+            canonical.setdefault(bases[cid][1], cid)
+
     services, used = [], set()
     skipped = {"category": 0, "no company": 0, "not a host name": 0}
     for domain, tid in sorted(trackers["trackerDomains"].items()):
@@ -71,6 +77,7 @@ def main():
         if cid in cmap:
             owner = cmap[cid]
         elif cid in bases and owner_id(cid):
+            cid = canonical[bases[cid][1]]
             owner = owner_id(cid)
         else:
             owner = "-"

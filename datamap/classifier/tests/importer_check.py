@@ -20,20 +20,23 @@ trackers = {
     "t_nocomp": {"name": "NoComp", "categoryId": 4},
     "t_dup": {"name": "Dup", "categoryId": 4, "companyId": "adco"},
     "t_long": {"name": "Long", "categoryId": 4, "companyId": "a_company_with_a_very_long_id"},
+    "t_twin": {"name": "Twin", "categoryId": 4, "companyId": "adco_twin"},
 }
 domains = {"ads.example": "t_ads", "an.example": "t_an", "soc.example": "t_soc", "cdn.example": "t_cdn",
            "core.example": "t_core", "misc.example": "t_misc", "mob.example": "t_mob", "nocomp.example": "t_nocomp",
-           "dup.example": "t_dup", "long.example": "t_long", "Bad_Host!": "t_ads"}
+           "dup.example": "t_dup", "long.example": "t_long", "Bad_Host!": "t_ads", "twin.example": "t_twin"}
 (T / "dist" / "trackers.json").write_text(json.dumps({"categories": cats, "trackers": trackers, "trackerDomains": domains}))
 (T / "dist" / "companies.json").write_text(json.dumps({"companies": {
     "adco": {"name": "Ad Co", "websiteUrl": "http://adco.example/"},
     "nobase_co": {"name": "No Base", "websiteUrl": "http://nobase.example/"},
     "facebook": {"name": "Facebook", "websiteUrl": "http://facebook.com/"},
+    "adco_twin": {"name": "Ad Co (second record)", "websiteUrl": "http://adco.example/"},
     "a_company_with_a_very_long_id": {"name": "Long", "websiteUrl": "http://long.example/"}}}))
 (T / "bases.tsv").write_text(
     "adco\tQ1\tAd Company Ltd\tNL\tAmsterdam\t52.37\t4.89\n"
     "facebook\tQ2\tFacebook\tUS\tMenlo Park\t37.45\t-122.18\n"
-    "a_company_with_a_very_long_id\tQ3\tLong\tDE\tBerlin\t52.52\t13.4\n")
+    "a_company_with_a_very_long_id\tQ3\tLong\tDE\tBerlin\t52.52\t13.4\n"
+    "adco_twin\tQ1\tAd Company Ltd\tNL\tAmsterdam\t52.37\t4.89\n")
 c = T / "curated"
 (c / "sources.tsv").write_text("C-001\tCurated source\tLicenseRef-Public-Fact\thttps://example.invalid/c1\n")
 (c / "owners.tsv").write_text("meta\tMeta\tMeta Platforms, Inc.\tUS\tMenlo Park\t37.4542\t-122.1786\tC-001\n")
@@ -69,6 +72,8 @@ check(svc["long.example"][1] == "-", "an id longer than 24 characters gives no o
 check(not any(k.lower() != k or "!" in k for k in svc), "a name that is not a host name is dropped")
 
 owners = {r[0]: r for r in rows("owners.tsv")}
+check(svc["twin.example"][1] == "adco", "two records of one Wikidata item are one owner")
+check(sum(1 for r in rows("sources.tsv") if r[0] == "WD-Q1") == 1, "and one source")
 check(set(owners) == {"adco", "meta"}, "owners: only those that own a service, plus curated: " + str(set(owners)))
 check(owners["adco"] == ["adco", "Ad Co", "Ad Company Ltd", "NL", "Amsterdam", "52.3700", "4.8900", "WD-Q1"], "generated owner row")
 srcs = {r[0]: r for r in rows("sources.tsv")}
