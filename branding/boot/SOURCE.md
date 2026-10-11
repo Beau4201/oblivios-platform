@@ -57,6 +57,12 @@ landed there is a single delta commit on that state, authored the same way; it
 gives the same three blobs. The package patches are the reproducible form for
 a clean upstream tree.
 
+The delta commit was landed with `git am` on 2026-10-11 as `aa9f259fd762` in
+`frameworks/base`, build-server branch `sovereignos-2026091900-r2`, on top of
+`eb4138d4688d` (`memory/cached-process-cap` `0001`). No build was running, the
+tree was clean and `git apply --check` passed first. The blobs read back from
+`HEAD` are the three above.
+
 ## Apply
 
 On the build server, with no build running and the tree clean at the expected
