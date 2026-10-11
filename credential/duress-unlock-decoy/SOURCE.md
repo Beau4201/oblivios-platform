@@ -4,9 +4,8 @@
 
 A Settings screen to set up, change and remove the decoy, as a second row below
 "Duress password" on the Device unlock page. Design:
-`docs/superpowers/specs/2026-10-07-duress-unlock-settings-ui-design.md`, plan:
-`docs/superpowers/plans/2026-10-07-duress-unlock-settings-ui.md` (both in
-`sovereignos-foundation`).
+the internal record "duress unlock settings ui design" (not published), plan:
+the internal record "duress unlock settings ui" (not published).
 
 - `frameworks-base/0012`: `ILockSettings#isDuressWipeCredential(ownerCredential,
   candidate)`, appended last. Settings cannot tell whether a decoy PIN equals the
@@ -178,7 +177,7 @@ exported files, not taken from the squash step):
   real tree, so it gets a genuinely different SHA even for byte-identical
   content. Verify the real SHA with `git log` on the branch after `git am`
   — never assume the local worktree's own commit SHA carries over) —
-  authored under `AGENTS.md`'s new local-first discipline (ADR-054): edited
+  authored under `CONTRIBUTING.md`'s new local-first discipline (ADR-054): edited
   in a disposable local git repo seeded from the real branch HEAD, not on
   the build server directly, then landed there with `git am --3way` (applied
   cleanly, no conflicts).
@@ -300,7 +299,7 @@ cd build/release && git checkout -b aegisos-duress-decoy-switch && \
   patch-authoring discipline this and all future patches now follow.
 - ADR-055 (2026-08-26) — Task 3's citation, plus two process-defect
   findings (a wrong SHA citation; a patch landed mid-build) folded into
-  `AGENTS.md`.
+  `CONTRIBUTING.md`.
 - ADR-056 (2026-08-27) — Tasks 4-6's citation, plus both real builds'
   results (Task 2's and the consolidated one) confirming `0001`-`0007`
   compile together. Tasks 7-9 (emulator validation, physical hardware
@@ -314,7 +313,7 @@ cd build/release && git checkout -b aegisos-duress-decoy-switch && \
 
 ## Second plan: real-user quiescing and return path (`0008`-`0017`)
 
-`docs/superpowers/plans/2026-08-27-duress-real-user-quiescing-and-return.md`
+the internal record "duress real user quiescing and return" (not published)
 continues the same `frameworks/base` branch (`aegisos-duress-decoy-switch`)
 from `0007`'s own HEAD (`41aeb66e0893`). All 10 commits below were authored
 under the same local-first discipline (disposable worktrees under
@@ -445,7 +444,7 @@ snapshot against the freshly built image; fixed with `-no-snapshot-load`.
 
 ## Third plan: session indistinguishability, Component A (`0018`)
 
-`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`
+the internal record "duress decoy session indistinguishability" (not published)
 continues the same `frameworks/base` branch (`aegisos-duress-decoy-switch`).
 The real branch tip at fetch time was `5f3a562a4eefea8a14c2aaf42d14fc9c49cf0c1a`
 — ahead of `0017`'s own recorded HEAD (`295f6f9cf610`) because two
@@ -476,7 +475,7 @@ entries here as they land.
   `mLockPatternUtils.isTrustAllowedForUser(userId)`, so the skip only
   ever applies to a target user whose CE storage is already unlocked and
   trusted — this task does not by itself relax either of those two
-  additional runtime gates. Authored under `AGENTS.md`'s local-first
+  additional runtime gates. Authored under `CONTRIBUTING.md`'s local-first
   discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-task2a/`,
   seeded read-only from the real branch HEAD
@@ -548,7 +547,7 @@ one.
   own `@hide`-only precedent instead — no `system-current.txt` entry
   expected or added). `ArrayList` was already imported in
   `UserManagerService.java`; no new import was needed. Authored under
-  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  `CONTRIBUTING.md`'s local-first discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-task3/`,
   seeded read-only from the real branch HEAD
   `ebb58e3ccc2034c2685b889ceecbcd1830b382ef`) and landed on the real
@@ -602,7 +601,7 @@ to migrate.
   `grep -n`/direct read against the actual build-server source before
   editing — the brief's own quoted line numbers carried a one-line drift
   (`UserRepositoryImpl.kt:266` in the brief vs. the real `:267`) but the
-  quoted code text itself matched exactly. Authored under `AGENTS.md`'s
+  quoted code text itself matched exactly. Authored under `CONTRIBUTING.md`'s
   local-first discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-task4/`, a
   fetch-only worktree seeded read-only from the real branch HEAD
@@ -668,7 +667,7 @@ relative to today's behavior.
   real current line was re-confirmed via `grep -n`/direct read against the
   actual build-server source (including a byte-for-byte `sha256sum` match
   between the fetched local copy and the live remote file) before editing.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable local
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable local
   git repo (`aegisos-platform/.worktrees/duress-indistinguishability-task5b/`,
   a fetch-only worktree seeded read-only from the real branch HEAD
   `c3a11765d4d61f61c0a753d1b9a4dd5d17b84049` — only the one touched file,
@@ -694,8 +693,7 @@ exercise of this specific UI surface.
 Task 7 of the same plan closes a different, wider cascade than Components
 A/B: a freshly created decoy user has never run Android's own SetupWizard,
 which — per this plan's own design research
-(`docs/superpowers/specs/2026-08-28-duress-decoy-session-indistinguishability-design.md`
-in `aegisos-foundation`) — gates several unrelated, non-admin-gated
+(the internal record "duress decoy session indistinguishability design" (not published)) — gates several unrelated, non-admin-gated
 SystemUI behaviors (screenshot/clipboard overlays, full-screen call/alarm
 intents, the status-bar alarm icon, Material You theming, the QS settings
 gear) purely on the per-user `Settings.Secure.USER_SETUP_COMPLETE` flag.
@@ -719,7 +717,7 @@ writes that one flag at the single place a decoy is ever registered.
   `grep -n`/direct read against the actual build-server source (imports
   block, `setDecoyProfile` body, and the constructor call site all matched
   the plan's expected text verbatim, no drift found) before editing.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable local
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable local
   git repo (`aegisos-platform/.worktrees/duress-indistinguishability-task7/`,
   a fetch-only worktree seeded read-only from the real branch HEAD
   `4167d1df8b4e53c05316e731d41d79f5ef2cfba3` — only the two touched files,
@@ -785,7 +783,7 @@ transient Settings-provider issue) would have gone completely unnoticed.
   Re-confirmed the real current source (`DecoyProfileHelper.java`'s
   imports and `setDecoyProfile` body) via SSH before editing — matched
   `0022`'s own landed content exactly, no drift. Authored under
-  `AGENTS.md`'s local-first discipline in a **new** disposable local git
+  `CONTRIBUTING.md`'s local-first discipline in a **new** disposable local git
   repo (`aegisos-platform/.worktrees/duress-indistinguishability-task7-fix/`,
   seeded read-only from the real branch HEAD
   `4e10e6a87a4a48e9381f5f46afd65d6765f61dbf` — i.e. `0022`'s own real
@@ -848,7 +846,7 @@ original four commits (`e4722bcb53a3`, `aae51c7d0274`, `952bd37e4bbc`,
 `10209de65d2a` — enable at `trunk_staging`, relocate to `cp2a`, fix
 permission to `READ_ONLY`, revert to `DISABLED`) were squashed into one
 commit on 2026-09-17, with owner sign-off, after a closure audit
-(`docs/devices/lynx-duress-unlock-patch-audit.md` in `AegisOS-foundation`)
+(the internal record "lynx duress unlock patch audit" (not published))
 found this flag's own upstream declared default already resolves to
 `state: DISABLED, permission: READ_ONLY` on this product's `cp2a` release
 config — identical to `0004`'s final state — meaning the whole four-patch
@@ -886,7 +884,7 @@ at the end of this subsection.
   `credential_capture_flag_values.textproto` file was actually new. This
   does not change what the patch does (one new file, no conflicts), only
   the "first flag override for this package" framing in the brief, which
-  was incorrect. Authored under `AGENTS.md`'s local-first discipline in a
+  was incorrect. Authored under `CONTRIBUTING.md`'s local-first discipline in a
   disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-task2b/`, a
   new-file-only worktree, nothing fetched) and landed on the real branch
@@ -907,8 +905,8 @@ here.
 
 ### Fix to `0001`: correct release-config directory + permission (`0002`, `0003`)
 
-Task 10's own emulator validation (`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`
-Task 10, `.superpowers/sdd/task-10-report.md`) found `0001` a real, confirmed
+Task 10's own emulator validation (the internal record "duress decoy session indistinguishability" (not published)
+Task 10) found `0001` a real, confirmed
 functional defect, not a hypothetical: `sdk_phone64_x86_64-cp2a-userdebug`
 and `lynx-cur-userdebug` both build release config `cp2a`
 (`RELEASE_ACONFIG_VALUE_SETS` ends in `...-cp2a`, confirmed in both trees'
@@ -935,7 +933,7 @@ this fix required (not by inspection):
   content otherwise unchanged (`permission: READ_WRITE` preserved at this
   step). No `Android.bp` change needed —
   `aconfig/cp2a/android.multiuser/Android.bp` already globs
-  `*_flag_values.textproto`. Authored under `AGENTS.md`'s local-first
+  `*_flag_values.textproto`. Authored under `CONTRIBUTING.md`'s local-first
   discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-task2-fix/`,
   a baseline-fetch-then-edit worktree — a direct `git fetch` of full branch
@@ -944,7 +942,7 @@ this fix required (not by inspection):
   corruption on the remote side," consistent with `build/release` being a
   partial/promisor clone this workstation cannot lazily complete; fell back
   to fetching only the touched file's content and committing it as an
-  explicit baseline, per `AGENTS.md`'s own "fetch only the touched files"
+  explicit baseline, per `CONTRIBUTING.md`'s own "fetch only the touched files"
   wording) and landed on the real branch with `git am --3way` (applied
   cleanly, no conflicts).
 - `952bd37e4bbceda794f3cc823e18f1c0948beeeb` — "aegisos: mark
@@ -1006,7 +1004,7 @@ is real and confirmed working at the flag-storage and `UserController`
 decision layers, but the plan's actual functional goal (single-PIN decoy
 unlock) is still not achieved, and a second, more serious, previously
 undetectable problem surfaced now that the flag is genuinely active for
-the first time.** Full evidence: `.superpowers/sdd/task-2-fix-report.md`.
+the first time.** Full evidence: the Task 2 fix report (not published).
 
 - Component A (decoy switch, single PIN entry): **still FAILS**, but via a
   *different* code path than `0001`'s original defect. Logcat confirms
@@ -1079,7 +1077,7 @@ whether the flag itself is enabled or disabled.
   ever consulted inside `if (android.multiuser.Flags.credentialCapture())
   { ... }` — with this flag disabled again, that resource value is simply
   never read, so `0018` does not need a separate revert. Authored under
-  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  `CONTRIBUTING.md`'s local-first discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-task2-revert/`,
   a baseline-fetch-then-edit worktree seeded from the real branch HEAD
   `952bd37e4bbceda794f3cc823e18f1c0948beeeb` — the fetched file's
@@ -1113,7 +1111,7 @@ newly-`ENABLED` vs. newly-`DISABLED` read-only flag that was not further
 root-caused (not needed: the dynamic test below is decisive regardless of
 what `aflags list` shows). Created an ordinary (non-decoy) secondary user
 (`aegisos-task2revert-ordinary`, id 10, confirmed cold — no `running` tag
-— before the switch), set PIN `22222`, cleared logcat, then `adb shell am
+— before the switch), set a PIN, cleared logcat, then `adb shell am
 switch-user 10`:
   - `dumpsys window` immediately showed `isKeyguardShowing=true` (the
     regression's own fingerprint was `isKeyguardShowing=false`
@@ -1123,8 +1121,7 @@ switch-user 10`:
     — neither `KeyguardViewMediator` nor `UserController` fired their skip
     decisions this time (both had fired for this exact scenario on the
     `0003` build).
-  - Supplying the real credential (`adb shell cmd lock_settings verify
-    --user 10 --old 22222`) produced `LockSettingsService: Verifying
+  - Supplying the real credential (`adb shell cmd lock_settings verify --user 10 --old <PIN>`) produced `LockSettingsService: Verifying
     primary lockscreen credential for user 10` /
     `LockSettingsService: Successfully verified primary lockscreen
     credential for user 10` — this exact line was **absent entirely** in
@@ -1148,7 +1145,7 @@ and every step below was verified against the real branch state
 immediately before acting, not assumed from an earlier read.
 
 **Why:** the Duress Unlock final-closure audit
-(`docs/devices/lynx-duress-unlock-patch-audit.md` in `AegisOS-foundation`,
+(the internal record "lynx duress unlock patch audit" (not published),
 Step 2) found `credential_capture`'s own upstream declared default (no
 explicit `state:` in `frameworks/base/core/java/android/content/pm/
 multiuser.aconfig`, so `aconfig`'s own hardcoded
@@ -1174,7 +1171,7 @@ identically to `0002`'s own prior experience ("lazy fetching disabled;
 some objects may not be available" / "aborting due to possible repository
 corruption on the remote side" — `build/release` is a partial/promisor
 clone on the build server, confirming this isn't a one-off). Fell back to
-`AGENTS.md`'s own "fetch only the touched files" pattern instead: an
+`CONTRIBUTING.md`'s own "fetch only the touched files" pattern instead: an
 empty baseline commit, then the four locally-exported `0001`-`0004`
 patches applied via `git am` on top of it (all four applied cleanly), with
 the resulting file's `sha256sum` confirmed byte-identical to the real
@@ -1274,9 +1271,8 @@ permission: READ_ONLY` on this product's `cp2a` release config, before and
 after the squash, confirmed by the actual `aconfig` tool's own output, not
 inferred.
 
-No LAN/account coordinates in this section, the new patch file, or the
-squashed commit message — grepped for `192\.168|beau@|beau-dev|
-/srv/aegisos` before this commit.
+No host, account or address coordinates in this section, the new patch file, or the
+squashed commit message — checked with a pattern search before this commit.
 
 ### `frameworks/base`: closing whole-branch review fixes (`0024`)
 
@@ -1333,7 +1329,7 @@ check anywhere in the call chain.
      hidden member; a method that did not exist before `0019` has no such
      callers by construction, so it only widened the non-SDK reflection
      surface for no benefit.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable
   local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-review-fix/`,
   a fetch-only worktree seeded read-only from the real branch HEAD
@@ -1394,7 +1390,7 @@ remain recoverable via the branch's own reflog on the build server (not
 force-pushed anywhere, not garbage-collected).
 
 **Why:** the Duress Unlock final-closure audit
-(`docs/devices/lynx-duress-unlock-patch-audit.md` in `AegisOS-foundation`)
+(the internal record "lynx duress unlock patch audit" (not published))
 classified `0018` (`ebb58e3ccc2034c2685b889ceecbcd1830b382ef`, flips
 `config_multiuserSkipKeyguardWhenSwitchingToUnlockedUsers` from `false` to
 `true`) as a dead end: real hardware validation after it landed found the
@@ -1418,7 +1414,7 @@ check, so it was preserved as an inseparable unit, not cherry-picked
 apart.
 
 **How:** `frameworks/base` is a much larger repository than `build/release`
-(Task 2), so a full or even shallow clone was avoided. Per `AGENTS.md`'s
+(Task 2), so a full or even shallow clone was avoided. Per `CONTRIBUTING.md`'s
 "fetch only the touched files, read-only" pattern, the full list of files
 touched by patches `0018`-`0086` was collected (38 distinct files, one of
 them — `DecoyRoutingFailureMarker.java` — created fresh partway through
@@ -1628,7 +1624,7 @@ vector, just a cosmetic inconsistency with every other tile.
   singleton list containing only the caller's own `UserInfo`, which this
   helper checks for `userType`. `isWalletRoleAvailable()`'s gate becomes
   `(userId == USER_SYSTEM || isDecoySession()) && ...`. Authored under
-  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  `CONTRIBUTING.md`'s local-first discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-wallet-tile-fix/`, a fetch-only
   worktree seeded read-only from the real branch HEAD
   `cd072d704764a3a7de10e33ec0d562f836031c5b` — only the one touched file,
@@ -1696,7 +1692,7 @@ consistent with ADR-063's claim holding for that one specific surface.
   itself, not a per-call-site patch: it covers every present and future
   caller regardless of which process renders it, rather than requiring
   every new UI surface to somehow run in a per-user process to get
-  correct filtering. Authored under `AGENTS.md`'s local-first discipline
+  correct filtering. Authored under `CONTRIBUTING.md`'s local-first discipline
   in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-getusersforuidisplay-fix/`, a
   fetch-only worktree seeded read-only from the real branch HEAD
@@ -1731,7 +1727,7 @@ entry.
 
 Following ADR-067's exhaustive, owner-requested audit for every
 remaining decoy identity-leak surface
-(`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`,
+(the internal record "duress decoy remaining leaks audit" (not published),
 21 items found), fixed in the audit's own recommended priority order.
 
 - `dcb6019b1bfa57a046583b386220581e90697ba8` — "aegisos: fix legacy
@@ -1758,7 +1754,7 @@ remaining decoy identity-leak surface
   fallback to 1) before substituting `getUsersForUiDisplay(true).size()`
   at all three, matching `getAliveUsers()`-based fixes elsewhere in this
   patch set.
-  Both authored under `AGENTS.md`'s local-first discipline in disposable
+  Both authored under `CONTRIBUTING.md`'s local-first discipline in disposable
   local git repos
   (`aegisos-platform/.worktrees/duress-legacyglobalactions-fix/`,
   `aegisos-platform/.worktrees/duress-uninstall-usercount-fix/`, each a
@@ -1809,7 +1805,7 @@ tooling-limitation record).
   of its own. Fixed with a one-line substitution to
   `getUsersForUiDisplay(/* excludeDying= */ true)`, reusing this same
   class's own already-fixed (ADR-066) primitive.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable
   local git repo (`aegisos-platform/.worktrees/duress-multiuser-icon-fix/`,
   a fetch-only worktree seeded read-only from the real branch HEAD
   `12719d2f93938762de6384999d21bd25d4ec857e` — only the one touched
@@ -1861,9 +1857,8 @@ round as `0026`-`0029` and the `packages-apps-settings`/
   needs, and exactly the condition this six-year-old bug was never
   exercised against. Fixed with a one-line substitution (`mContext` →
   `userContext`). Full incident record:
-  `aegisos-foundation`'s
-  `docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  the internal record "lynx duress decoy backup context crash incident" (not published).
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable
   local git repo (`aegisos-platform/.worktrees/duress-backup-context-fix/`,
   a fetch-only worktree seeded read-only from the real branch HEAD
   `57239cc4c69658e346f2f32720a548cbef58c27f` — only the one touched
@@ -1891,7 +1886,7 @@ dropbox` scan.
 ### `frameworks/base`: add `UserManager.isMainForUiDisplay` primitive (`0031`)
 
 Task 1 of the fourth plan
-(`docs/superpowers/plans/2026-09-03-duress-decoy-primary-profile-visual-parity.md`)
+(the internal record "duress decoy primary profile visual parity" (not published))
 adds the shared display-only primitive the plan's later tasks (2-4) use to
 close two visual "tells" that mark a decoy session as an ordinary secondary
 profile rather than the device's one true primary profile: a new `@hide`
@@ -1934,7 +1929,7 @@ design; it is additive only, exercised for the first time by Tasks 2-4.
   is line 5275 — the quoted code text itself matched the real source
   byte-for-byte with no drift, only the caption's line number was off by
   one, so the edit proceeded at the verified real location rather than the
-  cited number. Authored under `AGENTS.md`'s local-first discipline in a
+  cited number. Authored under `CONTRIBUTING.md`'s local-first discipline in a
   disposable local git repo
   (`aegisos-platform/.worktrees/decoy-visual-parity-task1/`, a fetch-only
   worktree seeded read-only from the real branch HEAD
@@ -1973,7 +1968,7 @@ its own; Tasks 2-4 exercise this API for the first time.
 ### `frameworks/base`: suppress "End session" affordance for a decoy session (`0032`)
 
 Task 2 of the fourth plan
-(`docs/superpowers/plans/2026-09-03-duress-decoy-primary-profile-visual-parity.md`)
+(the internal record "duress decoy primary profile visual parity" (not published))
 is `isMainForUiDisplay`'s (`0031`) first real consumer, closing a genuine,
 2026-09-03-audit-confirmed gap unrelated to `isMain()`/`isAdminUser()` and
 untouched by any prior fix in this feature: the QS footer's "End session"
@@ -2008,7 +2003,7 @@ expectation exactly, with no other drift.
   check governing whether the decoy session can actually be switched away
   from, used by this feature's own return path), is untouched. Only the
   "End session" UI affordance's visibility changes; the decoy's actual
-  switchability is unaffected. Authored under `AGENTS.md`'s local-first
+  switchability is unaffected. Authored under `CONTRIBUTING.md`'s local-first
   discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/decoy-visual-parity-task2/`, a fetch-only
   worktree seeded read-only from the real branch HEAD
@@ -2045,7 +2040,7 @@ done as of this entry.
 ### `frameworks/base`: hide user-switcher-enabled state for decoy current-user view (`0033`)
 
 Task 1 of the fifth plan
-(`docs/superpowers/plans/2026-09-03-duress-decoy-user-switcher-visibility.md`)
+(the internal record "duress decoy user switcher visibility" (not published))
 closes a real, audit-confirmed leak distinct from anything the fourth
 plan's `isMainForUiDisplay` primitive (`0031`/`0032`) touches:
 `Settings.Global.USER_SWITCHER_ENABLED` is a device-wide, non-per-user flag
@@ -2083,7 +2078,7 @@ it applies correctly to those cross-process callers too.
   The plan's own quoted pre-edit method body (lines 3445-3455) was
   re-verified against the live build-server source (`sed -n
   '3443,3457p'`) before editing and matched byte-for-byte, with no line
-  drift from the plan's own citation. Authored under `AGENTS.md`'s
+  drift from the plan's own citation. Authored under `CONTRIBUTING.md`'s
   local-first discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/decoy-switcher-visibility-task1/`, a
   fetch-only worktree seeded read-only from the real branch HEAD
@@ -2123,7 +2118,7 @@ icon, the lockscreen avatar, and — on the emulator round this held, but
 was re-suspected here — the Settings toggle) still leaked the decoy's
 existence on real hardware despite `0033`'s bytecode being confirmed
 present and correct via `dexdump` disassembly of the flashed
-`services.jar`. The owner's response ("waarom werkt het niet, vind het")
+`services.jar`. The owner's response (find out why it does not work)
 triggered a `superpowers:systematic-debugging` root-cause investigation
 rather than a guessed re-fix. Two of the three surfaces resolved to
 genuine, source-confirmed code defects, independent of each other and of
@@ -2176,7 +2171,7 @@ calls `UserCapabilities.updateAddUserCapabilities()`, which recomputes
 `mUserSwitcherEnabled = userManager.isUserSwitcherEnabled()` fresh, on
 the same correct, patched API `0034` now also uses. This exact code
 already passed on the Task 2 emulator round with `0033` alone
-(`docs/superpowers/plans/2026-09-03-duress-decoy-user-switcher-visibility.md`
+(the internal record "duress decoy user switcher visibility" (not published)
 Task 2: "Settings 'Allow multiple users' toggle PASS"). No divergent
 implementation or missing-invalidation defect was found in this call
 path by direct source reading. The Task 3 Phase B forensic recheck
@@ -2203,7 +2198,7 @@ not a third patch.
 - Base commit: `544d6e6d4567966cf0d8308e110da4a130b7df6e` (`0033`'s own
   real post-`git am` SHA, the real branch tip at fetch time).
 
-Authored under `AGENTS.md`'s local-first discipline in a disposable local
+Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable local
 git repo
 (`aegisos-platform/.worktrees/duress-switcher-visibility-regression-fix/`,
 a fetch-only worktree seeded read-only from the real branch HEAD above —
@@ -2280,7 +2275,7 @@ elsewhere.
   real build-server SHA). Base commit: `d5e8d97332f098eeb852deb9c2ff7a17423fc402`
   (`0009`'s own real post-`git am` SHA).
 
-Authored under `AGENTS.md`'s local-first discipline in two disposable
+Authored under `CONTRIBUTING.md`'s local-first discipline in two disposable
 local git repos
 (`aegisos-platform/.worktrees/duress-switcher-visibility-regression-fix/`
 for the `frameworks/base` change, added as a third file/commit onto the
@@ -2321,7 +2316,7 @@ anything, so this and future `packages/apps/Settings` commits land on a
 real ref, not an anonymous detached-HEAD history.
 
 Task 5 of the third plan
-(`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`)
+(the internal record "duress decoy session indistinguishability" (not published))
 routes the three real Settings call sites that build the Storage screen's
 per-user breakdown onto Task 3's `getUsersForUiDisplay` API
 (`patches/frameworks-base/0019`), closing the leak described in that
@@ -2349,7 +2344,7 @@ the `frameworks/base` `0021` entry above for the exact wrapper body cited).
   `um.getUsers()`;
   `StorageAsyncLoader.java:82`'s `getStorageResultsForUsers()` now calls
   `mUserManager.getUsersForUiDisplay(false /* excludeDying */)` instead of
-  `mUserManager.getUsers()`. Authored under `AGENTS.md`'s local-first
+  `mUserManager.getUsers()`. Authored under `CONTRIBUTING.md`'s local-first
   discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-task5a/`, a
   fetch-only worktree seeded read-only from the real repository HEAD
@@ -2378,7 +2373,7 @@ as a dependency in the same build. It is not a consolidated
 specific UI surface.
 
 Task 8 of the third plan
-(`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`,
+(the internal record "duress decoy session indistinguishability" (not published),
 "Component D — minor P3 fixes") routes the two remaining Settings
 multi-user UI hints — `Utils.hasMultipleUsers(Context)` and
 `WifiConfigController2`'s `mIsMultiUser` field initializer — onto the same
@@ -2415,7 +2410,7 @@ above and not a genuinely ambiguous case.
   .getUsersForUiDisplay(false /* excludeDying */).size() > 1` instead of
   `.getUserCount() > 1`. Both call sites' pre-edit bodies were confirmed
   via a byte-for-byte `sha256sum` match between the fetched local copy and
-  the live remote file before editing. Authored under `AGENTS.md`'s
+  the live remote file before editing. Authored under `CONTRIBUTING.md`'s
   local-first discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-task8/`, a
   fetch-only worktree seeded read-only from the real repository HEAD
@@ -2439,7 +2434,7 @@ build and does not validate runtime behavior.
 
 The same closing whole-branch review that found `frameworks/base` `0024`'s
 Critical gap also found `0002` above was incomplete: the design doc
-(`docs/superpowers/specs/2026-08-28-duress-decoy-session-indistinguishability-design.md`)
+(the internal record "duress decoy session indistinguishability design" (not published))
 named **three** unscoped Wi-Fi call sites, not two —
 `WifiConfigController2.java` and `WifiUtils.java` — but Task 8 only
 migrated the first. Confirmed by direct source read before fixing:
@@ -2455,7 +2450,7 @@ session — a real ownership-based multi-user tell.
   call-site change: `isCurrentUserNetworkOwner`'s `userCount` now comes
   from `userManager.getUsersForUiDisplay(false /* excludeDying */).size()`
   instead of `userManager.getUserCount()`, matching `0001`/`0002`'s own
-  `false` convention. Authored under `AGENTS.md`'s local-first discipline
+  `false` convention. Authored under `CONTRIBUTING.md`'s local-first discipline
   in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-review-fix-settings/`,
   a fetch-only worktree seeded read-only from the real branch HEAD
@@ -2475,7 +2470,7 @@ in `WifiUtils.java` or any file in this repository.
 
 Following ADR-067's exhaustive, owner-requested audit for every
 remaining decoy identity-leak surface
-(`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`,
+(the internal record "duress decoy remaining leaks audit" (not published),
 21 items found), fixed in the audit's own recommended priority order.
 
 - `ab4b0a932a049f5a3c484c72139dd81ff5661e4b` — "aegisos: fix Settings
@@ -2519,7 +2514,7 @@ remaining decoy identity-leak surface
   device" factory-reset warning (the latter combined with the existing
   `profilesSize` subtraction, unchanged). All three fixed with
   `getUsersForUiDisplay(true).size()`.
-  All three authored under `AGENTS.md`'s local-first discipline in
+  All three authored under `CONTRIBUTING.md`'s local-first discipline in
   disposable local git repos
   (`aegisos-platform/.worktrees/duress-usersettings-fix/`,
   `aegisos-platform/.worktrees/duress-storagewizard-fix/`,
@@ -2539,7 +2534,7 @@ remaining decoy identity-leak surface
   Utils.isProfileOrDeviceOwner to use getUsersForUiDisplay"
   (`patches/packages-apps-settings/0007`, real build-server SHA) — found
   while tracing the remaining-leaks audit's own low-confidence item 16
-  (`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`).
+  (the internal record "duress decoy remaining leaks audit" (not published)).
   The audit cited `AppButtonsPreferenceController.java:469` as possibly
   moot if the decoy user type is non-admin — confirmed non-admin (no
   `FLAG_ADMIN` in `UserTypeFactory.java`'s
@@ -2561,7 +2556,7 @@ remaining decoy identity-leak surface
   cross-user check in the same method, is intentionally left unscoped:
   it is a genuine device-wide security control (should block uninstall
   regardless of which user asks), not a per-user display concern.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable
   local git repo
   (`aegisos-platform/.worktrees/duress-appbuttons-uninstall-fix/`, a
   fetch-only worktree seeded read-only from the real branch HEAD
@@ -2598,8 +2593,7 @@ Separately, a full `m systemimage` consolidated build
 original ten fixes (`aegisos-duress-decoy-switch` branch state as of
 2026-08-30) compile together as one coherent build: `ninja: 54m13.01s
 Build Succeeded: 3658 steps`, `#### build completed successfully
-(54:19) ####`, log at
-`/srv/aegisos/evidence/consolidated-build-20260902.log` on the build
+(54:19) ####`, log kept on the build
 server. `0007` was landed after that run completed (confirmed via
 `pgrep` before `git am`, per the project's own
 never-`git am`-during-a-build rule) and is not yet included in a full
@@ -2608,7 +2602,7 @@ physical `lynx` candidate build this fix is now part of.
 
 ### Fourth plan: primary-profile visual parity, Task 3 (`0008`)
 
-`docs/superpowers/plans/2026-09-03-duress-decoy-primary-profile-visual-parity.md`
+the internal record "duress decoy primary profile visual parity" (not published)
 Task 3 closes a real, audit-confirmed cosmetic gap distinct from any
 identity leak: Settings ▸ Users already shows only the decoy's own row
 (via `0004`'s already-landed `getUsersForUiDisplay` fix), but that row's
@@ -2636,7 +2630,7 @@ first patch in this package to consume the new `frameworks/base`
   pref.setSummary(null); }` branches are untouched. Real current content
   re-confirmed via `git show HEAD:...` against the actual build-server
   source (exact match to the brief's quoted block) before editing.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable
   local git repo
   (`aegisos-platform/.worktrees/decoy-visual-parity-task3/`, a
   fetch-only worktree seeded read-only from the real branch HEAD
@@ -2669,7 +2663,7 @@ of this specific UI surface.
 
 ### Fourth plan: primary-profile visual parity, Task 4 (`0009`)
 
-`docs/superpowers/plans/2026-09-03-duress-decoy-primary-profile-visual-parity.md`
+the internal record "duress decoy primary profile visual parity" (not published)
 Task 4 closes a second, distinct cosmetic gap the same audit found:
 `DeviceAdminAdd.addDeviceAdminPolicies()` picks between two pre-existing
 string variants (`pi.description`/`pi.descriptionForSecondaryUsers`,
@@ -2696,7 +2690,7 @@ wording a real single-owner admin never would. Like Task 3, this consumes
   in the method or file changes. Real current content re-confirmed via
   `git show HEAD:...` against the actual build-server source (exact
   match to the brief's quoted line) before editing. Authored under
-  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  `CONTRIBUTING.md`'s local-first discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/decoy-visual-parity-task4/`, a
   fetch-only worktree seeded read-only from the real branch HEAD
   `885b048dd3c80cefb4e47dde2332abb058edad47` — only the one touched
@@ -2748,7 +2742,7 @@ anything, so this and future `packages/apps/Multiuser` commits land on a
 real ref, not an anonymous detached-HEAD history.
 
 Task 6 of the third plan
-(`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`)
+(the internal record "duress decoy session indistinguishability" (not published))
 closes the last leak in "Component B" (the multiuser widget): the widget's
 "Switch User" action tile was always shown whenever the platform-level
 switcher was otherwise enabled, regardless of how many users the caller
@@ -2783,7 +2777,7 @@ empirical confirmation).
   conceptually similar "can't switch" state) — confirmed against the real
   current file via `grep -n`/direct read before editing; the real body
   matched the plan's expected text exactly, no drift found. Authored under
-  `AGENTS.md`'s local-first discipline in a disposable local git repo
+  `CONTRIBUTING.md`'s local-first discipline in a disposable local git repo
   (`aegisos-platform/.worktrees/duress-indistinguishability-task6/`, a
   fetch-only worktree seeded read-only from the real repository HEAD
   `44f89da6503c` — only the one touched file, not a full checkout; the
@@ -2838,7 +2832,7 @@ exercise of this specific UI surface.
   control by accident, not design; found during an exhaustive audit of
   every `getUsers()`-style call site. Fixed by matching the sibling
   method's own already-correct pattern.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable
   local git repo
   (`aegisos-platform/.worktrees/duress-multiuser-widget-datalayer-fix/`,
   a fetch-only worktree seeded read-only from the real branch HEAD
@@ -2969,7 +2963,7 @@ decoy-specific and not caused by any of `0033`-`0037`. Full incident
 record with the complete evidence trail (logcat excerpts, `git blame`
 citations, three consecutive fix attempts each found to be real but
 individually insufficient):
-`docs/devices/lynx-duress-decoy-storage-unmount-incident.md`.
+the internal record "lynx duress decoy storage unmount incident" (not published).
 
 This resolved to three stacked instances of the same underlying pattern
 — a system service silently assuming user 0 always unlocks before any
@@ -3033,7 +3027,7 @@ call chain before the symptom actually resolved.
 - Base commit: `f1ef01a416c4f07c0b6296341a07b9e25f6f80fa` (`0037`'s own
   real post-`git am` SHA, the real branch tip at fetch time).
 
-All three authored under `AGENTS.md`'s local-first discipline in the
+All three authored under `CONTRIBUTING.md`'s local-first discipline in the
 same disposable worktree already used for `0034`-`0037`
 (`aegisos-platform/.worktrees/duress-switcher-visibility-regression-fix/`),
 landed on the real branch with `git am` (each applied cleanly, no
@@ -3055,8 +3049,8 @@ and the other 10 partitions were confirmed byte-identical to the
 `system.img` and `vbmeta.img` changed. Each candidate was signed with
 the alpha key (`SHA256_RSA4096`, rollback index `1783209600`,
 `--padding_size 65536`, matching every prior duress-unlock candidate),
-13/13 independently verified on two machines (build-vm, this
-workstation) each round, and flashed by the owner. `0038` alone did not
+13/13 independently verified on two machines (the build host and the
+controller workstation) each round, and flashed by the owner. `0038` alone did not
 resolve the crash (confirmed via a fresh, matching `dumpsys dropbox`
 entry with the identical stack trace after flashing it, and an
 independent `services.jar` checksum match ruling out a stale-build
@@ -3073,13 +3067,13 @@ list-volumes` showing `emulated;10` `mounted`, `adb logcat` showing a
 clean `UNMOUNTED → CHECKING → MOUNTED` transition with zero
 `ExternalStorageServiceException` occurrences, the Settings process
 still alive, and no new `dumpsys dropbox` entry. Full record:
-`docs/devices/lynx-duress-decoy-storage-unmount-incident.md`
-(status: resolved), `docs/governance/decision-log.md` ADR-084.
+the internal record "lynx duress decoy storage unmount incident" (not published)
+(status: resolved), `docs/governance/decision-log.md` in `sovereignos-docs` ADR-084.
 
 ### Pre-unlock concealment: `isUserSwitcherEnabled` (`0041`, `0042`, `0043`)
 
 Task 4 of
-`docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`
+the internal record "duress decoy seamless unlock" (not published)
 (Component A). `UserManagerService#isUserSwitcherEnabled(int)` already
 returns `false` while the *current* user is a decoy (`0033`), but a
 locked device showing the real owner's own lock screen still advertised
@@ -3091,7 +3085,7 @@ invoked. Fixed by extending the same method with a second, narrower
 early return gated on both a decoy actually existing on the device
 *and* the keyguard currently showing, using `isKeyguardShowing()` per
 Task 1's own predicate-semantics finding
-(`docs/devices/lynx-duress-decoy-prelock-audit.md`) — `isKeyguardLocked()`
+(the internal record "lynx duress decoy prelock audit" (not published)) — `isKeyguardLocked()`
 does not distinguish a genuinely dismissed keyguard from one merely
 occluded, per that same finding.
 
@@ -3148,7 +3142,7 @@ occluded, per that same finding.
 - Base commit: `4067c29a100d64da97a2f1ab6d3f81f458c6cdae` (`0040`'s own
   real post-`git am` SHA, the real branch tip at fetch time).
 
-Authored under `AGENTS.md`'s local-first discipline in a fresh
+Authored under `CONTRIBUTING.md`'s local-first discipline in a fresh
 disposable worktree
 (`aegisos-platform/.worktrees/prelock-concealment/`), landed on the
 real branch with `git am` in RED-then-GREEN order (each applied
@@ -3160,8 +3154,7 @@ independently verified byte-for-byte reproducible against
 apply-and-diff check before export.
 
 **Identity correction (2026-09-07):** the first export of this series
-carried the authoring session's own personal git identity
-(`beau4201 <beau.ten.berge@gmail.com>`) on the actual landed commit
+carried the authoring session's own personal git identity on the actual landed commit
 objects, not merely on the exported patch text — a genuine mismatch
 against every other `frameworks-base` patch in this directory, all of
 which use `AegisOS Build <build@aegisos.local>`. A prior version of
@@ -3214,8 +3207,7 @@ the JVM's `hsperfdata` shared-memory files, which are hardcoded to
 `/tmp/hsperfdata_$USER/` regardless of `TMPDIR`/`-Djava.io.tmpdir`.
 Fixed by relocating (not deleting) three large stale files left over
 from earlier, unrelated sessions
-(`/tmp/tmplb3pokio`, `/tmp/dex-check`, `/tmp/svc_check`, totaling
-~200MB) to `/srv/aegisos/tmp-primary/archived-tmp-debris/`. Separately,
+(totaling ~200MB) to an archive directory. Separately,
 bare class-name resolution (`atest UserManagerServiceTest:<method>`, as
 the plan's own code sample shows) never found the test on this host at
 all — the `CACHE` finder depends on `locate`/`plocate`, confirmed
@@ -3233,9 +3225,9 @@ validation round for this component, per the plan's own sequencing.
 
 ### `frameworks/base`: rename decoy-identifying log tags/messages (`0044`)
 
-Task 5 of `docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`,
+Task 5 of the internal record "duress decoy seamless unlock" (not published),
 applying Task 3's own log-audit decisions
-(`docs/devices/lynx-duress-decoy-prelock-audit.md`, "Log and event-log
+(the internal record "lynx duress decoy prelock audit" (not published), "Log and event-log
 traces" section). Task 3 found none of these traces reachable by an
 attacker confined to the decoy session itself (`READ_LOGS`/`DUMP` are
 both `signature|privileged|development`-gated, and a non-admin decoy
@@ -3291,7 +3283,7 @@ trigger condition changed.
   `org.aegisos.usertype.full.DECOY` string exposed via `dumpsys` (the
   accepted residual) were left completely untouched, per Task 3's own
   decision table.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable
   local git repo (`aegisos-platform/.worktrees/duress-logrename-task5/`,
   a fetch-only worktree seeded read-only from the real branch HEAD
   `362bc84237fb25e0a392cf552d2e9dc531fd3797` — only the four touched
@@ -3324,7 +3316,7 @@ this task's patches together).
 ### `packages/apps/Multiuser`: gate the widget's user grid on `isUserSwitcherEnabled` (`0004`)
 
 Task 5 of the same plan, fixing Task 2's audit Finding 13
-(`docs/devices/lynx-duress-decoy-prelock-audit.md`, "Pre-unlock UI
+(the internal record "lynx duress decoy prelock audit" (not published), "Pre-unlock UI
 surfaces" section) — the one `BYPASSES CHOKEPOINT` surface that audit
 found. `UsersRepository.getUsers()` already routes through
 `getUsersForUiDisplay(true)` (`0002`), which only collapses the list
@@ -3350,7 +3342,7 @@ away.
   No other call site needed touching: `checkUserSwitchRestrictions()`
   already gates correctly, and this is the only other place
   `getUsers()`'s own result is read.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable
   local git repo
   (`aegisos-platform/.worktrees/duress-multiuser-switcher-gate-task5/`,
   a fetch-only worktree seeded read-only from the real branch HEAD
@@ -3409,7 +3401,7 @@ round for this whole plan.
 
 ### `frameworks/base`: decoy switch keyguard-skip authorization, Tasks 6-7 (`0045`-`0050`)
 
-Tasks 6-7 of `docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`,
+Tasks 6-7 of the internal record "duress decoy seamless unlock" (not published),
 Component B's one-shot, decoy-scoped switch authorization store and its
 consumption point — the same architectural bet ADR-061's regression case
 already forced: the existing AOSP `skipKeyguardWhenSwitchingToUnlockedUsers`
@@ -3587,7 +3579,7 @@ confirming the split lost or altered nothing.
 
 ### `frameworks/base`: mint before the reply, switch after (`0051`-`0053`)
 
-Tasks 8-9 of `docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`,
+Tasks 8-9 of the internal record "duress decoy seamless unlock" (not published),
 implemented together in one worktree because Task 8's restructured
 `DecoyProfileHelper` calls Task 9's marker class directly. Base commit:
 `bbe0134976a439337cc84d4c4699d4389264b86a` (`0050`'s own real post-`git am`
@@ -3802,7 +3794,7 @@ hardware. Nothing in this task's own source reading settled this either
 way — `switchToUserSilently`'s own failure modes were not re-traced here,
 and `quiesceUserApps`'s failure surface was previously explored only in
 the context of the earlier real-user-quiescing plan
-(`docs/superpowers/specs/2026-08-27-duress-real-user-quiescing-and-return-design.md`),
+(the internal record "duress real user quiescing and return design" (not published)),
 not specifically for whether it can fail against a *decoy* target under
 these exact new call-timing conditions (posted to a handler, after the
 response already went out). Left as a real open question for Task 13's
@@ -3810,7 +3802,7 @@ dynamic validation to answer with evidence, not guessed here.
 
 ### `frameworks/base`: warm-start the decoy on keyguard appearance (`0054`-`0056`)
 
-Task 10 of `docs/superpowers/plans/2026-09-07-duress-decoy-seamless-unlock.md`
+Task 10 of the internal record "duress decoy seamless unlock" (not published)
 (Component C's warm-start mechanism). Base commit:
 `4ccf6785de23cf9cdebaa90ae3663a905e0bf61f` (`0053`'s own real post-`git am`
 SHA, the real branch tip at fetch time). Fetched two files read-only from the
@@ -3983,7 +3975,7 @@ established `pm create-user --user-type
 org.aegisos.usertype.full.DECOY`/`cmd lock_settings set-pin`/`cmd
 lock_settings set-decoy-profile --owner-credential`/`cmd lock_settings
 verify --old <pin> --user 0` test sequence (same pattern as
-`docs/superpowers/plans/2026-08-27-duress-real-user-quiescing-and-return.md`'s
+the internal record "duress real user quiescing and return" (not published)'s
 own Step 2-3, with synthetic test PINs, not the owner's real credential):
 
 - Confirmed, via `dumpsys lock_settings` (`CredentialType: PIN` for the
@@ -4162,7 +4154,7 @@ not the whole fix: `KeyguardViewMediator.handleUserSwitchComplete()` in
 SystemUI, a separate and independent mechanism, unconditionally re-arms a
 live bouncer roughly 500ms after the switch completes, since nothing tells
 it the switch was already authorized. A follow-up investigation
-(`task-11-fix-report.md`) confirmed no existing AOSP signal is safe to
+(the Task 11 fix report (not published)) confirmed no existing AOSP signal is safe to
 repurpose for this (see that report's "Avenue 1") and that a naive second
 consumer of the existing single-slot store would always find it already
 spent by `UserController`'s own internal consumption, which fires strictly
@@ -4286,7 +4278,7 @@ between two distinct native-JVM failure signatures in the unrelated
 `NullPointerException: Deflater has been closed`, and a `javac` worker
 crashing with `SIGBUS`) — both consistent with the disk-space/resource
 lessons already recorded in `docs/research/build-and-signing-engineering-
-notes.md` and `AGENTS.md`. Root-caused as far as read-only access allowed:
+notes.md` and `CONTRIBUTING.md`. Root-caused as far as read-only access allowed:
 raising the shell's open-file `ulimit` and overriding `TMPDIR`/
 `JAVA_TOOL_OPTIONS` changed which failure appeared but never fixed it;
 `df`/`df -i` on every filesystem in the chain (`/srv`, `/tmp`, `/dev/shm`)
@@ -4423,8 +4415,7 @@ was never itself an active "mark this session unlocked" call (per its own
 source comment, calling it on a secure user *shows* the bouncer -- it never
 silently bypasses one), and no mechanism anywhere carries the credential
 verified in the *original* (pre-switch) bouncer instance over to mark the
-decoy's own, freshly-bound keyguard session as dismissed. `task-11-fix-
-report.md`'s own Avenue 2 scoped this patch set narrowly as "suppress the
+decoy's own, freshly-bound keyguard session as dismissed. the Task 11 fix report (not published)'s own Avenue 2 scoped this patch set narrowly as "suppress the
 unwanted automatic re-challenge," not "perform an active unlock" -- this
 finding confirms that narrower scope is exactly what was delivered, no
 more: the automatic, unprompted 500ms re-arm is gone, but the first manual
@@ -4540,7 +4531,7 @@ second, distinct gap it never claimed to close: after the switch, the device
 lands on an ordinary swipeable lock screen, and the user's first manual swipe
 still raises a fresh, live PIN bouncer -- because nothing had ever told the
 keyguard "this specific session's credential was already verified moments
-ago." `task-11-fix-report.md`'s Avenue 2 had already ruled out repurposing
+ago." the Task 11 fix report (not published)'s Avenue 2 had already ruled out repurposing
 `KeyguardUpdateMonitor.getUserCanSkipBouncer`/trust-agent infrastructure for
 this (duration-based grants, a visible "extend unlock" indication, and a
 larger biometric-gating blast radius than this feature can absorb) and named
@@ -4584,7 +4575,7 @@ already spent by the time the user gets around to swiping (which can happen
 seconds later, whenever they choose to interact). A second consumption
 attempt against either existing grant would reliably find it already burned
 and return `false` -- exactly the "looks correct, isn't" trap this project's
-own `docs/superpowers/sdd/task-11-fix-report.md` had already identified and
+own the internal record "task 11 fix report" (not published) had already identified and
 declined to build without a proper design pass.
 
 **`0066`/`0067`: `UserController` grows a third grant.** The existing
@@ -4748,8 +4739,7 @@ ee03f17bdf5937240ec545afb1ae46e164e35aa0  aegisos: expose the decoy switch activ
 
 No build was in flight at the `git am` invocation (confirmed via `ps aux`
 for `ninja`/`soong_ui`/`siso` immediately before). Grepped the full diff,
-every patch file, this section, and the report for `192\.168|beau@|beau-dev|
-/srv/aegisos` -- no LAN/account coordinates. Grepped for new log call sites
+every patch file, this section, and the report for host, account and address patterns -- no LAN/account coordinates. Grepped for new log call sites
 containing `decoy`/`duress`/`Aegis` -- the one new `Log.e` call
 (`"failed to check active-dismiss authorization for switch"`) is deliberately
 worded without naming the mechanism, matching every prior patch in this
@@ -4913,8 +4903,7 @@ commit SHAs):
 
 No build was in flight at either `git am` invocation (confirmed via `ps aux`
 for `ninja`/`soong_ui`/`siso` immediately before each). Grepped the full
-diff, both patch files, and this section for `192\.168|beau@|beau-dev|
-/srv/aegisos` -- no LAN/account coordinates. Grepped for new log call sites
+diff, both patch files, and this section for host, account and address patterns -- no LAN/account coordinates. Grepped for new log call sites
 containing `decoy`/`duress`/`Aegis` -- none; this fix adds no new logging at
 all, only internal counter/flag bookkeeping.
 
@@ -5043,7 +5032,7 @@ hashed pubkey file), not assumed from a single "13/13" line, per the
 passing `verify_image` cleanly. All signing and flashing was performed
 by the owner directly, per this project's standing rule; the controller
 never had or requested access to the alpha private key or the
-sign-vm-equivalent signing environment this session.
+signing environment this session.
 
 **A real incident during the first candidate's flash, found and
 recovered, not silently worked around.** The controller's own flash
@@ -5087,8 +5076,7 @@ e0a88d56218c  aegisos: drop the artificial delay before redeeming the active-dis
 Patches regenerated fresh via `git format-patch 540d4a0366f2..HEAD`
 directly from the real post-`git am` branch history before being copied
 into this package, not carried over from any local worktree's own patch
-files. Grepped all six patch files for `192\.168|beau@|beau-dev|
-/srv/aegisos` -- no LAN/account coordinates.
+files. Grepped all six patch files for host, account and address patterns -- no LAN/account coordinates.
 
 **What remains open, stated plainly, not glossed over.**
 
@@ -5114,10 +5102,9 @@ files. Grepped all six patch files for `192\.168|beau@|beau-dev|
   leak-audit items, `credential_capture` (untouched), and Component C's
   latency floor (~1.7s of inherent switch-machinery-plus-animation time,
   independent of anything this patch set changed).
-- No ADR has been written for this patch set yet, and the
-  `aegisos-foundation` handoff-router's current-state narrative has not
-  been updated to reflect it. Both are still needed before this work can
-  be described as closed anywhere else in the project's own records.
+- No decision record had been written for this patch set when this entry
+  was written, so it could not yet be described as closed in the
+  project's records.
 
 ## Apply (this section)
 
@@ -5377,8 +5364,8 @@ rather than assumed:
   as an ordinary check, and asserted in both directions by `0079`.
 - Same open items as every prior entry: the six UNCHECKED leak-audit
   items, and `credential_capture` (untouched).
-- No ADR has been written for this patch set yet, and the
-  `aegisos-foundation` handoff-router has not been updated.
+- No decision record had been written for this patch set when this entry
+  was written.
 
 ## Apply (this section)
 
@@ -5400,8 +5387,7 @@ failures were logged but never escalated --
 was structurally unreachable dead code. This was flagged as an open
 completeness gap during the `credential_capture`/Finding-13 closure pass
 ("Component B's failure-path fallback ... is DEAD CODE, confirmed by direct
-source trace") and is Component 3 of `docs/superpowers/specs/2026-09-17
--duress-unlock-final-closure-design.md` in the `aegisos-foundation` repo.
+source trace") and is Component 3 of the internal record "duress unlock final closure design" (not published).
 Owner's explicit threshold (2026-09-17): any single process failing to
 freeze counts as a quiesce failure -- not "all fail" or "majority fail".
 
@@ -5809,10 +5795,8 @@ lock/unlock cycle with zero `Settings.Global` writes.
 
 New real branch tip: `f3f3c9ebc980`. Full record, including every
 command run and every piece of on-device evidence:
-`docs/superpowers/plans/2026-09-17-duress-unlock-final-closure.md`'s own
-Task 7/8 execution (this repo), and
-`docs/product/2026-09-20-duress-unlock-final-closure-session.md` (the
-narrative session record, `AegisOS-foundation` repo).
+the internal records "duress unlock final closure" and "duress unlock final closure session"
+(neither published).
 
 ## Apply (this section)
 
@@ -5849,7 +5833,7 @@ source to compile, never this test.
 
 Fixed (`0091`) by wrapping the two `setFinalField` calls in a
 try/catch and rethrowing unchecked, matching the idiom already used
-elsewhere for this same JUnit rule. Authored under `AGENTS.md`'s
+elsewhere for this same JUnit rule. Authored under `CONTRIBUTING.md`'s
 local-first discipline in a disposable local git repo
 (`aegisos-platform/.worktrees/duress-quiesce-atest-compile-fix/`, seeded
 read-only from the real branch HEAD `f3f3c9ebc980`) and landed on the real

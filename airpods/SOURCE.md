@@ -52,8 +52,7 @@ frames in a row end it), `AirPodsSessionHost` (main-thread owner of the session,
 phone last wrote, app-private, because this pair never reports it), `AirPodsStateStore.transform` (atomic read-modify-write). Pure logic in `app/src/.../ui/` (`SessionReducer`,
 `AirPodsRecognition`, `Backoff`), host checks `tools/run-host-checks.sh` and `tools/run-store-stress.sh` (needs `BUILD_HOST`; runs once with the lock and once without, which must fail).
 New permissions: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, and the privileged `START_FOREGROUND_SERVICES_FROM_BACKGROUND` (named in the privapp allow-list).
-Built into images `2026100202` to `2026100204` (`2026100204` not flashed at the time of writing). Threat review: `docs/architecture/airpods-session-threat-review.md` in
-`sovereignos-foundation`. The codec it uses is `core/airpods-core.jar` (see its section above; frames are documented in `docs/research/airpods-aap-protocol-facts.md`).
+Built into images `2026100202` to `2026100204` (`2026100204` not flashed at the time of writing). Threat review: the internal record "airpods session threat review" (not published). The codec it uses is `core/airpods-core.jar` (see its section above; frames are documented in the internal record "airpods aap protocol facts" (not published)).
 
 ## Probe (`probe/`, Plan 7A task 3)
 
@@ -68,7 +67,7 @@ and `raw:<hex>` (a frame as hex without spaces). Used on 2026-10-02 for `AIR-121
 `MetadataEncoder`, `ListeningModeToggles`, `NativePageLayout`, `DebugStateParser`) and
 `app/src/org/sovereignos/airpods/app/` (Kotlin: state store, command sink, runtime and receiver, debug observer,
 metadata writer, icon provider, settings factory, the two bound services). Resources: strings, 12 row icons
-generated from the approved design (`tools/design/svg-icons-to-vector-drawables.py` in `sovereignos-foundation`), three
+generated from the approved design (the project's `tools/design/svg-icons-to-vector-drawables.py`, not published), three
 ring artwork PNGs rendered once (`render-airpods-artwork.sh`, `assets/icons/`). Checks: `UiLogicCheck` (ten
 mutations killed), `tools/check-no-hardcoded-text.sh`, `tools/check-devicesettings-vendoring.sh`.
 Built (`AirPodsApp` compiled by Soong, images `2026100102` to `2026100104`) and seen on a `lynx` with a debug state:
@@ -95,8 +94,8 @@ changed, added or missing file; two mutations verified). Re-vendor and re-check 
 
 ## Validation harness (`debug-harness/`)
 
-Userdebug-only validation apps for `AIR-029` to `AIR-032` and `AIR-036` (ADR-120, plan
-`docs/superpowers/plans/2026-10-01-airpods-debug-harness.md` in `sovereignos-foundation`).
+Userdebug-only validation apps for `AIR-029` to `AIR-032` and `AIR-036` (ADR-120; plan:
+the internal record "airpods debug harness" (not published)).
 Not part of the product: they are installed through `PRODUCT_PACKAGES_DEBUG`
 (`patches/vendor-adevtool/0002`) and the package gate refuses them in a
 `user` image.
@@ -122,8 +121,7 @@ this tree's row below for the exact base commit and patch count. Generated
 via `git format-patch` directly from the real post-`git am` branch history
 on the build server (not from the disposable worktree's own local commit,
 whose SHA differs from what was actually built and verified — see
-`docs/research/build-and-signing-engineering-notes.md`'s note on this in
-`sovereignos-foundation`), author identity rewritten to the generic
+the note on this in `docs/research/build-and-signing-engineering-notes.md` in `sovereignos-docs`), author identity rewritten to the generic
 `SovereignOS Build <build@sovereignos.local>` identity before committing
 here (same convention as `guardian/SOURCE.md`). Real, dated commit on the
 build server's `platform-primary` checkout.
@@ -230,8 +228,7 @@ module build and by `AIR-154` on the device. Patch `0010` only renames a nested 
 ### What patch 0001 does (its registration and SDP mechanism is superseded, see Corrections)
 
 Adds a bonded-device-scoped identity mechanism (design §6.2 of
-`docs/superpowers/specs/2026-09-28-airpods-compatibility-and-finding-design.md`
-in `sovereignos-foundation`, corrected per ADR-107/ADR-108 before this patch
+the internal record "airpods compatibility and finding design" (not published), corrected per ADR-107/ADR-108 before this patch
 was authored — the original design named the wrong hook point for the
 Device-ID half):
 
@@ -339,7 +336,6 @@ and a flashed device — cannot be performed by an agent session. Do not
 treat this patch as functionally validated until that evidence exists.
 
 Full investigation and authoring trail:
-`docs/research/airpods-bluetooth-stack-investigation.md`,
-`docs/research/airpods-nonsdk-api-exemption-investigation.md`, and
-ADR-107/ADR-108/ADR-109 in `docs/governance/decision-log.md`, all in
-`sovereignos-foundation`.
+the internal record "airpods bluetooth stack investigation" (not published),
+the internal record "airpods nonsdk api exemption investigation" (not published), and
+ADR-107/ADR-108/ADR-109 in `docs/governance/decision-log.md` in `sovereignos-docs`.

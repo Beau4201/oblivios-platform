@@ -80,7 +80,7 @@
   module later.
 
 Re-vendor by repeating Task 1 of
-`docs/superpowers/plans/2026-08-05-guardian-platform-integration.md` against
+the internal record "guardian platform integration" (not published) against
 a newer `sovereignos-services` commit; do not hand-edit any file in this
 directory.
 
@@ -131,8 +131,7 @@ jar (see the SHA-256 entry above):
 
 These files supersede the earlier `org.sovereignos.guardian.ui` screens (green,
 Material 2, light theme), which were removed. See
-`docs/superpowers/specs/2026-08-13-guardian-visual-identity-design.md` in
-`sovereignos-foundation`.
+the internal record "guardian visual identity design" (not published).
 
 ### Android port deviations
 
@@ -222,7 +221,7 @@ The `app/` module (Android manifest, resources, permission allowlist, build
 configuration, and later source code in `app/src/`) is **first-party SovereignOS
 code**, not vendored. It is built and deployed as part of the SovereignOS platform.
 
-Permission grants are justified in `docs/research/guardian-platform-api-verification.md`:
+Permission grants are justified in the internal record "guardian platform api verification" (not published):
 
 - `android.permission.WATCH_APPOPS` — marked `signature|privileged` in AOSP.
   Granted by `privapp-permissions-org.sovereignos.guardian.xml` allowlist entry
@@ -240,8 +239,8 @@ Permission grants are justified in `docs/research/guardian-platform-api-verifica
 
 ### Fix: `BackgroundLocationWatcher` AppOps callbacks were not user-scoped (ADR-070)
 
-Found incidentally during `sovereignos-foundation`'s exhaustive Duress Unlock
-decoy identity-leak audit (`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`,
+Found incidentally during the exhaustive Duress Unlock
+decoy identity-leak audit (the internal record "duress decoy remaining leaks audit" (not published),
 item 13), but the defect itself is general to any multi-user SovereignOS
 device, not decoy-specific: `AppOpsManager#startWatchingNoted`/
 `startWatchingActive` are registered system-wide by this class, with no
@@ -266,7 +265,7 @@ out downstream.
   (confirmed via source, neither `@hide`); `Process.myUserHandle()`
   matches the existing pattern already used by
   `GuardianComponents.java` to construct `SovereignOSPlatformGateway`.
-  Authored under `AGENTS.md`'s local-first discipline in a disposable
+  Authored under `CONTRIBUTING.md`'s local-first discipline in a disposable
   local git repo
   (`sovereignos-platform/.worktrees/guardian-appops-user-scope-fix/`, a
   fetch-only worktree seeded read-only from the real branch HEAD
@@ -301,8 +300,8 @@ the live build-server tree at `vendor/aegisos/guardian` never was. adevtool's
 while the live module was still `privapp-permissions-org.aegisos.guardian.xml`,
 so the `lynx` build of 2026-09-26 shipped `GuardianApp` with no privapp
 allowlist and the build did not fail. Found during `stallion` bring-up
-(`sovereignos-foundation` ADR-111 and
-`docs/superpowers/plans/2026-09-28-stallion-daily-use-personal-stable.md`).
+(ADR-111 and
+the internal record "stallion daily use personal stable" (not published)).
 
 - Before syncing, the live tree (renamed mechanically in a scratch copy) was
   diffed against this package file by file. Drift ran both ways: this
@@ -320,7 +319,7 @@ allowlist and the build did not fail. Found during `stallion` bring-up
 - This package received the newer location fixture in the same change, so
   the live tree and this directory match file for file, `patches/` aside.
 - Not yet build- or hardware-verified. The next `stallion`/`lynx` build must
-  pass `tools/build-vm/check-required-packages.sh` (`sovereignos-foundation`),
+  pass `tools/check-required-packages.sh` (in `sovereignos-docs`),
   which checks the privapp allowlist is actually installed.
 
 ## AOSP source patches (`patches/`)
@@ -334,7 +333,7 @@ commits on the build server's `platform-primary` checkout.
 
 | Tree | Base commit | Patches | Approving ADR |
 | --- | --- | --- | --- |
-| `vendor/adevtool` | `4c9a78e2e7428818291a8c1e620f1e07e33ef185` | `patches/vendor-adevtool/0001`-`0002` | 0001: ADR-035 (names this branch/commit literally: `aegisos-guardian-lynx`, `43b73335`; carried onto the `2026091900` rebase branch `sovereignos-2026091900` as `5aa3fac8`). 0002: `sovereignos-foundation` ADR-111 — moves the Guardian `PRODUCT_PACKAGES` entry from `device/lynx/device.mk` to `common/device-common.mk` so every Pixel target ships it; landed as `6ebe8024291a5c003f0615a896574afbb9cbf29b` on `sovereignos-2026091900`, authored from a fetch-only local repo of the two touched files (the live repo is a partial clone, so a full clone fails). |
+| `vendor/adevtool` | `4c9a78e2e7428818291a8c1e620f1e07e33ef185` | `patches/vendor-adevtool/0001`-`0002` | 0001: ADR-035 (names this branch/commit literally: `aegisos-guardian-lynx`, `43b73335`; carried onto the `2026091900` rebase branch `sovereignos-2026091900` as `5aa3fac8`). 0002: ADR-111 — moves the Guardian `PRODUCT_PACKAGES` entry from `device/lynx/device.mk` to `common/device-common.mk` so every Pixel target ships it; landed as `6ebe8024291a5c003f0615a896574afbb9cbf29b` on `sovereignos-2026091900`, authored from a fetch-only local repo of the two touched files (the live repo is a partial clone, so a full clone fails). |
 | `device/generic/goldfish` | `1facfe03b3519c3413a51d2ea56400bbade0b4c3` | `patches/device-generic-goldfish/0001`-`0003` | ADR-051 (amends ADR-033) |
 
 Apply from the tree's own repository root:

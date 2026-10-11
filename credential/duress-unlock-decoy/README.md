@@ -1,29 +1,28 @@
 # Duress Unlock — decoy mechanism, hardware-validated
 
 Implements the full Duress Unlock decoy mechanism across three plans:
-Tasks 1-6 of `docs/superpowers/plans/2026-08-21-duress-decoy-user-switch.md`
+Tasks 1-6 of the internal record "duress decoy user switch" (not published)
 (a new SovereignOS-defined Android user type,
 `USER_TYPE_FULL_SOVEREIGNOS_DECOY`; a dialog-free silent user switch; decoy
 profile routing state storage; the `DecoyProfileHelper` keyguard-hook
 orchestration; its wiring into `doVerifyCredentialInner`; and the
 `set-decoy-profile`/`clear-decoy-profile` shell command backend), and all 8
-tasks of `docs/superpowers/plans/2026-08-27-duress-real-user-quiescing-and-return.md`
+tasks of the internal record "duress real user quiescing and return" (not published)
 (replacing the first plan's own freeze mechanism — found to always fail for
 user 0 during that plan's own Task 7 — with app-level quiescing
 (`RealUserQuiescer`: the existing cached-app freezer plus notification
 suppression, including a call/media-notification-exemption fix found during
 code review), and adding a previously-unspecified return-to-real-user path
 (`ReturnToRealUserHelper`)); and the third plan
-(`docs/superpowers/plans/2026-08-28-duress-decoy-session-indistinguishability.md`,
+(the internal record "duress decoy session indistinguishability" (not published),
 all 11 tasks) closing real, confirmed session-indistinguishability leaks
 across `frameworks/base`, `build/release`, `packages/apps/Settings`, and
 (new to this package) `packages/apps/Multiuser`. Per the owner-approved
 architecture in ADR-042,
-`docs/superpowers/specs/2026-08-21-duress-decoy-user-switch-design.md`,
-`docs/superpowers/specs/2026-08-27-duress-real-user-quiescing-and-return-design.md`,
+the internal record "duress decoy user switch design" (not published),
+the internal record "duress real user quiescing and return design" (not published),
 and
-`docs/superpowers/specs/2026-08-28-duress-decoy-session-indistinguishability-design.md`
-in `sovereignos-foundation`. This is the full real, end-to-end mechanism: a
+the internal record "duress decoy session indistinguishability design" (not published). This is the full real, end-to-end mechanism: a
 registered decoy credential typed at the primary keyguard silently switches
 to the decoy user (real user quiesced, notifications suppressed), the real
 owner's credential typed at the decoy's own keyguard silently switches back
@@ -39,9 +38,9 @@ owner's identity.
 
 Do not apply this package to a Phase 1 (or later) baseline tree without a
 corresponding ADR naming this exact patch set
-(`sovereignos-platform/AGENTS.md`'s hard rule). That ADR is **ADR-053** for Task 1
+(`CONTRIBUTING.md`'s hard rule). That ADR is **ADR-053** for Task 1
 (2026-08-26, amending ADR-042), **ADR-054** for Task 2 (2026-08-26, also
-adopting `AGENTS.md`'s new local-first patch-authoring discipline),
+adopting `CONTRIBUTING.md`'s new local-first patch-authoring discipline),
 **ADR-055** (2026-08-26) for Task 3, **ADR-056** (2026-08-27) for
 Tasks 4-6, **ADR-058** (2026-08-27) for the second plan's Tasks 1-8
 (the quiescing/return-path replacement, patches `0008`-`0017`), **ADR-059**
@@ -62,7 +61,7 @@ Critical identity-leak fix to the shared `getUsersForUiDisplay`
 primitive (`frameworks-base` `0026`), **ADR-067** (2026-08-30)
 commissioning an exhaustive, owner-requested audit for every remaining
 leak surface (21 found;
-`docs/superpowers/specs/2026-08-30-duress-decoy-remaining-leaks-audit.md`),
+the internal record "duress decoy remaining leaks audit" (not published)),
 **ADR-068** (2026-08-30) for the first batch of fixes from that
 audit — three Critical items (`frameworks-base` `0027`,
 `packages-apps-settings` `0004`/`0005`) and four High items
@@ -81,7 +80,7 @@ six-year-old upstream AOSP wrong-context bug in
 `UserBackupManagerService.java` (`frameworks-base` `0030`), fixed, and
 hardware-confirmed by reproducing the exact original trigger — see
 `SOURCE.md` for exactly what each patch does and why, and
-`sovereignos-foundation`'s `docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`
+the internal record "lynx duress decoy backup context crash incident" (not published)
 for the crash bug's full record.
 
 ## What this is not
@@ -155,14 +154,13 @@ decoy session. Root cause was a six-year-old upstream AOSP
 wrong-context bug in `UserBackupManagerService.java`, latent on every
 ordinary Android flow and exposed for what appears to be the first
 time by Duress Unlock's own core security property. Full record:
-`sovereignos-foundation`'s
-`docs/devices/lynx-duress-decoy-backup-context-crash-incident.md`.
+the internal record "lynx duress decoy backup context crash incident" (not published).
 
 **The distinct, larger design question raised by the owner after that
 round — hiding other users' identity from the decoy is not the same as
 making the decoy session look like the device's one true primary
 profile — has since been designed, implemented, and hardware-validated
-(2026-09-03/04, `sovereignos-foundation` ADR-074 through ADR-079)**. A real
+(2026-09-03/04, ADR-074 through ADR-079)**. A real
 audit found only two genuinely cosmetic gaps behind this concern (the
 QS footer's "End session" affordance, and two `packages/apps/Settings`
 text/label choices) — everywhere else `isMain()`/`isAdminUser()` is
@@ -172,8 +170,7 @@ display-only primitive, `UserManager.isMainForUiDisplay(int)`
 (`frameworks-base` `0031`), closed both: the "End session" leak
 (`0032`) and the two Settings text choices (`packages-apps-settings`
 `0008`/`0009`). All four patches are hardware-confirmed working on
-physical `lynx`; full record: `sovereignos-foundation`'s
-`docs/devices/lynx-duress-decoy-visual-parity-findings.md`. ADR-065's
+physical `lynx`; full record: the internal record "lynx duress decoy visual parity findings" (not published). ADR-065's
 Wallet-tile exemption was the precedent this generalized from.
 
 **A further, distinct instance of the same underlying problem was found
@@ -183,10 +180,9 @@ permanently and automatically the moment any second user (including a
 decoy) is ever created, read unfiltered by at least six real UI
 surfaces (the QS icon above being only one) — is not covered by
 `isMainForUiDisplay` at all, since it is a single global setting, not a
-per-user list. Designed (`sovereignos-foundation`'s
-`docs/superpowers/specs/2026-09-03-duress-decoy-user-switcher-visibility-design.md`)
+per-user list. Designed (the internal record "duress decoy user switcher visibility design" (not published))
 and planned
-(`docs/superpowers/plans/2026-09-03-duress-decoy-user-switcher-visibility.md`,
+(the internal record "duress decoy user switcher visibility" (not published),
 next patch `frameworks-base` `0033`) but **not yet implemented** as of
 this writing.
 

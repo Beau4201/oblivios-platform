@@ -4,7 +4,7 @@
 # moved, shifted or missing element must fail. No device needed.
 set -o errexit -o nounset -o pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-METRICS="${1:-$HERE/../../../sovereignos-foundation/docs/design/airpods-settings-ui-2026-09-29.metrics-dark.json}"
+METRICS="${1:?usage: test-page-conformance.sh <metrics-json>}"
 WORK="$(mktemp -d)"
 python3 - "$METRICS" "$WORK" <<'PY'
 import json, sys

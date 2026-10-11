@@ -2,8 +2,8 @@
 
 The lighthouse boot picture of the built-in boot renderer (ADR-152, which
 supersedes ADR-019). Design:
-`sovereignos-foundation/docs/superpowers/specs/2026-10-11-boot-picture-design.md`;
-visual reference: `sovereignos-foundation/docs/design/lighthouse-2026-10-10.html`.
+the internal record "boot picture design" (not published);
+visual reference: the internal record "lighthouse" (not published).
 
 ## What it is
 

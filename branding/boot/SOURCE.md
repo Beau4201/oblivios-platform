@@ -2,7 +2,7 @@
 
 ## Approved design
 
-- Reference page: `sovereignos-foundation/docs/design/lighthouse-2026-10-10.html`,
+- Reference page: the internal record "lighthouse" (not published),
   approved by the owner on 2026-10-11. The mask and the loading texture are the
   still picture and the bar of that page.
 - Decision: ADR-152. It supersedes ADR-019; the Aegis artwork, its Superdesign

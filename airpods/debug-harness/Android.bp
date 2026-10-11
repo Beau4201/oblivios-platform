@@ -5,7 +5,7 @@ package {
 
 // ADR-120: userdebug-only validation harness for AIR-029..032 and AIR-036. Wired through
 // PRODUCT_PACKAGES_DEBUG (vendor/adevtool patch 0002), so a `user` image never contains
-// it; tools/build-vm/check-required-packages.sh enforces that. Same sources, three
+// it; tools/check-required-packages.sh (in sovereignos-docs) enforces that. Same sources, three
 // permission sets. All three are priv-apps with the same single-package hidden-API
 // exemption as AirPodsApp, so a refusal is caused by the permission and not by app class.
 

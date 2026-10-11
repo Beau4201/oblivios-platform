@@ -30,7 +30,7 @@ cd packages/apps/Updater && git am ../../release/ota-server-url/patches/packages
 - ADR-045 (initial deployment), ADR-047 (OFFICIAL_BUILD fix that made the
   Updater app actually present in the built image), ADR-052 (this
   citation).
-- Real device confirmation: `docs/devices/lynx-ota-server-flash-rollback-corruption-incident.md`
+- Real device confirmation: the internal record "lynx ota server flash rollback corruption incident" (not published)
   and ADR-047's own text — `app.seamlessupdate.client` present via
   `pm list packages`, "up to date" check passing against the private
   server end to end. Since amended by ADR-049/050: the otacerts trust-store

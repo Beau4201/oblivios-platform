@@ -5,7 +5,7 @@
     package="org.sovereignos.airpods">
 
     <!-- Every permission here is justified in
-         docs/research/airpods-platform-api-verification.md (sovereignos-foundation).
+         the internal record "airpods platform api verification" (not published).
          Deliberately absent: BLUETOOTH_PRIVILEGED (ADR-117), any network
          permission, and every Guardian permission. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />

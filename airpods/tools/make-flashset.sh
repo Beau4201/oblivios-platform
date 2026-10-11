@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # Makes the owner's flashset: the 36 files of the previous set's remote.sha256, taken from the build
 # server's product directory; a file that did not change becomes a hardlink to the previous set, a
-# changed one is copied. Needs BUILD_HOST='<user>@<host>'. Usage: make-flashset.sh PREVIOUS_SET NEW_SET
+# changed one is copied. Needs BUILD_HOST='<user>@<host>' and PRODUCT_OUT, the lynx product output directory
+# on that host. Usage: make-flashset.sh PREVIOUS_SET NEW_SET
 set -o errexit -o nounset -o pipefail
 : "${BUILD_HOST:?set BUILD_HOST='<user>@<host>'}"
+: "${PRODUCT_OUT:?set PRODUCT_OUT to the lynx product output directory on the build host}"
 PREV="${1:?previous flashset directory}"
 NEW="${2:?new flashset directory}"
-PRODUCT=/srv/sovereignos/platform-primary/out-lynx/target/product/lynx
+PRODUCT="$PRODUCT_OUT"
 [ -d "$PREV" ] || { echo "no such directory: $PREV"; exit 1; }
 [ -e "$NEW" ] && { echo "$NEW exists, refusing to touch it"; exit 1; }
 mkdir -p "$NEW"

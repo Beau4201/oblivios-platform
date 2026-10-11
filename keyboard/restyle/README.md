@@ -1,6 +1,6 @@
 # Keyboard restyle (SovereignOS platform integration)
 
-LatinIME patches that give the on-screen keyboard its own rounded key caps, a rounded top, visible suggestion dividers and the same treatment on every page, and keep it from leaving an empty strip beside it in landscape. Design: `docs/superpowers/specs/2026-10-07-keyboard-restyle-design.md` in `sovereignos-foundation`, with the visual reference `docs/design/keyboard-2026-10-07.html` and ADR-146 in the decision log.
+LatinIME patches that give the on-screen keyboard its own rounded key caps, a rounded top, visible suggestion dividers and the same treatment on every page, and keep it from leaving an empty strip beside it in landscape. Design: the internal record "keyboard restyle design" (not published), with the visual reference the internal record "keyboard" (not published) and ADR-146 in the decision log.
 
 ## Layout
 

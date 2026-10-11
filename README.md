@@ -33,3 +33,14 @@ and device logs do not belong in this repository.
 All packages are patches layered over the pinned GrapheneOS manifest tag
 recorded in `sovereignos-manifest`; none are applied to a baseline tree without
 the ADR their own README cites.
+
+## Stage
+
+Source only. No builds, images or update service are offered, and no device is
+supported. See `CONTRIBUTING.md` for how a package is laid out and the rules for
+a patch. The pinned upstream baseline is in `sovereignos-manifest`.
+
+## Licence
+
+Apache-2.0, see `LICENSE` and `NOTICE`. Each patch keeps the licence of the
+upstream file it modifies. The name SovereignOS and its logo are not licensed.

@@ -27,15 +27,15 @@
 
 Unlike `branding/boot/`, this package carries no binary assets, so there is
 no `expected-assets.sha256`. The equivalent verification record is the real
-build+boot+review trail in `sovereignos-foundation`:
+build+boot+review trail in the internal task reports (not published):
 
-- `.superpowers/sdd/duress-dummy-task-1-report.md` — real timing measurement
+- Task 1 report — real timing measurement
   ruling out a software-only dummy.
-- `.superpowers/sdd/duress-dummy-task-2-report.md` — real implementation,
+- Task 2 report — real implementation,
   the SELinux root-cause investigation, emulator build/boot/logcat evidence.
-- `.superpowers/sdd/duress-dummy-task-2-fix-report.md` — the stale-state-clear
+- Task 2 fix report — the stale-state-clear
   defect fix (`frameworks-base/0002` above), with real build+boot re-verification.
-- `.superpowers/sdd/duress-dummy-task-3-report.md` — the physical `lynx`
+- Task 3 report — the physical `lynx`
   build that surfaced `system-sepolicy/0002` and `0003` (real full-`droid`-build
   failures the emulator build never exercised), plus 13/13 AVB signing
   verification on two independent machines.

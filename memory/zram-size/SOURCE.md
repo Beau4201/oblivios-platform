@@ -52,7 +52,7 @@ Every commit in `vendor/adevtool` also stales the pin of each generated
 `vendor/google_devices/<device>/adevtool-version-check.mk` (it holds the exact `HEAD` of
 `vendor/adevtool`; a stale pin fails the build within a second with "vendor module is
 outdated"). Update the pin of every device that is built, keeping a copy
-(`docs/research/build-and-signing-engineering-notes.md`, "adevtool version pinning"):
+(`docs/research/build-and-signing-engineering-notes.md` in `sovereignos-docs`, "adevtool version pinning"):
 
 ```sh
 N=$(git -C vendor/adevtool rev-parse HEAD); OLD=<the previous HEAD>

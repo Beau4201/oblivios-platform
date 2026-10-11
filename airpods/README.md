@@ -1,9 +1,8 @@
 # AirPods (SovereignOS platform integration)
 
 Platform side of the AirPods compatibility feature, per
-`docs/superpowers/specs/2026-09-28-airpods-compatibility-and-finding-design.md`
-and `docs/superpowers/specs/2026-09-29-airpods-settings-ui-design.md` in
-`sovereignos-foundation`. Domain logic is vendored from `sovereignos-services`
+the internal record "airpods compatibility and finding design" (not published)
+and the internal record "airpods settings ui design" (not published). Domain logic is vendored from `sovereignos-services`
 (`airpods-core`, see `SOURCE.md`) and unmodified here.
 
 ## Layout
@@ -40,8 +39,8 @@ lowering the music volume are two narrow `@SystemApi` calls in the Bluetooth mod
 
 The package is built into the `lynx` images (`PRODUCT_PACKAGES` wiring is a
 `vendor/adevtool` patch, see `SOURCE.md`) and runs on the owner's device. Device evidence,
-with the image each row ran on, is in `docs/quality/validation-matrix.md` (rows `AIR-111`
-to `AIR-192`) in `sovereignos-foundation`; the open rows are in its `docs/product/status.md`.
+with the image each row ran on, is in the internal record "validation matrix" (not published), rows `AIR-111`
+to `AIR-192`; the open rows are tracked in the internal project status record (not published).
 An app-only change cannot be installed with `adb install` (a system app update needs an
 fs-verity signature), so every change is an image build. Plan 9 is the last plan of this
 package: the control rows, Play sound, the alias call (patch `0012`) and the connection sheet.

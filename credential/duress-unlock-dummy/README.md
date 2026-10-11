@@ -7,19 +7,19 @@ SovereignOS decoy profile is registered on the device. Without this, failed-logi
 timing would itself reveal whether a decoy profile exists — the exact
 side-channel this package closes.
 
-Design: `sovereignos-foundation/docs/superpowers/specs/2026-08-15-duress-dummy-candidate-b-design.md`.
+Design: the internal record "duress dummy candidate b design" (not published).
 Plan and full real execution record (build/boot/logcat evidence, two task
-reviews, one fixed defect): `sovereignos-foundation/docs/superpowers/plans/2026-08-15-duress-dummy-cost-primitive.md`.
+reviews, one fixed defect): the internal record "duress dummy cost primitive" (not published).
 
 ## Boundary
 
 Do not apply this package to a Phase 1 (or later) baseline tree without a
-corresponding ADR in `sovereignos-foundation/docs/governance/decision-log.md`
-naming this exact patch set (`sovereignos-platform/AGENTS.md`'s hard rule). That
+corresponding ADR in `docs/governance/decision-log.md` in `sovereignos-docs`
+naming this exact patch set (`CONTRIBUTING.md`'s hard rule). That
 ADR is **ADR-040** (2026-08-15, updated 2026-08-16) — it names the exact
 commit hashes below. The Phase 1 baseline itself is
 `Accepted baseline (qualified, ADR-025)` per
-`sovereignos-foundation/docs/reviews/phase-1-emulator-baseline-review.md`.
+the internal record "phase 1 emulator baseline review" (not published).
 
 ## What this is not
 
@@ -33,9 +33,8 @@ and the Settings setup UI is Stage 2 — not started, not part of this package.
 
 Real, dated commits on the build server's `platform-primary` checkout,
 branch `aegisos-duress-dummy-primitive` (a disposable, single-copy AOSP
-checkout — this package is the durable record; see
-`sovereignos-foundation/.claude/local-server-memory.md` for the checkout's own
-operational history, not tracked in version control). Generated via
+checkout — this package is the durable record; the checkout's own
+operational history is not tracked in version control). Generated via
 `git format-patch`, one file per real commit; the diff content is
 unmodified, but the commit author identity was rewritten from the build
 server's local git config to a generic `SovereignOS Build` identity before

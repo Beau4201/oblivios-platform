@@ -4,9 +4,11 @@
 # runs it again with the lock removed, which must FAIL. BUILD_HOST = <user>@<host> (local memory file).
 set -o errexit -o nounset -o pipefail
 : "${BUILD_HOST:?set BUILD_HOST}"
+: "${PLATFORM_TREE:?set PLATFORM_TREE to the platform source root on the build host}"
+: "${WORK_DIR:?set WORK_DIR to a scratch directory on the build host}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-P=/srv/sovereignos/platform-primary
-W=/srv/sovereignos/tmp-primary/p7a-stress
+P="$PLATFORM_TREE"
+W="$WORK_DIR/p7a-stress"
 ssh -n "$BUILD_HOST" "rm -rf $W && mkdir -p $W/src"
 rsync -a "$HERE/app/src/org/sovereignos/airpods/ui" "$HERE/app/src/org/sovereignos/airpods/app/AirPodsStateStore.kt" "$HERE/app/test/org/sovereignos/airpods/app/StateStoreStress.kt" "$HERE/core/airpods-core.jar" "$BUILD_HOST:$W/src/"
 ssh "$BUILD_HOST" bash -s <<REMOTE

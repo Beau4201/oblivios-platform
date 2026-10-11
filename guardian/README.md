@@ -2,8 +2,7 @@
 
 Real Android integration of Guardian's `REVOKE_BACKGROUND_LOCATION`
 remediation, per
-`docs/superpowers/specs/2026-08-05-guardian-platform-integration-design.md`
-in `sovereignos-foundation`. Domain logic is vendored from `sovereignos-services`
+the internal record "guardian platform integration design" (not published). Domain logic is vendored from `sovereignos-services`
 (see `SOURCE.md`) and unmodified here.
 
 ## Layout
@@ -18,7 +17,7 @@ in `sovereignos-foundation`. Domain logic is vendored from `sovereignos-services
 
 ## Fixes since initial integration
 
-- **ADR-070** (2026-08-30, `sovereignos-foundation`): `BackgroundLocationWatcher`'s
+- **ADR-070** (2026-08-30): `BackgroundLocationWatcher`'s
   AppOps callbacks were not scoped to this process's own Android user, so on
   any multi-user SovereignOS device this Guardian instance would ingest another
   user's own app activity into its own overview store. Found incidentally

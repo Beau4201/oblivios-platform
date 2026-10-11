@@ -2,9 +2,8 @@
 
 Launcher3 patches that make the app drawer follow the home screen's themed
 icons and show the apps as automatic category groups that open as a frosted,
-centred card. Design: `docs/superpowers/specs/2026-10-06-app-drawer-theming-and-categories-design.md`
-in `sovereignos-foundation`, with the visual reference
-`docs/design/app-drawer-2026-10-06.html` and ADR-141 in the decision log.
+centred card. Design: the internal record "app drawer theming and categories design" (not published), with the visual reference
+the internal record "app drawer" (not published) and ADR-141 in the decision log.
 
 ## Layout
 

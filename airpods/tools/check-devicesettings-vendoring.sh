@@ -3,12 +3,14 @@
 # Fails when the DeviceSettings contract vendored into AirPodsApp differs from the build tree's own
 # files. The Parcel layout has no versioning (field order only), so a stale copy would break the
 # binder exchange with Settings silently. Plan 6B, ADR-121.
-# Usage: BUILD_HOST=<user@host> check-devicesettings-vendoring.sh   (read-only over ssh)
+# Usage: BUILD_HOST=<user@host> PLATFORM_TREE=<platform source root on that host> check-devicesettings-vendoring.sh
+#   (read-only over ssh)
 set -o errexit -o nounset -o pipefail
-: "${BUILD_HOST:?set BUILD_HOST to <user>@<host> (from the untracked local server memory)}"
+: "${BUILD_HOST:?set BUILD_HOST to <user>@<host>}"
+: "${PLATFORM_TREE:?set PLATFORM_TREE to the platform source root on the build host}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 VENDORED="$HERE/app/src/com/android/settingslib/bluetooth/devicesettings"
-TREE=/srv/sovereignos/platform-primary/frameworks/base/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings
+TREE="$PLATFORM_TREE/frameworks/base/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings"
 
 local_sums="$(cd "$VENDORED" && sha256sum -- * | sort -k2)"
 tree_sums="$(ssh -n -o BatchMode=yes "$BUILD_HOST" "cd $TREE && sha256sum -- \$(ls -p | grep -v '/\$') | sort -k2")"
