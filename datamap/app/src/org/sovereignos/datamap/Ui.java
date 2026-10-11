@@ -79,7 +79,8 @@ final class Ui {
 
     /** A round tile with the initials of a company or an app that has no icon. */
     View initialsTile(String name, boolean round, int sizeDp) {
-        TextView t = text(Initials.of(name), sizeDp >= 48 ? 20 : 15, true, round ? R.color.dm_onpri : R.color.dm_icfg);
+        TextView t = text(Initials.of(name), round ? (sizeDp >= 48 ? 22 : 16) : (sizeDp >= 48 ? 20 : 15), true,
+                round ? R.color.dm_onpri : R.color.dm_icfg);
         t.setGravity(Gravity.CENTER);
         GradientDrawable g = new GradientDrawable();
         g.setColor(color(round ? R.color.dm_pri : R.color.dm_icbg));

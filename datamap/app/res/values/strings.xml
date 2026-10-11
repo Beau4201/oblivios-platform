@@ -25,13 +25,11 @@
 
     <string name="app_totals">%1$d contacts: %2$d in the foreground, %3$d in the background</string>
     <string name="app_span">First seen %1$s, last seen %2$s</string>
-    <string name="app_publisher">Published by %1$s</string>
     <string name="app_not_on_map">Its publisher is not in the classifier file, so it has no place on the map.</string>
     <string name="contacted">Contacted</string>
     <string name="contact_counts">%1$d times (%2$d in the foreground, %3$d in the background)</string>
 
     <string name="company_based">Based in %1$s, %2$s</string>
-    <string name="company_based_note">This is where the company is based, which tells you which country\'s law governs what it holds. It is not where its servers are.</string>
     <string name="services">Services</string>
     <string name="apps_that_meet_it">Apps that contact it</string>
     <string name="connected_companies">Connected companies</string>
@@ -41,7 +39,28 @@
     <string name="rel_buys_ad_space_from">buys advertising space from</string>
     <string name="rel_connected">connected</string>
     <string name="rel_reverse">%1$s this company</string>
+    <string name="show_on_map">Show on map</string>
+    <string name="apps_reach">%1$d apps reached %2$d companies in %3$d countries since the phone started.</string>
+    <string name="most_companies_first">Most companies first</string>
+    <string name="companies_met">%1$d companies met by your apps, in %2$d countries.</string>
+    <string name="met_by_several">Met by several apps</string>
+    <string name="met_by_one">Met by one app</string>
+    <string name="standing_behind">Standing behind another</string>
+    <string name="behind">behind</string>
+    <string name="connected_explained">Documented connections between the companies behind your apps. Each has a source.</string>
+    <string name="links_explained">Apps that talk to the same company. That company could connect them. Whether it does is not visible from the phone.</string>
     <string name="group_here">Based close together on the map.</string>
+    <string name="app_publisher_line">%1$s · %2$s</string>
+    <string name="in_background">in the background</string>
+    <string name="calls">calls</string>
+    <string name="could_be_linked_to">Could be linked to</string>
+    <string name="could_be_linked_through">Could be linked through it</string>
+    <string name="linked_through_many">%1$s all talk to %2$s, which could connect them. What it holds is not visible from the phone.</string>
+    <string name="the_two_companies">The two companies</string>
+    <string name="source_id">Source %1$s</string>
+    <string name="relation_explained">A connection is shown only when it is documented, and each one carries a source. A connection that is not shown is not known; it is not proof that there is none.</string>
+    <string name="company_base">Company base</string>
+    <string name="company_base_law">%1$s. The laws of this country govern what the company holds. This is where the company is based, not where its servers are.</string>
     <string name="relations_note">Connections come from the public sources named in the classifier file. A connection that is not listed is not known.</string>
     <string name="no_relations">No documented connections between the companies seen.</string>
 
@@ -81,6 +100,22 @@
     <plurals name="n_companies">
         <item quantity="one">%d company</item>
         <item quantity="other">%d companies</item>
+    </plurals>
+    <plurals name="n_companies_label">
+        <item quantity="one">company</item>
+        <item quantity="other">companies</item>
+    </plurals>
+    <plurals name="n_countries_label">
+        <item quantity="one">country</item>
+        <item quantity="other">countries</item>
+    </plurals>
+    <plurals name="n_apps_label">
+        <item quantity="one">app</item>
+        <item quantity="other">apps</item>
+    </plurals>
+    <plurals name="n_services_label">
+        <item quantity="one">service</item>
+        <item quantity="other">services</item>
     </plurals>
     <plurals name="n_days">
         <item quantity="one">%d day</item>

@@ -292,7 +292,10 @@ public final class MainActivity extends Activity
             icon.setImageTintList(android.content.res.ColorStateList.valueOf(
                     mUi.color(on ? R.color.dm_osc : R.color.dm_onv)));
             item.getChildAt(1).setVisibility(on ? View.VISIBLE : View.GONE);
+            // the active tab is wider, as on the design page (flex 1 1 auto against 1 1 0)
+            ((LinearLayout.LayoutParams) item.getLayoutParams()).weight = on ? 2f : 1f;
         }
+        mTabBar.requestLayout();
         mHeader.setVisibility(tab == TAB_MAP ? View.VISIBLE : View.GONE);
         mGlobe.setVisibility(tab == TAB_MAP ? View.VISIBLE : View.INVISIBLE);
         mScroll.setVisibility(tab == TAB_MAP ? View.GONE : View.VISIBLE);
@@ -483,6 +486,20 @@ public final class MainActivity extends Activity
         } else {
             showScreen(mScreens.companyDetail(ownerId));
         }
+    }
+
+    @Override
+    public void showAppOnMap(String pkg) {
+        closeScreen();
+        showTab(TAB_MAP);
+        openApp(pkg);
+    }
+
+    @Override
+    public void showCompanyOnMap(String ownerId) {
+        closeScreen();
+        showTab(TAB_MAP);
+        openCompany(ownerId);
     }
 
     private void openSettings() {
