@@ -35,6 +35,10 @@ public final class UserSettingsCheck {
         // a valid choice next to an unknown key: the whole file is refused, the choice is not kept
         Check.isTrue(UserSettings.decode("datamap-settings\t1\nhistory\t1\nsurprise\t1\n").isDefault(), "an unknown key refuses the file");
         Check.isTrue(UserSettings.decode("datamap-settings\t1\nhistory\t1\t1\n").isDefault(), "too many fields");
+        // a user whose choice is not known (CE storage still locked, or user stopped) is not collected
+        Check.isTrue(!UserSettings.collects(null), "an unknown user is not collected");
+        Check.isTrue(UserSettings.collects(d), "a user with the defaults is collected");
+        Check.isTrue(!UserSettings.collects(d.withCollecting(false)), "a user who turned it off is not");
         Check.passed("UserSettingsCheck");
     }
 }

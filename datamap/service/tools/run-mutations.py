@@ -52,6 +52,12 @@ MUTATIONS = [
      "days > MAX_DAYS", "days > MAX_DAYS + 1", 2),
     ("settings: an unknown key is accepted", "UserSettings.java",
      "default:\n                        return defaults();", "default:\n                        break;", 1),
+    ("settings: an unknown user is collected", "UserSettings.java",
+     "return s != null && s.collecting;", "return s == null || s.collecting;", 1),
+    ("pending: no limit", "PendingLimit.java",
+     "if (n >= limit) {", "if (false) {", 1),
+    ("pending: a finished event keeps its place", "PendingLimit.java",
+     "held.decrementAndGet();", "held.get();", 1),
 ]
 
 def main():

@@ -13,11 +13,11 @@ if [ -z "$SRC" ]; then
   exit 2
 fi
 PKG="$SRC/frameworks/base/services/core/java/com/android/server/datamap"
-PURE=(Category HostnameValidator ClassifierException Classifier ServiceKeys RecentAnswers DataMapStore LinkDeriver HistoryCodec UserSettings)
+PURE=(Category HostnameValidator ClassifierException Classifier ServiceKeys RecentAnswers DataMapStore LinkDeriver HistoryCodec UserSettings PendingLimit)
 FILES=()
 for f in "${PURE[@]}"; do FILES+=("$PKG/$f.java"); done
 javac -Xlint:all -Werror -d "$OUT" "${FILES[@]}" "$HERE"/tests/host/com/android/server/datamap/*.java
-for c in HostnameValidatorCheck ClassifierCheck ServiceKeysCheck RecentAnswersCheck DataMapStoreCheck LinkDeriverCheck HistoryCodecCheck UserSettingsCheck; do
+for c in HostnameValidatorCheck ClassifierCheck ServiceKeysCheck RecentAnswersCheck DataMapStoreCheck LinkDeriverCheck HistoryCodecCheck UserSettingsCheck PendingLimitCheck; do
   java -ea -cp "$OUT" com.android.server.datamap.$c
 done
 echo "all host checks passed"

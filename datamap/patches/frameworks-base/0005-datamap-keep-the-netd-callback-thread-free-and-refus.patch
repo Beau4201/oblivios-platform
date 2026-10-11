@@ -1,0 +1,154 @@
+From 0926492a5f44d976105d6b8617758c174cfc3ba8 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 17:51:44 +0200
+Subject: [PATCH] datamap: keep the netd callback thread free and refuse
+ collection for a user whose choice is unknown
+
+The collector runs on the thread of netd's event callbacks with the monitor of NetdEventListenerService
+held, and upstream requires that it never blocks. DataMapService.record asked the activity manager
+(getUidProcessState waits for mProcLock) and the package manager from that thread, so a slow lock
+stalled every consumer of the events. The event is now handed to the service thread, at most 4096 at
+a time; a flood that finds no place is dropped and counted, and an exception on that thread drops the
+event instead of reaching the system server.
+
+A user whose settings were not read yet (CE storage locked, or the user stopped) was collected by
+default, which overrode a stored "off" for the time before unlock. Such a user is now not collected.
+---
+ .../server/datamap/DataMapService.java        | 32 ++++++++++++++-
+ .../android/server/datamap/PendingLimit.java  | 41 +++++++++++++++++++
+ .../android/server/datamap/UserSettings.java  |  9 ++++
+ 3 files changed, 80 insertions(+), 2 deletions(-)
+ create mode 100644 services/core/java/com/android/server/datamap/PendingLimit.java
+
+diff --git a/services/core/java/com/android/server/datamap/DataMapService.java b/services/core/java/com/android/server/datamap/DataMapService.java
+index 7a67989..cfe07e6 100644
+--- a/services/core/java/com/android/server/datamap/DataMapService.java
++++ b/services/core/java/com/android/server/datamap/DataMapService.java
+@@ -73,6 +73,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     private static final long LINK_WINDOW_MS = 5 * 60_000L;
+     private static final int MAX_PACKAGES = 2000;
+     private static final int MAX_UID_CACHE = 2048;
++    private static final int MAX_PENDING_EVENTS = 4096;
+     private static final String SYSTEM_PACKAGE = "android";
+ 
+     private final Context mContext;
+@@ -82,6 +83,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     private final ConcurrentHashMap<Integer, UserSettings> mSettings = new ConcurrentHashMap<>();
+     private final ConcurrentHashMap<Integer, String> mPackageOfUid = new ConcurrentHashMap<>();
+     private final RemoteCallbackList<IDataMapObserver> mObservers = new RemoteCallbackList<>();
++    private final PendingLimit mPending = new PendingLimit(MAX_PENDING_EVENTS);
+     private final AtomicLong mDropped = new AtomicLong();
+     private final AtomicLong mEvents = new AtomicLong();
+     private final AtomicLong mLastNotify = new AtomicLong();
+@@ -214,13 +216,39 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+ 
+     @Override
+     public boolean collecting(int userId) {
+-        UserSettings s = mSettings.get(userId);
+-        return s == null || s.collecting;
++        // A user whose settings are not read yet is not collected (see UserSettings.collects).
++        return UserSettings.collects(mSettings.get(userId));
+     }
+ 
++    /**
++     * Runs on the thread of netd's event callbacks, with the monitor of NetdEventListenerService held:
++     * upstream requires that it never blocks, and every other consumer of the events waits behind it.
++     * The activity manager (getUidProcessState waits for mProcLock) and the package manager are
++     * therefore asked on the service thread. At most MAX_PENDING_EVENTS events wait; a flood that finds
++     * no place is dropped and counted.
++     */
+     @Override
+     public void record(int uid, String key, boolean viaDns, long wallMs) {
++        if (!mPending.tryAcquire()) {
++            mDropped.incrementAndGet();
++            return;
++        }
++        mHandler.post(() -> {
++            try {
++                recordOnServiceThread(uid, key, viaDns, wallMs);
++            } catch (RuntimeException e) {
++                mDropped.incrementAndGet();   // never take the system server down for one event
++            } finally {
++                mPending.release();
++            }
++        });
++    }
++
++    private void recordOnServiceThread(int uid, String key, boolean viaDns, long wallMs) {
+         int userId = UserHandle.getUserId(uid);
++        if (!collecting(userId)) {
++            return;   // the user turned it off while the event waited
++        }
+         int storeUid = uid < Process.FIRST_APPLICATION_UID ? Process.SYSTEM_UID : uid;
+         mStore.record(userId, storeUid, packageOf(uid), key, isForeground(uid), viaDns, wallMs);
+         mEvents.incrementAndGet();
+diff --git a/services/core/java/com/android/server/datamap/PendingLimit.java b/services/core/java/com/android/server/datamap/PendingLimit.java
+new file mode 100644
+index 0000000..3eb34d9
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/PendingLimit.java
+@@ -0,0 +1,41 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++import java.util.concurrent.atomic.AtomicInteger;
++
++/**
++ * Bounds the events that wait for the service thread. The collector hands an event on from a thread
++ * that must not block, so a thread that is busy (a long history write) must not let the queue grow
++ * without end: an event that finds no free place is dropped and counted.
++ */
++final class PendingLimit {
++    private final int limit;
++    private final AtomicInteger held = new AtomicInteger();
++
++    PendingLimit(int limit) {
++        if (limit < 1) {
++            throw new IllegalArgumentException("limit must be at least 1");
++        }
++        this.limit = limit;
++    }
++
++    boolean tryAcquire() {
++        while (true) {
++            int n = held.get();
++            if (n >= limit) {
++                return false;
++            }
++            if (held.compareAndSet(n, n + 1)) {
++                return true;
++            }
++        }
++    }
++
++    void release() {
++        held.decrementAndGet();
++    }
++
++    int held() {
++        return held.get();
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/UserSettings.java b/services/core/java/com/android/server/datamap/UserSettings.java
+index e367f6d..f28f6a6 100644
+--- a/services/core/java/com/android/server/datamap/UserSettings.java
++++ b/services/core/java/com/android/server/datamap/UserSettings.java
+@@ -27,6 +27,15 @@ final class UserSettings {
+         return new UserSettings(true, false, DEFAULT_DAYS);
+     }
+ 
++    /**
++     * Whether names are collected for a user. A user whose choice is not known (null: the settings are
++     * in CE storage that is still locked, or the user was stopped) is not collected, so that a stored
++     * "off" is never overridden by the time before it can be read.
++     */
++    static boolean collects(UserSettings s) {
++        return s != null && s.collecting;
++    }
++
+     boolean isDefault() {
+         return collecting && !history && days == DEFAULT_DAYS;
+     }
+-- 
+2.56.0
+

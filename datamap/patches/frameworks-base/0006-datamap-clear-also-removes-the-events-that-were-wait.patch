@@ -1,0 +1,30 @@
+From 8879a73a906feda77c22a9336b9e6df57d8d8643 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 17:52:58 +0200
+Subject: [PATCH] datamap: clear also removes the events that were waiting for
+ the service thread
+
+An event handed to the service thread before the user pressed clear was recorded after the store was
+emptied, so a cleared user saw rows again. clear now empties the store a second time on the service
+thread, behind those events.
+---
+ .../core/java/com/android/server/datamap/DataMapService.java   | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/services/core/java/com/android/server/datamap/DataMapService.java b/services/core/java/com/android/server/datamap/DataMapService.java
+index cfe07e6..30b8022 100644
+--- a/services/core/java/com/android/server/datamap/DataMapService.java
++++ b/services/core/java/com/android/server/datamap/DataMapService.java
+@@ -505,6 +505,9 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         mStore.clearUser(user);
+         EventLogTags.writeDatamapCleared(user);
+         mHandler.post(() -> {
++            // The events that were waiting for the service thread when the user pressed clear are
++            // recorded before this runs (one queue, in order), so they are cleared as well.
++            mStore.clearUser(user);
+             historyFile(user).delete();
+             mWrittenVersion.remove(user);
+         });
+-- 
+2.56.0
+
