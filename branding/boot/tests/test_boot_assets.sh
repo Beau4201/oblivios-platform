@@ -13,7 +13,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 if grep -Eq '<text\b|<image\b|href=|xlink:' "$root_dir"/source/*.svg; then fail "sources must not contain text, images or links"; fi
 
 [[ "$(identify -format '%wx%h' "$mask")" = "1080x2400" ]]  || fail "mask size"
-[[ "$(identify -format '%wx%h' "$shine")" = "720x2160" ]]   || fail "shine size"
+[[ "$(identify -format '%wx%h' "$shine")" = "720x256" ]]    || fail "shine size"
 
 # r g b a (0-255) of one pixel
 px() { magick "$1" -format "%[fx:int(255*p{$2,$3}.r+.5)] %[fx:int(255*p{$2,$3}.g+.5)] %[fx:int(255*p{$2,$3}.b+.5)] %[fx:int(255*p{$2,$3}.a+.5)]" info:; }
@@ -46,12 +46,13 @@ for x in 140 940; do
   (( g - r > 20 )) || fail "beam colour at x=$x is $r $g $b"
 done
 
-# loading texture: dark track with a mint segment, ink elsewhere
-(( $(chan "$shine" 360 2154 g) > 170 )) || fail "segment must be bright mint"
-read -r r g b a <<<"$(px "$shine" 20 2154)";  near "$r" 26 1 && near "$g" 59 1 && near "$b" 53 1 || fail "track colour $r $g $b"
+# loading texture: dark track with a mint segment, ink elsewhere. The renderer lines the bottom edge of the texture up with
+# the bottom edge of the mask, so the window rows 2152 to 2156 of the mask are rows 8 to 12 of this 256-row texture.
+(( $(chan "$shine" 360 10 g) > 170 )) || fail "segment must be bright mint"
+read -r r g b a <<<"$(px "$shine" 20 10)";  near "$r" 26 1 && near "$g" 59 1 && near "$b" 53 1 || fail "track colour $r $g $b"
 read -r r g b a <<<"$(px "$shine" 20 100)";   near "$r" 3 1 && near "$g" 7 1 && near "$b" 6 1 || fail "ink colour $r $g $b"
 # the segment must sit inside one period so the two side-by-side quads join without a seam
-[[ "$(chan "$shine" 0 2154 g)" = "$(chan "$shine" 719 2154 g)" ]] || fail "texture edges must match"
+[[ "$(chan "$shine" 0 10 g)" = "$(chan "$shine" 719 10 g)" ]] || fail "texture edges must match"
 
 # the renderer draws only two copies of the shine, side by side, so the whole window must stay covered at every scroll offset:
 # with a texture narrower than the window's right edge the bar goes blank for part of every pass

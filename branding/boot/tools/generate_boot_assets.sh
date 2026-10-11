@@ -13,7 +13,7 @@ out="$1"; mkdir -p "$out"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 
 rsvg-convert --format=png --width=1080 --height=2400 --output="$work/mask.png" "$root_dir/source/lighthouse-mask.svg"
-rsvg-convert --format=png --width=720  --height=2160 --output="$work/shine.png" "$root_dir/source/lighthouse-shine.svg"
+rsvg-convert --format=png --width=720  --height=256 --output="$work/shine.png" "$root_dir/source/lighthouse-shine.svg"
 
 # The dark sky and sea gradients would show 8-bit bands on an OLED panel. Add up to +-0.75 of one 8-bit level
 # of fixed pseudo-random noise to the colour channels (never alpha), so band edges break up. The noise is a pure

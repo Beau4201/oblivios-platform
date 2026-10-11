@@ -45,13 +45,14 @@ PNGs of the stock tree have the sha256 `75efac98...` (mask) and `73c2cb64...`
 | --- | --- | --- | --- |
 | `frameworks-base/0001` | boot clear colour matches the boot picture | `cmds/bootanimation/BootAnimation.cpp` (one line and a comment) | A display taller than the mask shows the clear colour above and below it, so it must equal the picture's top and bottom rows. |
 | `frameworks-base/0002` | redraw at 60 fps | `cmds/bootanimation/BootAnimation.cpp` (the sleep constant and its comment) | The bar moves a fixed 4 px per redraw; the stock 12 fps would move it in 20 px steps. Unchanged from ADR-019. |
-| `frameworks-base/0003` | boot picture assets | the two PNGs under `core/res/assets/images/` | The picture itself. |
+| `frameworks-base/0003` | boot picture assets | the two PNGs under `core/res/assets/images/` | The picture itself. The loading texture is 720 x 256: the renderer lines a texture up with the bottom edge of the mask, so only the rows behind the window are needed (0.74 MB instead of 6.2 MB). |
 
 The three patches were authored in a disposable local repository that held only
 the three files at the stock blobs (`sovereignos-platform/.worktrees/boot-lighthouse-patches`).
 `git am` of the three exported patches on the stock files gives the blobs
 `BootAnimation.cpp` `673b4b6d`, `android-logo-mask.png` `d2a77598` and
-`android-logo-shine.png` `dff60465`. The build server tree already carries the
+`android-logo-shine.png` `6761fae9` (the first version of the shine, `dff60465`, was 720 x 2160 and left
+the loading bar empty, see below). The build server tree already carries the
 ADR-019 versions of the clear colour and the redraw, so the change that is
 landed there is a single delta commit on that state, authored the same way; it
 gives the same three blobs. The package patches are the reproducible form for
@@ -61,7 +62,18 @@ The delta commit was landed with `git am` on 2026-10-11 as `aa9f259fd762` in
 `frameworks/base`, build-server branch `sovereignos-2026091900-r2`, on top of
 `eb4138d4688d` (`memory/cached-process-cap` `0001`). No build was running, the
 tree was clean and `git apply --check` passed first. The blobs read back from
-`HEAD` are the three above.
+`HEAD` were the three above, with the first shine.
+
+The first shine was wrong. The boot picture ran on `lynx` image `2026101101` with the loading bar missing and the
+picture still. `drawTexturedQuad` maps y as `mapLinear(yStart, 0, height, -1, 1)`, GL's y-up convention, so the
+2160-row shine sat on the bottom of the mask and the window (screen row 2152) showed row 1912 of it, the clear
+colour. A frame captured on the device (`screencap` during a replay of the service) matched a simulation with the
+shine on the bottom edge to 5e-8 of the pixels and differed by 8e-5 from the one on the top edge. The fix is a
+256-row shine with the track on rows 2 to 18; the real renderer, run with it (the file bind-mounted over
+`framework-res.apk` for the replay only, restored and compared by sha256 afterwards), draws the dark track and a
+mint segment at changing positions in eight frames. Landed as the delta commit `fda11b7a2c9d` in
+`frameworks/base` (no build was running, tree clean, `git apply --check` first); `HEAD` reads back the shine `6761fae9`
+and the mask `d2a77598`. Package patch `0003` was regenerated against the stock blobs and gives the same two blobs.
 
 ## Apply
 

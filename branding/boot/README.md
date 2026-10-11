@@ -15,17 +15,23 @@ and the clear colour:
 | File | Size | Texture memory | Content |
 | --- | --- | --- | --- |
 | `core/res/assets/images/android-logo-mask.png` | 1080 x 2400 | 10.4 MB | The whole picture: sky, lighthouse with two beams, island, still water, the name. A 260 x 5 window at (410, 2152) is transparent. |
-| `core/res/assets/images/android-logo-shine.png` | 720 x 2160 | 6.2 MB | The loading bar behind the window: a dark track with one mint segment. |
+| `core/res/assets/images/android-logo-shine.png` | 720 x 256 | 0.74 MB | The loading bar behind the window: a dark track with one mint segment. |
 
 The PNG names are fixed by the renderer; the content is original artwork.
 
 ## Rules the renderer imposes
 
-- The scrolling texture is drawn twice, side by side, from the mask's top left
-  minus an offset. It must be at least as wide as the window's right edge
+- The scrolling texture is drawn twice, side by side, starting at the mask's left
+  edge minus an offset. It must be at least as wide as the window's right edge
   (670 px), or part of the bar is blank in every pass.
   `tests/test_boot_assets.sh` simulates the renderer and fails otherwise.
-- It is drawn from the mask's top, so it must reach the window: 2160 rows.
+- It is lined up with the mask's BOTTOM edge, not the top: `drawTexturedQuad`
+  maps y with GL's y-up convention, so a texture of any height sits on the
+  bottom of the mask. Row y of the 256-row texture is row y + 2144 of the mask,
+  and the window rows 2152 to 2156 are rows 8 to 12 of it. A 2160-row texture
+  with the bar on rows 2146 and below (the first version) put the bar under the
+  opaque bottom of the mask and left the window empty and the boot picture
+  still (measured on `lynx`, 2026-10-11).
 - Scrolling is linear at 240 px/s: the segment crosses the 260 px window in
   about 1.5 s and the pattern repeats every 3.0 s. Eased motion is not possible.
 - A display taller than 2400 px shows the clear colour above and below the
