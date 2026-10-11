@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// ADR-157. The read-only classifier file of the Data Map. DataMapService reads exactly this path; a build in
+// which the file is missing still boots, and every service is then "unknown".
+prebuilt_etc {
+    name: "datamap-classifier.tsv",
+    src: "classifier.tsv",
+    filename: "classifier.tsv",
+    sub_dir: "datamap",
+}
