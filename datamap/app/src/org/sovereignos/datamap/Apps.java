@@ -26,10 +26,16 @@ final class Apps {
         mPm = context.getPackageManager();
     }
 
+    /** The service refuses a longer list (DataMapService.MAX_PACKAGES); a phone with more keeps the first ones. */
+    private static final int MAX_PACKAGES = 2000;
+
     /** Every installed package of this user: the list that publishers are looked up for. */
     String[] installedPackages() {
         List<String> out = new ArrayList<>();
         for (ApplicationInfo info : mPm.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0))) {
+            if (out.size() == MAX_PACKAGES) {
+                break;
+            }
             out.add(info.packageName);
         }
         return out.toArray(new String[0]);
