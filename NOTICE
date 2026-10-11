@@ -1,5 +1,5 @@
 SovereignOS platform patches
-Copyright 2026 The SovereignOS authors
+Copyright 2026 Beau ten Berge
 
 LICENCE
 
@@ -59,4 +59,10 @@ The copyright line is the one embedded in the font file (SHA-256
 886ac5757cab2d72cc47025ee1b94ae0a621ed9cda123e6deb6fddc2b878f768). That string
 does not declare a Reserved Font Name; the distribution package metadata does.
 Whether the outlines in the PNG files are a modified version in the sense of
-the licence has not been reviewed by counsel.
+the licence has not been legally reviewed.
+
+TRADEMARKS
+
+The name SovereignOS and its logo are not licensed; section 6 of the Apache
+License grants no right to use them. This project is not affiliated with
+GrapheneOS, Google, or any other product that uses a similar name.
