@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.airpods.debugharness;
 
 /** Host-runnable check: javac + java -ea, no framework. Exits non-zero on failure. */

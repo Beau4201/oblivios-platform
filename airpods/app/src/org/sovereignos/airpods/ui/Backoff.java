@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.airpods.ui;
 
 /** Delay before the next connection attempt: 2 s, doubled each time, never more than 60 s. */

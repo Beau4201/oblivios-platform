@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Runs the AirPodsStateStore stress check on the build server (kotlinc and a JDK live there) and then
 # runs it again with the lock removed, which must FAIL. BUILD_HOST = <user>@<host> (local memory file).
 set -o errexit -o nounset -o pipefail

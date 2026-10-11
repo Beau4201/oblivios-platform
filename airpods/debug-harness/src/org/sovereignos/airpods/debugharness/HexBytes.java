@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.airpods.debugharness;
 
 /** Strict hex decoding for the validation harness: even length, ASCII hex digits only, bounded. */

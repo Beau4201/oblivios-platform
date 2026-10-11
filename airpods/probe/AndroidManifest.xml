@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Debug tool, never part of an image: built with `m AirPodsProbe` and installed with adb on a
      userdebug device. It opens the AirPods accessory channel and logs what the AirPods send, to
      capture real frames for the codec. Not added to PRODUCT_PACKAGES. -->

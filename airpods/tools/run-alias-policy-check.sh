@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Compiles the alias policy of patch 0012 (plain Java, no Android classes) from the authoring worktree and
 # runs the host check against it. Usage: run-alias-policy-check.sh [WORKTREE]
 set -o errexit -o nounset -o pipefail

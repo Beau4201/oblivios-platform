@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Reads AirPodsProbe logcat lines and prints what the pair reported.
 
   adb logcat -d -s AirPodsProbe | aap-capture-table.py            controls and opcodes seen

@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Makes the owner's flashset: the 36 files of the previous set's remote.sha256, taken from the build
 # server's product directory; a file that did not change becomes a hardlink to the previous set, a
 # changed one is copied. Needs BUILD_HOST='<user>@<host>'. Usage: make-flashset.sh PREVIOUS_SET NEW_SET

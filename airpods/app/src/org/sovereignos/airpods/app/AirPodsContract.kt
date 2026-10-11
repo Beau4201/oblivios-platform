@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.airpods.app
 
 /** Names shared between the services, the icon provider and the metadata writer. */

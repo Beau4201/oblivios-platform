@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Fails when the DeviceSettings contract vendored into AirPodsApp differs from the build tree's own
 # files. The Parcel layout has no versioning (field order only), so a stale copy would break the
 # binder exchange with Settings silently. Plan 6B, ADR-121.

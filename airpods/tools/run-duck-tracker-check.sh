@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Runs AirPodsDuckTrackerTest (ADR-127, patch 0011) on the build server's JDK against the tree's own
 # junit, hamcrest, truth and guava jars, without building Bluetooth. The tracker is plain Java; the two
 # Android annotations are replaced by a stub and JUnit4 for the test. Needs BUILD_HOST='<user>@<host>'

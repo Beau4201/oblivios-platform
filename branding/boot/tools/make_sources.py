@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Generate source/lighthouse-mask.svg and source/lighthouse-shine.svg.
 
 The committed SVGs are the source of truth; this script documents how they were

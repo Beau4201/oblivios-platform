@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Writes one control of the owner's AirPods and reads it back through a new session.
 #   aap-write-test.sh ID DATA     ID two hex digits (2E), DATA one to four bytes as hex without spaces (32)
 #   aap-write-test.sh --read ID   print the value a new session reports

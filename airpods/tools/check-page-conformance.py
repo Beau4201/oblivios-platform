@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Compares a uiautomator dump of an AirPods page with the approved mock-up metrics (ADR-129, AIR-166).
 
 The mock-up is drawn at 350.2 css px for a phone of the real width, so css values are scaled by

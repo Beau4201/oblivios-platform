@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- The section heading of our own page (AIR-166, ADR-137). It is Settings' expressive category layout without the
      icon frame and the summary, placed as the approved mock-up draws it: 16 dp from the left edge, a 36 dp high
      title and 16 dp above it. Settings' own layout puts the title at 24 dp and 19 dp high. The title style, and with

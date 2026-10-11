@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # Render the two boot textures from source/*.svg, deterministically.
 set -euo pipefail
 

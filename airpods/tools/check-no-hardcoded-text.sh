@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Fails when user-visible text is hard-coded in the AirPods app: every string must be an Android
 # string resource (design D5). A repo-local check, because lint is not evidenced to run in this
 # build (docs/research/airpods-settings-ui-investigation.md section 5). Plain grep over layouts

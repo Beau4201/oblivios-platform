@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Compiles the pure-Java UI logic of AirPodsApp against airpods-core.jar and runs both host checks.
 # No Android classes are needed: everything under app/src/org/sovereignos/airpods/ui is plain Java.
 set -o errexit -o nounset -o pipefail

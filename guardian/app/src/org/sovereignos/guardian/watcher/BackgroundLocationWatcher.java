@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.guardian.watcher;
 
 import android.app.ActivityManager;

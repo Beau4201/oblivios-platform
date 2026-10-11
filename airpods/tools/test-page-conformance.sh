@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Host test of check-page-conformance.py: a dump built from the metrics themselves must pass, and a
 # moved, shifted or missing element must fail. No device needed.
 set -o errexit -o nounset -o pipefail

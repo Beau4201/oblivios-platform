@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # Emulate BootAnimation::android() (frameworks/base cmds/bootanimation/BootAnimation.cpp, android()): clear colour, the shine
 # quad drawn at x and x+w (x = -offset, offset = (1 - frac(4*frame/w)) * w), then the mask blended over it.
 # usage: simulate_renderer.sh MASK SHINE FRAME OUT.png

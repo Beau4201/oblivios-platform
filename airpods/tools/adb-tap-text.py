@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Taps a screen element found in a fresh uiautomator dump, never in an old one.
 
   adb-tap-text.py --list                 print every node with text, description and bounds
