@@ -15,27 +15,38 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.animation.PathInterpolator;
 
 import org.sovereignos.datamap.model.Cluster;
 import org.sovereignos.datamap.model.GlobeMath;
 import org.sovereignos.datamap.model.Initials;
 import org.sovereignos.datamap.model.LandData;
 import org.sovereignos.datamap.model.MapModel;
+import org.sovereignos.datamap.model.MapSelection;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * The globe. It is drawn only when something changes: a finger moves it, a turn to a chosen place runs,
- * or a new snapshot arrives. There is no timer and no idle animation (MAP-018).
+ * The globe. It is drawn only when something changes: a finger moves it, a turn to a chosen place runs, the
+ * sheet over it moves, the choice changes, or a new snapshot arrives. There is no timer and no idle
+ * animation (MAP-018). What is chosen and what is dimmed is decided by {@link MapSelection}.
  */
 final class GlobeView extends View {
     interface Listener {
         void onApp(String pkg);
 
         void onCompany(String ownerId);
+
+        /** Several companies that stand close together on the map and are shown as one number. */
+        void onGroup(List<String> ownerIds);
+
+        /** The marker on the dashed line between two companies; the index is into the model's relations. */
+        void onRelation(int index);
 
         void onNothing();
     }
@@ -67,18 +78,51 @@ final class GlobeView extends View {
         }
     }
 
+    private static final int HIT_APP = 0;
+    private static final int HIT_COMPANY = 1;
+    private static final int HIT_GROUP = 2;
+    private static final int HIT_RELATION = 3;
+
+    /** Where a tap counts, as drawn the last time. */
+    private static final class Hit {
+        final int kind;
+        final float x;
+        final float y;
+        final float reach;
+        final String id;
+        final List<String> ids;
+        final int index;
+
+        Hit(int kind, float x, float y, float reach, String id, List<String> ids, int index) {
+            this.kind = kind;
+            this.x = x;
+            this.y = y;
+            this.reach = reach;
+            this.id = id;
+            this.ids = ids;
+            this.index = index;
+        }
+    }
+
+    private static final PathInterpolator STANDARD = new PathInterpolator(0.2f, 0f, 0f, 1f);
+
     private final Ui mUi;
     private final Apps mApps;
     private Listener mListener;
     private LandData mLand;
     private MapModel.Output mModel = new MapModel.Output();
+    private MapSelection mSel = new MapSelection();
+    private Set<String> mVisibleCompanies = new HashSet<>();
     private final List<Marker> mMarkers = new ArrayList<>();
     private final Map<String, Marker> mCompanyMarker = new HashMap<>();
     private final Map<String, Marker> mAppMarker = new HashMap<>();
+    private final List<Hit> mHits = new ArrayList<>();
 
     private double mLat0 = 20;
     private double mLon0 = 10;
     private double mZoom = 1;
+    private float mSheetPx;
+    private MapSelection.Layout mLayout = MapSelection.layout(1, 1, 0, 1f);
     private ValueAnimator mTurn;
 
     private final Paint mFill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -160,22 +204,74 @@ final class GlobeView extends View {
                 mAppMarker.put(a.pkg, m);
             }
         }
+        refreshVisible();
         invalidate();
     }
 
-    /** Turns the globe so that a place is in the middle. The only animation; it ends by itself. */
-    void turnTo(double lat, double lon) {
+    /** The choice changed (or the model did): which companies are in view is decided again. */
+    void setSelection(MapSelection selection) {
+        mSel = selection;
+        refreshVisible();
+        invalidate();
+    }
+
+    private void refreshVisible() {
+        mVisibleCompanies = new HashSet<>(MapSelection.visibleCompanies(mModel, mSel.app()));
+    }
+
+    /** The height in pixels of the sheet over the map, while it moves; the globe keeps clear of it. */
+    void setSheetHeightPx(float px) {
+        mSheetPx = px;
+        relayout();
+        invalidate();
+    }
+
+    private void relayout() {
+        if (getWidth() > 0 && getHeight() > 0) {
+            mLayout = MapSelection.layout(getWidth(), getHeight(), mSheetPx,
+                    getResources().getDisplayMetrics().density);
+        }
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        relayout();
+    }
+
+    // ------------------------------------------------------------------------------- turning
+
+    /** Turns the globe so that a place is in the middle, and zooms in to at least {@code minZoom}. */
+    void flyTo(double lat, double lon, double minZoom) {
         cancelTurn();
         final double fromLat = mLat0;
         final double fromLon = mLon0;
+        final double fromZoom = mZoom;
         final double dLon = GlobeMath.wrapLon(lon - fromLon);
         final double toLat = GlobeMath.clampTilt(lat);
+        final double toZoom = GlobeMath.clampZoom(Math.max(fromZoom, minZoom));
         mTurn = ValueAnimator.ofFloat(0f, 1f);
-        mTurn.setDuration(350);
+        mTurn.setDuration(450);
+        mTurn.setInterpolator(STANDARD);
         mTurn.addUpdateListener(a -> {
             float t = (float) a.getAnimatedValue();
             mLat0 = fromLat + (toLat - fromLat) * t;
             mLon0 = GlobeMath.wrapLon(fromLon + dLon * t);
+            mZoom = fromZoom + (toZoom - fromZoom) * t;
+            invalidate();
+        });
+        mTurn.start();
+    }
+
+    /** Back to the whole globe, where it is. */
+    void zoomOut() {
+        cancelTurn();
+        final double fromZoom = mZoom;
+        mTurn = ValueAnimator.ofFloat(0f, 1f);
+        mTurn.setDuration(350);
+        mTurn.setInterpolator(STANDARD);
+        mTurn.addUpdateListener(a -> {
+            mZoom = fromZoom + (1.0 - fromZoom) * (float) a.getAnimatedValue();
             invalidate();
         });
         mTurn.start();
@@ -184,14 +280,46 @@ final class GlobeView extends View {
     void turnToCompany(String ownerId) {
         Marker m = mCompanyMarker.get(ownerId);
         if (m != null) {
-            turnTo(m.lat, m.lon);
+            flyTo(m.lat, m.lon, 2.2);
         }
     }
 
     void turnToApp(String pkg) {
         Marker m = mAppMarker.get(pkg);
         if (m != null) {
-            turnTo(m.lat, m.lon);
+            flyTo(m.lat, m.lon, 1.5);
+        }
+    }
+
+    void turnToRelation(int index) {
+        if (index < 0 || index >= mModel.relations.size()) {
+            return;
+        }
+        MapModel.Relation r = mModel.relations.get(index);
+        Marker a = mCompanyMarker.get(r.ownerA);
+        Marker b = mCompanyMarker.get(r.ownerB);
+        if (a != null && b != null) {
+            double[] mid = GlobeMath.arc(a.lat, a.lon, b.lat, b.lon, 2, 0)[1];
+            flyTo(mid[0], mid[1], GlobeMath.zoomForSpan(GlobeMath.angle(a.lat, a.lon, b.lat, b.lon)));
+        }
+    }
+
+    void turnToGroup(List<String> ownerIds) {
+        double sx = 0;
+        double sy = 0;
+        double lat = 0;
+        int n = 0;
+        for (String id : ownerIds) {
+            Marker m = mCompanyMarker.get(id);
+            if (m != null) {
+                sx += Math.cos(Math.toRadians(m.lon));
+                sy += Math.sin(Math.toRadians(m.lon));
+                lat += m.lat;
+                n++;
+            }
+        }
+        if (n > 0) {
+            flyTo(lat / n, Math.toDegrees(Math.atan2(sy, sx)), 2.2);
         }
     }
 
@@ -215,11 +343,11 @@ final class GlobeView extends View {
     }
 
     private float cy() {
-        return getHeight() * 0.44f;
+        return mLayout.centerY;
     }
 
     private float radius() {
-        return (float) (Math.min(getWidth(), getHeight()) * 0.42 * mZoom);
+        return (float) (mLayout.baseRadius * mZoom);
     }
 
     private void place(Marker m) {
@@ -239,19 +367,15 @@ final class GlobeView extends View {
     }
 
     private void tap(float x, float y) {
-        float reach = mUi.dp(24);
-        Marker hit = null;
-        float best = reach * reach;
-        for (Marker m : mMarkers) {
-            if (!m.visible) {
-                continue;
-            }
-            float dx = m.x - x;
-            float dy = m.y - y;
+        Hit hit = null;
+        float best = Float.MAX_VALUE;
+        for (Hit h : mHits) {
+            float dx = h.x - x;
+            float dy = h.y - y;
             float d2 = dx * dx + dy * dy;
-            if (d2 <= best) {
+            if (d2 <= h.reach * h.reach && d2 < best) {
                 best = d2;
-                hit = m;
+                hit = h;
             }
         }
         if (mListener == null) {
@@ -259,8 +383,12 @@ final class GlobeView extends View {
         }
         if (hit == null) {
             mListener.onNothing();
-        } else if (hit.isApp) {
+        } else if (hit.kind == HIT_APP) {
             mListener.onApp(hit.id);
+        } else if (hit.kind == HIT_GROUP) {
+            mListener.onGroup(hit.ids);
+        } else if (hit.kind == HIT_RELATION) {
+            mListener.onRelation(hit.index);
         } else {
             mListener.onCompany(hit.id);
         }
@@ -273,6 +401,7 @@ final class GlobeView extends View {
         float r = radius();
         float cx = cx();
         float cy = cy();
+        mHits.clear();
 
         // the sphere
         mFill.setShader(new RadialGradient(cx - r * 0.3f, cy - r * 0.3f, r * 1.4f,
@@ -332,39 +461,62 @@ final class GlobeView extends View {
 
     private void drawEdges(Canvas canvas, float r, float cx, float cy) {
         mStroke.setPathEffect(null);
-        mStroke.setStrokeWidth(mUi.dp(1.5f));
         for (MapModel.Edge e : mModel.edges) {
+            float alpha = mSel.edgeAlpha(e.pkg, e.ownerId);
             Marker from = mAppMarker.get(e.pkg);
             Marker to = mCompanyMarker.get(e.ownerId);
-            if (from == null || to == null) {
+            if (alpha <= 0f || from == null || to == null || !mVisibleCompanies.contains(e.ownerId)) {
                 continue;
             }
-            mStroke.setColor(withAlpha(mUi.color(to.tracker ? R.color.dm_err : R.color.dm_pri), 0.75f));
+            mStroke.setStrokeWidth(mUi.dp(mSel.edgeWidthDp(e.pkg, e.ownerId)));
+            mStroke.setColor(withAlpha(mUi.color(to.tracker ? R.color.dm_err : R.color.dm_pri), alpha));
             drawArc(canvas, from, to, 0.25, r, cx, cy);
         }
     }
 
+    /** The dashed lines between companies, each with a marker in the middle that can be tapped. */
     private void drawRelations(Canvas canvas, float r, float cx, float cy) {
-        mStroke.setPathEffect(new DashPathEffect(new float[] {mUi.dp(5), mUi.dp(4)}, 0));
-        mStroke.setStrokeWidth(mUi.dp(1.5f));
-        mStroke.setColor(withAlpha(mUi.color(R.color.dm_ol), 0.9f));
-        for (MapModel.Relation rel : mModel.relations) {
+        List<Integer> shown = MapSelection.visibleRelations(mModel, mSel.app());
+        for (int index : shown) {
+            MapModel.Relation rel = mModel.relations.get(index);
             Marker a = mCompanyMarker.get(rel.ownerA);
             Marker b = mCompanyMarker.get(rel.ownerB);
-            if (a != null && b != null) {
-                drawArc(canvas, a, b, 0.12, r, cx, cy);
+            if (a == null || b == null) {
+                continue;
+            }
+            boolean chosen = mSel.relation() == index;
+            float alpha = mSel.relation() < 0 || chosen ? 0.9f : 0.3f;
+            mStroke.setPathEffect(new DashPathEffect(new float[] {mUi.dp(5), mUi.dp(4)}, 0));
+            mStroke.setStrokeWidth(mUi.dp(chosen ? 2.5f : 1.5f));
+            mStroke.setColor(withAlpha(mUi.color(chosen ? R.color.dm_pri : R.color.dm_ol), alpha));
+            float[] mid = drawArc(canvas, a, b, 0.12, r, cx, cy);
+            mStroke.setPathEffect(null);
+            if (mid != null) {
+                mFill.setColor(withAlpha(mUi.color(R.color.dm_hi), alpha));
+                canvas.drawCircle(mid[0], mid[1], mUi.dp(6), mFill);
+                mStroke.setStrokeWidth(mUi.dp(1.5f));
+                mStroke.setColor(withAlpha(mUi.color(chosen ? R.color.dm_pri : R.color.dm_ol), alpha));
+                canvas.drawCircle(mid[0], mid[1], mUi.dp(6), mStroke);
+                mHits.add(new Hit(HIT_RELATION, mid[0], mid[1], mUi.dp(20), null, null, index));
             }
         }
         mStroke.setPathEffect(null);
     }
 
-    /** A great-circle arc that lifts off the globe in the middle; drawn where both ends of a piece are in front. */
-    private void drawArc(Canvas canvas, Marker a, Marker b, double lift, float r, float cx, float cy) {
+    /**
+     * A great-circle arc that lifts off the globe in the middle; drawn where both ends of a piece are in
+     * front.
+     *
+     * @return the middle of the arc if it is in front, else null
+     */
+    private float[] drawArc(Canvas canvas, Marker a, Marker b, double lift, float r, float cx, float cy) {
         double[][] pts = GlobeMath.arc(a.lat, a.lon, b.lat, b.lon, 24, lift);
         float px = 0;
         float py = 0;
         boolean prevVisible = false;
-        for (double[] p : pts) {
+        float[] mid = null;
+        for (int i = 0; i < pts.length; i++) {
+            double[] p = pts[i];
             GlobeMath.P q = GlobeMath.project(p[0], p[1], mLat0, mLon0);
             float scale = (float) (1.0 + p[2]);
             float x = (float) (cx + q.x * r * scale);
@@ -373,15 +525,32 @@ final class GlobeView extends View {
             if (visible && prevVisible) {
                 canvas.drawLine(px, py, x, y, mStroke);
             }
+            if (i == pts.length / 2 && visible) {
+                mid = new float[] {x, y};
+            }
             px = x;
             py = y;
             prevVisible = visible;
         }
+        return mid;
     }
 
     private void drawMarkers(Canvas canvas) {
+        MapModel.Relation chosenRel = mSel.relation() >= 0 && mSel.relation() < mModel.relations.size()
+                ? mModel.relations.get(mSel.relation()) : null;
+        Set<String> appsOfCompany = null;
+        if (mSel.company() != null) {
+            for (MapModel.CompanyRow c : mModel.companies) {
+                if (c.owner.id.equals(mSel.company())) {
+                    appsOfCompany = c.apps;
+                }
+            }
+        }
         List<Marker> shown = new ArrayList<>();
         for (Marker m : mMarkers) {
+            if (!m.isApp && !mVisibleCompanies.contains(m.id)) {
+                continue;
+            }
             place(m);
             if (m.visible) {
                 shown.add(m);
@@ -405,49 +574,94 @@ final class GlobeView extends View {
             Marker m = shown.get(i);
             float half = mUi.dp(m.isApp ? 16 : 18);
             if (m.isApp) {
-                mFill.setColor(mUi.color(R.color.dm_icbg));
+                float alpha = mSel.appAlpha(m.id, appsOfCompany);
+                mFill.setColor(withAlpha(mUi.color(R.color.dm_icbg), alpha));
                 canvas.drawRoundRect(m.x - half, m.y - half, m.x + half, m.y + half, mUi.dp(10), mUi.dp(10), mFill);
                 Drawable icon = size[i] == 1 ? mApps.icon(m.id) : null;
                 if (icon != null) {
                     icon.setBounds((int) (m.x - half), (int) (m.y - half), (int) (m.x + half), (int) (m.y + half));
+                    icon.setAlpha((int) (alpha * 255));
                     icon.draw(canvas);
+                    icon.setAlpha(255);
                 } else {
                     drawLabel(canvas, size[i] == 1 ? Initials.of(m.name) : String.valueOf(size[i]), m.x, m.y,
-                            R.color.dm_icfg, 13);
+                            R.color.dm_icfg, 13, alpha);
+                }
+                if (m.id.equals(mSel.app())) {
+                    ring(canvas, m.x, m.y, half + mUi.dp(3), true);
                 }
             } else {
+                boolean dim = mSel.companyDimmed(m.id, chosenRel == null ? null : chosenRel.ownerA,
+                        chosenRel == null ? null : chosenRel.ownerB);
+                float alpha = dim ? 0.45f : 1f;
                 if (m.ghost) {
                     mStroke.setPathEffect(new DashPathEffect(new float[] {mUi.dp(4), mUi.dp(3)}, 0));
                     mStroke.setStrokeWidth(mUi.dp(2));
-                    mStroke.setColor(mUi.color(R.color.dm_pri));
+                    mStroke.setColor(withAlpha(mUi.color(R.color.dm_pri), alpha));
                     canvas.drawCircle(m.x, m.y, half, mStroke);
                     mStroke.setPathEffect(null);
-                    drawLabel(canvas, Initials.of(m.name), m.x, m.y, R.color.dm_pri, 14);
+                    drawLabel(canvas, Initials.of(m.name), m.x, m.y, R.color.dm_pri, 14, alpha);
                 } else {
-                    mFill.setColor(mUi.color(m.tracker ? R.color.dm_err : R.color.dm_pri));
+                    mFill.setColor(withAlpha(mUi.color(m.tracker ? R.color.dm_err : R.color.dm_pri), alpha));
                     canvas.drawCircle(m.x, m.y, half, mFill);
                     drawLabel(canvas, size[i] == 1 ? Initials.of(m.name) : String.valueOf(size[i]), m.x, m.y,
-                            R.color.dm_onpri, 14);
+                            R.color.dm_onpri, 14, alpha);
                 }
                 Drawable flag = size[i] == 1 ? Flags.of(getContext(), m.country) : null;
                 if (flag != null) {
                     int fx = (int) (m.x + half * 0.5f);
                     int fy = (int) (m.y - half - mUi.dp(6));
                     flag.setBounds(fx, fy, fx + mUi.dp(20), fy + mUi.dp(15));
+                    flag.setAlpha((int) (alpha * 255));
                     flag.draw(canvas);
+                    flag.setAlpha(255);
+                }
+                if (size[i] == 1 && m.id.equals(mSel.company())) {
+                    ring(canvas, m.x, m.y, half + mUi.dp(4), false);
                 }
             }
+            addMarkerHit(shown, leader, i);
         }
     }
 
-    private void drawLabel(Canvas canvas, String s, float x, float y, int colorRes, float sp) {
-        mTextPaint.setColor(mUi.color(colorRes));
+    /** A tap on a marker; on a number it is a tap on the group of companies behind it. */
+    private void addMarkerHit(List<Marker> shown, int[] leader, int i) {
+        Marker m = shown.get(i);
+        List<String> companies = new ArrayList<>();
+        for (int j = 0; j < leader.length; j++) {
+            if (leader[j] == i && !shown.get(j).isApp) {
+                companies.add(shown.get(j).id);
+            }
+        }
+        float reach = mUi.dp(24);
+        if (companies.size() > 1) {
+            mHits.add(new Hit(HIT_GROUP, m.x, m.y, reach, null, companies, -1));
+        } else {
+            mHits.add(new Hit(m.isApp ? HIT_APP : HIT_COMPANY, m.x, m.y, reach, m.id, null, -1));
+        }
+    }
+
+    private void ring(Canvas canvas, float x, float y, float radius, boolean rounded) {
+        mStroke.setPathEffect(null);
+        mStroke.setStrokeWidth(mUi.dp(2));
+        mStroke.setColor(mUi.color(R.color.dm_on));
+        if (rounded) {
+            canvas.drawRoundRect(x - radius, y - radius, x + radius, y + radius, mUi.dp(12), mUi.dp(12), mStroke);
+        } else {
+            canvas.drawCircle(x, y, radius, mStroke);
+        }
+    }
+
+    private void drawLabel(Canvas canvas, String s, float x, float y, int colorRes, float sp, float alpha) {
+        mTextPaint.setColor(withAlpha(mUi.color(colorRes), alpha));
         mTextPaint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp,
                 getResources().getDisplayMetrics()));
         canvas.drawText(s, x, y - (mTextPaint.ascent() + mTextPaint.descent()) / 2f, mTextPaint);
     }
 
+    /** The colour with its own opacity multiplied by {@code alpha}. */
     private static int withAlpha(int color, float alpha) {
-        return (color & 0x00FFFFFF) | ((int) (alpha * 255) << 24);
+        int a = Math.round(((color >>> 24) & 0xFF) * Math.max(0f, Math.min(1f, alpha)));
+        return (color & 0x00FFFFFF) | (a << 24);
     }
 }

@@ -65,6 +65,14 @@ public final class GlobeMathCheck {
         for (double[] p : GlobeMath.arc(0, 0, 0, 180, 8, 0.25)) {
             if (Double.isNaN(p[0]) || Double.isNaN(p[1])) throw new AssertionError("antipodal arc");
         }
+        // the angle between two places, for turning to a relation and choosing a zoom
+        if (Math.abs(GlobeMath.angle(0, 0, 0, 90) - Math.PI / 2) > 1e-9) throw new AssertionError("a quarter turn");
+        if (GlobeMath.angle(10, 20, 10, 20) != 0.0) throw new AssertionError("the same place");
+        if (Math.abs(GlobeMath.angle(0, 179, 0, -179) - Math.toRadians(2)) > 1e-9) throw new AssertionError("across the date line");
+        if (Math.abs(GlobeMath.angle(90, 0, -90, 0) - Math.PI) > 1e-9) throw new AssertionError("pole to pole");
+        if (Math.abs(GlobeMath.zoomForSpan(0.1) - 2.6) > 1e-9) throw new AssertionError("close places: the largest zoom 2.6");
+        if (Math.abs(GlobeMath.zoomForSpan(1.0) - 1.7) > 1e-9) throw new AssertionError("1.7 over the span");
+        if (Math.abs(GlobeMath.zoomForSpan(3.0) - 1.5) > 1e-9) throw new AssertionError("far places: at least 1.5");
         System.out.println("PASS GlobeMathCheck");
     }
 }

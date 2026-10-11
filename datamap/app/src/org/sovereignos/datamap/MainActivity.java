@@ -21,9 +21,11 @@ import com.android.internal.datamap.IDataMapService;
 
 import org.sovereignos.datamap.model.LandData;
 import org.sovereignos.datamap.model.MapModel;
+import org.sovereignos.datamap.model.MapSelection;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,7 +35,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * no process of the app remains (MAP-013, MAP-015). The service is asked while the activity is started and
  * the observer is removed when it stops.
  */
-public final class MainActivity extends Activity implements Screens.Nav, SettingsScreen.Actions {
+public final class MainActivity extends Activity
+        implements Screens.Nav, SettingsScreen.Actions, GlobeView.Listener, SheetView.Host {
     private static final int TAB_MAP = 0;
     private static final int TAB_APPS = 1;
     private static final int TAB_COMPANIES = 2;
@@ -47,21 +50,27 @@ public final class MainActivity extends Activity implements Screens.Nav, Setting
             refresh();
         }
     };
-    private final OnBackInvokedCallback mBack = this::closeScreen;
+    private final OnBackInvokedCallback mBack = this::onBack;
     private boolean mBackRegistered;
+    private final MapSelection mSel = new MapSelection();
 
     private Ui mUi;
     private Apps mApps;
     private Screens mScreens;
     private GlobeView mGlobe;
     private FrameLayout mRoot;
+    private FrostedBar.Backdrop mBackdrop;
     private FrameLayout mPageHost;
     private FrameLayout mScreenHost;
     private ScrollView mScroll;
-    private LinearLayout mTabBar;
+    private SheetView mSheet;
+    private FrostedBar mTabBar;
     private View mHeader;
+    private View mHeaderTitle;
+    private View mHeaderBack;
     private android.widget.TextView mLead;
     private int mTab = TAB_MAP;
+    private int mBottomInset;
 
     private volatile IDataMapService mService;
     private DataMapSnapshot mLast;
@@ -78,34 +87,30 @@ public final class MainActivity extends Activity implements Screens.Nav, Setting
 
         mRoot = new FrameLayout(this);
         mRoot.setBackgroundColor(mUi.color(R.color.dm_bg));
+
+        // Everything the tab bar looks through: the globe, the pages and the sheet.
+        mBackdrop = new FrostedBar.Backdrop(this);
         mGlobe = new GlobeView(this, mApps);
-        mGlobe.setListener(new GlobeView.Listener() {
-            @Override
-            public void onApp(String pkg) {
-                openApp(pkg);
-            }
-
-            @Override
-            public void onCompany(String ownerId) {
-                openCompany(ownerId);
-            }
-
-            @Override
-            public void onNothing() {}
-        });
-        mRoot.addView(mGlobe, new FrameLayout.LayoutParams(-1, -1));
+        mGlobe.setListener(this);
+        mBackdrop.addView(mGlobe, new FrameLayout.LayoutParams(-1, -1));
 
         mScroll = new ScrollView(this);
         mScroll.setBackgroundColor(mUi.color(R.color.dm_bg));
         mScroll.setVerticalScrollBarEnabled(false);
         mPageHost = new FrameLayout(this);
         mPageHost.addView(mScroll, new FrameLayout.LayoutParams(-1, -1));
-        mRoot.addView(mPageHost, new FrameLayout.LayoutParams(-1, -1));
+        mBackdrop.addView(mPageHost, new FrameLayout.LayoutParams(-1, -1));
+
+        mSheet = new SheetView(this, mUi, this);
+        mBackdrop.addView(mSheet, new FrameLayout.LayoutParams(-1, 0, Gravity.BOTTOM));
+        mSheet.jumpTo(0);
+        mRoot.addView(mBackdrop, new FrameLayout.LayoutParams(-1, -1));
 
         mHeader = header();
         mRoot.addView(mHeader, new FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         mTabBar = tabBar();
+        mTabBar.setBackdrop(mBackdrop);
         FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-1, mUi.dp(68), Gravity.BOTTOM);
         tp.setMargins(mUi.dp(14), 0, mUi.dp(14), mUi.dp(12));
         mRoot.addView(mTabBar, tp);
@@ -116,12 +121,20 @@ public final class MainActivity extends Activity implements Screens.Nav, Setting
 
         mRoot.setOnApplyWindowInsetsListener((v, insets) -> {
             android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars());
+            mBottomInset = bars.bottom;
             mHeader.setPadding(0, bars.top, 0, 0);
             ((FrameLayout.LayoutParams) mTabBar.getLayoutParams()).bottomMargin = mUi.dp(12) + bars.bottom;
             mTabBar.requestLayout();
             mScroll.setPadding(0, bars.top, 0, mUi.dp(104) + bars.bottom);
             mScroll.setClipToPadding(false);
+            mSheet.setBottomPadding(mUi.dp(104) + bars.bottom);
             return insets;
+        });
+        // The sheet is a share of the height of the screen: it follows a rotation.
+        mBackdrop.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            if (b - t != ob - ot) {
+                applySelection(false);
+            }
         });
         setContentView(mRoot);
         showTab(TAB_MAP);
@@ -200,7 +213,9 @@ public final class MainActivity extends Activity implements Screens.Nav, Setting
         mLast = snap;
         mScreens.set(out, in.owners, snap.nowWallMs);
         mGlobe.setModel(out, in.owners);
+        mGlobe.setSelection(mSel);
         mLead.setText(out.apps.isEmpty() ? R.string.empty_nothing : R.string.lead_map);
+        renderSheet(true);
         if (mTab != TAB_MAP) {
             final int y = mScroll.getScrollY();   // a live refresh must not throw the reader back to the top
             showTab(mTab);
@@ -220,7 +235,18 @@ public final class MainActivity extends Activity implements Screens.Nav, Setting
         mLead.setPadding(mUi.dp(24), 0, mUi.dp(72), 0);
         col.addView(t);
         col.addView(mLead);
+        mHeaderTitle = col;
         h.addView(col);
+        // With the sheet open the title gives way to a way back, as on the design page.
+        ImageView back = new ImageView(this);
+        back.setImageResource(R.drawable.ic_back);
+        back.setImageTintList(android.content.res.ColorStateList.valueOf(mUi.color(R.color.dm_on)));
+        back.setScaleType(ImageView.ScaleType.CENTER);
+        back.setContentDescription(getString(R.string.back));
+        back.setOnClickListener(v -> backFromSelection());
+        back.setVisibility(View.GONE);
+        mHeaderBack = back;
+        h.addView(back, new FrameLayout.LayoutParams(mUi.dp(48), mUi.dp(48), Gravity.TOP | Gravity.START));
         ImageView menu = new ImageView(this);
         menu.setImageResource(R.drawable.ic_menu);
         menu.setImageTintList(android.content.res.ColorStateList.valueOf(mUi.color(R.color.dm_on)));
@@ -232,13 +258,11 @@ public final class MainActivity extends Activity implements Screens.Nav, Setting
         return h;
     }
 
-    private LinearLayout tabBar() {
-        LinearLayout bar = new LinearLayout(this);
+    private FrostedBar tabBar() {
+        FrostedBar bar = new FrostedBar(this, mUi);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(mUi.dp(8), 0, mUi.dp(8), 0);
-        bar.setBackground(mUi.shape(R.color.dm_glass, 34, 34));
-        bar.setElevation(mUi.dp(6));
         int[] icons = {R.drawable.ic_map, R.drawable.ic_apps, R.drawable.ic_companies, R.drawable.ic_links};
         int[] names = {R.string.tab_map, R.string.tab_apps, R.string.tab_companies, R.string.tab_links};
         for (int i = 0; i < 4; i++) {
@@ -280,6 +304,7 @@ public final class MainActivity extends Activity implements Screens.Nav, Setting
         } else if (tab == TAB_LINKS) {
             mScroll.addView(mScreens.linksPage());
         }
+        applySelection(false);
     }
 
     private void showScreen(View content) {
@@ -304,36 +329,160 @@ public final class MainActivity extends Activity implements Screens.Nav, Setting
         bp.topMargin = mUi.dp(8);
         mScreenHost.addView(back, bp);
         mScreenHost.setVisibility(View.VISIBLE);
-        if (!mBackRegistered) {
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                    OnBackInvokedDispatcher.PRIORITY_DEFAULT, mBack);
-            mBackRegistered = true;
-        }
+        updateBack();
     }
 
     private void closeScreen() {
         mScreenHost.removeAllViews();
         mScreenHost.setVisibility(View.GONE);
-        if (mBackRegistered) {
+        updateBack();
+    }
+
+    private boolean screenOpen() {
+        return mScreenHost.getVisibility() == View.VISIBLE;
+    }
+
+    // ------------------------------------------------------------- the choice and the sheet
+
+    /** Draws the choice: the sheet to its height, its body, the globe clear of it, the header and the back key. */
+    private void applySelection(boolean animate) {
+        mGlobe.setSelection(mSel);
+        boolean onMap = mTab == TAB_MAP;
+        int target = onMap
+                ? MapSelection.sheetHeight(mSel.sheet(), mBackdrop.getHeight(), mUi.dp(60)) : 0;
+        if (animate) {
+            mSheet.animateTo(target);
+        } else {
+            mSheet.jumpTo(target);
+        }
+        renderSheet(false);
+        boolean open = onMap && mSel.sheet() != MapSelection.SHEET_NONE;
+        mHeaderTitle.setVisibility(open ? View.GONE : View.VISIBLE);
+        mHeaderBack.setVisibility(open ? View.VISIBLE : View.GONE);
+        updateBack();
+    }
+
+    private void renderSheet(boolean keepScroll) {
+        View v = null;
+        switch (mSel.content()) {
+            case MapSelection.CONTENT_APP:
+                v = mScreens.appBody(mSel.app(), 8);
+                break;
+            case MapSelection.CONTENT_COMPANY:
+                v = mScreens.companyBody(mSel.company(), 8);
+                break;
+            case MapSelection.CONTENT_RELATION:
+                v = mScreens.relationBody(mSel.relation(), 8);
+                break;
+            case MapSelection.CONTENT_GROUP:
+                v = mScreens.groupBody(mSel.group(), 8);
+                break;
+            default:
+                break;
+        }
+        mSheet.setContent(v, keepScroll);
+    }
+
+    private void backFromSelection() {
+        mSel.back();
+        if (mSel.sheet() == MapSelection.SHEET_NONE) {
+            mGlobe.zoomOut();
+        }
+        applySelection(true);
+    }
+
+    private boolean needsBack() {
+        return screenOpen() || (mTab == TAB_MAP && mSel.sheet() != MapSelection.SHEET_NONE);
+    }
+
+    private void updateBack() {
+        boolean need = needsBack();
+        if (need && !mBackRegistered) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT, mBack);
+            mBackRegistered = true;
+        } else if (!need && mBackRegistered) {
             getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(mBack);
             mBackRegistered = false;
         }
     }
 
+    private void onBack() {
+        if (screenOpen()) {
+            closeScreen();
+        } else if (mTab == TAB_MAP && mSel.sheet() != MapSelection.SHEET_NONE) {
+            backFromSelection();
+        }
+    }
+
+    // ---------------------------------------------------------------- SheetView.Host
+
+    @Override
+    public void onHandle() {
+        mSel.toggleSheet();
+        applySelection(true);
+    }
+
+    @Override
+    public void onHeight(float px) {
+        mGlobe.setSheetHeightPx(px);
+    }
+
+    // --------------------------------------------------------------- GlobeView.Listener
+
+    @Override
+    public void onApp(String pkg) {
+        openApp(pkg);
+    }
+
+    @Override
+    public void onCompany(String ownerId) {
+        openCompany(ownerId);
+    }
+
+    @Override
+    public void onGroup(List<String> ownerIds) {
+        mSel.openGroup(ownerIds);
+        mGlobe.turnToGroup(ownerIds);
+        applySelection(true);
+    }
+
+    @Override
+    public void onRelation(int index) {
+        mSel.selectRelation(index);
+        mGlobe.turnToRelation(index);
+        applySelection(true);
+    }
+
+    @Override
+    public void onNothing() {
+        if (mSel.sheet() != MapSelection.SHEET_NONE) {
+            backFromSelection();
+        }
+    }
+
+    // ------------------------------------------------------------------- Screens.Nav
+
     @Override
     public void openApp(String pkg) {
-        if (mTab == TAB_MAP) {
+        if (mTab == TAB_MAP && !screenOpen()) {
+            mSel.selectApp(pkg);
             mGlobe.turnToApp(pkg);
+            applySelection(true);
+        } else {
+            showScreen(mScreens.appDetail(pkg));
         }
-        showScreen(mScreens.appDetail(pkg));
     }
 
     @Override
     public void openCompany(String ownerId) {
-        if (mTab == TAB_MAP) {
+        if (mTab == TAB_MAP && !screenOpen()) {
+            mSel.selectCompany(ownerId);
             mGlobe.turnToCompany(ownerId);
+            applySelection(true);
+        } else {
+            showScreen(mScreens.companyDetail(ownerId));
         }
-        showScreen(mScreens.companyDetail(ownerId));
     }
 
     private void openSettings() {

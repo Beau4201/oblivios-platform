@@ -108,7 +108,13 @@ final class Screens {
         return p;
     }
 
+    /** The app on a screen of its own. */
     View appDetail(String pkg) {
+        return appBody(pkg, 64);
+    }
+
+    /** The app, for the sheet over the map ({@code topDp} small) or for a screen of its own. */
+    View appBody(String pkg, int topDp) {
         LinearLayout p = page();
         MapModel.AppRow a = null;
         for (MapModel.AppRow row : mModel.apps) {
@@ -117,7 +123,7 @@ final class Screens {
             }
         }
         TextView name = mUi.text(mApps.label(pkg), 28, false, R.color.dm_on);
-        name.setPadding(mUi.dp(24), mUi.dp(64), mUi.dp(24), mUi.dp(4));
+        name.setPadding(mUi.dp(24), mUi.dp(topDp), mUi.dp(24), mUi.dp(4));
         p.addView(name);
         if (a == null) {
             p.addView(mUi.para(mUi.ctx.getString(R.string.empty_app)));
@@ -184,7 +190,12 @@ final class Screens {
         return p;
     }
 
+    /** The company on a screen of its own. */
     View companyDetail(String ownerId) {
+        return companyBody(ownerId, 64);
+    }
+
+    View companyBody(String ownerId, int topDp) {
         LinearLayout p = page();
         MapModel.Owner o = mOwners.get(ownerId);
         MapModel.CompanyRow row = null;
@@ -194,7 +205,7 @@ final class Screens {
             }
         }
         TextView name = mUi.text(o == null ? ownerId : o.name, 28, false, R.color.dm_on);
-        name.setPadding(mUi.dp(24), mUi.dp(64), mUi.dp(24), mUi.dp(4));
+        name.setPadding(mUi.dp(24), mUi.dp(topDp), mUi.dp(24), mUi.dp(4));
         p.addView(name);
         if (o == null) {
             return p;
@@ -243,6 +254,53 @@ final class Screens {
             p.addView(g.seal().view);
             p.addView(mUi.note(mUi.ctx.getString(R.string.relations_note)));
         }
+        return p;
+    }
+
+    // -------------------------------------------------------------------- relation and group
+
+    /** One documented connection between two companies, as the sheet over the map shows it. */
+    View relationBody(int index, int topDp) {
+        LinearLayout p = page();
+        if (index < 0 || index >= mModel.relations.size()) {
+            p.addView(mUi.para(mUi.ctx.getString(R.string.no_relations)));
+            return p;
+        }
+        MapModel.Relation r = mModel.relations.get(index);
+        TextView name = mUi.text(ownerName(r.ownerA) + " — " + ownerName(r.ownerB), 24, false, R.color.dm_on);
+        name.setPadding(mUi.dp(24), mUi.dp(topDp), mUi.dp(24), mUi.dp(4));
+        p.addView(name);
+        p.addView(mUi.para(relation(r.type) + (r.note.isEmpty() ? "" : " · " + r.note)));
+        Ui.Group g = new Ui.Group(mUi);
+        for (final String id : new String[] {r.ownerA, r.ownerB}) {
+            MapModel.Owner o = mOwners.get(id);
+            g.add(mUi.row(mUi.companyTile(ownerName(id), 40), ownerName(id),
+                    o == null ? "" : o.city + ", " + o.countryCode, "", v -> mNav.openCompany(id)));
+        }
+        p.addView(g.seal().view);
+        p.addView(mUi.note(mUi.ctx.getString(R.string.relations_note)));
+        return p;
+    }
+
+    /** Companies based close together, which the map shows as one number. */
+    View groupBody(java.util.List<String> ownerIds, int topDp) {
+        LinearLayout p = page();
+        TextView name = mUi.text(mUi.ctx.getResources().getQuantityString(R.plurals.n_companies,
+                ownerIds.size(), ownerIds.size()), 24, false, R.color.dm_on);
+        name.setPadding(mUi.dp(24), mUi.dp(topDp), mUi.dp(24), mUi.dp(4));
+        p.addView(name);
+        p.addView(mUi.para(mUi.ctx.getString(R.string.group_here)));
+        Ui.Group g = new Ui.Group(mUi);
+        for (final String id : ownerIds) {
+            String summary = "";
+            for (MapModel.CompanyRow c : mModel.companies) {
+                if (c.owner.id.equals(id)) {
+                    summary = c.contacted ? category(c.category) : mUi.ctx.getString(R.string.not_contacted_directly);
+                }
+            }
+            g.add(mUi.row(mUi.companyTile(ownerName(id), 40), ownerName(id), summary, "", v -> mNav.openCompany(id)));
+        }
+        p.addView(g.seal().view);
         return p;
     }
 

@@ -130,6 +130,21 @@ public final class GlobeMath {
         return out;
     }
 
+    /** The angle in radians between two places as seen from the middle of the globe. */
+    public static double angle(double lat1, double lon1, double lat2, double lon2) {
+        double[] a = unit(lat1, lon1);
+        double[] b = unit(lat2, lon2);
+        double cx = a[1] * b[2] - a[2] * b[1];
+        double cy = a[2] * b[0] - a[0] * b[2];
+        double cz = a[0] * b[1] - a[1] * b[0];
+        return Math.atan2(Math.sqrt(cx * cx + cy * cy + cz * cz), a[0] * b[0] + a[1] * b[1] + a[2] * b[2]);
+    }
+
+    /** The zoom that shows both ends of a relation that lie {@code angle} radians apart: 1.5 to 2.6. */
+    public static double zoomForSpan(double angle) {
+        return Math.max(1.5, Math.min(2.6, 1.7 / Math.max(angle, 0.5)));
+    }
+
     private static double[] unit(double latDeg, double lonDeg) {
         double lat = Math.toRadians(latDeg);
         double lon = Math.toRadians(lonDeg);

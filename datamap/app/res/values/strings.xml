@@ -4,6 +4,7 @@
     <string name="app_name">Data Map</string>
     <string name="app_system">System</string>
     <string name="back">Back</string>
+    <string name="sheet_handle">Switch between half and full height</string>
     <string name="settings">Settings</string>
     <string name="tab_map">Map</string>
     <string name="tab_apps">Apps</string>
@@ -40,6 +41,7 @@
     <string name="rel_buys_ad_space_from">buys advertising space from</string>
     <string name="rel_connected">connected</string>
     <string name="rel_reverse">%1$s this company</string>
+    <string name="group_here">Based close together on the map.</string>
     <string name="relations_note">Connections come from the public sources named in the classifier file. A connection that is not listed is not known.</string>
     <string name="no_relations">No documented connections between the companies seen.</string>
 
