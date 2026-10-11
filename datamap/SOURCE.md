@@ -2,7 +2,7 @@
 
 ADR-157. Observe-only collector in `system_server`, a read-only classifier file in the system image, and the privileged app `DataMapApp`.
 
-State: **not landed on the build server, not built, not on a device.** Task 4 of the implementation plan lands the patches; this file is updated then.
+State: **landed on the build server on 2026-10-12 (section "Landed"), not built, not on a device.**
 
 ## Baselines
 
@@ -14,7 +14,7 @@ The patches were authored in disposable worktrees (`.worktrees/datamap-authored/
 | `system/sepolicy` | `261adac69c6d` | `private/seapp_contexts` `8633389`; `private/service.te` `7e738f8`; `private/service_contexts` `de00043`; `private/system_app.te` `b75dfe4`; `private/traceur_app.te` `029405b` |
 | `vendor/adevtool` | `d9665a565a56` | `config/mk/google_devices/common/device-common.mk` `2e94e04` |
 
-Task 4 step 2 compares these blobs with the HEAD of each tree before anything is applied.
+Task 4 step 2 compared these blobs with the HEAD of each tree before anything was applied: all twelve were identical.
 
 ## Patches
 
@@ -82,3 +82,27 @@ One fresh reviewer read the six patches against the tree (2026-10-12). Every fin
 | 10 | Notification throttle is global and has no trailing notification; rows recorded between `snapshot()` and `clearUser()` at day rollover are lost; the settings are read, changed and written without a lock. | Confirmed by reading. | Settings fixed in 0007. Accepted for now: the throttle, and the rollover loss (at most the events of one tick). |
 
 Areas the reviewer and the author checked and found sound: the callback array and its fourth slot, the registration order, the permission check of `IpConnectivityMetrics`, per-user isolation of the store, files and observers, the content of `dumpsys` and of the event log, the `datamap_service` type.
+
+## Landed
+
+2026-10-12, with no build running and the three trees clean. The patches were applied with `git am` in series order; the SHAs differ from the worktree commits, as `git am` makes them.
+
+| Tree (branch) | Patch | Landed commit |
+| --- | --- | --- |
+| `frameworks/base` (`sovereignos-2026091900-r2`) | 0001 | `8d6a040c46af` |
+| | 0002 | `38e3ce3241dd` |
+| | 0003 | `c4e6a7e17aac` |
+| | 0004 | `d37e1cf7c494` |
+| | 0005 | `be2a93b3faad` |
+| | 0006 | `04218f8e1943` |
+| | 0007 | `659ad140a8c4` |
+| `system/sepolicy` (`sovereignos-2026091900`) | 0001 | `39ab9fee2` |
+| | 0002 | `27527dbd2` |
+| `vendor/adevtool` (`sovereignos-airpods-identity`) | 0001 | `924c1ffa` |
+| `vendor/sovereignos/datamap` (new repository, `master`) | app and classifier, without `tests/` and `tools/` | `2ed0a6b` |
+
+Verification: for every file the patches touch (34 files) the git blob id in the build-server tree equals the blob id of the worktree commit; for `vendor/sovereignos/datamap`, `sha256sum` of all 41 files equals the package. The three trees were clean afterwards.
+
+The pin `vendor/google_devices/{lynx,stallion}/adevtool-version-check.mk` now names `vendor/adevtool` HEAD `924c1ffa318637506e39d93fd22ecb1a0d28c6c3`; the previous files are kept beside them as `adevtool-version-check.mk.pre-datamap`. A second commit in `vendor/adevtool` (patch `vendor-adevtool/0002`, Task 10) moves the pin again.
+
+Not built. The Soong and sepolicy compile is proven only by a build (Task 9).
