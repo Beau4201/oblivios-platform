@@ -4,9 +4,9 @@ The Live Data Map (ADR-157): a collector in `system_server`, a classifier file i
 
 | Directory | Holds |
 | --- | --- |
-| `patches/` | The AOSP changes as `git format-patch` files, per tree (`frameworks-base`, `system-sepolicy`, `vendor-adevtool`), applied in order with `git am`. |
-| `service/tests/host/`, `service/tools/` | Host checks and mutation check of the pure server classes, and the tools that fetch baselines and type-check on the build server. |
-| `app/` | `DataMapApp` (`Android.bp`, manifest, `src/`, `res/`, `tools/`, `tests/`). |
+| `patches/` | The AOSP changes as `git format-patch` files, per tree (`frameworks-base`, `system-sepolicy`, `vendor-adevtool`), applied in order with `git am`. A fix is a new patch on top, never an edit of an earlier one. |
+| `service/tests/host/`, `service/tools/` | Host checks and mutation check of the pure server classes, and the tools that fetch baselines and type-check the Android classes on the build server (`typecheck-on-server.sh`). |
+| `app/` | `DataMapApp` (`Android.bp`, manifest, `src/`, `res/`, `tools/`, `tests/`); `tools/typecheck-on-server.sh` compiles resources, AIDL and Java against the system SDK stubs. |
 | `classifier/` | The classifier module, the builder, its tests and (later) the data with its sources. |
 | `SOURCE.md` | Baselines, one row per patch, review and landing records. |
 
@@ -22,4 +22,16 @@ datamap/classifier/tests/run-builder-checks.sh $W | tail -1
 python3 datamap/classifier/tests/run-builder-mutations.py $W | tail -1
 ```
 
-Expected: `all host checks passed`, `19 of 19 mutations killed`, `all app host checks passed`, `26 of 26 mutations killed`, `static checks passed`, `all builder checks passed`, `3 of 3 mutations killed`.
+Expected: `all host checks passed`, `29 of 29 mutations killed`, `all app host checks passed`, `41 of 41 mutations killed`, `static checks passed`, `all builder checks passed`, `3 of 3 mutations killed`.
+
+## Type-check on the build server (changes nothing in the tree)
+
+```bash
+D=<a new directory under the scratch area of the build server>
+tar -C <worktree> --exclude=.git -cf - frameworks | ssh <build server> "mkdir -p $D && tar -C $D -xf -"
+ssh <build server> "bash -s -- $D" < datamap/service/tools/typecheck-on-server.sh     # frameworks/base classes
+tar --exclude=tests --exclude=tools -cf - app | ssh <build server> "mkdir -p $D && tar -C $D -xf -"
+ssh <build server> "bash -s -- $D" < datamap/app/tools/typecheck-on-server.sh         # the app
+```
+
+Neither replaces the build: the policy compile (neverallows) and the Soong rules are proven only by `m` (Task 9 of the plan).
