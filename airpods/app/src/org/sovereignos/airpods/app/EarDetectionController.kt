@@ -132,6 +132,15 @@ internal class EarDetectionController(
                 }
                 Action.ROUTE_AWAY -> route(true)
                 Action.ROUTE_BACK -> route(false)
+                Action.ROUTE_BACK_IF_LINKED -> {
+                    // The link may be dropping right now: wait until its state has settled.
+                    try {
+                        Thread.sleep(LINK_SETTLE_MS)
+                    } catch (e: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                    }
+                    if (isLinked()) route(false)
+                }
             }
         }
     }
@@ -168,6 +177,14 @@ internal class EarDetectionController(
         audio.dispatchMediaKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, code, 0))
     }
 
+    // A refused check counts as linked: failing to restore the route leaves the worn pods silent.
+    private fun isLinked(): Boolean =
+        try {
+            device.isConnected
+        } catch (e: SecurityException) {
+            true
+        }
+
     private fun route(away: Boolean) {
         val ok = try {
             device.setAirPodsAudioRoute(away)
@@ -184,6 +201,8 @@ internal class EarDetectionController(
         const val SILENCE_POLLS = 20
         const val SILENCE_POLL_MS = 25L
         const val PLAY_SETTLE_MS = 3000L
+        // The audio profiles disconnected 33 ms after the AAP stream ended (measured); one second is generous.
+        const val LINK_SETTLE_MS = 1000L
         const val FIND_WAIT_S = 3L
     }
 }

@@ -26,7 +26,15 @@ public final class EarDetectionPolicy {
         /** Take the AirPods out of the active audio slots. */
         ROUTE_AWAY,
         /** Put the AirPods back into the slots we took them out of. */
-        ROUTE_BACK
+        ROUTE_BACK,
+        /**
+         * Put them back at the end of a session, but only if the link is still up after a short wait.
+         * A session also ends because the link is dropping (the pods went into the case): putting
+         * the AirPods back then moves the audio to a dying link and the player pauses on
+         * ACTION_AUDIO_BECOMING_NOISY (measured 2026-10-11). The Bluetooth stack forgets the route
+         * itself when the audio profiles disconnect.
+         */
+        ROUTE_BACK_IF_LINKED
     }
 
     private static final int UNKNOWN = -1;
@@ -81,11 +89,13 @@ public final class EarDetectionPolicy {
         pausedByUs = true;
     }
 
-    /** The session ended: restore a route we removed. */
+    /** The session ended: restore a route we removed, if the link is still up. */
     public synchronized List<Action> end() {
         pausedByUs = false;
         finding = false;
-        return routeBack();
+        if (!routedAway) return List.of();
+        routedAway = false;
+        return List.of(Action.ROUTE_BACK_IF_LINKED);
     }
 
     /**

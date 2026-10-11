@@ -97,7 +97,7 @@ public final class EarDetectionCheck {
         // End of session: restore a route we removed, once.
         p = new EarDetectionPolicy(true);
         p.onEars(0);
-        is(p.end(), "end while routed away", Action.ROUTE_BACK);
+        is(p.end(), "end while routed away", Action.ROUTE_BACK_IF_LINKED);
         is(p.end(), "second end does nothing");
         p = new EarDetectionPolicy(true);
         p.onEars(2);
