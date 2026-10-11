@@ -1,0 +1,62 @@
+SovereignOS platform patches
+Copyright 2026 The SovereignOS authors
+
+LICENCE
+
+Everything in this repository is licensed under the Apache License, Version 2.0
+(see LICENSE), with these exceptions:
+
+1. A patch file (*.patch) keeps the licence of every upstream file it modifies.
+   A patch is not relicensed. The table below lists the upstream projects the
+   patches modify and the licence of each.
+2. Third-party material listed under "THIRD-PARTY MATERIAL" keeps its own
+   licence.
+
+A file that a patch creates inside an upstream project is SovereignOS work and
+is offered under Apache-2.0, unless the file carries its own licence header.
+
+UPSTREAM PROJECTS MODIFIED BY THE PATCHES
+
+Licences were read from the upstream sources at the revisions pinned in
+sovereignos-manifest (manifest/upstream-2026091900.xml, tag 2026091900), for
+every file that a patch modifies (149 files). "Header" means the licence header
+at the top of the modified upstream files.
+
+| Project (AOSP path)              | Licence                  | Basis |
+| -------------------------------- | ------------------------ | ----- |
+| frameworks/base                  | Apache-2.0               | NOTICE and MODULE_LICENSE_APACHE2 in the project root; header on 48 of 55 modified files |
+| packages/modules/Bluetooth       | Apache-2.0               | NOTICE and MODULE_LICENSE_APACHE2 in the project root; header on 19 of 26 modified files |
+| packages/apps/Launcher3          | Apache-2.0               | Header on all 5 modified upstream files; the project root has no licence file |
+| packages/apps/Settings           | Apache-2.0               | NOTICE in the project root; header on 16 of 17 modified files |
+| packages/inputmethods/LatinIME   | Apache-2.0               | NOTICE in the project root; header on all 24 modified files |
+| packages/apps/Multiuser          | Apache-2.0               | Header on both modified files (AOSP tag android-17.0.0_r1) |
+| device/generic/goldfish          | Apache-2.0               | Header on both modified files; the project root has no licence file |
+| system/core                      | Apache-2.0               | MODULE_LICENSE_APACHE2 marker in the project root; the one modified file has no header |
+| packages/apps/Updater            | MIT                      | LICENSE in the project root (GrapheneOS) |
+| vendor/adevtool                  | MIT                      | LICENSE in the project root (GrapheneOS) |
+| system/sepolicy                  | Public domain (NSA)      | NOTICE in the project root states that the configuration is public domain, with a warranty exclusion; none of the 5 modified files has a header |
+| build/release                    | Not established          | The project root has no licence file. The patch only adds one new file, which is SovereignOS work under Apache-2.0 |
+
+Upstream files without a header that a patch modifies are data or build files
+(AndroidManifest.xml, system-current.txt, init.rc, *.te, *.yml, *.mk, Android.bp)
+or two Java sources (SettingsLib Utils.java and DuressPasswordHelper.java, both
+in frameworks/base). They fall under the licence of their project in the table.
+
+The other files without a header are created by the patches themselves (15
+files: 4 in frameworks/base, 7 in packages/apps/Launcher3 and 4 in
+packages/modules/Bluetooth) and are covered by the rule under "LICENCE".
+
+THIRD-PARTY MATERIAL
+
+branding/boot contains vector outlines of glyphs of the typeface Manrope
+SemiBold. The font file is not shipped and no font is loaded.
+
+  Manrope
+  Copyright 2019 The Manrope Project Authors (https://github.com/sharanda/manrope)
+  SIL Open Font License, Version 1.1 (licenses/OFL-1.1.txt)
+
+The copyright line is the one embedded in the font file (SHA-256
+886ac5757cab2d72cc47025ee1b94ae0a621ed9cda123e6deb6fddc2b878f768). That string
+does not declare a Reserved Font Name; the distribution package metadata does.
+Whether the outlines in the PNG files are a modified version in the sense of
+the licence has not been reviewed by counsel.
