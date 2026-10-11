@@ -1,0 +1,44 @@
+From 294b71fbc99185c3b7ebf3f0ce00aea973bfc703 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 11 Oct 2026 03:48:58 +0200
+Subject: [PATCH] wm: tell no app that the user took a screenshot
+
+Upstream notifies the Activity.ScreenCaptureCallback of every visible
+activity that registered one, and SystemUI then shows the user which apps
+were told. Nothing is notified now and the empty list makes SystemUI show
+no notice. FLAG_SECURE is unaffected.
+---
+ .../com/android/server/wm/WindowManagerService.java    | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
+index 13fc8538688a..48211f73e218 100644
+--- a/services/core/java/com/android/server/wm/WindowManagerService.java
++++ b/services/core/java/com/android/server/wm/WindowManagerService.java
+@@ -11164,6 +11164,9 @@ public class WindowManagerService extends IWindowManager.Stub
+     }
+ 
+ 
++    // sovereignos: see notifyScreenshotListeners.
++    private static final boolean NOTIFY_SCREENSHOT_LISTENERS = false;
++
+     /**
+      * Must be called when a screenshot is taken via hardware chord.
+      *
+@@ -11177,6 +11180,13 @@ public class WindowManagerService extends IWindowManager.Stub
+                 "notifyScreenshotListeners()")) {
+             throw new SecurityException("Requires STATUS_BAR_SERVICE permission");
+         }
++        // sovereignos: no app learns that the user took a screenshot. Upstream calls the
++        // Activity.ScreenCaptureCallback of every visible activity that registered one (and
++        // SystemUI then tells the user which apps were notified). Nothing is notified and the
++        // empty list tells SystemUI so. FLAG_SECURE is unaffected: it blocks the capture itself.
++        if (!NOTIFY_SCREENSHOT_LISTENERS) {
++            return new ArrayList<>();
++        }
+         synchronized (mGlobalLock) {
+             final DisplayContent displayContent = mRoot.getDisplayContent(displayId);
+             if (displayContent == null) {
+-- 
+2.39.5
+
