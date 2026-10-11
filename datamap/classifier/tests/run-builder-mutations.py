@@ -14,10 +14,12 @@ MUTATIONS = [   # (name, file in tools/, old text, new text, how often old occur
     # the message of the refusal (an equivalent mutant)
     ("output is not sorted", B, "lines.sort(key=lambda x: (order[x[0]], x[1]))", "pass", 1),
     ("importer: a category that is not used is kept", I, "if cat is None:", "if False:", 1),
-    ("importer: a company without a base gets an owner", I, "elif cid in bases and owner_id(cid):", "elif owner_id(cid):", 1),
+    ("importer: a company without a base gets an owner", I, "elif cid in bases and owner_id(cid) and not is_code(bases[cid][4]):", "elif owner_id(cid):", 1),
     ("importer: a curated service does not win", I, "if domain in curated_suffixes:", "if False:", 1),
     ("importer: an id longer than the parser allows", I, "return oid if 1 <= len(oid) <= MAX_ID else None", "return oid", 1),
     ("importer: two records of one company are two owners", I, "cid = canonical[bases[cid][1]]", "cid = cid", 1),
+    ("importer: a Wikidata code is a legal name", I, "legal = name if is_code(b[2]) else clean(b[2])", "legal = clean(b[2])", 1),
+    ("importer: a place that is only a code is used", I, "and not is_code(bases[cid][4]):\n            cid = canonical", ":\n            cid = canonical", 1),
     ("importer: the database licence is wrong", I, '"CC-BY-SA-4.0",', '"CC0-1.0",', 1),
 ]
 

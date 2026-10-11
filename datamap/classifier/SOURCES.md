@@ -60,6 +60,27 @@ the look of the font, and a device without an emoji font shows two letters.
    under one category as a whole.
 6. The size of the file stays far below the limits of the device parser (20 000 lines, 4 MiB).
 
-## Check as a reviewer (Task 7 step 6)
+## Check as a reviewer (2026-10-12)
 
-Ten owner rows and ten relation rows are picked at random and followed to their sources. The result is recorded here with the day of the check.
+- Ten generated owners, picked at random (seeded), were compared with their Wikidata item: the headquarters city and
+  the official website. Ten of ten match. This shows the data is true to the source, not that Wikidata is right.
+- The first build showed what the checks had missed: two records of one company under one Wikidata item gave a
+  duplicate source (the device parser refused it), and 22 owners had a Wikidata code (`Q123`) as legal name or
+  city where an item has no English label. Both are now handled in the importer and covered by its check.
+- The 7 relations and 55 services of layer 3 come from primary pages read during the research; 4 of the 28 owners
+  (X Corp, Yahoo, Snap, Pinterest) and 2 services (Mobvista brands, Digital Turbine base) were re-read by the author.
+  Left out after the review: the three `partner_of` relations of group A (not shown to be current), `nativex.com`
+  (category only implied), `unity3d.com` as a whole (it also serves assets), Adjust and Chartboost and Smaato
+  (no document that states a base, or no longer owned).
+
+## Coverage and what is missing
+
+3698 services, of which 1177 (31%) have an owner with a place; they include the largest operators (Google 309
+domains, Verizon, Microsoft, Amazon, Yandex, Cloudflare, Adobe, Oracle). The other 2521 have a category but no
+owner: Wikidata has no item with a headquarters for about 1600 of the 2357 companies of the database, mostly small
+advertising companies. A service whose company has no base is shown with its domain and category and the owner
+"unknown". Bases for these companies need another source (company registers) and are open work.
+
+Known weak rows: Criteo is placed in Luxembourg after its 2026 redomiciliation and plans to move to the US in
+January 2027; ironSource and Zynga carry the base of a filing from before they were acquired; Liftoff has its
+registered address only.

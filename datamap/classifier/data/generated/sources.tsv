@@ -1,0 +1,354 @@
+A-001	Alphabet Inc. Form 10-K for fiscal year 2025, main document (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1652044/000165204426000018/goog-20251231.htm
+A-002	Alphabet Inc. 10-K Exhibit 21.01, subsidiaries of the registrant (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1652044/000165204426000018/googexhibit2101q42025.htm
+A-003	Google Privacy Policy (read 2026-10-12)	LicenseRef-Public-Fact	https://policies.google.com/privacy
+A-004	Google tag platform guide, Content Security Policy (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.google.com/tag-platform/security/guides/csp
+A-005	Google Cloud APIs overview (read 2026-10-12)	LicenseRef-Public-Fact	https://docs.cloud.google.com/apis/docs/overview
+A-006	Google OAuth 2.0 for iOS and desktop apps (native apps) guide (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.google.com/identity/protocols/oauth2/native-app
+A-007	Meta Platforms, Inc. Form 10-K for fiscal year 2025, main document (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1326801/000162828026003942/meta-20251231.htm
+A-008	Meta Pixel get started guide, Meta for Developers (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.facebook.com/docs/meta-pixel/get-started
+A-009	Instagram home page (read 2026-10-12)	LicenseRef-Public-Fact	https://www.instagram.com/
+A-010	Graph API overview, Meta for Developers (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.facebook.com/docs/graph-api/overview
+A-011	Microsoft Privacy Statement (read 2026-10-12)	LicenseRef-Public-Fact	https://www.microsoft.com/en-us/privacy/privacystatement
+A-012	How to setup Clarity manually, Microsoft Learn (read 2026-10-12)	LicenseRef-Public-Fact	https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-setup
+A-013	OAuth 2.0 device authorization grant, Microsoft identity platform, Microsoft Learn (read 2026-10-12)	LicenseRef-Public-Fact	https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code
+A-014	LinkedIn Privacy Policy (read 2026-10-12)	LicenseRef-Public-Fact	https://www.linkedin.com/legal/privacy-policy
+A-015	SEC EDGAR submissions record for Amazon.com, Inc. (CIK 1018724) (read 2026-10-12)	LicenseRef-Public-Fact	https://data.sec.gov/submissions/CIK0001018724.json
+A-016	What is Amazon CloudFront, AWS documentation (read 2026-10-12)	LicenseRef-Public-Fact	https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html
+A-017	AWS service endpoints, AWS General Reference (read 2026-10-12)	LicenseRef-Public-Fact	https://docs.aws.amazon.com/general/latest/gr/rande.html
+A-018	Amazon Ads pixel requirements, ad policy (read 2026-10-12)	LicenseRef-Public-Fact	https://advertising.amazon.com/resources/ad-policy/remarketing-conversion-pixel-requirements
+A-019	X Developer Agreement, X developer documentation (read 2026-10-12)	LicenseRef-Public-Fact	https://docs.x.com/developer-terms/agreement.md
+A-020	Embedded Posts overview, X developer documentation (read 2026-10-12)	LicenseRef-Public-Fact	https://docs.x.com/x-for-websites/embedded-posts/overview.md
+A-021	Making authenticated requests, X Ads API documentation (read 2026-10-12)	LicenseRef-Public-Fact	https://docs.x.com/x-ads-api/fundamentals/making-authenticated-requests.md
+A-022	SEC EDGAR submissions record for Snap Inc (CIK 1564408) (read 2026-10-12)	LicenseRef-Public-Fact	https://data.sec.gov/submissions/CIK0001564408.json
+A-023	Snapchat home page (read 2026-10-12)	LicenseRef-Public-Fact	https://www.snapchat.com/
+A-024	Login Kit overview, Snap developer documentation (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.snap.com/snap-kit/login-kit/overview
+A-025	Pinterest Privacy Policy (read 2026-10-12)	LicenseRef-Public-Fact	https://policy.pinterest.com/en/privacy-policy
+A-026	Track conversions with Pinterest Tag, Pinterest developer documentation (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.pinterest.com/docs/track-conversions/pinterest-tag/
+A-027	SEC EDGAR submissions record for Adobe Inc. (CIK 796343) (read 2026-10-12)	LicenseRef-Public-Fact	https://data.sec.gov/submissions/CIK0000796343.json
+A-028	How to identify your Analytics tracking server and report suite, Adobe Experience League (read 2026-10-12)	LicenseRef-Public-Fact	https://experienceleague.adobe.com/en/docs/analytics-learn/tutorials/implementation/implementation-basics/how-to-identify-your-analytics-tracking-server-and-report-suites
+A-029	Domains used by Experience Cloud, Adobe Experience League (read 2026-10-12)	LicenseRef-Public-Fact	https://experienceleague.adobe.com/en/docs/core-services/interface/data-collection/domains
+A-030	Yahoo Privacy Policy (read 2026-10-12)	LicenseRef-Public-Fact	https://legal.yahoo.com/us/en/yahoo/privacy/index.html
+A-031	Flurry home page (read 2026-10-12)	LicenseRef-Public-Fact	https://www.flurry.com/
+B-001	Criteo S.A. Form 10-Q for the period ended 2026-06-30, SEC EDGAR (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1576427/000157642726000092/crto-20260630.htm
+B-002	Criteo developer documentation, Beacon SDK page (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.criteo.com/retailer-integration/docs/beacon-sdk
+B-003	Criteo developer documentation home page (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.criteo.com/
+B-004	Taboola.com Ltd. Form 10-K for fiscal year 2025, SEC EDGAR (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1840502/000184050226000004/tbla-20251231.htm
+B-005	Taboola developer documentation home page (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.taboola.com/
+B-006	Teads Holding Co. (formerly Outbrain Inc.) Form 10-K for fiscal year 2025, SEC EDGAR (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1454938/000145493826000015/tead-20251231.htm
+B-007	Teads developer documentation home page (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.teads.com/
+B-008	Outbrain home page (read 2026-10-12)	LicenseRef-Public-Fact	https://www.outbrain.com/
+B-009	Digital Turbine, Inc. Form 10-K for fiscal year ended 2026-03-31, SEC EDGAR (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/317788/000162828026038115/apps-20260331.htm
+B-010	Digital Turbine home page (read 2026-10-12)	LicenseRef-Public-Fact	https://www.digitalturbine.com/
+B-011	Baidu, Inc. Form 20-F for fiscal year 2025, SEC EDGAR (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1329099/000119312526109289/d38065d20f.htm
+B-012	Baidu Developer Center home page (read 2026-10-12)	LicenseRef-Public-Fact	https://developer.baidu.com/
+B-013	Tencent Holdings Limited 2026 Interim Report, corporate information page (read 2026-10-12)	LicenseRef-Public-Fact	https://www.tencent.com/wp-content/uploads/2026/08/E700_IR.pdf
+B-014	Tencent Marketing Open Platform developer site (read 2026-10-12)	LicenseRef-Public-Fact	https://developers.e.qq.com/
+B-015	WeChat Open Platform home page (read 2026-10-12)	LicenseRef-Public-Fact	https://open.weixin.qq.com/
+B-016	Mobvista Inc. 2024 Annual Report, corporate information page, HKEXnews (read 2026-10-12)	LicenseRef-Public-Fact	https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0429/2025042902664.pdf
+B-017	Mintegral home page (read 2026-10-12)	LicenseRef-Public-Fact	https://www.mintegral.com/en/
+B-018	Mobvista home page (read 2026-10-12)	LicenseRef-Public-Fact	https://www.mobvista.com/en/
+B-019	Yandex privacy policy, operator and address section (read 2026-10-12)	LicenseRef-Public-Fact	https://yandex.ru/legal/confidential
+B-020	Yandex terms of use for Metrica and AppMetrica (read 2026-10-12)	LicenseRef-Public-Fact	https://yandex.com/legal/metrica_termsofuse/
+B-021	Yandex Metrica help, counter initialisation page (read 2026-10-12)	LicenseRef-Public-Fact	https://yandex.com/support/metrica/en/code/counter-initialize
+B-022	Yandex Advertising Network help home page (read 2026-10-12)	LicenseRef-Public-Fact	https://yandex.com/support/partner2/en/
+C-001	AppLovin Form 10-K for fiscal 2025 (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1751008/000175100826000010/app-20251231.htm
+C-002	AppLovin MAX documentation, IAB supply chain validation (read 2026-10-12)	LicenseRef-Public-Fact	https://support.applovin.com/en/max/max-dashboard/account/iab-supply-chain-validation
+C-004	Unity Software Form 10-K for fiscal 2025 (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1810806/000181080626000011/unity-20251231.htm
+C-005	Unity manual, define exceptions on your web proxy (read 2026-10-12)	LicenseRef-Public-Fact	https://docs.unity3d.com/Manual/ent-proxy-exception-list.html
+C-006	Unity news, Unity completes merger with ironSource (read 2026-10-12)	LicenseRef-Public-Fact	https://unity.com/news/unity-completes-merger-ironsource
+C-007	ironSource Form 20-F for fiscal 2021 (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1837430/000110465922039720/is-20211231x20f.htm
+C-008	Unity documentation, ironSource app-ads.txt (read 2026-10-12)	LicenseRef-Public-Fact	https://docs.unity.com/en-us/grow/programmatic/ironsource-exchange/app-ads-txt.md
+C-009	Liftoff privacy policy (read 2026-10-12)	LicenseRef-Public-Fact	https://liftoff.ai/privacy-policy/
+C-010	Zynga Form 10-K for fiscal 2021 (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1439404/000156459022007217/znga-10k_20211231.htm
+C-011	Take-Two press release exhibit, completes combination with Zynga (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/946581/000119312522160004/d306239dex999.htm
+C-012	PubMatic 2026 proxy statement (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1422930/000114036126014825/ny20065439x771_def14a.htm
+C-013	PubMatic sellers.json file (read 2026-10-12)	LicenseRef-Public-Fact	https://cdn.pubmatic.com/sellers/data/sellers.json
+C-014	PubMatic Form 10-K for fiscal 2025 (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1422930/000142293026000010/pubm-20251231.htm
+C-016	The Trade Desk privacy policy (read 2026-10-12)	LicenseRef-Public-Fact	https://www.thetradedesk.com/us/privacy
+C-017	Magnite Form 10-K for fiscal 2025 (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/1595974/000159597426000007/mgni-20251231.htm
+C-018	Magnite Open Bidding FAQ (read 2026-10-12)	LicenseRef-Public-Fact	https://www.magnite.com/openbiddingfaq/
+C-019	Kochava press kit page (read 2026-10-12)	LicenseRef-Public-Fact	https://www.kochava.com/company/press-kit/
+C-021	Kochava SDK data privacy and safety guidelines (read 2026-10-12)	LicenseRef-Public-Fact	https://support.kochava.com/reference-information/sdk-data-privacy-and-safety/
+C-022	Take-Two Interactive Form 10-K for fiscal 2026 (read 2026-10-12)	LicenseRef-Public-Fact	https://www.sec.gov/Archives/edgar/data/946581/000162828026037434/ttwo-20260331.htm
+ADG	AdGuard companies database, commit 0b4655c: tracker domains, companies and categories (built on whotracks.me)	CC-BY-SA-4.0	https://github.com/AdguardTeam/companiesdb
+WD-Q85738240	Wikidata item Q85738240, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q85738240
+WD-Q4635648	Wikidata item Q4635648, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4635648
+WD-Q56317102	Wikidata item Q56317102, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q56317102
+WD-Q4676587	Wikidata item Q4676587, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4676587
+WD-Q65063411	Wikidata item Q65063411, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q65063411
+WD-Q2824126	Wikidata item Q2824126, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q2824126
+WD-Q140460132	Wikidata item Q140460132, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q140460132
+WD-Q4682434	Wikidata item Q4682434, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4682434
+WD-Q364	Wikidata item Q364, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q364
+WD-Q17509872	Wikidata item Q17509872, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17509872
+WD-Q135985915	Wikidata item Q135985915, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q135985915
+WD-Q379222	Wikidata item Q379222, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q379222
+WD-Q2825408	Wikidata item Q2825408, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q2825408
+WD-Q141458264	Wikidata item Q141458264, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q141458264
+WD-Q395389	Wikidata item Q395389, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q395389
+WD-Q16002230	Wikidata item Q16002230, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16002230
+WD-Q415598	Wikidata item Q415598, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q415598
+WD-Q4703568	Wikidata item Q4703568, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4703568
+WD-Q4752572	Wikidata item Q4752572, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4752572
+WD-Q4780783	Wikidata item Q4780783, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4780783
+WD-Q56272861	Wikidata item Q56272861, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q56272861
+WD-Q312	Wikidata item Q312, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q312
+WD-Q4780796	Wikidata item Q4780796, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4780796
+WD-Q20050673	Wikidata item Q20050673, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q20050673
+WD-Q296782	Wikidata item Q296782, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q296782
+WD-Q463963	Wikidata item Q463963, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q463963
+WD-Q135418354	Wikidata item Q135418354, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q135418354
+WD-Q757307	Wikidata item Q757307, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q757307
+WD-Q2991162	Wikidata item Q2991162, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q2991162
+WD-Q56072164	Wikidata item Q56072164, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q56072164
+WD-Q2872634	Wikidata item Q2872634, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q2872634
+WD-Q163560	Wikidata item Q163560, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q163560
+WD-Q4839031	Wikidata item Q4839031, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4839031
+WD-Q4856439	Wikidata item Q4856439, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4856439
+WD-Q554198	Wikidata item Q554198, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q554198
+WD-Q2892275	Wikidata item Q2892275, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q2892275
+WD-Q880942	Wikidata item Q880942, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q880942
+WD-Q9661566	Wikidata item Q9661566, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q9661566
+WD-Q94737313	Wikidata item Q94737313, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q94737313
+WD-Q20800435	Wikidata item Q20800435, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q20800435
+WD-Q16960674	Wikidata item Q16960674, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16960674
+WD-Q4957208	Wikidata item Q4957208, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4957208
+WD-Q20880554	Wikidata item Q20880554, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q20880554
+WD-Q55606242	Wikidata item Q55606242, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q55606242
+WD-Q141532546	Wikidata item Q141532546, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q141532546
+WD-Q16986628	Wikidata item Q16986628, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16986628
+WD-Q18205935	Wikidata item Q18205935, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18205935
+WD-Q22907179	Wikidata item Q22907179, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q22907179
+WD-Q5102241	Wikidata item Q5102241, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5102241
+WD-Q48966378	Wikidata item Q48966378, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q48966378
+WD-Q28134162	Wikidata item Q28134162, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q28134162
+WD-Q140136708	Wikidata item Q140136708, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q140136708
+WD-Q4778915	Wikidata item Q4778915, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4778915
+WD-Q1113804	Wikidata item Q1113804, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1113804
+WD-Q5152403	Wikidata item Q5152403, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5152403
+WD-Q1985340	Wikidata item Q1985340, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1985340
+WD-Q734779	Wikidata item Q734779, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q734779
+WD-Q2892775	Wikidata item Q2892775, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q2892775
+WD-Q5163620	Wikidata item Q5163620, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5163620
+WD-Q86676634	Wikidata item Q86676634, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q86676634
+WD-Q18348837	Wikidata item Q18348837, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18348837
+WD-Q111947249	Wikidata item Q111947249, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q111947249
+WD-Q5014902	Wikidata item Q5014902, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5014902
+WD-Q5199204	Wikidata item Q5199204, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5199204
+WD-Q18337418	Wikidata item Q18337418, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18337418
+WD-Q139974106	Wikidata item Q139974106, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q139974106
+WD-Q18149240	Wikidata item Q18149240, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18149240
+WD-Q16834870	Wikidata item Q16834870, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16834870
+WD-Q372435	Wikidata item Q372435, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q372435
+WD-Q99333588	Wikidata item Q99333588, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q99333588
+WD-Q3027764	Wikidata item Q3027764, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3027764
+WD-Q5275732	Wikidata item Q5275732, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5275732
+WD-Q140834956	Wikidata item Q140834956, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q140834956
+WD-Q7414	Wikidata item Q7414, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7414
+WD-Q5306018	Wikidata item Q5306018, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5306018
+WD-Q25048844	Wikidata item Q25048844, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q25048844
+WD-Q58024	Wikidata item Q58024, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q58024
+WD-Q6549207	Wikidata item Q6549207, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q6549207
+WD-Q17068984	Wikidata item Q17068984, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17068984
+WD-Q22074922	Wikidata item Q22074922, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q22074922
+WD-Q27150199	Wikidata item Q27150199, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q27150199
+WD-Q5384453	Wikidata item Q5384453, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5384453
+WD-Q108538376	Wikidata item Q108538376, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q108538376
+WD-Q5417806	Wikidata item Q5417806, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5417806
+WD-Q692157	Wikidata item Q692157, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q692157
+WD-Q7733371	Wikidata item Q7733371, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7733371
+WD-Q34045622	Wikidata item Q34045622, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q34045622
+WD-Q1427443	Wikidata item Q1427443, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1427443
+WD-Q1168317	Wikidata item Q1168317, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1168317
+WD-Q51709	Wikidata item Q51709, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q51709
+WD-Q186068	Wikidata item Q186068, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q186068
+WD-Q18339189	Wikidata item Q18339189, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18339189
+WD-Q141609464	Wikidata item Q141609464, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q141609464
+WD-Q107749466	Wikidata item Q107749466, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q107749466
+WD-Q5503999	Wikidata item Q5503999, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5503999
+WD-Q100319972	Wikidata item Q100319972, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q100319972
+WD-Q3419343	Wikidata item Q3419343, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3419343
+WD-Q701088	Wikidata item Q701088, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q701088
+WD-Q1416215	Wikidata item Q1416215, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1416215
+WD-Q481536	Wikidata item Q481536, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q481536
+WD-Q11221981	Wikidata item Q11221981, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q11221981
+WD-Q848325	Wikidata item Q848325, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q848325
+WD-Q4040469	Wikidata item Q4040469, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4040469
+WD-Q3135346	Wikidata item Q3135346, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3135346
+WD-Q5760050	Wikidata item Q5760050, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5760050
+WD-Q4420901	Wikidata item Q4420901, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4420901
+WD-Q19923099	Wikidata item Q19923099, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q19923099
+WD-Q5926631	Wikidata item Q5926631, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5926631
+WD-Q3057268	Wikidata item Q3057268, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3057268
+WD-Q37156	Wikidata item Q37156, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q37156
+WD-Q140834807	Wikidata item Q140834807, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q140834807
+WD-Q16996537	Wikidata item Q16996537, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16996537
+WD-Q4041067	Wikidata item Q4041067, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4041067
+WD-Q6013943	Wikidata item Q6013943, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q6013943
+WD-Q1045367	Wikidata item Q1045367, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1045367
+WD-Q16848534	Wikidata item Q16848534, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16848534
+WD-Q28134086	Wikidata item Q28134086, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q28134086
+WD-Q19880602	Wikidata item Q19880602, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q19880602
+WD-Q19903345	Wikidata item Q19903345, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q19903345
+WD-Q3305345	Wikidata item Q3305345, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3305345
+WD-Q1648137	Wikidata item Q1648137, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1648137
+WD-Q22905866	Wikidata item Q22905866, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q22905866
+WD-Q3598926	Wikidata item Q3598926, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3598926
+WD-Q25389308	Wikidata item Q25389308, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q25389308
+WD-Q56318461	Wikidata item Q56318461, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q56318461
+WD-Q87190201	Wikidata item Q87190201, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q87190201
+WD-Q6398345	Wikidata item Q6398345, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q6398345
+WD-Q6784006	Wikidata item Q6784006, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q6784006
+WD-Q2680856	Wikidata item Q2680856, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q2680856
+WD-Q18688866	Wikidata item Q18688866, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18688866
+WD-Q106631196	Wikidata item Q106631196, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q106631196
+WD-Q140599516	Wikidata item Q140599516, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q140599516
+WD-Q18712406	Wikidata item Q18712406, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18712406
+WD-Q27808154	Wikidata item Q27808154, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q27808154
+WD-Q18636383	Wikidata item Q18636383, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18636383
+WD-Q4545749	Wikidata item Q4545749, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4545749
+WD-Q6763754	Wikidata item Q6763754, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q6763754
+WD-Q6770934	Wikidata item Q6770934, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q6770934
+WD-Q892898	Wikidata item Q892898, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q892898
+WD-Q17005842	Wikidata item Q17005842, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17005842
+WD-Q24885109	Wikidata item Q24885109, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q24885109
+WD-Q25346573	Wikidata item Q25346573, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q25346573
+WD-Q6805556	Wikidata item Q6805556, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q6805556
+WD-Q16186120	Wikidata item Q16186120, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16186120
+WD-Q25048114	Wikidata item Q25048114, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q25048114
+WD-Q6886719	Wikidata item Q6886719, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q6886719
+WD-Q1583606	Wikidata item Q1583606, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1583606
+WD-Q3331123	Wikidata item Q3331123, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3331123
+WD-Q6944890	Wikidata item Q6944890, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q6944890
+WD-Q33121488	Wikidata item Q33121488, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q33121488
+WD-Q1137986	Wikidata item Q1137986, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1137986
+WD-Q11790715	Wikidata item Q11790715, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q11790715
+WD-Q4052342	Wikidata item Q4052342, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4052342
+WD-Q7011152	Wikidata item Q7011152, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7011152
+WD-Q11991273	Wikidata item Q11991273, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q11991273
+WD-Q7020906	Wikidata item Q7020906, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7020906
+WD-Q540891	Wikidata item Q540891, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q540891
+WD-Q16999054	Wikidata item Q16999054, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16999054
+WD-Q140701571	Wikidata item Q140701571, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q140701571
+WD-Q495943	Wikidata item Q495943, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q495943
+WD-Q96756948	Wikidata item Q96756948, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q96756948
+WD-Q17072705	Wikidata item Q17072705, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17072705
+WD-Q17092204	Wikidata item Q17092204, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17092204
+WD-Q7095918	Wikidata item Q7095918, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7095918
+WD-Q17073265	Wikidata item Q17073265, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17073265
+WD-Q3354444	Wikidata item Q3354444, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3354444
+WD-Q17073302	Wikidata item Q17073302, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17073302
+WD-Q19900	Wikidata item Q19900, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q19900
+WD-Q7099494	Wikidata item Q7099494, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7099494
+WD-Q304116	Wikidata item Q304116, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q304116
+WD-Q7114930	Wikidata item Q7114930, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7114930
+WD-Q7139941	Wikidata item Q7139941, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7139941
+WD-Q7119727	Wikidata item Q7119727, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7119727
+WD-Q107439276	Wikidata item Q107439276, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q107439276
+WD-Q121002697	Wikidata item Q121002697, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q121002697
+WD-Q78203110	Wikidata item Q78203110, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q78203110
+WD-Q7190127	Wikidata item Q7190127, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7190127
+WD-Q131406561	Wikidata item Q131406561, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q131406561
+WD-Q140651026	Wikidata item Q140651026, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q140651026
+WD-Q7228283	Wikidata item Q7228283, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7228283
+WD-Q7242559	Wikidata item Q7242559, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7242559
+WD-Q140737685	Wikidata item Q140737685, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q140737685
+WD-Q7692127	Wikidata item Q7692127, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7692127
+WD-Q1083858	Wikidata item Q1083858, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1083858
+WD-Q7268803	Wikidata item Q7268803, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7268803
+WD-Q4047758	Wikidata item Q4047758, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4047758
+WD-Q7272057	Wikidata item Q7272057, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7272057
+WD-Q24259992	Wikidata item Q24259992, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q24259992
+WD-Q1758666	Wikidata item Q1758666, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1758666
+WD-Q629733	Wikidata item Q629733, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q629733
+WD-Q1327389	Wikidata item Q1327389, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1327389
+WD-Q7316653	Wikidata item Q7316653, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7316653
+WD-Q4118540	Wikidata item Q4118540, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4118540
+WD-Q7331089	Wikidata item Q7331089, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7331089
+WD-Q24963107	Wikidata item Q24963107, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q24963107
+WD-Q941127	Wikidata item Q941127, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q941127
+WD-Q5459453	Wikidata item Q5459453, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q5459453
+WD-Q552581	Wikidata item Q552581, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q552581
+WD-Q284147	Wikidata item Q284147, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q284147
+WD-Q1473820	Wikidata item Q1473820, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1473820
+WD-Q7388880	Wikidata item Q7388880, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7388880
+WD-Q20112811	Wikidata item Q20112811, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q20112811
+WD-Q4652189	Wikidata item Q4652189, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4652189
+WD-Q7445467	Wikidata item Q7445467, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7445467
+WD-Q140835305	Wikidata item Q140835305, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q140835305
+WD-Q7489522	Wikidata item Q7489522, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7489522
+WD-Q7501150	Wikidata item Q7501150, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7501150
+WD-Q7501262	Wikidata item Q7501262, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7501262
+WD-Q17020771	Wikidata item Q17020771, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17020771
+WD-Q17538813	Wikidata item Q17538813, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17538813
+WD-Q864923	Wikidata item Q864923, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q864923
+WD-Q1643121	Wikidata item Q1643121, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1643121
+WD-Q17156801	Wikidata item Q17156801, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17156801
+WD-Q18691850	Wikidata item Q18691850, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18691850
+WD-Q7390964	Wikidata item Q7390964, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7390964
+WD-Q18378670	Wikidata item Q18378670, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18378670
+WD-Q507135	Wikidata item Q507135, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q507135
+WD-Q965133	Wikidata item Q965133, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q965133
+WD-Q17082162	Wikidata item Q17082162, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17082162
+WD-Q22908948	Wikidata item Q22908948, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q22908948
+WD-Q3492842	Wikidata item Q3492842, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3492842
+WD-Q20045144	Wikidata item Q20045144, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q20045144
+WD-Q18636409	Wikidata item Q18636409, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18636409
+WD-Q3497284	Wikidata item Q3497284, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3497284
+WD-Q2357618	Wikidata item Q2357618, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q2357618
+WD-Q911595	Wikidata item Q911595, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q911595
+WD-Q24818973	Wikidata item Q24818973, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q24818973
+WD-Q17089237	Wikidata item Q17089237, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17089237
+WD-Q47508526	Wikidata item Q47508526, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q47508526
+WD-Q441619	Wikidata item Q441619, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q441619
+WD-Q43079856	Wikidata item Q43079856, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q43079856
+WD-Q11248006	Wikidata item Q11248006, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q11248006
+WD-Q18636415	Wikidata item Q18636415, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18636415
+WD-Q7695737	Wikidata item Q7695737, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7695737
+WD-Q7784348	Wikidata item Q7784348, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7784348
+WD-Q16968770	Wikidata item Q16968770, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16968770
+WD-Q16927713	Wikidata item Q16927713, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16927713
+WD-Q3532509	Wikidata item Q3532509, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q3532509
+WD-Q25112268	Wikidata item Q25112268, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q25112268
+WD-Q7671959	Wikidata item Q7671959, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7671959
+WD-Q7850758	Wikidata item Q7850758, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7850758
+WD-Q35476	Wikidata item Q35476, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q35476
+WD-Q48790540	Wikidata item Q48790540, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q48790540
+WD-Q1687816	Wikidata item Q1687816, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1687816
+WD-Q11345624	Wikidata item Q11345624, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q11345624
+WD-Q322579	Wikidata item Q322579, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q322579
+WD-Q119585768	Wikidata item Q119585768, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q119585768
+WD-Q30282721	Wikidata item Q30282721, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q30282721
+WD-Q7909276	Wikidata item Q7909276, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7909276
+WD-Q28811356	Wikidata item Q28811356, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q28811356
+WD-Q7919334	Wikidata item Q7919334, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7919334
+WD-Q467752	Wikidata item Q467752, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q467752
+WD-Q7922793	Wikidata item Q7922793, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7922793
+WD-Q88857869	Wikidata item Q88857869, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q88857869
+WD-Q4110593	Wikidata item Q4110593, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q4110593
+WD-Q7924439	Wikidata item Q7924439, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7924439
+WD-Q7936148	Wikidata item Q7936148, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7936148
+WD-Q1127887	Wikidata item Q1127887, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1127887
+WD-Q1885456	Wikidata item Q1885456, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q1885456
+WD-Q65233126	Wikidata item Q65233126, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q65233126
+WD-Q18156830	Wikidata item Q18156830, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q18156830
+WD-Q16683212	Wikidata item Q16683212, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q16683212
+WD-Q7978995	Wikidata item Q7978995, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7978995
+WD-Q7978996	Wikidata item Q7978996, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q7978996
+WD-Q180	Wikidata item Q180, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q180
+WD-Q8027755	Wikidata item Q8027755, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q8027755
+WD-Q420506	Wikidata item Q420506, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q420506
+WD-Q8034025	Wikidata item Q8034025, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q8034025
+WD-Q19903819	Wikidata item Q19903819, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q19903819
+WD-Q8039882	Wikidata item Q8039882, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q8039882
+WD-Q8052917	Wikidata item Q8052917, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q8052917
+WD-Q19882033	Wikidata item Q19882033, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q19882033
+WD-Q54718	Wikidata item Q54718, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q54718
+WD-Q17111008	Wikidata item Q17111008, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q17111008
+WD-Q8054709	Wikidata item Q8054709, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q8054709
+WD-Q8059885	Wikidata item Q8059885, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q8059885
+WD-Q147505	Wikidata item Q147505, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q147505
+WD-Q15117258	Wikidata item Q15117258, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q15117258
+WD-Q8069710	Wikidata item Q8069710, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q8069710
+WD-Q199296	Wikidata item Q199296, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q199296
+WD-Q8063247	Wikidata item Q8063247, headquarters location (read with the database)	CC0-1.0	https://www.wikidata.org/wiki/Q8063247

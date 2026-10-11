@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 """Looks up where companies are based in Wikidata (CC0) by the official website of each company.
 
-usage: fetch-wikidata-bases.py COMPANIES.json OUT.tsv [TRACKERS.json [TOP]]
+usage: fetch-wikidata-bases.py COMPANIES.json OUT.tsv [--by-name]
 COMPANIES.json is dist/companies.json of the AdGuard companies database. For every company with a website it asks
 Wikidata for the item whose official website (P856) is that site, and for the headquarters location (P159) of the
 item when that is a human settlement with coordinates. When several items share a site, the one with the most
 sitelinks (the well-known entity) decides. A company is written only when that item has exactly one such place;
 two different places mean "no single base" and the company is left out.
 OUT.tsv: company-id, wikidata item, name of the item, country (ISO 3166-1 alpha-2), city, latitude, longitude.
-With TRACKERS.json (dist/trackers.json) a second step searches Wikidata by company name for the TOP companies
-(default 400) that have the most domains and no place yet. A found item counts only when its official website
-belongs to the company's own host: a name alone is never enough.
+A second step looks every company that still has no place up by its exact English name in Wikidata (one SPARQL
+query for many names, not the search API, which rate limits). A found item counts only when its official website
+contains the company's own host: a name alone is never enough.
 Network access, rate limited on purpose. Run by hand, never during a build.
 """
 import json, sys, time, urllib.parse, urllib.request
@@ -36,14 +36,18 @@ def variants(host):
     return out
 
 
-def query(urls=None, items=None):
-    if items is not None:
-        head = "VALUES ?item { " + " ".join(f"wd:{i}" for i in items) + " }"
+def query(urls=None, items=None, names=None):
+    """names: list of (English name, host); the item must carry the name as its label and the host in its website."""
+    if names is not None:
+        pairs = " ".join('(' + json.dumps(n) + '@en ' + json.dumps(h) + ')' for n, h in names)
+        head = ("VALUES (?name ?host) { " + pairs + " }\n  ?item rdfs:label ?name .\n"
+                "  ?item wdt:P856 ?url . FILTER(CONTAINS(LCASE(STR(?url)), ?host))")
+    elif items is not None:
+        head = "VALUES ?item { " + " ".join(f"wd:{i}" for i in items) + " }\n  ?item wdt:P856 ?url ."
     else:
-        head = "VALUES ?url { " + " ".join(f"<{u}>" for u in urls) + " }"
-    q = f"""SELECT ?url ?item ?itemLabel ?sl ?hq ?hqLabel ?lat ?lon ?cc WHERE {{
+        head = "VALUES ?url { " + " ".join(f"<{u}>" for u in urls) + " }\n  ?item wdt:P856 ?url ."
+    q = f"""SELECT ?url ?item ?itemLabel ?sl ?hq ?hqLabel ?lat ?lon ?cc ?host WHERE {{
   {head}
-  ?item wdt:P856 ?url .
   ?item wikibase:sitelinks ?sl .
   ?item wdt:P159 ?hq .
   ?hq wdt:P31/wdt:P279* wd:Q486972 .
@@ -61,25 +65,6 @@ def query(urls=None, items=None):
             print(f"retry {attempt + 1}: {e}", file=sys.stderr)
             time.sleep(10 * (attempt + 1))
     raise SystemExit("Wikidata did not answer")
-
-
-def search(name):
-    url = "https://www.wikidata.org/w/api.php?" + urllib.parse.urlencode(
-        {"action": "wbsearchentities", "search": name, "language": "en", "limit": 5, "format": "json"})
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                return [x["id"] for x in json.load(r).get("search", [])]
-        except Exception as e:
-            print(f"search retry {attempt + 1}: {e}", file=sys.stderr)
-            time.sleep(5 * (attempt + 1))
-    return []
-
-
-def same_site(url, host):
-    h = host_of(url)
-    return h == host or h.endswith("." + host) or host.endswith("." + h)
 
 
 def main():
@@ -106,36 +91,26 @@ def main():
                 found.setdefault(cid, set()).add(row)
         print(f"{min(i + CHUNK, len(hosts))}/{len(hosts)} hosts, {len(found)} companies with a place", file=sys.stderr)
         time.sleep(2)
-    if len(sys.argv) > 3:
-        t = json.load(open(sys.argv[3]))
-        keep = {"advertising", "pornvertising", "site_analytics", "mobile_analytics", "telemetry", "social_media", "cdn", "essential"}
-        count = {}
-        for dom, tid in t["trackerDomains"].items():
-            tr = t["trackers"][tid]
-            if tr.get("companyId") and t["categories"][str(tr["categoryId"])] in keep:
-                count[tr["companyId"]] = count.get(tr["companyId"], 0) + 1
-        top = int(sys.argv[4]) if len(sys.argv) > 4 else 400
-        missing = [c for c, _ in sorted(count.items(), key=lambda x: -x[1])
-                   if c not in found and c in companies and companies[c].get("websiteUrl")][:top]
-        cand = {}   # candidate item -> company ids it may belong to
-        for n, cid in enumerate(missing, 1):
-            for q in {companies[cid]["name"], host_of(companies[cid]["websiteUrl"]).split(".")[0]}:
-                for qid in search(q):
-                    cand.setdefault(qid, set()).add(cid)
-            if n % 50 == 0:
-                print(f"searched {n}/{len(missing)}", file=sys.stderr)
-            time.sleep(0.4)
-        ids = sorted(cand)
-        for i in range(0, len(ids), 80):
-            for b in query(items=ids[i:i + 80]):
-                item = b["item"]["value"].rsplit("/", 1)[1]
-                for cid in cand[item]:
-                    if same_site(b["url"]["value"], host_of(companies[cid]["websiteUrl"])):
-                        found.setdefault(cid, set()).add((item, b["itemLabel"]["value"], b["cc"]["value"],
-                                b["hqLabel"]["value"], b["lat"]["value"], b["lon"]["value"], int(b["sl"]["value"]),
-                                b["hq"]["value"].rsplit("/", 1)[1]))
+    if "--by-name" in sys.argv:
+        todo = sorted(c for c in companies if c not in found and companies[c].get("websiteUrl") and companies[c].get("name"))
+        for i in range(0, len(todo), 60):
+            chunk = todo[i:i + 60]
+            names = {}
+            for cid in chunk:
+                host = host_of(companies[cid]["websiteUrl"])
+                for n in {companies[cid]["name"].strip(), cid.replace("_", " ").strip().title()}:
+                    names.setdefault((n, host), []).append(cid)
+            for b in query(names=list(names)):
+                key = (b["itemLabel"]["value"], b["host"]["value"])
+                # the label returned is the English label, which equals the name that was asked for
+                for (n, h), cids in names.items():
+                    if h == b["host"]["value"] and n.lower() == b["itemLabel"]["value"].lower():
+                        for cid in cids:
+                            found.setdefault(cid, set()).add((b["item"]["value"].rsplit("/", 1)[1], b["itemLabel"]["value"],
+                                    b["cc"]["value"], b["hqLabel"]["value"], b["lat"]["value"], b["lon"]["value"],
+                                    int(b["sl"]["value"]), b["hq"]["value"].rsplit("/", 1)[1]))
+            print(f"by name {min(i + 60, len(todo))}/{len(todo)}, {len(found)} companies with a place", file=sys.stderr)
             time.sleep(2)
-        print(f"after the name search: {len(found)} companies with a place", file=sys.stderr)
     with open(sys.argv[2], "w", encoding="utf-8") as out:
         for cid in sorted(found):
             best = max(r[6] for r in found[cid])

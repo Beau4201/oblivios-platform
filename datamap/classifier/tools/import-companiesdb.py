@@ -31,6 +31,11 @@ def owner_id(company_id):
     return oid if 1 <= len(oid) <= MAX_ID else None
 
 
+def is_code(text):
+    """Wikidata answers with the item code (Q123) where it has no English label; that is not a name."""
+    return re.fullmatch(r"Q[0-9]+", text) is not None
+
+
 def read_tsv(path):
     return [l.split("\t") for l in path.read_text(encoding="utf-8").split("\n") if l and not l.startswith("#")] \
         if path.exists() else []
@@ -54,7 +59,7 @@ def main():
     # Two records of the database can be the same company (one Wikidata item): the first id stands for both.
     canonical = {}
     for cid in sorted(bases):
-        if owner_id(cid):
+        if owner_id(cid) and not is_code(bases[cid][4]):
             canonical.setdefault(bases[cid][1], cid)
 
     services, used = [], set()
@@ -76,7 +81,7 @@ def main():
             continue
         if cid in cmap:
             owner = cmap[cid]
-        elif cid in bases and owner_id(cid):
+        elif cid in bases and owner_id(cid) and not is_code(bases[cid][4]):
             cid = canonical[bases[cid][1]]
             owner = owner_id(cid)
         else:
@@ -91,7 +96,8 @@ def main():
             continue
         b = bases[cid]
         name = clean(companies.get(cid, {}).get("name") or b[2])
-        owners.append((oid, name, clean(b[2]), b[3], clean(b[4]), f"{float(b[5]):.4f}", f"{float(b[6]):.4f}",
+        legal = name if is_code(b[2]) else clean(b[2])
+        owners.append((oid, name, legal, b[3], clean(b[4]), f"{float(b[5]):.4f}", f"{float(b[6]):.4f}",
                        "WD-" + b[1]))
         sources.append(("WD-" + b[1], f"Wikidata item {b[1]}, headquarters location (read with the database)",
                         "CC0-1.0", "https://www.wikidata.org/wiki/" + b[1]))
