@@ -1,0 +1,453 @@
+From 0a72c04ee7f4e3986e6c3d77e1874d29ebb56342 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 18:11:38 +0200
+Subject: [PATCH] datamap: fix what the independent review found
+
+DataMapStore.restore failed with a NullPointerException on the service thread when it restored no rows
+into a user that had nothing yet. A cleared history leaves an empty day in the file, so the next unlock
+of that user took down the system server.
+
+The store kept the full host name of every lookup instead of its service key, so a name with a random
+label made a new entry and evicted the real ones of that app. DNS contacts are now stored under their
+service key.
+
+netd reports an IPv4 connect of a Java socket as ::ffff:a.b.c.d while the DNS answer is a.b.c.d, so
+every connect was counted again. Both forms are one address now. The recent answers are kept per app, so
+that one app cannot push out the answers of another, and are forgotten when a user is cleared or stopped.
+
+The reply to the app was not bounded and could exceed the Binder transaction limit: it carries at most
+2000 entries and 300 links. The earlier days of the history are read once per change of the file, not at
+every call, and the cache is dropped when the app unregisters.
+
+The last minute of the history is written when the user is stopping (the storage is locked right after
+onUserStopped) and when the device shuts down. The settings of a user change atomically.
+---
+ .../server/datamap/DataMapService.java        | 108 +++++++++++++++---
+ .../android/server/datamap/DataMapStore.java  |  33 +++++-
+ .../android/server/datamap/LinkDeriver.java   |   6 +
+ .../android/server/datamap/RecentAnswers.java |  50 ++++++--
+ .../android/server/datamap/ServiceKeys.java   |  36 +++++-
+ 5 files changed, 202 insertions(+), 31 deletions(-)
+
+diff --git a/services/core/java/com/android/server/datamap/DataMapService.java b/services/core/java/com/android/server/datamap/DataMapService.java
+index 30b8022..05534b1 100644
+--- a/services/core/java/com/android/server/datamap/DataMapService.java
++++ b/services/core/java/com/android/server/datamap/DataMapService.java
+@@ -74,16 +74,38 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     private static final int MAX_PACKAGES = 2000;
+     private static final int MAX_UID_CACHE = 2048;
+     private static final int MAX_PENDING_EVENTS = 4096;
++    // The reply is one Binder transaction of about 1 MB at most: an entry is a few hundred bytes.
++    private static final int MAX_ENTRIES = 2000;
++    private static final int MAX_LINKS = 300;
++    // Rows of the earlier days of the history that are kept in memory while the app is open.
++    private static final int MAX_PAST_ROWS = 4000;
++    private static final int MAX_ANSWERS_PER_UID = 32;
+     private static final String SYSTEM_PACKAGE = "android";
+ 
+     private final Context mContext;
+     private final DataMapStore mStore = new DataMapStore(256, 4000);
+-    private final RecentAnswers mAnswers = new RecentAnswers(2048);
++    private final RecentAnswers mAnswers = new RecentAnswers(MAX_ANSWERS_PER_UID);
+     private final DataMapCollector mCollector = new DataMapCollector(this, mAnswers);
+     private final ConcurrentHashMap<Integer, UserSettings> mSettings = new ConcurrentHashMap<>();
+     private final ConcurrentHashMap<Integer, String> mPackageOfUid = new ConcurrentHashMap<>();
+     private final RemoteCallbackList<IDataMapObserver> mObservers = new RemoteCallbackList<>();
+     private final PendingLimit mPending = new PendingLimit(MAX_PENDING_EVENTS);
++    // The earlier days of the history of a user, aggregated, valid until the file changes.
++    private static final class Past {
++        final long generation;
++        final int today;
++        final int days;
++        final List<DataMapStore.Row> rows;
++
++        Past(long generation, int today, int days, List<DataMapStore.Row> rows) {
++            this.generation = generation;
++            this.today = today;
++            this.days = days;
++            this.rows = rows;
++        }
++    }
++    private final ConcurrentHashMap<Integer, Past> mPast = new ConcurrentHashMap<>();
++    private final AtomicLong mHistoryGeneration = new AtomicLong();
+     private final AtomicLong mDropped = new AtomicLong();
+     private final AtomicLong mEvents = new AtomicLong();
+     private final AtomicLong mLastNotify = new AtomicLong();
+@@ -133,6 +155,11 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+             mService.onUserUnlocked(user.getUserIdentifier());
+         }
+ 
++        @Override
++        public void onUserStopping(@NonNull TargetUser user) {
++            mService.onUserStopping(user.getUserIdentifier());
++        }
++
+         @Override
+         public void onUserStopped(@NonNull TargetUser user) {
+             mService.onUserStopped(user.getUserIdentifier());
+@@ -156,6 +183,16 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+                 mPackageOfUid.clear();
+             }
+         }, filter, null, mHandler);
++        // The last minute of a history is written when the device shuts down. The receiver runs on the
++        // service thread, which the ordered broadcast waits for.
++        mContext.registerReceiver(new BroadcastReceiver() {
++            @Override
++            public void onReceive(Context context, Intent intent) {
++                for (int user : new ArrayList<>(mSettings.keySet())) {
++                    writeHistory(user);
++                }
++            }
++        }, new IntentFilter(Intent.ACTION_SHUTDOWN), null, mHandler);
+         mHandler.post(() -> {
+             mClassifier = loadClassifier();
+             refreshRegistration();
+@@ -250,7 +287,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+             return;   // the user turned it off while the event waited
+         }
+         int storeUid = uid < Process.FIRST_APPLICATION_UID ? Process.SYSTEM_UID : uid;
+-        mStore.record(userId, storeUid, packageOf(uid), key, isForeground(uid), viaDns, wallMs);
++        mStore.record(userId, storeUid, packageOf(uid),
++                ServiceKeys.storageKey(key, viaDns, mClassifier), isForeground(uid), viaDns, wallMs);
+         mEvents.incrementAndGet();
+         notifyObservers(userId);
+     }
+@@ -339,7 +377,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         }
+         long wall = System.currentTimeMillis();
+         UserSettings st = settingsOf(user);
+-        List<DataMapStore.Row> rows = rowsFor(user, st);
++        List<DataMapStore.Row> rows = DataMapStore.newest(rowsFor(user, st), MAX_ENTRIES);
+         Classifier c = mClassifier;
+ 
+         DataMapSnapshot out = new DataMapSnapshot();
+@@ -417,7 +455,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         out.owners = owners.toArray(new DataMapOwner[0]);
+ 
+         List<DataMapLink> links = new ArrayList<>();
+-        for (LinkDeriver.Link l : LinkDeriver.derive(rows, c, LINK_WINDOW_MS)) {
++        for (LinkDeriver.Link l : LinkDeriver.derive(rows, c, LINK_WINDOW_MS, MAX_LINKS)) {
+             DataMapLink dto = new DataMapLink();
+             dto.packageA = l.pkgA;
+             dto.packageB = l.pkgB;
+@@ -436,20 +474,36 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         return out;
+     }
+ 
+-    /** The live rows, plus the days of the history when the user keeps one. */
++    /**
++     * The live rows, plus the days of the history when the user keeps one. The earlier days are read
++     * from the file once per change of the file, not once per call: the app asks again at every
++     * notification.
++     */
+     private List<DataMapStore.Row> rowsFor(int user, UserSettings st) {
+         List<DataMapStore.Row> live = mStore.snapshot(user);
+         if (!st.history) {
+             return live;
+         }
+-        TreeMap<Integer, List<DataMapStore.Row>> days = readHistory(user);
+-        if (days == null) {
+-            return live;
+-        }
+         int today = HistoryCodec.dayIndex(System.currentTimeMillis(), tzOffset());
+-        Integer liveDay = mLiveDay.get(user);
+-        days.remove(liveDay == null ? today : liveDay);   // the live rows are that day
+-        return HistoryCodec.aggregate(HistoryCodec.prune(days, today, st.days), live);
++        long generation = mHistoryGeneration.get();
++        Past past = mPast.get(user);
++        if (past == null || past.generation != generation || past.today != today
++                || past.days != st.days) {
++            List<DataMapStore.Row> rows = new ArrayList<>();
++            TreeMap<Integer, List<DataMapStore.Row>> days = readHistory(user);
++            if (days != null) {
++                Integer liveDay = mLiveDay.get(user);
++                days.remove(liveDay == null ? today : liveDay);   // the live rows are that day
++                rows = DataMapStore.newest(HistoryCodec.aggregate(
++                        HistoryCodec.prune(days, today, st.days), new ArrayList<DataMapStore.Row>()),
++                        MAX_PAST_ROWS);
++            }
++            past = new Past(generation, today, st.days, rows);
++            mPast.put(user, past);
++        }
++        TreeMap<Integer, List<DataMapStore.Row>> one = new TreeMap<>();
++        one.put(0, past.rows);
++        return HistoryCodec.aggregate(one, live);
+     }
+ 
+     @Override
+@@ -466,13 +520,16 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         if (observer != null) {
+             mObservers.unregister(observer);
+         }
++        if (mObservers.getRegisteredCallbackCount() == 0) {
++            mPast.clear();   // nobody is looking: the memory goes back
++        }
+     }
+ 
+     @Override
+     public void setCollecting(boolean collecting) {
+         int user = enforceCaller();
+-        UserSettings next = settingsOf(user).withCollecting(collecting);
+-        mSettings.put(user, next);
++        UserSettings next = mSettings.compute(user, (k, cur) ->
++                (cur == null ? UserSettings.defaults() : cur).withCollecting(collecting));
+         EventLogTags.writeDatamapCollecting(user, collecting ? 1 : 0);
+         mHandler.post(() -> {
+             saveSettings(user, next);
+@@ -483,8 +540,10 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     @Override
+     public void setHistory(boolean enabled, int days) {
+         int user = enforceCaller();
+-        UserSettings next = settingsOf(user).withHistory(enabled, days);   // refuses days outside 1 to 90
+-        mSettings.put(user, next);
++        // refuses days outside 1 to 90
++        UserSettings next = mSettings.compute(user, (k, cur) ->
++                (cur == null ? UserSettings.defaults() : cur).withHistory(enabled, days));
++        mHistoryGeneration.incrementAndGet();
+         EventLogTags.writeDatamapHistory(user, enabled ? 1 : 0, days);
+         mHandler.post(() -> {
+             saveSettings(user, next);
+@@ -503,6 +562,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     public void clear() {
+         int user = enforceCaller();
+         mStore.clearUser(user);
++        mAnswers.clearUser(user);
++        mHistoryGeneration.incrementAndGet();
+         EventLogTags.writeDatamapCleared(user);
+         mHandler.post(() -> {
+             // The events that were waiting for the service thread when the user pressed clear are
+@@ -536,11 +597,23 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         });
+     }
+ 
+-    void onUserStopped(int user) {
++    /**
++     * The last minute of the history is written while the user's credential-encrypted storage is still
++     * open: onUserStopped is followed at once by the lock of that storage, and a write posted from
++     * there would find it closed.
++     */
++    void onUserStopping(int user) {
+         mHandler.post(() -> {
+             if (settingsOf(user).history) {
+                 writeHistory(user);
+             }
++        });
++    }
++
++    void onUserStopped(int user) {
++        mAnswers.clearUser(user);
++        mHandler.post(() -> {
++            mPast.remove(user);
+             mStore.clearUser(user);
+             mSettings.remove(user);
+             mWrittenVersion.remove(user);
+@@ -636,6 +709,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         days.put(liveDay, mStore.snapshot(user));
+         days = HistoryCodec.prune(days, today, st.days);
+         if (writeAtomically(historyFile(user), HistoryCodec.encode(days))) {
++            mHistoryGeneration.incrementAndGet();
+             if (today != liveDay) {
+                 mStore.clearUser(user);   // yesterday is on disk; today starts empty
+                 mLiveDay.put(user, today);
+diff --git a/services/core/java/com/android/server/datamap/DataMapStore.java b/services/core/java/com/android/server/datamap/DataMapStore.java
+index 3dfe271..c1a2d0c 100644
+--- a/services/core/java/com/android/server/datamap/DataMapStore.java
++++ b/services/core/java/com/android/server/datamap/DataMapStore.java
+@@ -100,7 +100,12 @@ final class DataMapStore {
+             e.last = Math.max(e.last, r.lastWall);
+             e.dns |= r.viaDns;
+         }
+-        users.get(userId).version++;
++        UserData u = users.get(userId);
++        if (u == null) {   // no rows: a cleared history leaves an empty day
++            u = new UserData();
++            users.put(userId, u);
++        }
++        u.version++;
+     }
+ 
+     private Entry entryFor(int userId, int uid, String pkg, String key, long wallMs) {
+@@ -154,6 +159,32 @@ final class DataMapStore {
+         return best;
+     }
+ 
++    /**
++     * The reply to the app is bounded (a Binder transaction is about 1 MB): when there are more rows
++     * than {@code max}, the ones seen most recently are kept, in their order.
++     */
++    static List<Row> newest(List<Row> rows, int max) {
++        if (rows.size() <= max) {
++            return rows;
++        }
++        List<Row> byLast = new ArrayList<>(rows);
++        Collections.sort(byLast, new Comparator<Row>() {
++            @Override
++            public int compare(Row a, Row b) {
++                return Long.compare(b.lastWall, a.lastWall);
++            }
++        });
++        java.util.Set<Row> keep = Collections.newSetFromMap(new java.util.IdentityHashMap<Row, Boolean>());
++        keep.addAll(byLast.subList(0, max));
++        List<Row> out = new ArrayList<>(max);
++        for (Row r : rows) {
++            if (keep.contains(r)) {
++                out.add(r);
++            }
++        }
++        return out;
++    }
++
+     /** The aggregates of one user, in a fixed order (uid, then key). */
+     synchronized List<Row> snapshot(int userId) {
+         List<Row> out = new ArrayList<>();
+diff --git a/services/core/java/com/android/server/datamap/LinkDeriver.java b/services/core/java/com/android/server/datamap/LinkDeriver.java
+index b71dc0a..b8307ee 100644
+--- a/services/core/java/com/android/server/datamap/LinkDeriver.java
++++ b/services/core/java/com/android/server/datamap/LinkDeriver.java
+@@ -43,6 +43,12 @@ final class LinkDeriver {
+ 
+     private LinkDeriver() {}
+ 
++    /** The strongest {@code maxLinks} links (the order puts the most evidence first). */
++    static List<Link> derive(List<DataMapStore.Row> rows, Classifier c, long windowMs, int maxLinks) {
++        List<Link> all = derive(rows, c, windowMs);
++        return all.size() > maxLinks ? new ArrayList<>(all.subList(0, maxLinks)) : all;
++    }
++
+     /**
+      * @param windowMs two apps count as in the same window when their contact with a shared service
+      *     lies within this distance of each other.
+diff --git a/services/core/java/com/android/server/datamap/RecentAnswers.java b/services/core/java/com/android/server/datamap/RecentAnswers.java
+index ec23626..6c81436 100644
+--- a/services/core/java/com/android/server/datamap/RecentAnswers.java
++++ b/services/core/java/com/android/server/datamap/RecentAnswers.java
+@@ -1,35 +1,61 @@
+ // SPDX-License-Identifier: Apache-2.0
+ package com.android.server.datamap;
+ 
++import java.util.HashMap;
++import java.util.Iterator;
+ import java.util.LinkedHashMap;
+ import java.util.Map;
+ 
+ /**
+  * The last DNS answers per app, so that a TCP connect to an address can be tied to the name the app
+- * asked for. Bounded; the oldest answer goes first.
++ * asked for. Bounded per app, so that one app that resolves thousands of names cannot push the
++ * answers of another app out; within an app the oldest unread answer goes first. An IPv4 address is
++ * the same address in its plain and in its mapped IPv6 form. The names of a user are forgotten when
++ * that user is cleared or stopped.
+  */
+ final class RecentAnswers {
+-    private final LinkedHashMap<String, String> map;
++    private final int maxPerUid;
++    private final HashMap<Integer, LinkedHashMap<String, String>> byUid = new HashMap<>();
+ 
+-    RecentAnswers(final int max) {
+-        map = new LinkedHashMap<String, String>(64, 0.75f, true) {
+-            @Override
+-            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+-                return size() > max;
+-            }
+-        };
++    RecentAnswers(int maxPerUid) {
++        this.maxPerUid = maxPerUid;
+     }
+ 
+     synchronized void put(int uid, String ip, String host) {
+-        map.put(uid + "|" + ip, host);
++        LinkedHashMap<String, String> m = byUid.get(uid);
++        if (m == null) {
++            m = new LinkedHashMap<>(16, 0.75f, true);
++            byUid.put(uid, m);
++        }
++        m.put(ServiceKeys.normalizeIp(ip), host);
++        if (m.size() > maxPerUid) {
++            Iterator<String> it = m.keySet().iterator();
++            it.next();
++            it.remove();
++        }
+     }
+ 
+     /** @return the host the app asked for that resolved to this address, or null. */
+     synchronized String get(int uid, String ip) {
+-        return map.get(uid + "|" + ip);
++        LinkedHashMap<String, String> m = byUid.get(uid);
++        return m == null ? null : m.get(ServiceKeys.normalizeIp(ip));
++    }
++
++    /** Forgets every answer of the apps of one user. */
++    synchronized void clearUser(int userId) {
++        Iterator<Map.Entry<Integer, LinkedHashMap<String, String>>> it = byUid.entrySet().iterator();
++        while (it.hasNext()) {
++            if (it.next().getKey() / 100000 == userId) {
++                it.remove();
++            }
++        }
+     }
+ 
+     synchronized int size() {
+-        return map.size();
++        int n = 0;
++        for (LinkedHashMap<String, String> m : byUid.values()) {
++            n += m.size();
++        }
++        return n;
+     }
+ }
+diff --git a/services/core/java/com/android/server/datamap/ServiceKeys.java b/services/core/java/com/android/server/datamap/ServiceKeys.java
+index 12a8f4e..b90ec5c 100644
+--- a/services/core/java/com/android/server/datamap/ServiceKeys.java
++++ b/services/core/java/com/android/server/datamap/ServiceKeys.java
+@@ -44,6 +44,40 @@ final class ServiceKeys {
+         return two;
+     }
+ 
++    /**
++     * What the store keeps for a contact: a name as its service key, so that a random label does not
++     * make a new entry; an address key as it is.
++     */
++    static String storageKey(String key, boolean viaDns, Classifier classifier) {
++        return viaDns ? keyFor(key, classifier) : key;
++    }
++
++    /**
++     * An IPv4 address as netd reports it for a Java socket (always an IPv6 socket) is
++     * {@code ::ffff:a.b.c.d}; the DNS answer for the same address is {@code a.b.c.d}. Both give the
++     * same text here. Anything else is only lower-cased.
++     */
++    static String normalizeIp(String ip) {
++        String s = ip.toLowerCase(java.util.Locale.ROOT);
++        if (s.startsWith("::ffff:")) {
++            String v4 = s.substring(7);
++            int dots = 0;
++            boolean ok = !v4.isEmpty();
++            for (int i = 0; i < v4.length() && ok; i++) {
++                char c = v4.charAt(i);
++                if (c == '.') {
++                    dots++;
++                } else if (c < '0' || c > '9') {
++                    ok = false;
++                }
++            }
++            if (ok && dots == 3) {
++                return v4;
++            }
++        }
++        return s;
++    }
++
+     /** The key of a connection to an address with no earlier DNS answer; null if it is no address. */
+     static String ipKey(String ip) {
+         if (ip == null || ip.isEmpty() || ip.length() > 45) {
+@@ -57,6 +91,6 @@ final class ServiceKeys {
+                 return null;
+             }
+         }
+-        return "ip:" + ip.toLowerCase(java.util.Locale.ROOT);
++        return "ip:" + normalizeIp(ip);
+     }
+ }
+-- 
+2.56.0
+

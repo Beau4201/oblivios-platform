@@ -1,0 +1,40 @@
+From 201d9b7d3ac55ec7eb0cb5dd7787691f235577aa Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 18:11:25 +0200
+Subject: [PATCH] sepolicy: keep system_app and traceur_app from finding the
+ Data Map service
+
+Both are app domains with an allow rule for every service type except a fixed list, which conflicts with
+the neverallow that only datamap_app may find datamap_service and would stop the policy from compiling.
+---
+ private/system_app.te  | 1 +
+ private/traceur_app.te | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/private/system_app.te b/private/system_app.te
+index b75dfe4..397ac43 100644
+--- a/private/system_app.te
++++ b/private/system_app.te
+@@ -110,6 +110,7 @@ allow system_app servicemanager:service_manager list;
+ allow system_app {
+   service_manager_type
+   -apex_service
++  -datamap_service
+   -dnsresolver_service
+   -dumpstate_service
+   -installd_service
+diff --git a/private/traceur_app.te b/private/traceur_app.te
+index 029405b..8339618 100644
+--- a/private/traceur_app.te
++++ b/private/traceur_app.te
+@@ -31,6 +31,7 @@ allow traceur_app hwservicemanager:hwservice_manager list;
+ allow traceur_app {
+   service_manager_type
+   -apex_service
++  -datamap_service
+   -dnsresolver_service
+   -gatekeeper_service
+   -incident_service
+-- 
+2.56.0
+

@@ -11,7 +11,7 @@ The patches were authored in disposable worktrees (`.worktrees/datamap-authored/
 | Tree | Baseline HEAD (abbreviated) | Blob of each modified file at that HEAD |
 | --- | --- | --- |
 | `frameworks/base` | `fda11b7a2c9d` | `core/java/android/net/INetdEventCallback.aidl` `27fac25`; `services/core/java/com/android/server/connectivity/NetdEventListenerService.java` `68f9a5f`; `core/res/AndroidManifest.xml` `5c9e490`; `core/res/res/values/strings.xml` `4d56413`; `services/core/java/com/android/server/EventLogTags.logtags` `c604779`; `services/java/com/android/server/SystemServer.java` `d34efa7` |
-| `system/sepolicy` | `261adac69c6d` | `private/seapp_contexts` `8633389`; `private/service.te` `7e738f8`; `private/service_contexts` `de00043` |
+| `system/sepolicy` | `261adac69c6d` | `private/seapp_contexts` `8633389`; `private/service.te` `7e738f8`; `private/service_contexts` `de00043`; `private/system_app.te` `b75dfe4`; `private/traceur_app.te` `029405b` |
 | `vendor/adevtool` | `d9665a565a56` | `config/mk/google_devices/common/device-common.mk` `2e94e04` |
 
 Task 4 step 2 compares these blobs with the HEAD of each tree before anything is applied.
@@ -30,11 +30,14 @@ Task 4 step 2 compares these blobs with the HEAD of each tree before anything is
 | `frameworks-base/0005` | Review findings R1, R2, R7 (below). The collector runs on the thread of netd's event callbacks with the monitor of `NetdEventListenerService` held, and upstream requires that it never blocks; it asked the activity manager (`mProcLock`) and the package manager from there. The event now goes to the service thread, at most 4096 at a time, and a user whose settings are not read yet is not collected. | New: `PendingLimit.java`; `DataMapService.java`, `UserSettings.java` |
 | `frameworks-base/0006` | Review finding on `clear()`: events that waited for the service thread were recorded after the store was emptied. `clear` empties the store again behind them. | `DataMapService.java` |
 
+| `frameworks-base/0007` | The independent review (next section): the empty-day crash in `DataMapStore.restore`, hostnames stored in full instead of service keys, IPv4 connects counted again as `::ffff:` addresses, answers of one app pushing out those of another and surviving a clear, an unbounded reply to the app, the history read at every call, the final write lost at user stop, an unlocked read-modify-write of the settings. | `DataMapService.java`, `DataMapStore.java`, `LinkDeriver.java`, `RecentAnswers.java`, `ServiceKeys.java` |
+| `system-sepolicy/0002` | `system_app` and `traceur_app` are app domains with an allow rule for every service type except a fixed list, which conflicts with the neverallow that only `datamap_app` may find `datamap_service`; the policy would not compile. Both lists gain `-datamap_service`. | `private/system_app.te`, `private/traceur_app.te` |
+
 A loose file `0005-datamap-import-IpConnectivityLog-...patch` in the authoring directory is folded into `0004` and is not part of the series.
 
 ## Checks (2026-10-11, from this package)
 
-- Server host checks: all pass; mutation check 22 of 22 killed (`service/tools/materialize-core.sh`, `run-host-checks.sh`, `run-mutations.py`).
+- Server host checks: all pass; mutation check 29 of 29 killed (`service/tools/materialize-core.sh`, `run-host-checks.sh`, `run-mutations.py`).
 - App host checks: all pass; mutation check 26 of 26 killed; `check-resources.py` and `check-static.sh` pass.
 - Classifier builder checks: all pass; mutation check 3 of 3 killed (the field-count check is an equivalent mutant because the device parser repeats it).
 - AIDL copies in the app equal the ones in patch `frameworks-base/0003`.
@@ -52,7 +55,7 @@ Own read, 2026-10-12, against the tree the patches apply to (`frameworks/base` `
 | R5 who may add a callback | No defect. `IpConnectivityMetrics.enforceNetdEventListeningPermission` accepts only `Process.SYSTEM_UID`; the service calls from its own handler thread, outside a Binder transaction, so the caller is `system_server`. `mNetdListener` is created in `IpConnectivityMetrics.onBootPhase(PHASE_SYSTEM_SERVICES_READY)`; `SystemServer` starts `IpConnectivityMetrics` before the Data Map service, so its boot-phase callback runs first and the registration posted by `systemReady` finds it. A refused registration is logged and not retried. Accepted: it depends on that start order. |
 | R6 SELinux | No blocking rule found. `datamap_app` copies `logviewer_app` (`private/logviewer_app.te`). No `allow` in `public` or `private` lets an app domain find `system_server_service` as a class, and no `neverallow` of `app_neverallows.te` covers a new system service type, so `neverallow { appdomain -datamap_app } datamap_service:service_manager find` conflicts with nothing found. `shell` is not an `appdomain`. The compile is the proof and is a build step (Task 9). |
 | R7 users | **Defect, fixed by 0005.** `collecting(userId)` returned true for a user without a settings entry, that is before the first unlock (settings are in CE storage) and after the user stopped, so a stored "off" did not apply until unlock. Observers are keyed by the calling user (`RemoteCallbackList` cookie) and `getSnapshot` reads the calling user's store, so the decoy user receives nothing of the owner's. |
-| R8 restore and stop | No defect. `UserController.finishUserStopped` calls `onUserStopped` before it locks the user, so the final write in `onUserStopped` still has CE storage. A history file from a previous day is kept and today starts empty. |
+| R8 restore and stop | **Own read was wrong, corrected by the reviewer and fixed by 0007.** `UserController.finishUserStopped` calls `onUserStopped` and then, synchronously, `dispatchUserLocking` (the CE storage is locked). The write that `onUserStopped` only posted therefore ran after the lock and was lost. The write now runs in `onUserStopping`, and a receiver for `ACTION_SHUTDOWN` writes on the service thread when the device shuts down, as the spec promises. |
 | R9 permission site | No defect. The permission is declared in `core/res/AndroidManifest.xml` (package `android`) because the checking code is `system_server` itself; `MANAGE_AIRPODS_IDENTITY` is declared in the Bluetooth module's manifest because Bluetooth is the checking code there. |
 | R10 `dump` and logs | No defect. `dump` prints counts after `DUMP`; no `Slog` call carries a package, service or owner name. The event log tags carry the user id, flags and day count only. |
 
@@ -61,4 +64,21 @@ Further findings of the own read, all fixed in 0005 and 0006 or accepted:
 - Accepted: the observer notification is throttled globally and has no trailing notification, so a last event inside a burst can leave the screen stale until the next event; the app also refreshes when it starts.
 - Accepted: a damaged settings file gives the defaults, that is collecting on.
 
-Independent reviewer: see the next section.
+## Independent review
+
+One fresh reviewer read the six patches against the tree (2026-10-12). Every finding below was checked against the source by the author before it was accepted; none is taken on the reviewer's word.
+
+| # | Finding | Check by the author | Outcome |
+| --- | --- | --- | --- |
+| 1 | `restore()` ends with `users.get(userId).version++`; an empty day in the history file (left by `clear()` or by turning the history on with nothing recorded) makes the next unlock throw on the service thread, which takes down `system_server`. | Reproduced on the host first: `restore(7, [])` into a new store threw `NullPointerException` at `DataMapStore.restore`. | Fixed in 0007, check and mutation added. |
+| 2 | The sepolicy neverallow conflicts with `system_app.te` and `traceur_app.te`. A uid 1000 caller passes `enforceCallingPermission` (the activity manager grants every permission to app id 1000), so SELinux is the only gate. | Read both files in the tree: each allows `find` for every `service_manager_type` minus a fixed list, and both are app domains. The other wide rules are neverallows or belong to non-app domains (`atrace`, `shell`, `dumpstate`). | Fixed in `system-sepolicy/0002`. Compile still to be proven (Task 9). Recorded for the threat model: the permission does not separate uid 1000 from the app. |
+| 3 | The reply to the app is unbounded (a Binder transaction is about 1 MB); the history is read and decoded at every call; the writer rewrites the whole file every minute. | `LinkDeriver.derive` returns a link for every pair of apps that share any tracker, with no cap; `getSnapshot` read the file at every call. | Fixed in 0007: at most 2000 entries and 300 links, the earlier days cached until the file changes and dropped when the app unregisters. Accepted: the writer still rewrites the file once a minute when something changed; to be measured (`MAP-006`, `MAP-008`). |
+| 4 | Full host names were stored, not service keys; `ServiceKeys.keyFor` had no caller. | Confirmed by `grep`: the collector passed `host` to `record`. | Fixed in 0007: a DNS contact is stored under its service key. |
+| 5 | Collection against a stored "off" before unlock. | Same as the own finding R7. | Fixed in 0005. |
+| 6 | An IPv4 connect is counted again because netd reports it as `::ffff:a.b.c.d`. | netd formats the address with `getnameinfo(NI_NUMERICHOST)` (`system/netd/server/FwmarkServer.cpp`). `[assumption]` that Java sockets are always IPv6 sockets; a device test (`MAP-012`) settles it. The fix is harmless if the assumption is wrong. | Fixed in 0007: both forms are one address. |
+| 7 | Blocking calls under the `NetdEventListenerService` monitor. | Same as the own finding R1. | Fixed in 0005. |
+| 8 | The final write at user stop is lost; no write at shutdown. | Confirmed in `UserController.finishUserStopped` (R8 above). | Fixed in 0007. |
+| 9 | The recent answers (names) survive `clear()` and a user stop. | Confirmed: no purge existed. | Fixed in 0007. |
+| 10 | Notification throttle is global and has no trailing notification; rows recorded between `snapshot()` and `clearUser()` at day rollover are lost; the settings are read, changed and written without a lock. | Confirmed by reading. | Settings fixed in 0007. Accepted for now: the throttle, and the rollover loss (at most the events of one tick). |
+
+Areas the reviewer and the author checked and found sound: the callback array and its fourth slot, the registration order, the permission check of `IpConnectivityMetrics`, per-user isolation of the store, files and observers, the content of `dumpsys` and of the event log, the `datamap_service` type.

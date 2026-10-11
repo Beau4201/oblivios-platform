@@ -19,6 +19,8 @@ FILES=(
   "system/sepolicy private/service.te"
   "system/sepolicy private/service_contexts"
   "system/sepolicy private/seapp_contexts"
+  "system/sepolicy private/system_app.te"
+  "system/sepolicy private/traceur_app.te"
   "vendor/adevtool config/mk/google_devices/common/device-common.mk"
 )
 mkdir -p "$WT"

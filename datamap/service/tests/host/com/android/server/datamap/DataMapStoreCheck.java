@@ -120,6 +120,23 @@ public final class DataMapStoreCheck {
         Check.eq("a.com", rows.get(0).key, "uid first, then key");
         Check.eq("z.com", rows.get(1).key, "uid first, then key (2)");
         Check.eq(10300, rows.get(2).uid, "uid first, then key (3)");
+
+        // an empty day restored into a user that has nothing yet must not fail: a cleared history
+        // leaves an empty day in the file, and the next unlock restores it
+        DataMapStore empty = new DataMapStore(256, 4000);
+        empty.restore(7, new ArrayList<DataMapStore.Row>());
+        Check.eq(0, empty.snapshot(7).size(), "an empty restore adds nothing");
+
+        // the reply is bounded: the newest rows are kept, in their order
+        List<DataMapStore.Row> many = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            many.add(new DataMapStore.Row(1, "p", "k" + i, i, 100 + i, 1, 1, 0, true));
+        }
+        List<DataMapStore.Row> top = DataMapStore.newest(many, 3);
+        Check.eq(3, top.size(), "capped to three");
+        Check.eq("k7", top.get(0).key, "the newest three, oldest of them first (1)");
+        Check.eq("k9", top.get(2).key, "the newest three, oldest of them first (2)");
+        Check.eq(10, DataMapStore.newest(many, 50).size(), "under the cap nothing is dropped");
         Check.passed("DataMapStoreCheck");
     }
 }

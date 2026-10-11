@@ -45,7 +45,7 @@ MUTATIONS = [
     ("history: day index rounds toward zero", "HistoryCodec.java",
      "Math.floorDiv(wallMs + tzOffsetMs, DAY_MS)", "(wallMs + tzOffsetMs) / DAY_MS", 1),
     ("answers: not kept per app", "RecentAnswers.java",
-     'uid + "|" + ip', "ip", 2),
+     "LinkedHashMap<String, String> m = byUid.get(uid);\n        return m == null", "LinkedHashMap<String, String> m = byUid.get(10001);\n        return m == null", 1),
     ("keys: no two-level suffixes", "ServiceKeys.java",
      "for (String t : TWO_LEVEL) {", "for (String t : new String[0]) {", 1),
     ("settings: 91 days is allowed", "UserSettings.java",
@@ -54,6 +54,20 @@ MUTATIONS = [
      "default:\n                        return defaults();", "default:\n                        break;", 1),
     ("settings: an unknown user is collected", "UserSettings.java",
      "return s != null && s.collecting;", "return s == null || s.collecting;", 1),
+    ("store: restoring no rows into a new user fails", "DataMapStore.java",
+     "if (u == null) {   // no rows", "if (false) {   // no rows", 1),
+    ("store: the reply keeps the oldest rows", "DataMapStore.java",
+     "return Long.compare(b.lastWall, a.lastWall);", "return Long.compare(a.lastWall, b.lastWall);", 1),
+    ("links: no cap on the reply", "LinkDeriver.java",
+     "all.size() > maxLinks ?", "false ?", 1),
+    ("keys: a mapped IPv4 address is a different address", "ServiceKeys.java",
+     'if (s.startsWith("::ffff:")) {', "if (false) {", 1),
+    ("keys: a name is stored in full", "ServiceKeys.java",
+     "return viaDns ? keyFor(key, classifier) : key;", "return key;", 1),
+    ("answers: one app can fill the room of all", "RecentAnswers.java",
+     "if (m.size() > maxPerUid) {", "if (false) {", 1),
+    ("answers: a user's names are kept after clear", "RecentAnswers.java",
+     "it.next().getKey() / 100000 == userId", "it.next().getKey() / 100000 != userId", 1),
     ("pending: no limit", "PendingLimit.java",
      "if (n >= limit) {", "if (false) {", 1),
     ("pending: a finished event keeps its place", "PendingLimit.java",
@@ -73,9 +87,12 @@ def main():
                 print(f"BROKEN MUTATION {name}: found {text.count(old)} of the old text, expected {count}")
                 sys.exit(2)
             f.write_text(text.replace(old, new), encoding="utf-8")
-            r = subprocess.run([str(HERE / "tools/run-host-checks.sh"), str(tmp)],
-                               capture_output=True, text=True)
-            killed = r.returncode != 0
+            try:
+                r = subprocess.run([str(HERE / "tools/run-host-checks.sh"), str(tmp)],
+                                   capture_output=True, text=True, timeout=300)
+                killed = r.returncode != 0
+            except subprocess.TimeoutExpired:
+                killed = True   # a mutation that hangs a check is caught too
             print(("KILLED   " if killed else "SURVIVED ") + name)
             if not killed:
                 survivors.append(name)

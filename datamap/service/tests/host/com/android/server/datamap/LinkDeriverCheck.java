@@ -97,6 +97,18 @@ public final class LinkDeriverCheck {
         appear.add("goog");
         Check.eq(2, LinkDeriver.relevantRelations(c, appear).size(), "and Google's partner relation");
         Check.eq(0, LinkDeriver.relevantRelations(c, new HashSet<>()).size(), "nothing appears, nothing is relevant");
+
+        // the reply is bounded: the strongest links are kept
+        rows = new ArrayList<>();
+        for (String p : new String[] {"com.a", "com.b", "com.c", "com.d", "com.e"}) {
+            rows.add(row(p, "facebook.com", 1000, 2000));
+        }
+        List<LinkDeriver.Link> all = LinkDeriver.derive(rows, c, window);
+        List<LinkDeriver.Link> some = LinkDeriver.derive(rows, c, window, 3);
+        Check.eq(10, all.size(), "five apps make ten pairs");
+        Check.eq(3, some.size(), "capped to three");
+        Check.eq(all.get(0).pkgA + all.get(0).pkgB, some.get(0).pkgA + some.get(0).pkgB, "the same order as without the cap");
+        Check.eq(10, LinkDeriver.derive(rows, c, window, 50).size(), "under the cap nothing is dropped");
         Check.passed("LinkDeriverCheck");
     }
 }
