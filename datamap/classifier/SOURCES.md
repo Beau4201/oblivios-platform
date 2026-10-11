@@ -37,6 +37,13 @@ The licence of the result is CC-BY-SA-4.0 (ShareAlike of layer 1); `NOTICE` carr
 
 The licence texts were read in the README or `LICENSE` of each source on the day above. The sentences are not copied here.
 
+## Flags (decision D4)
+
+The flag of a country is the emoji of the system font (two regional indicator symbols of the country code,
+`app/src/.../model/FlagEmoji.java`). No flag artwork is shipped, so there is no licence to carry and no country can
+lack its flag; the `--flags` option of `build-classifier.py` is therefore not used. The cost: the look of a flag is
+the look of the font, and a device without an emoji font shows two letters.
+
 ## Rules for a record
 
 1. Every owner, service, publisher and relation names a source id, and every source id has an https URL. The builder

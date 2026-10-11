@@ -90,6 +90,12 @@ MUTATIONS = [
      "Math.max(1.5, Math.min(2.6, 1.7 / Math.max(angle, 0.5)))", "Math.min(2.6, 1.7 / Math.max(angle, 0.5))", 1),
     ("globe: relation zoom has no ceiling", "GlobeMath.java",
      "Math.max(1.5, Math.min(2.6, 1.7 / Math.max(angle, 0.5)))", "Math.max(1.5, 1.7 / Math.max(angle, 0.5))", 1),
+    ("flags: the letters are not offset", "FlagEmoji.java",
+     "REGIONAL_INDICATOR_A + (c - 'A')", "REGIONAL_INDICATOR_A + (c - 'B')", 1),
+    ("flags: any length is accepted", "FlagEmoji.java",
+     "countryCode.length() != 2", "countryCode.length() < 1", 1),
+    ("flags: any character is accepted", "FlagEmoji.java",
+     "if (c < 'A' || c > 'Z') {", "if (false) {", 1),
 ]
 
 

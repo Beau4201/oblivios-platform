@@ -8,7 +8,7 @@ OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 javac -Xlint:all -Werror -d "$OUT" "$APP"/src/org/sovereignos/datamap/model/*.java \
   "$APP"/tests/host/org/sovereignos/datamap/model/*.java
-for c in GlobeMathCheck MapModelCheck ClusterCheck InitialsCheck MapSelectionCheck; do
+for c in GlobeMathCheck MapModelCheck ClusterCheck InitialsCheck MapSelectionCheck FlagEmojiCheck; do
   java -ea -cp "$OUT" org.sovereignos.datamap.model.$c
 done
 # The land file: made with tolerance 0 from the fixture and read back; the real file is read when given.
