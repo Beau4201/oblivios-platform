@@ -202,7 +202,7 @@ internal class EarDetectionController(
         const val SILENCE_POLLS = 20
         const val SILENCE_POLL_MS = 25L
         const val PLAY_SETTLE_MS = 3000L
-        // The audio profiles disconnected 33 ms after the AAP stream ended (measured); one second is generous.
+        // The audio profiles disconnected 37 to 39 ms after the AAP stream ended (two captures); one second is generous.
         const val LINK_SETTLE_MS = 1000L
         const val FIND_WAIT_S = 3L
     }
