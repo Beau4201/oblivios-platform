@@ -105,6 +105,7 @@ final class SettingsScreen {
         p.addView(mUi.label(mUi.ctx.getString(R.string.cannot_see)));
         p.addView(mUi.para(mUi.ctx.getString(R.string.blind_spots)));
         p.addView(mUi.para(mUi.ctx.getString(R.string.not_listed_not_proof)));
+        p.addView(mUi.note(mUi.ctx.getString(R.string.data_sources)));
         if (invalidCount > 0) {
             p.addView(mUi.note(mUi.ctx.getResources().getQuantityString(
                     R.plurals.n_invalid, invalidCount, invalidCount)));

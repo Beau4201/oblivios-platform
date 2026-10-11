@@ -1,0 +1,26 @@
+From 43e0734ae7ca27266a117704b21617b17841f8ee Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 23:54:14 +0200
+Subject: [PATCH] sepolicy: list the Data Map service without a fuzzer
+
+A Java service has no automatic fuzzer (b/287102710); fuzzer_bindings_test refuses a new service that is not
+listed, and names this file as the place for the exception.
+---
+ build/soong/service_fuzzer_bindings.go | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/build/soong/service_fuzzer_bindings.go b/build/soong/service_fuzzer_bindings.go
+index dd83ae0..cff8582 100644
+--- a/build/soong/service_fuzzer_bindings.go
++++ b/build/soong/service_fuzzer_bindings.go
+@@ -296,6 +296,7 @@ var (
+ 		"crossprofileapps":                                                     EXCEPTION_NO_FUZZER,
+ 		"d2d_connectivity":                                                     EXCEPTION_NO_FUZZER,
+ 		"dataloader_manager":                                                   EXCEPTION_NO_FUZZER,
++		"datamap":                                                             EXCEPTION_NO_FUZZER,
+ 		"dbinfo":                                                               EXCEPTION_NO_FUZZER,
+ 		"device_config":                                                        EXCEPTION_NO_FUZZER,
+ 		"device_config_updatable":                                              EXCEPTION_NO_FUZZER,
+-- 
+2.56.0
+

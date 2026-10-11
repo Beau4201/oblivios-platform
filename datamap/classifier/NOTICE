@@ -1,0 +1,13 @@
+classifier.tsv (the Data Map classifier file) contains data from these sources, and is itself licensed under
+the Creative Commons Attribution-ShareAlike 4.0 International licence (CC BY-SA 4.0,
+https://creativecommons.org/licenses/by-sa/4.0/):
+
+- AdGuard Companies DB, https://github.com/AdguardTeam/companiesdb, CC BY-SA 4.0. It lists tracker domains, the
+  companies behind them and categories. It was built on the whotracks.me database (Ghostery, CC BY 4.0,
+  https://github.com/ghostery/whotracks.me). The commit used is named in the first source record of the file.
+  Changes: only the categories that this file uses were kept (advertising, analytics, social, cdn, core), and
+  the company of a domain was reduced to its owner record.
+- Wikidata, https://www.wikidata.org/, CC0 1.0: the headquarters location of a company and the coordinates of
+  its city.
+- Facts taken from company filings, company documentation and public registers, each with its own source record.
+  Facts are not copied text.

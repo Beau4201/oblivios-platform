@@ -21,6 +21,7 @@ FILES=(
   "system/sepolicy private/seapp_contexts"
   "system/sepolicy private/system_app.te"
   "system/sepolicy private/traceur_app.te"
+  "system/sepolicy build/soong/service_fuzzer_bindings.go"
   "vendor/adevtool config/mk/google_devices/common/device-common.mk"
 )
 mkdir -p "$WT"

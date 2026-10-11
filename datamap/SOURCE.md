@@ -2,7 +2,7 @@
 
 ADR-157. Observe-only collector in `system_server`, a read-only classifier file in the system image, and the privileged app `DataMapApp`.
 
-State: **landed on the build server on 2026-10-12 (section "Landed"), not built, not on a device.**
+State: **landed on the build server on 2026-10-12 (section "Landed"), built as modules (section "Module build"), not an image, not on a device.**
 
 ## Baselines
 
@@ -11,7 +11,7 @@ The patches were authored in disposable worktrees (`.worktrees/datamap-authored/
 | Tree | Baseline HEAD (abbreviated) | Blob of each modified file at that HEAD |
 | --- | --- | --- |
 | `frameworks/base` | `fda11b7a2c9d` | `core/java/android/net/INetdEventCallback.aidl` `27fac25`; `services/core/java/com/android/server/connectivity/NetdEventListenerService.java` `68f9a5f`; `core/res/AndroidManifest.xml` `5c9e490`; `core/res/res/values/strings.xml` `4d56413`; `services/core/java/com/android/server/EventLogTags.logtags` `c604779`; `services/java/com/android/server/SystemServer.java` `d34efa7` |
-| `system/sepolicy` | `261adac69c6d` | `private/seapp_contexts` `8633389`; `private/service.te` `7e738f8`; `private/service_contexts` `de00043`; `private/system_app.te` `b75dfe4`; `private/traceur_app.te` `029405b` |
+| `system/sepolicy` | `261adac69c6d` | `private/seapp_contexts` `8633389`; `private/service.te` `7e738f8`; `private/service_contexts` `de00043`; `private/system_app.te` `b75dfe4`; `private/traceur_app.te` `029405b`; `build/soong/service_fuzzer_bindings.go` `dd83ae0` (fetched from `27527dbd2`, after patches 0001 and 0002) |
 | `vendor/adevtool` | `d9665a565a56` | `config/mk/google_devices/common/device-common.mk` `2e94e04` |
 
 Task 4 step 2 compared these blobs with the HEAD of each tree before anything was applied: all twelve were identical.
@@ -32,6 +32,9 @@ Task 4 step 2 compared these blobs with the HEAD of each tree before anything wa
 
 | `frameworks-base/0007` | The independent review (next section): the empty-day crash in `DataMapStore.restore`, hostnames stored in full instead of service keys, IPv4 connects counted again as `::ffff:` addresses, answers of one app pushing out those of another and surviving a clear, an unbounded reply to the app, the history read at every call, the final write lost at user stop, an unlocked read-modify-write of the settings. | `DataMapService.java`, `DataMapStore.java`, `LinkDeriver.java`, `RecentAnswers.java`, `ServiceKeys.java` |
 | `system-sepolicy/0002` | `system_app` and `traceur_app` are app domains with an allow rule for every service type except a fixed list, which conflicts with the neverallow that only `datamap_app` may find `datamap_service`; the policy would not compile. Both lists gain `-datamap_service`. | `private/system_app.te`, `private/traceur_app.te` |
+
+| `frameworks-base/0008` | Found by the first module build: a permission declared in `core/res/AndroidManifest.xml` becomes a public `Manifest.permission` constant, and `check_current_api` refuses an API change that `current.txt` does not list. `READ_DATA_MAP` is for one app of this system only, so the comment above it gets `@hide`. | `core/res/AndroidManifest.xml` |
+| `system-sepolicy/0003` | Found by the first module build: `fuzzer_bindings_test` refuses a new service that has no fuzzer on file. A Java service has no automatic fuzzer (b/287102710); the build names `service_fuzzer_bindings.go` as the place for the exception. | `build/soong/service_fuzzer_bindings.go` |
 
 A loose file `0005-datamap-import-IpConnectivityLog-...patch` in the authoring directory is folded into `0004` and is not part of the series.
 
@@ -106,3 +109,20 @@ Verification: for every file the patches touch (34 files) the git blob id in the
 The pin `vendor/google_devices/{lynx,stallion}/adevtool-version-check.mk` now names `vendor/adevtool` HEAD `924c1ffa318637506e39d93fd22ecb1a0d28c6c3`; the previous files are kept beside them as `adevtool-version-check.mk.pre-datamap`. A second commit in `vendor/adevtool` (patch `vendor-adevtool/0002`, Task 10) moves the pin again.
 
 Not built. The Soong and sepolicy compile is proven only by a build (Task 9).
+
+Later landings, by `git am` after the first module build: `system/sepolicy` 0003 (`fd1b880f3`) and `frameworks/base` 0008 (`e53353ced37f`); the blobs of `build/soong/service_fuzzer_bindings.go` (`cff8582`) and `core/res/AndroidManifest.xml` (`a421805`) are identical to the worktree commits. `vendor/sovereignos/datamap` gained the finished app screens (`17a3a03`).
+
+## Module build
+
+Three builds on 2026-10-12 of `DataMapApp datamap-classifier.tsv selinux_policy services` for `lynx-cur-userdebug` (detached, with the disk guard; no image, no signing). The first two found what no type-check could:
+
+1. `fuzzer_bindings_test` refused the new service until it was listed in `service_fuzzer_bindings.go` (patch `system-sepolicy/0003`).
+2. `check_current_api` refused the permission as a new public API constant (patch `frameworks-base/0008`, `@hide`).
+
+The third build exited 0 with no failed step. Checked in the output, not from the exit code:
+- `DataMapApp.apk` asks for `org.sovereignos.permission.READ_DATA_MAP` and `android.permission.QUERY_ALL_PACKAGES` only; `INTERNET` appears nowhere; the manifest has one activity and no service, receiver or provider (`aapt2 dump`).
+- `system/etc/datamap/classifier.tsv` is the 21-byte empty file with its header, at the path the service reads.
+- `plat_sepolicy.cil` contains the new type and domain (48 mentions), `plat_service_contexts` the `datamap` entry, `plat_seapp_contexts` the app entry. The policy compile, with its neverallow checks, passed.
+- `services.jar` holds all 13 classes of `com.android.server.datamap` (found in `classes.dex`).
+
+Still open: the privapp and sysconfig files are built but ship only with patch `vendor-adevtool/0002` (not landed); nothing has run on a device.

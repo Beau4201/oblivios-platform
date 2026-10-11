@@ -47,4 +47,6 @@ fresh; printf 'ads.example.test\texa\tadvertising\tS-1\n' >> "$W/case/services-f
 expect_refused "a service listed twice" "$W/case"
 fresh; printf 'exa\towns\n' >> "$W/case/relations.tsv"
 expect_refused "a record with too few fields" "$W/case"
+python3 "$HERE/tests/importer_check.py" || { echo "FAIL: the importer check"; exit 1; }
+echo "ok importer"
 echo "all builder checks passed"

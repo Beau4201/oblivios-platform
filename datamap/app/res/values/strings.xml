@@ -79,6 +79,7 @@
     <string name="clear">Delete everything collected</string>
     <string name="clear_confirm">Delete the names and counts collected for this user, in memory and on this phone?</string>
     <string name="cannot_see">What this screen cannot see</string>
+    <string name="data_sources">Company data: AdGuard Companies DB (CC BY-SA 4.0, built on whotracks.me, CC BY 4.0) and Wikidata (CC0), with facts from company filings. See NOTICE in the classifier.</string>
     <string name="blind_spots">Not seen: apps that look up names themselves (DNS over HTTPS inside the app), connections to a fixed address over UDP, and traffic that needs no lookup of its own. An app that is not listed may still be talking.</string>
     <string name="not_listed_not_proof">A connection that is not listed is not known. That is not proof that there is none.</string>
 

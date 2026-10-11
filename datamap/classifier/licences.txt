@@ -4,3 +4,8 @@
 # LicenseRef-PublicDomain: public-domain geographic data (Natural Earth), used for the coordinates of a city.
 LicenseRef-Public-Fact
 LicenseRef-PublicDomain
+# CC-BY-SA-4.0: the AdGuard companies database (tracker domains, companies, categories), built on whotracks.me
+#   (CC-BY-4.0). A classifier built from it carries the same licence and the attribution in NOTICE.
+# CC0-1.0: Wikidata (headquarters location of a company, coordinates of a city).
+CC-BY-SA-4.0
+CC0-1.0
