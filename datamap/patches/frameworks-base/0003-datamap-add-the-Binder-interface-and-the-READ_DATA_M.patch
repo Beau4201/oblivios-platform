@@ -1,0 +1,279 @@
+From 8e93e6d3cd94e2e5739020f10c6169002e36b68a Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 15:38:01 +0200
+Subject: [PATCH 3/4] datamap: add the Binder interface and the READ_DATA_MAP
+ permission
+
+org.sovereignos.permission.READ_DATA_MAP is signature|privileged and only the Data Map app holds it.
+Structured parcelables, so that the app compiles the same files and no hand-written Parcelable is
+needed.
+---
+ .../internal/datamap/DataMapEntry.aidl        | 24 +++++++++++
+ .../android/internal/datamap/DataMapLink.aidl | 17 ++++++++
+ .../internal/datamap/DataMapOwner.aidl        | 19 +++++++++
+ .../internal/datamap/DataMapPublisher.aidl    | 11 +++++
+ .../internal/datamap/DataMapRelation.aidl     | 15 +++++++
+ .../internal/datamap/DataMapSnapshot.aidl     | 27 +++++++++++++
+ .../internal/datamap/IDataMapObserver.aidl    | 13 ++++++
+ .../internal/datamap/IDataMapService.aidl     | 40 +++++++++++++++++++
+ core/res/AndroidManifest.xml                  |  7 ++++
+ core/res/res/values/strings.xml               |  6 +++
+ 10 files changed, 179 insertions(+)
+ create mode 100644 core/java/com/android/internal/datamap/DataMapEntry.aidl
+ create mode 100644 core/java/com/android/internal/datamap/DataMapLink.aidl
+ create mode 100644 core/java/com/android/internal/datamap/DataMapOwner.aidl
+ create mode 100644 core/java/com/android/internal/datamap/DataMapPublisher.aidl
+ create mode 100644 core/java/com/android/internal/datamap/DataMapRelation.aidl
+ create mode 100644 core/java/com/android/internal/datamap/DataMapSnapshot.aidl
+ create mode 100644 core/java/com/android/internal/datamap/IDataMapObserver.aidl
+ create mode 100644 core/java/com/android/internal/datamap/IDataMapService.aidl
+
+diff --git a/core/java/com/android/internal/datamap/DataMapEntry.aidl b/core/java/com/android/internal/datamap/DataMapEntry.aidl
+new file mode 100644
+index 0000000..15fb886
+--- /dev/null
++++ b/core/java/com/android/internal/datamap/DataMapEntry.aidl
+@@ -0,0 +1,24 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.datamap;
++
++/** One service an app contacted, aggregated: when first and last, how often. */
++parcelable DataMapEntry {
++    String packageName;
++    /** The service key: the classifier suffix, a registrable domain, or ip:<address>. */
++    String serviceKey;
++    /** The owner id of the service in the classifier, or an empty string if it is unknown. */
++    String ownerId;
++    /** One of the Category codes: 0 unknown, 1 core, 2 cdn, 3 analytics, 4 advertising,
++        5 attribution, 6 social, 7 identity. */
++    int category;
++    long firstSeenWallMs;
++    long lastSeenWallMs;
++    int count;
++    int foregroundCount;
++    int backgroundCount;
++    /** The service came with a DNS answer for the app. False for a connect to a bare address. */
++    boolean viaDns;
++}
+diff --git a/core/java/com/android/internal/datamap/DataMapLink.aidl b/core/java/com/android/internal/datamap/DataMapLink.aidl
+new file mode 100644
+index 0000000..3d77f45
+--- /dev/null
++++ b/core/java/com/android/internal/datamap/DataMapLink.aidl
+@@ -0,0 +1,17 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.datamap;
++
++/** Two apps that could be linked, and why. Never "are linked": that is not visible. */
++parcelable DataMapLink {
++    String packageA;
++    String packageB;
++    /** 1: both contacted the same service. 2: different services of the same owner. */
++    int kind;
++    /** Service keys for kind 1, owner ids for kind 2. */
++    String[] evidence;
++    /** Kind 1 only: both contacted a shared service within the same window of each other. */
++    boolean stronger;
++}
+diff --git a/core/java/com/android/internal/datamap/DataMapOwner.aidl b/core/java/com/android/internal/datamap/DataMapOwner.aidl
+new file mode 100644
+index 0000000..1c67326
+--- /dev/null
++++ b/core/java/com/android/internal/datamap/DataMapOwner.aidl
+@@ -0,0 +1,19 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.datamap;
++
++/** A company or a publisher and where it is based, from the classifier file. */
++parcelable DataMapOwner {
++    String id;
++    String name;
++    String legalName;
++    /** Two capital letters, ISO 3166-1. */
++    String countryCode;
++    String city;
++    double latitude;
++    double longitude;
++    /** The id of the source of these facts in the classifier file. */
++    String sourceId;
++}
+diff --git a/core/java/com/android/internal/datamap/DataMapPublisher.aidl b/core/java/com/android/internal/datamap/DataMapPublisher.aidl
+new file mode 100644
+index 0000000..e550577
+--- /dev/null
++++ b/core/java/com/android/internal/datamap/DataMapPublisher.aidl
+@@ -0,0 +1,11 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.datamap;
++
++/** The publisher of an installed package, where the classifier file knows it. */
++parcelable DataMapPublisher {
++    String packageName;
++    String ownerId;
++}
+diff --git a/core/java/com/android/internal/datamap/DataMapRelation.aidl b/core/java/com/android/internal/datamap/DataMapRelation.aidl
+new file mode 100644
+index 0000000..a5ca9cf
+--- /dev/null
++++ b/core/java/com/android/internal/datamap/DataMapRelation.aidl
+@@ -0,0 +1,15 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.datamap;
++
++/** A documented connection between two owners, with its source. */
++parcelable DataMapRelation {
++    String ownerA;
++    /** One of: owns, merged_with, partner_of, buys_ad_space_from. */
++    String type;
++    String ownerB;
++    String note;
++    String sourceId;
++}
+diff --git a/core/java/com/android/internal/datamap/DataMapSnapshot.aidl b/core/java/com/android/internal/datamap/DataMapSnapshot.aidl
+new file mode 100644
+index 0000000..ddb794c
+--- /dev/null
++++ b/core/java/com/android/internal/datamap/DataMapSnapshot.aidl
+@@ -0,0 +1,27 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.datamap;
++
++import com.android.internal.datamap.DataMapEntry;
++import com.android.internal.datamap.DataMapLink;
++import com.android.internal.datamap.DataMapOwner;
++import com.android.internal.datamap.DataMapPublisher;
++import com.android.internal.datamap.DataMapRelation;
++
++/** Everything the Data Map app draws, for the calling user. */
++parcelable DataMapSnapshot {
++    DataMapEntry[] entries;
++    DataMapOwner[] owners;
++    DataMapRelation[] relations;
++    DataMapPublisher[] publishers;
++    DataMapLink[] links;
++    /** Collecting is on for this user. */
++    boolean collecting;
++    boolean historyOn;
++    int historyDays;
++    /** Names the service refused as not valid host names since the user started. */
++    int invalidCount;
++    long nowWallMs;
++}
+diff --git a/core/java/com/android/internal/datamap/IDataMapObserver.aidl b/core/java/com/android/internal/datamap/IDataMapObserver.aidl
+new file mode 100644
+index 0000000..f117f16
+--- /dev/null
++++ b/core/java/com/android/internal/datamap/IDataMapObserver.aidl
+@@ -0,0 +1,13 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.datamap;
++
++/**
++ * Tells the Data Map app that there is something new to read. It carries no data: the app calls
++ * getSnapshot.
++ */
++oneway interface IDataMapObserver {
++    void onChanged();
++}
+diff --git a/core/java/com/android/internal/datamap/IDataMapService.aidl b/core/java/com/android/internal/datamap/IDataMapService.aidl
+new file mode 100644
+index 0000000..ed3cb28
+--- /dev/null
++++ b/core/java/com/android/internal/datamap/IDataMapService.aidl
+@@ -0,0 +1,40 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.datamap;
++
++import com.android.internal.datamap.DataMapSnapshot;
++import com.android.internal.datamap.IDataMapObserver;
++
++/**
++ * The Binder interface of the Data Map service. Every call acts on the calling user; there is no
++ * user argument. Each call needs org.sovereignos.permission.READ_DATA_MAP, which only the Data Map
++ * app holds.
++ *
++ * <p>The transaction order is part of the contract with the app, which compiles its own copy of
++ * this file: new methods are added at the end.
++ */
++interface IDataMapService {
++    /**
++     * The aggregates of the calling user, the owners and publishers they refer to, the documented
++     * relations between owners, and the apps that could be linked.
++     *
++     * @param packages the installed packages the caller wants publishers for (at most 2000).
++     */
++    DataMapSnapshot getSnapshot(in String[] packages);
++
++    /** The observer is told, at most twice a second, that there is something new to read. */
++    void registerObserver(IDataMapObserver observer);
++
++    void unregisterObserver(IDataMapObserver observer);
++
++    /** Names and counts are collected, or not at all. Applies to the calling user. */
++    void setCollecting(boolean collecting);
++
++    /** A history of 1 to 90 days is kept on this phone, encrypted, or none. */
++    void setHistory(boolean enabled, int days);
++
++    /** Deletes everything collected for the calling user, in memory and on disk. */
++    void clear();
++}
+diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
+index 5c9e490..e4b025a 100644
+--- a/core/res/AndroidManifest.xml
++++ b/core/res/AndroidManifest.xml
+@@ -949,6 +949,13 @@
+         android:protectionLevel="signature|privileged"
+         android:featureFlag="com.android.window.flags.enable_fullscreen_in_new_task_preference" />
+ 
++    <!-- Allows the SovereignOS Data Map app to read which services each app contacts, for its own
++         user. Only that app holds it (ADR-157). -->
++    <permission android:name="org.sovereignos.permission.READ_DATA_MAP"
++        android:label="@string/permlab_sovereignosReadDataMap"
++        android:description="@string/permdesc_sovereignosReadDataMap"
++        android:protectionLevel="signature|privileged" />
++
+     <!-- Allows an app to update the verification status of E2EE contact keys owned by other apps.
+         <p>This permission is only granted to system apps.
+         <p>Protection level: signature|privileged
+diff --git a/core/res/res/values/strings.xml b/core/res/res/values/strings.xml
+index 4d56413..697a663 100644
+--- a/core/res/res/values/strings.xml
++++ b/core/res/res/values/strings.xml
+@@ -1310,6 +1310,12 @@
+      [CHAR LIMIT=NONE] -->
+     <string name="permdesc_manageProfileAndDeviceOwners">Allows apps to set the profile owners and the device owner.</string>
+ 
++    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
++    <string name="permlab_sovereignosReadDataMap">read which services apps contact</string>
++    <!-- Description of an application permission. Only the SovereignOS Data Map app holds it.
++     [CHAR LIMIT=NONE] -->
++    <string name="permdesc_sovereignosReadDataMap">Allows the Data Map app to read the names and counts of the services that apps of the same user contact.</string>
++
+     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+     <string name="permlab_reorderTasks">reorder running apps</string>
+     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->

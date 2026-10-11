@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: Apache-2.0
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// ADR-157. Like AirPodsApp (ADR-118): not platform-signed and not platform_apis. The one hidden API it uses
+// (ServiceManager.getService, to find the Data Map service) is covered by a single-package sysconfig entry.
+// It uses no library besides the framework, so the merged manifest can never gain a component.
+android_app {
+    name: "DataMapApp",
+    manifest: "AndroidManifest.xml",
+    resource_dirs: ["res"],
+    srcs: [
+        "src/**/*.java",
+        "src/**/*.aidl",
+    ],
+    aidl: {
+        local_include_dirs: ["src"],
+    },
+    sdk_version: "system_current",
+    privileged: true,
+    required: [
+        "privapp-permissions-org.sovereignos.datamap.xml",
+        "hidden-api-whitelisted-app-org.sovereignos.datamap.xml",
+    ],
+}
+
+prebuilt_etc {
+    name: "privapp-permissions-org.sovereignos.datamap.xml",
+    src: "privapp-permissions-org.sovereignos.datamap.xml",
+    sub_dir: "permissions",
+}
+
+// Read by SystemConfig only from /system/etc/sysconfig, as for AirPodsApp.
+prebuilt_etc {
+    name: "hidden-api-whitelisted-app-org.sovereignos.datamap.xml",
+    src: "hidden-api-whitelisted-app-org.sovereignos.datamap.xml",
+    sub_dir: "sysconfig",
+}

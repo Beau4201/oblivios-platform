@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- ADR-157. No INTERNET permission and no service, receiver or provider: MAP-011, MAP-013, MAP-015 check this. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.sovereignos.datamap">
+
+    <uses-permission android:name="org.sovereignos.permission.READ_DATA_MAP" />
+    <!-- Needed to show the icon and name of every installed app; holds nothing else. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.DataMap"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

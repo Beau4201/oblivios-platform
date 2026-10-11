@@ -1,0 +1,809 @@
+From 44b6bff70182b606a9e4e8e72eb7b512f66148cf Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 15:38:01 +0200
+Subject: [PATCH 4/4] datamap: add the Data Map service and start it with the
+ system server
+
+Collects the names and counts of DNS lookups and TCP connects per user, in memory unless the user keeps
+a history; derives the links on read; audits what the user changed, never what was collected.
+---
+ .../com/android/server/EventLogTags.logtags   |   5 +
+ .../server/datamap/DataMapCollector.java      |  93 +++
+ .../server/datamap/DataMapService.java        | 651 ++++++++++++++++++
+ .../java/com/android/server/SystemServer.java |   5 +
+ 4 files changed, 754 insertions(+)
+ create mode 100644 services/core/java/com/android/server/datamap/DataMapCollector.java
+ create mode 100644 services/core/java/com/android/server/datamap/DataMapService.java
+
+diff --git a/services/core/java/com/android/server/EventLogTags.logtags b/services/core/java/com/android/server/EventLogTags.logtags
+index c604779..0f2beea 100644
+--- a/services/core/java/com/android/server/EventLogTags.logtags
++++ b/services/core/java/com/android/server/EventLogTags.logtags
+@@ -303,3 +303,8 @@ option java_package com.android.server
+ 51622 timezone_uninstall_complete (token|3), (result|1)
+ 51630 timezone_request_nothing (token|3)
+ 51631 timezone_nothing_complete (token|3)
++
++# SovereignOS Data Map (ADR-157): what the user changed, never what was collected
++51700 datamap_collecting (user|1), (enabled|1)
++51701 datamap_history (user|1), (enabled|1), (days|1)
++51702 datamap_cleared (user|1)
+diff --git a/services/core/java/com/android/server/datamap/DataMapCollector.java b/services/core/java/com/android/server/datamap/DataMapCollector.java
+new file mode 100644
+index 0000000..a7261a6
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/DataMapCollector.java
+@@ -0,0 +1,93 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++import android.os.UserHandle;
++
++import com.android.server.net.BaseNetdEventCallback;
++
++/**
++ * Receives the DNS lookups and TCP connects that netd reports and hands the contacts on. It runs on
++ * a binder thread of the resolver's callback and must be quick and must never throw: whatever goes
++ * wrong, the event is dropped and counted.
++ *
++ * <p>A DNS lookup counts as a contact with the name. A connect counts only when the address has no
++ * earlier DNS answer for that app (a fixed address), so that a lookup followed by a connect is not
++ * counted twice. UDP connects are not reported by netd at all.
++ */
++final class DataMapCollector extends BaseNetdEventCallback {
++    /** What the collector needs from the service. */
++    interface Recorder {
++        boolean collecting(int userId);
++
++        void record(int uid, String key, boolean viaDns, long wallMs);
++
++        void invalid(int uid);
++
++        void dropped();
++    }
++
++    // INetdEventListener.EVENT_*; copied here so that this class has no dependency on the module.
++    private static final int EVENT_GETADDRINFO = 1;
++    private static final int EVENT_GETHOSTBYNAME = 2;
++    private static final int EVENT_GETHOSTBYADDR = 3;
++    private static final int EVENT_RES_NSEND = 4;
++    private static final int MAX_ADDRESSES = 10;
++
++    private final Recorder mRecorder;
++    private final RecentAnswers mAnswers;
++
++    DataMapCollector(Recorder recorder, RecentAnswers answers) {
++        mRecorder = recorder;
++        mAnswers = answers;
++    }
++
++    @Override
++    public void onDnsEvent(int netId, int eventType, int returnCode, String hostname,
++            String[] ipAddresses, int ipAddressesCount, long timestamp, int uid) {
++        try {
++            if (returnCode != 0 || eventType == EVENT_GETHOSTBYADDR
++                    || (eventType != EVENT_GETADDRINFO && eventType != EVENT_GETHOSTBYNAME
++                            && eventType != EVENT_RES_NSEND)) {
++                return;   // a failed lookup, a reverse lookup or a kind we do not know
++            }
++            if (!mRecorder.collecting(UserHandle.getUserId(uid))) {
++                return;
++            }
++            String host = HostnameValidator.normalize(hostname);
++            if (host == null) {
++                mRecorder.invalid(uid);
++                return;
++            }
++            if (ipAddresses != null) {
++                for (int i = 0; i < ipAddresses.length && i < MAX_ADDRESSES; i++) {
++                    if (ipAddresses[i] != null) {
++                        mAnswers.put(uid, ipAddresses[i], host);
++                    }
++                }
++            }
++            mRecorder.record(uid, host, true, timestamp);
++        } catch (Throwable t) {
++            mRecorder.dropped();
++        }
++    }
++
++    @Override
++    public void onConnectEvent(String ipAddr, int port, long timestamp, int uid) {
++        try {
++            if (!mRecorder.collecting(UserHandle.getUserId(uid))) {
++                return;
++            }
++            if (mAnswers.get(uid, ipAddr) != null) {
++                return;   // already counted when the app looked the name up
++            }
++            String key = ServiceKeys.ipKey(ipAddr);
++            if (key == null) {
++                mRecorder.invalid(uid);
++                return;
++            }
++            mRecorder.record(uid, key, false, timestamp);
++        } catch (Throwable t) {
++            mRecorder.dropped();
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/DataMapService.java b/services/core/java/com/android/server/datamap/DataMapService.java
+new file mode 100644
+index 0000000..7a67989
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/DataMapService.java
+@@ -0,0 +1,651 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++import android.annotation.NonNull;
++import android.app.ActivityManager;
++import android.app.ActivityManagerInternal;
++import android.content.BroadcastReceiver;
++import android.content.Context;
++import android.content.Intent;
++import android.content.IntentFilter;
++import android.net.INetdEventCallback;
++import android.net.IIpConnectivityMetrics;
++import android.net.metrics.IpConnectivityLog;
++import android.os.Environment;
++import android.os.FileUtils;
++import android.os.Handler;
++import android.os.Process;
++import android.os.RemoteCallbackList;
++import android.os.RemoteException;
++import android.os.ServiceManager;
++import android.os.UserHandle;
++import android.util.AtomicFile;
++import android.util.Slog;
++
++import com.android.internal.datamap.DataMapEntry;
++import com.android.internal.datamap.DataMapLink;
++import com.android.internal.datamap.DataMapOwner;
++import com.android.internal.datamap.DataMapPublisher;
++import com.android.internal.datamap.DataMapRelation;
++import com.android.internal.datamap.DataMapSnapshot;
++import com.android.internal.datamap.IDataMapObserver;
++import com.android.internal.datamap.IDataMapService;
++import com.android.server.EventLogTags;
++import com.android.server.LocalServices;
++import com.android.server.ServiceThread;
++import com.android.server.SystemService;
++
++import java.io.File;
++import java.io.FileDescriptor;
++import java.io.FileOutputStream;
++import java.io.IOException;
++import java.io.PrintWriter;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Set;
++import java.util.TimeZone;
++import java.util.TreeMap;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.atomic.AtomicLong;
++
++/**
++ * Shows the owner which services each app talks to, which of them are trackers, and which apps could
++ * be linked through one. It observes only: it reads the names and counts that netd reports, keeps them
++ * in memory per user, and keeps a history on disk only when the user asks for one.
++ *
++ * <p>The only caller is the Data Map app, which holds org.sovereignos.permission.READ_DATA_MAP. Every
++ * call acts on the calling user. Nothing here is exported, and the service never touches the
++ * network.
++ */
++public final class DataMapService extends IDataMapService.Stub implements DataMapCollector.Recorder {
++    static final String TAG = "DataMapService";
++    static final String SERVICE_NAME = "datamap";
++    static final String PERMISSION = "org.sovereignos.permission.READ_DATA_MAP";
++    private static final String CLASSIFIER_PATH = "/system/etc/datamap/classifier.tsv";
++    private static final int MAX_CLASSIFIER_BYTES = 4 * 1024 * 1024;
++    private static final long MAX_HISTORY_BYTES = 64L * 1024 * 1024;
++    private static final long WRITE_INTERVAL_MS = 60_000L;
++    private static final long NOTIFY_INTERVAL_MS = 500L;
++    private static final long LINK_WINDOW_MS = 5 * 60_000L;
++    private static final int MAX_PACKAGES = 2000;
++    private static final int MAX_UID_CACHE = 2048;
++    private static final String SYSTEM_PACKAGE = "android";
++
++    private final Context mContext;
++    private final DataMapStore mStore = new DataMapStore(256, 4000);
++    private final RecentAnswers mAnswers = new RecentAnswers(2048);
++    private final DataMapCollector mCollector = new DataMapCollector(this, mAnswers);
++    private final ConcurrentHashMap<Integer, UserSettings> mSettings = new ConcurrentHashMap<>();
++    private final ConcurrentHashMap<Integer, String> mPackageOfUid = new ConcurrentHashMap<>();
++    private final RemoteCallbackList<IDataMapObserver> mObservers = new RemoteCallbackList<>();
++    private final AtomicLong mDropped = new AtomicLong();
++    private final AtomicLong mEvents = new AtomicLong();
++    private final AtomicLong mLastNotify = new AtomicLong();
++    private final ServiceThread mThread;
++    private final Handler mHandler;
++
++    // Written on the handler thread only.
++    private final java.util.HashMap<Integer, Long> mWrittenVersion = new java.util.HashMap<>();
++    // Written on the handler thread, read by binder threads (getSnapshot).
++    private final ConcurrentHashMap<Integer, Integer> mLiveDay = new ConcurrentHashMap<>();
++
++    private volatile Classifier mClassifier = Classifier.empty();
++    private volatile ActivityManagerInternal mAm;
++    private IIpConnectivityMetrics mMetrics;
++    private boolean mRegistered;
++
++    DataMapService(Context context) {
++        mContext = context;
++        mThread = new ServiceThread(TAG, Process.THREAD_PRIORITY_BACKGROUND, false /* allowIo */);
++        mThread.start();
++        mHandler = new Handler(mThread.getLooper());
++    }
++
++    /** Starts and stops the service with the system server. */
++    public static final class Lifecycle extends SystemService {
++        private DataMapService mService;
++
++        public Lifecycle(Context context) {
++            super(context);
++        }
++
++        @Override
++        public void onStart() {
++            mService = new DataMapService(getContext());
++            publishBinderService(SERVICE_NAME, mService);
++        }
++
++        @Override
++        public void onBootPhase(int phase) {
++            if (phase == PHASE_SYSTEM_SERVICES_READY) {
++                mService.systemReady();
++            }
++        }
++
++        @Override
++        public void onUserUnlocked(@NonNull TargetUser user) {
++            mService.onUserUnlocked(user.getUserIdentifier());
++        }
++
++        @Override
++        public void onUserStopped(@NonNull TargetUser user) {
++            mService.onUserStopped(user.getUserIdentifier());
++        }
++    }
++
++    // ---------------------------------------------------------------- start
++
++    void systemReady() {
++        mAm = LocalServices.getService(ActivityManagerInternal.class);
++        mMetrics = IIpConnectivityMetrics.Stub.asInterface(
++                ServiceManager.getService(IpConnectivityLog.SERVICE_NAME));
++        IntentFilter filter = new IntentFilter();
++        filter.addAction(Intent.ACTION_PACKAGE_ADDED);
++        filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
++        filter.addAction(Intent.ACTION_PACKAGE_REPLACED);
++        filter.addDataScheme("package");
++        mContext.registerReceiverForAllUsers(new BroadcastReceiver() {
++            @Override
++            public void onReceive(Context context, Intent intent) {
++                mPackageOfUid.clear();
++            }
++        }, filter, null, mHandler);
++        mHandler.post(() -> {
++            mClassifier = loadClassifier();
++            refreshRegistration();
++            scheduleWrite();
++        });
++    }
++
++    private Classifier loadClassifier() {
++        File f = new File(CLASSIFIER_PATH);
++        try {
++            if (!f.isFile() || f.length() > MAX_CLASSIFIER_BYTES) {
++                Slog.w(TAG, "no usable classifier file; every service is unknown");
++                return Classifier.empty();
++            }
++            Classifier c = Classifier.parse(new String(Files.readAllBytes(f.toPath()),
++                    StandardCharsets.UTF_8));
++            Slog.i(TAG, "classifier: " + c.serviceCount() + " services, " + c.owners().size()
++                    + " owners");
++            return c;
++        } catch (ClassifierException | IOException e) {
++            Slog.e(TAG, "the classifier file is refused: " + e.getMessage());
++            return Classifier.empty();
++        }
++    }
++
++    // ------------------------------------------------ the callback in netd's list
++
++    /** Puts the collector on, or takes it off, according to what the users chose. */
++    private void refreshRegistration() {
++        boolean want = true;
++        if (!mSettings.isEmpty()) {
++            want = false;
++            for (UserSettings s : mSettings.values()) {
++                want |= s.collecting;
++            }
++        }
++        IIpConnectivityMetrics metrics = mMetrics;
++        if (metrics == null) {
++            return;
++        }
++        try {
++            if (want && !mRegistered) {
++                mRegistered = metrics.addNetdEventCallback(
++                        INetdEventCallback.CALLBACK_CALLER_DATA_MAP, mCollector);
++                if (!mRegistered) {
++                    Slog.e(TAG, "the callback slot was refused");
++                }
++            } else if (!want && mRegistered) {
++                metrics.removeNetdEventCallback(INetdEventCallback.CALLBACK_CALLER_DATA_MAP);
++                mRegistered = false;
++            }
++        } catch (RemoteException e) {
++            Slog.e(TAG, "cannot change the callback", e);
++        }
++    }
++
++    // ------------------------------------------------------- DataMapCollector.Recorder
++
++    @Override
++    public boolean collecting(int userId) {
++        UserSettings s = mSettings.get(userId);
++        return s == null || s.collecting;
++    }
++
++    @Override
++    public void record(int uid, String key, boolean viaDns, long wallMs) {
++        int userId = UserHandle.getUserId(uid);
++        int storeUid = uid < Process.FIRST_APPLICATION_UID ? Process.SYSTEM_UID : uid;
++        mStore.record(userId, storeUid, packageOf(uid), key, isForeground(uid), viaDns, wallMs);
++        mEvents.incrementAndGet();
++        notifyObservers(userId);
++    }
++
++    @Override
++    public void invalid(int uid) {
++        mStore.countInvalid(UserHandle.getUserId(uid));
++    }
++
++    @Override
++    public void dropped() {
++        mDropped.incrementAndGet();
++    }
++
++    private String packageOf(int uid) {
++        if (uid < Process.FIRST_APPLICATION_UID) {
++            return SYSTEM_PACKAGE;
++        }
++        String p = mPackageOfUid.get(uid);
++        if (p == null) {
++            String[] names = mContext.getPackageManager().getPackagesForUid(uid);
++            if (names == null || names.length == 0) {
++                p = "uid:" + uid;
++            } else {
++                String[] sorted = names.clone();
++                Arrays.sort(sorted);
++                p = sorted[0];
++            }
++            if (mPackageOfUid.size() >= MAX_UID_CACHE) {
++                mPackageOfUid.clear();
++            }
++            mPackageOfUid.put(uid, p);
++        }
++        return p;
++    }
++
++    private boolean isForeground(int uid) {
++        ActivityManagerInternal am = mAm;
++        if (am == null) {
++            return false;
++        }
++        int importance = ActivityManager.RunningAppProcessInfo.procStateToImportance(
++                am.getUidProcessState(uid));
++        return importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND;
++    }
++
++    private void notifyObservers(int userId) {
++        if (mObservers.getRegisteredCallbackCount() == 0) {
++            return;
++        }
++        long now = android.os.SystemClock.elapsedRealtime();
++        long last = mLastNotify.get();
++        if (now - last < NOTIFY_INTERVAL_MS || !mLastNotify.compareAndSet(last, now)) {
++            return;
++        }
++        mHandler.post(() -> {
++            int n = mObservers.beginBroadcast();
++            try {
++                for (int i = 0; i < n; i++) {
++                    if ((Integer) mObservers.getBroadcastCookie(i) == userId) {
++                        try {
++                            mObservers.getBroadcastItem(i).onChanged();
++                        } catch (RemoteException e) {
++                            // the list drops a dead observer
++                        }
++                    }
++                }
++            } finally {
++                mObservers.finishBroadcast();
++            }
++        });
++    }
++
++    // -------------------------------------------------------------- Binder: IDataMapService
++
++    private int enforceCaller() {
++        mContext.enforceCallingPermission(PERMISSION, "Data Map");
++        return UserHandle.getCallingUserId();
++    }
++
++    @Override
++    public DataMapSnapshot getSnapshot(String[] packages) {
++        int user = enforceCaller();
++        if (packages != null && packages.length > MAX_PACKAGES) {
++            throw new IllegalArgumentException("at most " + MAX_PACKAGES + " packages");
++        }
++        long wall = System.currentTimeMillis();
++        UserSettings st = settingsOf(user);
++        List<DataMapStore.Row> rows = rowsFor(user, st);
++        Classifier c = mClassifier;
++
++        DataMapSnapshot out = new DataMapSnapshot();
++        Set<String> ownerIds = new LinkedHashSet<>();
++        Set<String> appearing = new LinkedHashSet<>();
++
++        List<DataMapEntry> entries = new ArrayList<>(rows.size());
++        for (DataMapStore.Row r : rows) {
++            Classifier.Service sv = c.lookup(r.key);
++            DataMapEntry e = new DataMapEntry();
++            e.packageName = r.pkg;
++            e.serviceKey = r.key;
++            e.ownerId = sv == null || sv.ownerId.equals("-") ? "" : sv.ownerId;
++            e.category = sv == null ? Category.UNKNOWN : sv.category;
++            e.firstSeenWallMs = r.firstWall;
++            e.lastSeenWallMs = r.lastWall;
++            e.count = r.count;
++            e.foregroundCount = r.fg;
++            e.backgroundCount = r.bg;
++            e.viaDns = r.viaDns;
++            entries.add(e);
++            if (!e.ownerId.isEmpty()) {
++                ownerIds.add(e.ownerId);
++                appearing.add(e.ownerId);
++            }
++        }
++        out.entries = entries.toArray(new DataMapEntry[0]);
++
++        List<DataMapPublisher> publishers = new ArrayList<>();
++        if (packages != null) {
++            for (String p : packages) {
++                String owner = p == null ? null : c.publisherOf(p);
++                if (owner != null) {
++                    DataMapPublisher pub = new DataMapPublisher();
++                    pub.packageName = p;
++                    pub.ownerId = owner;
++                    publishers.add(pub);
++                    ownerIds.add(owner);
++                    appearing.add(owner);
++                }
++            }
++        }
++        out.publishers = publishers.toArray(new DataMapPublisher[0]);
++
++        List<DataMapRelation> relations = new ArrayList<>();
++        for (Classifier.Relation r : LinkDeriver.relevantRelations(c, appearing)) {
++            DataMapRelation rel = new DataMapRelation();
++            rel.ownerA = r.a;
++            rel.type = r.type;
++            rel.ownerB = r.b;
++            rel.note = r.note;
++            rel.sourceId = r.source;
++            relations.add(rel);
++            ownerIds.add(r.a);
++            ownerIds.add(r.b);
++        }
++        out.relations = relations.toArray(new DataMapRelation[0]);
++
++        List<DataMapOwner> owners = new ArrayList<>();
++        for (String id : ownerIds) {
++            Classifier.Owner o = c.owner(id);
++            if (o != null) {
++                DataMapOwner dto = new DataMapOwner();
++                dto.id = o.id;
++                dto.name = o.name;
++                dto.legalName = o.legal;
++                dto.countryCode = o.cc;
++                dto.city = o.city;
++                dto.latitude = o.lat;
++                dto.longitude = o.lon;
++                dto.sourceId = o.source;
++                owners.add(dto);
++            }
++        }
++        out.owners = owners.toArray(new DataMapOwner[0]);
++
++        List<DataMapLink> links = new ArrayList<>();
++        for (LinkDeriver.Link l : LinkDeriver.derive(rows, c, LINK_WINDOW_MS)) {
++            DataMapLink dto = new DataMapLink();
++            dto.packageA = l.pkgA;
++            dto.packageB = l.pkgB;
++            dto.kind = l.kind;
++            dto.evidence = l.evidence.toArray(new String[0]);
++            dto.stronger = l.stronger;
++            links.add(dto);
++        }
++        out.links = links.toArray(new DataMapLink[0]);
++
++        out.collecting = st.collecting;
++        out.historyOn = st.history;
++        out.historyDays = st.days;
++        out.invalidCount = mStore.invalidCount(user);
++        out.nowWallMs = wall;
++        return out;
++    }
++
++    /** The live rows, plus the days of the history when the user keeps one. */
++    private List<DataMapStore.Row> rowsFor(int user, UserSettings st) {
++        List<DataMapStore.Row> live = mStore.snapshot(user);
++        if (!st.history) {
++            return live;
++        }
++        TreeMap<Integer, List<DataMapStore.Row>> days = readHistory(user);
++        if (days == null) {
++            return live;
++        }
++        int today = HistoryCodec.dayIndex(System.currentTimeMillis(), tzOffset());
++        Integer liveDay = mLiveDay.get(user);
++        days.remove(liveDay == null ? today : liveDay);   // the live rows are that day
++        return HistoryCodec.aggregate(HistoryCodec.prune(days, today, st.days), live);
++    }
++
++    @Override
++    public void registerObserver(IDataMapObserver observer) {
++        int user = enforceCaller();
++        if (observer != null) {
++            mObservers.register(observer, user);
++        }
++    }
++
++    @Override
++    public void unregisterObserver(IDataMapObserver observer) {
++        enforceCaller();
++        if (observer != null) {
++            mObservers.unregister(observer);
++        }
++    }
++
++    @Override
++    public void setCollecting(boolean collecting) {
++        int user = enforceCaller();
++        UserSettings next = settingsOf(user).withCollecting(collecting);
++        mSettings.put(user, next);
++        EventLogTags.writeDatamapCollecting(user, collecting ? 1 : 0);
++        mHandler.post(() -> {
++            saveSettings(user, next);
++            refreshRegistration();
++        });
++    }
++
++    @Override
++    public void setHistory(boolean enabled, int days) {
++        int user = enforceCaller();
++        UserSettings next = settingsOf(user).withHistory(enabled, days);   // refuses days outside 1 to 90
++        mSettings.put(user, next);
++        EventLogTags.writeDatamapHistory(user, enabled ? 1 : 0, days);
++        mHandler.post(() -> {
++            saveSettings(user, next);
++            if (enabled) {
++                mLiveDay.put(user, HistoryCodec.dayIndex(System.currentTimeMillis(), tzOffset()));
++                writeHistory(user);
++            } else {
++                historyFile(user).delete();
++                mWrittenVersion.remove(user);
++                mLiveDay.remove(user);
++            }
++        });
++    }
++
++    @Override
++    public void clear() {
++        int user = enforceCaller();
++        mStore.clearUser(user);
++        EventLogTags.writeDatamapCleared(user);
++        mHandler.post(() -> {
++            historyFile(user).delete();
++            mWrittenVersion.remove(user);
++        });
++    }
++
++    private UserSettings settingsOf(int user) {
++        UserSettings s = mSettings.get(user);
++        return s == null ? UserSettings.defaults() : s;
++    }
++
++    // ------------------------------------------------------------------- users and files
++
++    void onUserUnlocked(int user) {
++        mHandler.post(() -> {
++            UserSettings st = readSettings(user);
++            mSettings.put(user, st);
++            if (st.history) {
++                int today = HistoryCodec.dayIndex(System.currentTimeMillis(), tzOffset());
++                mLiveDay.put(user, today);
++                TreeMap<Integer, List<DataMapStore.Row>> days = readHistory(user);
++                if (days != null && days.get(today) != null) {
++                    mStore.restore(user, days.get(today));   // the rows of today before the restart
++                }
++            }
++            refreshRegistration();
++        });
++    }
++
++    void onUserStopped(int user) {
++        mHandler.post(() -> {
++            if (settingsOf(user).history) {
++                writeHistory(user);
++            }
++            mStore.clearUser(user);
++            mSettings.remove(user);
++            mWrittenVersion.remove(user);
++            mLiveDay.remove(user);
++            refreshRegistration();
++        });
++    }
++
++    private File dir(int user) {
++        return new File(Environment.getDataSystemCeDirectory(user), "datamap");
++    }
++
++    private File historyFile(int user) {
++        return new File(dir(user), "history.v1");
++    }
++
++    private File settingsFile(int user) {
++        return new File(dir(user), "settings.v1");
++    }
++
++    private static long tzOffset() {
++        return TimeZone.getDefault().getOffset(System.currentTimeMillis());
++    }
++
++    private UserSettings readSettings(int user) {
++        File f = settingsFile(user);
++        try {
++            if (f.isFile() && f.length() < 4096) {
++                return UserSettings.decode(new String(Files.readAllBytes(f.toPath()),
++                        StandardCharsets.UTF_8));
++            }
++        } catch (IOException e) {
++            Slog.w(TAG, "cannot read the settings of user " + user);
++        }
++        return UserSettings.defaults();
++    }
++
++    /** The defaults leave no file; a choice that differs from them leaves one small file. */
++    private void saveSettings(int user, UserSettings s) {
++        File f = settingsFile(user);
++        if (s.isDefault()) {
++            f.delete();
++            return;
++        }
++        writeAtomically(f, s.encode());
++    }
++
++    private TreeMap<Integer, List<DataMapStore.Row>> readHistory(int user) {
++        File f = historyFile(user);
++        try {
++            if (!f.isFile()) {
++                return new TreeMap<>();
++            }
++            if (f.length() > MAX_HISTORY_BYTES) {
++                return null;
++            }
++            return HistoryCodec.decode(new String(Files.readAllBytes(f.toPath()),
++                    StandardCharsets.UTF_8));
++        } catch (IOException | HistoryCodec.FormatException e) {
++            Slog.w(TAG, "the history of user " + user + " is not readable; it is started again");
++            return null;
++        }
++    }
++
++    private void scheduleWrite() {
++        mHandler.postDelayed(() -> {
++            for (int user : new ArrayList<>(mSettings.keySet())) {
++                if (settingsOf(user).history && mStore.version(user)
++                        != mWrittenVersion.getOrDefault(user, -1L)) {
++                    writeHistory(user);
++                }
++            }
++            scheduleWrite();
++        }, WRITE_INTERVAL_MS);
++    }
++
++    /** Writes the live rows under the live day, starts a new live day at midnight, drops old days. */
++    private void writeHistory(int user) {
++        UserSettings st = settingsOf(user);
++        if (!st.history) {
++            return;
++        }
++        int today = HistoryCodec.dayIndex(System.currentTimeMillis(), tzOffset());
++        Integer liveDay = mLiveDay.get(user);
++        if (liveDay == null) {
++            liveDay = today;
++            mLiveDay.put(user, today);
++        }
++        TreeMap<Integer, List<DataMapStore.Row>> days = readHistory(user);
++        if (days == null) {
++            days = new TreeMap<>();
++        }
++        days.put(liveDay, mStore.snapshot(user));
++        days = HistoryCodec.prune(days, today, st.days);
++        if (writeAtomically(historyFile(user), HistoryCodec.encode(days))) {
++            if (today != liveDay) {
++                mStore.clearUser(user);   // yesterday is on disk; today starts empty
++                mLiveDay.put(user, today);
++                mWrittenVersion.put(user, 0L);
++            } else {
++                mWrittenVersion.put(user, mStore.version(user));
++            }
++        }
++    }
++
++    private boolean writeAtomically(File f, String text) {
++        File d = f.getParentFile();
++        if (!d.isDirectory() && !d.mkdirs()) {
++            Slog.w(TAG, "cannot create " + d);
++            return false;
++        }
++        FileUtils.setPermissions(d.getPath(), 0700, -1, -1);
++        AtomicFile af = new AtomicFile(f);
++        FileOutputStream out = null;
++        try {
++            out = af.startWrite();
++            out.write(text.getBytes(StandardCharsets.UTF_8));
++            af.finishWrite(out);
++            return true;
++        } catch (IOException e) {
++            if (out != null) {
++                af.failWrite(out);
++            }
++            Slog.w(TAG, "cannot write " + f.getName());
++            return false;
++        }
++    }
++
++    // ------------------------------------------------------------------------------- dump
++
++    @Override
++    protected void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
++        mContext.enforceCallingPermission(android.Manifest.permission.DUMP, TAG);
++        // Counts only: no package, no service, no owner.
++        pw.println("events: " + mEvents.get() + ", dropped: " + mDropped.get()
++                + ", entries: " + mStore.size() + ", registered: " + mRegistered
++                + ", classifier services: " + mClassifier.serviceCount());
++    }
++}
+diff --git a/services/java/com/android/server/SystemServer.java b/services/java/com/android/server/SystemServer.java
+index d34efa7..59fe56b 100644
+--- a/services/java/com/android/server/SystemServer.java
++++ b/services/java/com/android/server/SystemServer.java
+@@ -175,6 +175,7 @@ import com.android.server.coverage.CoverageService;
+ import com.android.server.cpu.CpuMonitorService;
+ import com.android.server.credentials.CredentialManagerService;
+ import com.android.server.criticalevents.CriticalEventLog;
++import com.android.server.datamap.DataMapService;
+ import com.android.server.devicepolicy.DevicePolicyManagerService;
+ import com.android.server.devicestate.DeviceStateManagerService;
+ import com.android.server.display.DisplayManagerService;
+@@ -1827,6 +1828,10 @@ public final class SystemServer implements Dumpable {
+             mSystemServiceManager.startService(NetworkWatchlistService.Lifecycle.class);
+             t.traceEnd();
+ 
++            t.traceBegin("DataMapService");
++            mSystemServiceManager.startService(DataMapService.Lifecycle.class);
++            t.traceEnd();
++
+             t.traceBegin("PinnerService");
+             mSystemServiceManager.startService(PinnerService.class);
+             t.traceEnd();

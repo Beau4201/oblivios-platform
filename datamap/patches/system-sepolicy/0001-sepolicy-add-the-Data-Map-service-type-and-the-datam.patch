@@ -1,0 +1,69 @@
+From be872ecd98e916083364577c868632966ecbb296 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 15:35:45 +0200
+Subject: [PATCH] sepolicy: add the Data Map service type and the datamap_app
+ domain
+
+---
+ private/datamap_app.te   | 13 +++++++++++++
+ private/seapp_contexts   |  1 +
+ private/service.te       |  1 +
+ private/service_contexts |  1 +
+ 4 files changed, 16 insertions(+)
+ create mode 100644 private/datamap_app.te
+
+diff --git a/private/datamap_app.te b/private/datamap_app.te
+new file mode 100644
+index 0000000..2e63d15
+--- /dev/null
++++ b/private/datamap_app.te
+@@ -0,0 +1,13 @@
++# SPDX-License-Identifier: Apache-2.0
++# The SovereignOS Data Map app (ADR-157): an app domain like logviewer_app, with one extra permission, to
++# find the Data Map service. It declares no network permission and has no service, receiver or provider.
++type datamap_app, domain;
++typeattribute datamap_app coredomain;
++
++app_domain(datamap_app)
++untrusted_app_domain(datamap_app)
++
++allow datamap_app datamap_service:service_manager find;
++
++# Only the Data Map app may find the service: no other app domain, privileged apps included.
++neverallow { appdomain -datamap_app } datamap_service:service_manager find;
+diff --git a/private/seapp_contexts b/private/seapp_contexts
+index 8633389..49164fa 100644
+--- a/private/seapp_contexts
++++ b/private/seapp_contexts
+@@ -196,6 +196,7 @@ user=_app seinfo=media isPrivApp=true name=com.android.providers.media.module:*
+ user=_app seinfo=platform isPrivApp=true name=com.android.permissioncontroller domain=permissioncontroller_app type=privapp_data_file levelFrom=all
+ user=_app isPrivApp=true name=com.android.rkpdapp domain=rkpdapp type=privapp_data_file levelFrom=all
+ user=_app isPrivApp=true name=app.grapheneos.logviewer domain=logviewer_app type=app_data_file levelFrom=all
++user=_app isPrivApp=true name=org.sovereignos.datamap domain=datamap_app type=app_data_file levelFrom=all
+ user=_app isPrivApp=true name=app.seamlessupdate.client domain=updater_app type=app_data_file levelFrom=all
+ user=_app minTargetSdkVersion=37 domain=untrusted_app type=app_data_file levelFrom=all
+ user=_app minTargetSdkVersion=34 domain=untrusted_app_34 type=app_data_file levelFrom=all
+diff --git a/private/service.te b/private/service.te
+index 7e738f8..b0b9e50 100644
+--- a/private/service.te
++++ b/private/service.te
+@@ -14,6 +14,7 @@ type communal_service,               app_api_service, system_server_service, ser
+ type content_restriction_service,    app_api_service, ephemeral_app_api_service, system_server_service, service_manager_type;
+ type d2d_connectivity_service,       system_api_service, system_server_service, service_manager_type;
+ type dynamic_system_service,         system_api_service, system_server_service, service_manager_type;
++type datamap_service,                system_server_service, service_manager_type;
+ type feature_flags_service,          app_api_service, system_server_service, service_manager_type;
+ type file_service,                   app_api_service, ephemeral_app_api_service, system_server_service, service_manager_type;
+ type fwk_devicestate_service, system_server_service, service_manager_type;
+diff --git a/private/service_contexts b/private/service_contexts
+index de00043..3d22cf9 100644
+--- a/private/service_contexts
++++ b/private/service_contexts
+@@ -287,6 +287,7 @@ cpu_monitor                               u:object_r:cpu_monitor_service:s0
+ crossprofileapps                          u:object_r:crossprofileapps_service:s0
+ d2d_connectivity                          u:object_r:d2d_connectivity_service:s0
+ dataloader_manager                        u:object_r:dataloader_manager_service:s0
++datamap                                   u:object_r:datamap_service:s0
+ dbinfo                                    u:object_r:dbinfo_service:s0
+ device_config                             u:object_r:device_config_service:s0
+ device_config_updatable                   u:object_r:device_config_updatable_service:s0

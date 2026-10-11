@@ -1,0 +1,59 @@
+From 055f5c4fca9882ae94f76956368d25f213fdb9c2 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 15:38:01 +0200
+Subject: [PATCH 2/4] datamap: give the Data Map service its own slot for the
+ netd event callbacks
+
+CALLBACK_CALLER_DATA_MAP = 3. The three existing slots are taken (connectivity service, device
+policy, which the intrusion detection NetworkLogSource uses, and network watchlist), and a slot
+holds one callback, so the service cannot share one.
+---
+ core/java/android/net/INetdEventCallback.aidl             | 3 +++
+ .../server/connectivity/NetdEventListenerService.java     | 8 ++++++--
+ 2 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/core/java/android/net/INetdEventCallback.aidl b/core/java/android/net/INetdEventCallback.aidl
+index 27fac25..cd74151 100644
+--- a/core/java/android/net/INetdEventCallback.aidl
++++ b/core/java/android/net/INetdEventCallback.aidl
+@@ -23,6 +23,9 @@ oneway interface INetdEventCallback {
+     const int CALLBACK_CALLER_CONNECTIVITY_SERVICE = 0;
+     const int CALLBACK_CALLER_DEVICE_POLICY = 1;
+     const int CALLBACK_CALLER_NETWORK_WATCHLIST = 2;
++    // The Data Map service (SovereignOS). It has a slot of its own, so that it never shares one with
++    // another consumer of the same events.
++    const int CALLBACK_CALLER_DATA_MAP = 3;
+ 
+     /**
+      * Reports a single DNS lookup function call.
+diff --git a/services/core/java/com/android/server/connectivity/NetdEventListenerService.java b/services/core/java/com/android/server/connectivity/NetdEventListenerService.java
+index 68f9a5f..a6927ec 100644
+--- a/services/core/java/com/android/server/connectivity/NetdEventListenerService.java
++++ b/services/core/java/com/android/server/connectivity/NetdEventListenerService.java
+@@ -106,7 +106,7 @@ public class NetdEventListenerService extends BaseNetdEventListener {
+     final TransportForNetIdNetworkCallback mCallback = new TransportForNetIdNetworkCallback();
+ 
+     /**
+-     * There are only 3 possible callbacks.
++     * There are only 4 possible callbacks.
+      *
+      * mNetdEventCallbackList[CALLBACK_CALLER_CONNECTIVITY_SERVICE]
+      * Callback registered/unregistered by ConnectivityService.
+@@ -117,12 +117,16 @@ public class NetdEventListenerService extends BaseNetdEventListener {
+      *
+      * mNetdEventCallbackList[CALLBACK_CALLER_NETWORK_WATCHLIST]
+      * Callback registered/unregistered by NetworkWatchlistService.
++     *
++     * mNetdEventCallbackList[CALLBACK_CALLER_DATA_MAP]
++     * Callback registered/unregistered by DataMapService (SovereignOS).
+      */
+     @GuardedBy("this")
+     private static final int[] ALLOWED_CALLBACK_TYPES = {
+         INetdEventCallback.CALLBACK_CALLER_CONNECTIVITY_SERVICE,
+         INetdEventCallback.CALLBACK_CALLER_DEVICE_POLICY,
+-        INetdEventCallback.CALLBACK_CALLER_NETWORK_WATCHLIST
++        INetdEventCallback.CALLBACK_CALLER_NETWORK_WATCHLIST,
++        INetdEventCallback.CALLBACK_CALLER_DATA_MAP
+     };
+ 
+     @GuardedBy("this")

@@ -1,0 +1,1287 @@
+From 061d9e0850f07cb329655078d0f64bda75484866 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 15:38:01 +0200
+Subject: [PATCH 1/4] datamap: add the pure core of the Data Map service
+
+Host name validation, the classifier file parser, the bounded per-user store, the link derivation,
+the history file codec and the per-user settings. None of it uses an Android class, so it is
+checked on the host (datamap/tests/host in sovereignos-platform).
+---
+ .../com/android/server/datamap/Category.java  |  42 +++
+ .../android/server/datamap/Classifier.java    | 344 ++++++++++++++++++
+ .../server/datamap/ClassifierException.java   |  11 +
+ .../android/server/datamap/DataMapStore.java  | 222 +++++++++++
+ .../android/server/datamap/HistoryCodec.java  | 164 +++++++++
+ .../server/datamap/HostnameValidator.java     |  59 +++
+ .../android/server/datamap/LinkDeriver.java   | 156 ++++++++
+ .../android/server/datamap/RecentAnswers.java |  35 ++
+ .../android/server/datamap/ServiceKeys.java   |  62 ++++
+ .../android/server/datamap/UserSettings.java  | 101 +++++
+ 10 files changed, 1196 insertions(+)
+ create mode 100644 services/core/java/com/android/server/datamap/Category.java
+ create mode 100644 services/core/java/com/android/server/datamap/Classifier.java
+ create mode 100644 services/core/java/com/android/server/datamap/ClassifierException.java
+ create mode 100644 services/core/java/com/android/server/datamap/DataMapStore.java
+ create mode 100644 services/core/java/com/android/server/datamap/HistoryCodec.java
+ create mode 100644 services/core/java/com/android/server/datamap/HostnameValidator.java
+ create mode 100644 services/core/java/com/android/server/datamap/LinkDeriver.java
+ create mode 100644 services/core/java/com/android/server/datamap/RecentAnswers.java
+ create mode 100644 services/core/java/com/android/server/datamap/ServiceKeys.java
+ create mode 100644 services/core/java/com/android/server/datamap/UserSettings.java
+
+diff --git a/services/core/java/com/android/server/datamap/Category.java b/services/core/java/com/android/server/datamap/Category.java
+new file mode 100644
+index 0000000..91914f3
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/Category.java
+@@ -0,0 +1,42 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++/**
++ * How the classifier file names the kind of a service. The integer codes are part of the Binder
++ * contract with the Data Map app (DataMapEntry#category), so they never change.
++ */
++final class Category {
++    static final int UNKNOWN = 0;
++    static final int CORE = 1;
++    static final int CDN = 2;
++    static final int ANALYTICS = 3;
++    static final int ADVERTISING = 4;
++    static final int ATTRIBUTION = 5;
++    static final int SOCIAL = 6;
++    static final int IDENTITY = 7;
++
++    private static final String[] NAMES = {
++        "unknown", "core", "cdn", "analytics", "advertising", "attribution", "social", "identity"
++    };
++
++    private Category() {}
++
++    /** @return the code for a name of the classifier file, or -1 if the name is not a category. */
++    static int parse(String name) {
++        for (int i = 0; i < NAMES.length; i++) {
++            if (NAMES[i].equals(name)) {
++                return i;
++            }
++        }
++        return -1;
++    }
++
++    static String name(int code) {
++        return code >= 0 && code < NAMES.length ? NAMES[code] : NAMES[UNKNOWN];
++    }
++
++    /** A kind of service that can link two apps: it builds a picture of a person. */
++    static boolean isTracker(int code) {
++        return code >= ANALYTICS && code <= IDENTITY;
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/Classifier.java b/services/core/java/com/android/server/datamap/Classifier.java
+new file mode 100644
+index 0000000..f4ee1d0
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/Classifier.java
+@@ -0,0 +1,344 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++import java.util.ArrayList;
++import java.util.Collection;
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++
++/**
++ * The read-only classifier file of the system image: which owner stands behind a service, where an
++ * owner and an app's publisher are based, and which owners are documented as connected. Every
++ * claim carries the id of a source, and the parser rejects a file in which one does not.
++ *
++ * <p>Format (tab separated, '#' starts a comment line):
++ * <pre>
++ * datamap-classifier 1
++ * source    id  title  licence  url
++ * owner     id  name  legal-name  country(2 capitals)  city  latitude  longitude  source
++ * service   suffix  owner-id-or-"-"  category  source
++ * publisher package  owner-id  source
++ * relation  owner-a  type  owner-b  note-or-empty  source
++ * </pre>
++ */
++final class Classifier {
++    static final int MAX_LINES = 20000;
++    static final int MAX_LINE = 1000;
++    private static final String[] RELATION_TYPES = {
++        "owns", "merged_with", "partner_of", "buys_ad_space_from"
++    };
++
++    static final class Source {
++        final String id;
++        final String title;
++        final String licence;
++        final String url;
++
++        Source(String id, String title, String licence, String url) {
++            this.id = id;
++            this.title = title;
++            this.licence = licence;
++            this.url = url;
++        }
++    }
++
++    static final class Owner {
++        final String id;
++        final String name;
++        final String legal;
++        final String cc;
++        final String city;
++        final double lat;
++        final double lon;
++        final String source;
++
++        Owner(String id, String name, String legal, String cc, String city, double lat, double lon,
++                String source) {
++            this.id = id;
++            this.name = name;
++            this.legal = legal;
++            this.cc = cc;
++            this.city = city;
++            this.lat = lat;
++            this.lon = lon;
++            this.source = source;
++        }
++    }
++
++    static final class Service {
++        final String suffix;
++        final String ownerId;
++        final int category;
++        final String source;
++
++        Service(String suffix, String ownerId, int category, String source) {
++            this.suffix = suffix;
++            this.ownerId = ownerId;
++            this.category = category;
++            this.source = source;
++        }
++    }
++
++    static final class Relation {
++        final String a;
++        final String type;
++        final String b;
++        final String note;
++        final String source;
++
++        Relation(String a, String type, String b, String note, String source) {
++            this.a = a;
++            this.type = type;
++            this.b = b;
++            this.note = note;
++            this.source = source;
++        }
++    }
++
++    private final Map<String, Source> sources;
++    private final Map<String, Owner> owners;
++    private final Map<String, Service> services;
++    private final Map<String, String> publishers;
++    private final List<Relation> relations;
++
++    private Classifier(Map<String, Source> sources, Map<String, Owner> owners,
++            Map<String, Service> services, Map<String, String> publishers,
++            List<Relation> relations) {
++        this.sources = sources;
++        this.owners = owners;
++        this.services = services;
++        this.publishers = publishers;
++        this.relations = relations;
++    }
++
++    /** A classifier that knows nothing: every service is unknown and nothing is placed. */
++    static Classifier empty() {
++        return new Classifier(new HashMap<>(), new HashMap<>(), new HashMap<>(), new HashMap<>(),
++                new ArrayList<>());
++    }
++
++    /** @throws ClassifierException if the text is not a valid classifier file. */
++    static Classifier parse(String text) throws ClassifierException {
++        Map<String, Source> sources = new LinkedHashMap<>();
++        Map<String, Owner> owners = new LinkedHashMap<>();
++        Map<String, Service> services = new LinkedHashMap<>();
++        Map<String, String> publishers = new LinkedHashMap<>();
++        Map<String, Integer> publisherLine = new HashMap<>();
++        List<Relation> relations = new ArrayList<>();
++        Set<String> relationKeys = new HashSet<>();
++        Map<String, Integer> sourceUse = new LinkedHashMap<>();   // source id -> first line using it
++        Map<String, Integer> ownerUse = new LinkedHashMap<>();    // owner id -> first line using it
++        boolean sawHeader = false;
++
++        String[] lines = text.split("\n", -1);
++        if (lines.length > MAX_LINES) {
++            throw new ClassifierException(0, "more than " + MAX_LINES + " lines");
++        }
++        for (int n = 1; n <= lines.length; n++) {
++            String line = lines[n - 1];
++            if (line.endsWith("\r")) {
++                line = line.substring(0, line.length() - 1);
++            }
++            if (line.length() > MAX_LINE) {
++                throw new ClassifierException(n, "line longer than " + MAX_LINE);
++            }
++            if (line.isEmpty() || line.charAt(0) == '#') {
++                continue;
++            }
++            String[] f = line.split("\t", -1);
++            if (!sawHeader) {
++                if (f.length != 2 || !f[0].equals("datamap-classifier") || !f[1].equals("1")) {
++                    throw new ClassifierException(n, "the first line must be: datamap-classifier\t1");
++                }
++                sawHeader = true;
++                continue;
++            }
++            switch (f[0]) {
++                case "source": {
++                    need(n, f, 5, true);
++                    if (sources.containsKey(f[1])) {
++                        throw new ClassifierException(n, "duplicate source " + f[1]);
++                    }
++                    sources.put(f[1], new Source(f[1], f[2], f[3], f[4]));
++                    break;
++                }
++                case "owner": {
++                    need(n, f, 9, true);
++                    checkId(n, f[1], 24);
++                    if (owners.containsKey(f[1])) {
++                        throw new ClassifierException(n, "duplicate owner " + f[1]);
++                    }
++                    if (!f[4].matches("[A-Z]{2}")) {
++                        throw new ClassifierException(n, "country must be two capital letters: " + f[4]);
++                    }
++                    double lat = number(n, f[6]);
++                    double lon = number(n, f[7]);
++                    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
++                        throw new ClassifierException(n, "coordinates out of range");
++                    }
++                    owners.put(f[1], new Owner(f[1], f[2], f[3], f[4], f[5], lat, lon, f[8]));
++                    sourceUse.putIfAbsent(f[8], n);
++                    break;
++                }
++                case "service": {
++                    need(n, f, 5, true);
++                    String suffix = HostnameValidator.normalize(f[1]);
++                    if (suffix == null || !suffix.equals(f[1])) {
++                        throw new ClassifierException(n, "not a normalized host name: " + f[1]);
++                    }
++                    if (services.containsKey(suffix)) {
++                        throw new ClassifierException(n, "duplicate service " + suffix);
++                    }
++                    int category = Category.parse(f[3]);
++                    if (category < 0) {
++                        throw new ClassifierException(n, "unknown category " + f[3]);
++                    }
++                    if (!f[2].equals("-")) {
++                        ownerUse.putIfAbsent(f[2], n);
++                    }
++                    services.put(suffix, new Service(suffix, f[2], category, f[4]));
++                    sourceUse.putIfAbsent(f[4], n);
++                    break;
++                }
++                case "publisher": {
++                    need(n, f, 4, true);
++                    if (!f[1].matches("[A-Za-z0-9._]{1,255}")) {
++                        throw new ClassifierException(n, "not a package name: " + f[1]);
++                    }
++                    if (publishers.containsKey(f[1])) {
++                        throw new ClassifierException(n, "duplicate publisher " + f[1]);
++                    }
++                    publishers.put(f[1], f[2]);
++                    publisherLine.put(f[1], n);
++                    ownerUse.putIfAbsent(f[2], n);
++                    sourceUse.putIfAbsent(f[3], n);
++                    break;
++                }
++                case "relation": {
++                    need(n, f, 6, false);   // the note may be empty
++                    boolean typeOk = false;
++                    for (String t : RELATION_TYPES) {
++                        typeOk |= t.equals(f[2]);
++                    }
++                    if (!typeOk) {
++                        throw new ClassifierException(n, "unknown relation type " + f[2]);
++                    }
++                    if (f[1].isEmpty() || f[3].isEmpty() || f[5].isEmpty()) {
++                        throw new ClassifierException(n, "an owner or the source is empty");
++                    }
++                    if (f[1].equals(f[3])) {
++                        throw new ClassifierException(n, "a company cannot be connected to itself");
++                    }
++                    if (!relationKeys.add(f[1] + "\t" + f[2] + "\t" + f[3])) {
++                        throw new ClassifierException(n, "duplicate relation");
++                    }
++                    relations.add(new Relation(f[1], f[2], f[3], f[4], f[5]));
++                    ownerUse.putIfAbsent(f[1], n);
++                    ownerUse.putIfAbsent(f[3], n);
++                    sourceUse.putIfAbsent(f[5], n);
++                    break;
++                }
++                default:
++                    throw new ClassifierException(n, "unknown record type " + f[0]);
++            }
++        }
++        if (!sawHeader) {
++            throw new ClassifierException(0, "empty file: no header line");
++        }
++        for (Map.Entry<String, Integer> e : sourceUse.entrySet()) {
++            if (!sources.containsKey(e.getKey())) {
++                throw new ClassifierException(e.getValue(), "unknown source " + e.getKey());
++            }
++        }
++        for (Map.Entry<String, Integer> e : ownerUse.entrySet()) {
++            if (!owners.containsKey(e.getKey())) {
++                throw new ClassifierException(e.getValue(), "unknown owner " + e.getKey());
++            }
++        }
++        return new Classifier(sources, owners, services, publishers, relations);
++    }
++
++    private static void need(int line, String[] f, int count, boolean nonEmpty)
++            throws ClassifierException {
++        if (f.length != count) {
++            throw new ClassifierException(line, f[0] + " needs " + count + " fields, found " + f.length);
++        }
++        if (nonEmpty) {
++            for (int i = 1; i < f.length; i++) {
++                if (f[i].isEmpty()) {
++                    throw new ClassifierException(line, "field " + (i + 1) + " is empty");
++                }
++            }
++        }
++    }
++
++    private static void checkId(int line, String id, int max) throws ClassifierException {
++        if (!id.matches("[a-z0-9_]{1," + max + "}")) {
++            throw new ClassifierException(line, "not an id (a-z, 0-9, _): " + id);
++        }
++    }
++
++    private static double number(int line, String s) throws ClassifierException {
++        try {
++            double d = Double.parseDouble(s);
++            if (Double.isNaN(d) || Double.isInfinite(d)) {
++                throw new NumberFormatException();
++            }
++            return d;
++        } catch (NumberFormatException e) {
++            throw new ClassifierException(line, "not a number: " + s);
++        }
++    }
++
++    /**
++     * The service whose suffix is the longest match for a normalized host name. A suffix matches
++     * only at a label boundary: "google.com" matches "ads.google.com" and not "notgoogle.com".
++     */
++    Service lookup(String host) {
++        if (host == null) {
++            return null;
++        }
++        int i = 0;
++        while (true) {
++            Service s = services.get(host.substring(i));
++            if (s != null) {
++                return s;
++            }
++            int dot = host.indexOf('.', i);
++            if (dot < 0) {
++                return null;
++            }
++            i = dot + 1;
++        }
++    }
++
++    Owner owner(String id) {
++        return owners.get(id);
++    }
++
++    Source source(String id) {
++        return sources.get(id);
++    }
++
++    /** The owner id of the publisher of a package, or null if the package is not listed. */
++    String publisherOf(String packageName) {
++        return publishers.get(packageName);
++    }
++
++    Collection<Owner> owners() {
++        return Collections.unmodifiableCollection(owners.values());
++    }
++
++    List<Relation> relations() {
++        return Collections.unmodifiableList(relations);
++    }
++
++    int serviceCount() {
++        return services.size();
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/ClassifierException.java b/services/core/java/com/android/server/datamap/ClassifierException.java
+new file mode 100644
+index 0000000..71c962f
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/ClassifierException.java
+@@ -0,0 +1,11 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++/** The classifier file is not valid. The message names the line. */
++final class ClassifierException extends Exception {
++    private static final long serialVersionUID = 1L;
++
++    ClassifierException(int line, String message) {
++        super(line > 0 ? "line " + line + ": " + message : message);
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/DataMapStore.java b/services/core/java/com/android/server/datamap/DataMapStore.java
+new file mode 100644
+index 0000000..3dfe271
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/DataMapStore.java
+@@ -0,0 +1,222 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.Comparator;
++import java.util.HashMap;
++import java.util.Iterator;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++
++/**
++ * The live aggregates: per user, per app uid, per service key, when a service was first and last
++ * seen and how often, in the foreground or background. Bounded per uid and in total, so that one app
++ * that makes thousands of lookups cannot push the entries of another app out: a full uid evicts its
++ * own least recently seen entry, and a full store evicts from the uid that holds most.
++ *
++ * <p>Methods are synchronized. Each is O(1) except the eviction on a full store, which looks at the
++ * uids once. Nothing here blocks or does I/O.
++ */
++final class DataMapStore {
++    /** One aggregate, as read back. */
++    static final class Row {
++        final int uid;
++        final String pkg;
++        final String key;
++        final long firstWall;
++        final long lastWall;
++        final int count;
++        final int fg;
++        final int bg;
++        final boolean viaDns;
++
++        Row(int uid, String pkg, String key, long firstWall, long lastWall, int count, int fg,
++                int bg, boolean viaDns) {
++            this.uid = uid;
++            this.pkg = pkg;
++            this.key = key;
++            this.firstWall = firstWall;
++            this.lastWall = lastWall;
++            this.count = count;
++            this.fg = fg;
++            this.bg = bg;
++            this.viaDns = viaDns;
++        }
++    }
++
++    private static final class Entry {
++        int uid;
++        String pkg;
++        String key;
++        long first;
++        long last;
++        int count;
++        int fg;
++        int bg;
++        boolean dns;
++    }
++
++    private static final class UserData {
++        final HashMap<Integer, LinkedHashMap<String, Entry>> byUid = new HashMap<>();
++        int invalid;
++        long version;
++    }
++
++    private final int maxPerUid;
++    private final int maxTotal;
++    private final HashMap<Integer, UserData> users = new HashMap<>();
++    private int total;
++
++    DataMapStore(int maxPerUid, int maxTotal) {
++        this.maxPerUid = maxPerUid;
++        this.maxTotal = maxTotal;
++    }
++
++    /** Records one contact of an app with a service. */
++    synchronized void record(int userId, int uid, String pkg, String key, boolean foreground,
++            boolean viaDns, long wallMs) {
++        Entry e = entryFor(userId, uid, pkg, key, wallMs);
++        e.count++;
++        if (foreground) {
++            e.fg++;
++        } else {
++            e.bg++;
++        }
++        e.last = Math.max(e.last, wallMs);
++        e.dns |= viaDns;
++        users.get(userId).version++;
++    }
++
++    /** Adds rows read back from the history file; a row already present is merged. */
++    synchronized void restore(int userId, List<Row> rows) {
++        for (Row r : rows) {
++            Entry e = entryFor(userId, r.uid, r.pkg, r.key, r.firstWall);
++            e.count += r.count;
++            e.fg += r.fg;
++            e.bg += r.bg;
++            e.first = Math.min(e.first, r.firstWall);
++            e.last = Math.max(e.last, r.lastWall);
++            e.dns |= r.viaDns;
++        }
++        users.get(userId).version++;
++    }
++
++    private Entry entryFor(int userId, int uid, String pkg, String key, long wallMs) {
++        UserData u = users.get(userId);
++        if (u == null) {
++            u = new UserData();
++            users.put(userId, u);
++        }
++        LinkedHashMap<String, Entry> m = u.byUid.get(uid);
++        if (m == null) {
++            m = new LinkedHashMap<>(16, 0.75f, true);
++            u.byUid.put(uid, m);
++        }
++        Entry e = m.get(key);   // access order: a read makes the entry the most recent
++        if (e == null) {
++            if (m.size() >= maxPerUid) {
++                evictEldest(m);
++            } else if (total >= maxTotal) {
++                evictEldest(largestMap());
++            }
++            e = new Entry();
++            e.uid = uid;
++            e.pkg = pkg;
++            e.key = key;
++            e.first = wallMs;
++            e.last = wallMs;
++            m.put(key, e);
++            total++;
++        }
++        return e;
++    }
++
++    private void evictEldest(LinkedHashMap<String, Entry> m) {
++        Iterator<Entry> it = m.values().iterator();
++        if (it.hasNext()) {
++            it.next();
++            it.remove();
++            total--;
++        }
++    }
++
++    private LinkedHashMap<String, Entry> largestMap() {
++        LinkedHashMap<String, Entry> best = null;
++        for (UserData u : users.values()) {
++            for (LinkedHashMap<String, Entry> m : u.byUid.values()) {
++                if (best == null || m.size() > best.size()) {
++                    best = m;
++                }
++            }
++        }
++        return best;
++    }
++
++    /** The aggregates of one user, in a fixed order (uid, then key). */
++    synchronized List<Row> snapshot(int userId) {
++        List<Row> out = new ArrayList<>();
++        UserData u = users.get(userId);
++        if (u != null) {
++            for (LinkedHashMap<String, Entry> m : u.byUid.values()) {
++                for (Entry e : m.values()) {
++                    out.add(new Row(e.uid, e.pkg, e.key, e.first, e.last, e.count, e.fg, e.bg, e.dns));
++                }
++            }
++        }
++        Collections.sort(out, new Comparator<Row>() {
++            @Override
++            public int compare(Row a, Row b) {
++                if (a.uid != b.uid) {
++                    return Integer.compare(a.uid, b.uid);
++                }
++                return a.key.compareTo(b.key);
++            }
++        });
++        return out;
++    }
++
++    synchronized void countInvalid(int userId) {
++        UserData u = users.get(userId);
++        if (u == null) {
++            u = new UserData();
++            users.put(userId, u);
++        }
++        u.invalid++;
++    }
++
++    synchronized int invalidCount(int userId) {
++        UserData u = users.get(userId);
++        return u == null ? 0 : u.invalid;
++    }
++
++    /** Forgets everything of one user: the data, the invalid count and the change counter. */
++    synchronized void clearUser(int userId) {
++        UserData u = users.remove(userId);
++        if (u != null) {
++            for (LinkedHashMap<String, Entry> m : u.byUid.values()) {
++                total -= m.size();
++            }
++        }
++    }
++
++    /** Grows with every change of one user, so a writer can tell that there is something new. */
++    synchronized long version(int userId) {
++        UserData u = users.get(userId);
++        return u == null ? 0 : u.version;
++    }
++
++    synchronized int size() {
++        return total;
++    }
++
++    synchronized int sizeFor(int userId, int uid) {
++        UserData u = users.get(userId);
++        if (u == null) {
++            return 0;
++        }
++        Map<String, Entry> m = u.byUid.get(uid);
++        return m == null ? 0 : m.size();
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/HistoryCodec.java b/services/core/java/com/android/server/datamap/HistoryCodec.java
+new file mode 100644
+index 0000000..c948040
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/HistoryCodec.java
+@@ -0,0 +1,164 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.TreeMap;
++
++/**
++ * The history file: per day, the aggregates of that day, never single events. Text, one record per
++ * line, tab separated:
++ * <pre>
++ * datamap-history 1
++ * day  index
++ * row  uid  package  key  first  last  count  foreground  background  viaDns(0|1)
++ * </pre>
++ * A day index is the number of local days since 1970-01-01. The decoder is bounded: it refuses a file
++ * with more than {@link #MAX_ROWS} rows or a line longer than {@link #MAX_LINE}.
++ */
++final class HistoryCodec {
++    static final int MAX_ROWS = 400000;
++    static final int MAX_LINE = 600;
++    static final long DAY_MS = 86_400_000L;
++
++    /** The file is damaged or not ours; the caller discards it and starts empty. */
++    static final class FormatException extends Exception {
++        private static final long serialVersionUID = 1L;
++
++        FormatException(String message) {
++            super(message);
++        }
++    }
++
++    private HistoryCodec() {}
++
++    /** The local day of a wall-clock time. */
++    static int dayIndex(long wallMs, long tzOffsetMs) {
++        return (int) Math.floorDiv(wallMs + tzOffsetMs, DAY_MS);
++    }
++
++    static String encode(TreeMap<Integer, List<DataMapStore.Row>> days) {
++        StringBuilder sb = new StringBuilder("datamap-history\t1\n");
++        for (Map.Entry<Integer, List<DataMapStore.Row>> d : days.entrySet()) {
++            sb.append("day\t").append(d.getKey()).append('\n');
++            for (DataMapStore.Row r : d.getValue()) {
++                if (bad(r.pkg) || bad(r.key)) {
++                    throw new IllegalArgumentException("a tab or a line break in a field");
++                }
++                sb.append("row\t").append(r.uid).append('\t').append(r.pkg).append('\t')
++                        .append(r.key).append('\t').append(r.firstWall).append('\t')
++                        .append(r.lastWall).append('\t').append(r.count).append('\t')
++                        .append(r.fg).append('\t').append(r.bg).append('\t')
++                        .append(r.viaDns ? 1 : 0).append('\n');
++            }
++        }
++        return sb.toString();
++    }
++
++    private static boolean bad(String s) {
++        return s == null || s.isEmpty() || s.indexOf('\t') >= 0 || s.indexOf('\n') >= 0
++                || s.indexOf('\r') >= 0;
++    }
++
++    static TreeMap<Integer, List<DataMapStore.Row>> decode(String text) throws FormatException {
++        TreeMap<Integer, List<DataMapStore.Row>> days = new TreeMap<>();
++        String[] lines = text.split("\n", -1);
++        int rows = 0;
++        boolean header = false;
++        List<DataMapStore.Row> current = null;
++        for (String line : lines) {
++            if (line.isEmpty()) {
++                continue;
++            }
++            if (line.length() > MAX_LINE) {
++                throw new FormatException("line too long");
++            }
++            String[] f = line.split("\t", -1);
++            if (!header) {
++                if (f.length != 2 || !f[0].equals("datamap-history") || !f[1].equals("1")) {
++                    throw new FormatException("not a history file");
++                }
++                header = true;
++                continue;
++            }
++            try {
++                if (f[0].equals("day") && f.length == 2) {
++                    int day = Integer.parseInt(f[1]);
++                    current = days.get(day);
++                    if (current == null) {
++                        current = new ArrayList<>();
++                        days.put(day, current);
++                    }
++                } else if (f[0].equals("row") && f.length == 10 && current != null) {
++                    if (++rows > MAX_ROWS) {
++                        throw new FormatException("too many rows");
++                    }
++                    int count = Integer.parseInt(f[6]);
++                    int fg = Integer.parseInt(f[7]);
++                    int bg = Integer.parseInt(f[8]);
++                    if (count < 0 || fg < 0 || bg < 0 || f[2].isEmpty() || f[3].isEmpty()
++                            || !(f[9].equals("0") || f[9].equals("1"))) {
++                        throw new FormatException("bad row");
++                    }
++                    current.add(new DataMapStore.Row(Integer.parseInt(f[1]), f[2], f[3],
++                            Long.parseLong(f[4]), Long.parseLong(f[5]), count, fg, bg,
++                            f[9].equals("1")));
++                } else {
++                    throw new FormatException("unexpected record");
++                }
++            } catch (NumberFormatException e) {
++                throw new FormatException("not a number");
++            }
++        }
++        if (!header) {
++            throw new FormatException("empty file");
++        }
++        return days;
++    }
++
++    /** Keeps the days that are newer than today minus keepDays. */
++    static TreeMap<Integer, List<DataMapStore.Row>> prune(
++            TreeMap<Integer, List<DataMapStore.Row>> days, int today, int keepDays) {
++        TreeMap<Integer, List<DataMapStore.Row>> out = new TreeMap<>();
++        for (Map.Entry<Integer, List<DataMapStore.Row>> d : days.entrySet()) {
++            if (d.getKey() > today - keepDays) {
++                out.put(d.getKey(), d.getValue());
++            }
++        }
++        return out;
++    }
++
++    /** One row per (uid, key) over the kept days and the live rows of today. */
++    static List<DataMapStore.Row> aggregate(TreeMap<Integer, List<DataMapStore.Row>> days,
++            List<DataMapStore.Row> live) {
++        Map<String, DataMapStore.Row> merged = new HashMap<>();
++        List<List<DataMapStore.Row>> all = new ArrayList<>(days.values());
++        all.add(live);
++        for (List<DataMapStore.Row> rows : all) {
++            for (DataMapStore.Row r : rows) {
++                String k = r.uid + "\t" + r.key;
++                DataMapStore.Row m = merged.get(k);
++                if (m == null) {
++                    merged.put(k, r);
++                } else {
++                    merged.put(k, new DataMapStore.Row(r.uid, r.pkg, r.key,
++                            Math.min(m.firstWall, r.firstWall), Math.max(m.lastWall, r.lastWall),
++                            m.count + r.count, m.fg + r.fg, m.bg + r.bg, m.viaDns || r.viaDns));
++                }
++            }
++        }
++        List<DataMapStore.Row> out = new ArrayList<>(merged.values());
++        java.util.Collections.sort(out, new java.util.Comparator<DataMapStore.Row>() {
++            @Override
++            public int compare(DataMapStore.Row a, DataMapStore.Row b) {
++                if (a.uid != b.uid) {
++                    return Integer.compare(a.uid, b.uid);
++                }
++                return a.key.compareTo(b.key);
++            }
++        });
++        return out;
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/HostnameValidator.java b/services/core/java/com/android/server/datamap/HostnameValidator.java
+new file mode 100644
+index 0000000..0c23039
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/HostnameValidator.java
+@@ -0,0 +1,59 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++/**
++ * Host names come from apps and are untrusted input. A name that is not acceptable is counted and
++ * never stored.
++ */
++final class HostnameValidator {
++    static final int MAX_NAME = 253;
++    static final int MAX_LABEL = 63;
++
++    private HostnameValidator() {}
++
++    /**
++     * Lower-cases the name and removes one trailing dot.
++     *
++     * @return the normalized name, or null if it is longer than 253 characters, has an empty label
++     *     or a label longer than 63, or has any character other than letters, digits, '-', '_' and
++     *     '.'. Internationalized names arrive as their ASCII form (xn--...), so non-ASCII is refused.
++     */
++    static String normalize(String raw) {
++        if (raw == null) {
++            return null;
++        }
++        String s = raw;
++        if (s.endsWith(".")) {
++            s = s.substring(0, s.length() - 1);
++        }
++        if (s.isEmpty() || s.length() > MAX_NAME) {
++            return null;
++        }
++        StringBuilder out = new StringBuilder(s.length());
++        int labelLen = 0;
++        for (int i = 0; i < s.length(); i++) {
++            char c = s.charAt(i);
++            if (c >= 'A' && c <= 'Z') {
++                c = (char) (c + 32);
++            }
++            if (c == '.') {
++                if (labelLen == 0) {
++                    return null;
++                }
++                labelLen = 0;
++            } else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
++                labelLen++;
++                if (labelLen > MAX_LABEL) {
++                    return null;
++                }
++            } else {
++                return null;
++            }
++            out.append(c);
++        }
++        if (labelLen == 0) {
++            return null;
++        }
++        return out.toString();
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/LinkDeriver.java b/services/core/java/com/android/server/datamap/LinkDeriver.java
+new file mode 100644
+index 0000000..b71dc0a
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/LinkDeriver.java
+@@ -0,0 +1,156 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.Comparator;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++import java.util.TreeSet;
++
++/**
++ * Derives, when the snapshot is read and never stored, which apps could be linked and which
++ * documented relations between companies matter.
++ *
++ * <p>Only a service that the classifier knows and whose category can link two apps (analytics,
++ * advertising, attribution, social, identity) makes a link. An unknown service never does.
++ */
++final class LinkDeriver {
++    static final int SHARED_COMPANY = 1;
++    static final int SAME_OWNER = 2;
++
++    /** Two apps that could be linked, with the evidence. */
++    static final class Link {
++        final String pkgA;
++        final String pkgB;
++        final int kind;
++        /** Service keys both apps contacted (SHARED_COMPANY) or owner ids (SAME_OWNER). */
++        final List<String> evidence;
++        /** Both contacted a shared service within the same window of each other. */
++        final boolean stronger;
++
++        Link(String pkgA, String pkgB, int kind, List<String> evidence, boolean stronger) {
++            this.pkgA = pkgA;
++            this.pkgB = pkgB;
++            this.kind = kind;
++            this.evidence = evidence;
++            this.stronger = stronger;
++        }
++    }
++
++    private LinkDeriver() {}
++
++    /**
++     * @param windowMs two apps count as in the same window when their contact with a shared service
++     *     lies within this distance of each other.
++     */
++    static List<Link> derive(List<DataMapStore.Row> rows, Classifier c, long windowMs) {
++        // per app: tracker service key -> [first, last]; and the owners of those services
++        Map<String, Map<String, long[]>> keysByPkg = new HashMap<>();
++        Map<String, Set<String>> ownersByPkg = new HashMap<>();
++        for (DataMapStore.Row r : rows) {
++            Classifier.Service s = c.lookup(r.key);
++            if (s == null || !Category.isTracker(s.category)) {
++                continue;
++            }
++            Map<String, long[]> m = keysByPkg.get(r.pkg);
++            if (m == null) {
++                m = new HashMap<>();
++                keysByPkg.put(r.pkg, m);
++            }
++            long[] span = m.get(s.suffix);
++            if (span == null) {
++                m.put(s.suffix, new long[] {r.firstWall, r.lastWall});
++            } else {
++                span[0] = Math.min(span[0], r.firstWall);
++                span[1] = Math.max(span[1], r.lastWall);
++            }
++            if (!s.ownerId.equals("-")) {
++                Set<String> o = ownersByPkg.get(r.pkg);
++                if (o == null) {
++                    o = new HashSet<>();
++                    ownersByPkg.put(r.pkg, o);
++                }
++                o.add(s.ownerId);
++            }
++        }
++        List<String> pkgs = new ArrayList<>(keysByPkg.keySet());
++        Collections.sort(pkgs);
++        List<Link> out = new ArrayList<>();
++        for (int i = 0; i < pkgs.size(); i++) {
++            for (int j = i + 1; j < pkgs.size(); j++) {
++                String a = pkgs.get(i);
++                String b = pkgs.get(j);
++                Map<String, long[]> ka = keysByPkg.get(a);
++                Map<String, long[]> kb = keysByPkg.get(b);
++                TreeSet<String> shared = new TreeSet<>();
++                boolean stronger = false;
++                Set<String> sharedOwners = new HashSet<>();
++                for (Map.Entry<String, long[]> e : ka.entrySet()) {
++                    long[] sb = kb.get(e.getKey());
++                    if (sb == null) {
++                        continue;
++                    }
++                    shared.add(e.getKey());
++                    long[] sa = e.getValue();
++                    if (sa[0] - windowMs <= sb[1] && sb[0] - windowMs <= sa[1]) {
++                        stronger = true;
++                    }
++                    Classifier.Service s = c.lookup(e.getKey());
++                    if (s != null && !s.ownerId.equals("-")) {
++                        sharedOwners.add(s.ownerId);
++                    }
++                }
++                if (!shared.isEmpty()) {
++                    out.add(new Link(a, b, SHARED_COMPANY, new ArrayList<>(shared), stronger));
++                    continue;
++                }
++                // different services of the same owner
++                Set<String> oa = ownersByPkg.get(a);
++                Set<String> ob = ownersByPkg.get(b);
++                if (oa == null || ob == null) {
++                    continue;
++                }
++                TreeSet<String> same = new TreeSet<>();
++                for (String o : oa) {
++                    if (ob.contains(o) && !sharedOwners.contains(o)) {
++                        same.add(o);
++                    }
++                }
++                if (!same.isEmpty()) {
++                    out.add(new Link(a, b, SAME_OWNER, new ArrayList<>(same), false));
++                }
++            }
++        }
++        Collections.sort(out, new Comparator<Link>() {
++            @Override
++            public int compare(Link x, Link y) {
++                int d = Integer.compare(y.evidence.size(), x.evidence.size());
++                if (d != 0) {
++                    return d;
++                }
++                d = x.pkgA.compareTo(y.pkgA);
++                return d != 0 ? d : x.pkgB.compareTo(y.pkgB);
++            }
++        });
++        return out;
++    }
++
++    /**
++     * The documented relations that touch at least one owner that appears (a service owner of a
++     * contacted service, or the publisher of an installed app). The other end may be an owner that no
++     * app contacts: a parent or a merged company.
++     */
++    static List<Classifier.Relation> relevantRelations(Classifier c, Set<String> appearingOwners) {
++        List<Classifier.Relation> out = new ArrayList<>();
++        for (Classifier.Relation r : c.relations()) {
++            if (appearingOwners.contains(r.a) || appearingOwners.contains(r.b)) {
++                out.add(r);
++            }
++        }
++        return out;
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/RecentAnswers.java b/services/core/java/com/android/server/datamap/RecentAnswers.java
+new file mode 100644
+index 0000000..ec23626
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/RecentAnswers.java
+@@ -0,0 +1,35 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++import java.util.LinkedHashMap;
++import java.util.Map;
++
++/**
++ * The last DNS answers per app, so that a TCP connect to an address can be tied to the name the app
++ * asked for. Bounded; the oldest answer goes first.
++ */
++final class RecentAnswers {
++    private final LinkedHashMap<String, String> map;
++
++    RecentAnswers(final int max) {
++        map = new LinkedHashMap<String, String>(64, 0.75f, true) {
++            @Override
++            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
++                return size() > max;
++            }
++        };
++    }
++
++    synchronized void put(int uid, String ip, String host) {
++        map.put(uid + "|" + ip, host);
++    }
++
++    /** @return the host the app asked for that resolved to this address, or null. */
++    synchronized String get(int uid, String ip) {
++        return map.get(uid + "|" + ip);
++    }
++
++    synchronized int size() {
++        return map.size();
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/ServiceKeys.java b/services/core/java/com/android/server/datamap/ServiceKeys.java
+new file mode 100644
+index 0000000..12a8f4e
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/ServiceKeys.java
+@@ -0,0 +1,62 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++/**
++ * The unit of aggregation: a service key. It is the classifier suffix when the classifier knows the
++ * host, otherwise the registrable domain by a small built-in list of two-level suffixes (a heuristic;
++ * a public suffix list replaces it when one is available under a compatible licence).
++ */
++final class ServiceKeys {
++    private static final String[] TWO_LEVEL = {
++        "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.jp", "co.kr",
++        "co.in", "co.nz", "com.br", "com.cn", "com.mx", "com.tr", "co.za", "com.sg", "com.hk"
++    };
++
++    private ServiceKeys() {}
++
++    /** @param host a name returned by {@link HostnameValidator#normalize}. */
++    static String keyFor(String host, Classifier classifier) {
++        if (classifier != null) {
++            Classifier.Service s = classifier.lookup(host);
++            if (s != null) {
++                return s.suffix;
++            }
++        }
++        return registrable(host);
++    }
++
++    static String registrable(String host) {
++        int last = host.lastIndexOf('.');
++        if (last < 0) {
++            return host;
++        }
++        int prev = host.lastIndexOf('.', last - 1);
++        if (prev < 0) {
++            return host;
++        }
++        String two = host.substring(prev + 1);
++        for (String t : TWO_LEVEL) {
++            if (two.equals(t)) {
++                int p2 = host.lastIndexOf('.', prev - 1);
++                return p2 < 0 ? host : host.substring(p2 + 1);
++            }
++        }
++        return two;
++    }
++
++    /** The key of a connection to an address with no earlier DNS answer; null if it is no address. */
++    static String ipKey(String ip) {
++        if (ip == null || ip.isEmpty() || ip.length() > 45) {
++            return null;
++        }
++        for (int i = 0; i < ip.length(); i++) {
++            char c = ip.charAt(i);
++            boolean ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
++                    || c == '.' || c == ':';
++            if (!ok) {
++                return null;
++            }
++        }
++        return "ip:" + ip.toLowerCase(java.util.Locale.ROOT);
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/UserSettings.java b/services/core/java/com/android/server/datamap/UserSettings.java
+new file mode 100644
+index 0000000..e367f6d
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/UserSettings.java
+@@ -0,0 +1,101 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++/**
++ * The choices of one user: whether names are collected, whether a history is kept and for how many
++ * days. The defaults write nothing: a file exists only while a choice differs from them.
++ */
++final class UserSettings {
++    static final int MIN_DAYS = 1;
++    static final int MAX_DAYS = 90;
++    static final int DEFAULT_DAYS = 30;
++
++    final boolean collecting;
++    final boolean history;
++    final int days;
++
++    UserSettings(boolean collecting, boolean history, int days) {
++        if (days < MIN_DAYS || days > MAX_DAYS) {
++            throw new IllegalArgumentException("days must be " + MIN_DAYS + " to " + MAX_DAYS);
++        }
++        this.collecting = collecting;
++        this.history = history;
++        this.days = days;
++    }
++
++    static UserSettings defaults() {
++        return new UserSettings(true, false, DEFAULT_DAYS);
++    }
++
++    boolean isDefault() {
++        return collecting && !history && days == DEFAULT_DAYS;
++    }
++
++    UserSettings withCollecting(boolean value) {
++        return new UserSettings(value, history, days);
++    }
++
++    UserSettings withHistory(boolean enabled, int newDays) {
++        return new UserSettings(collecting, enabled, newDays);
++    }
++
++    String encode() {
++        return "datamap-settings\t1\ncollecting\t" + (collecting ? 1 : 0) + "\nhistory\t"
++                + (history ? 1 : 0) + "\ndays\t" + days + "\n";
++    }
++
++    /** An unreadable or unknown file gives the defaults: it never stops the service. */
++    static UserSettings decode(String text) {
++        boolean collecting = true;
++        boolean history = false;
++        int days = DEFAULT_DAYS;
++        boolean header = false;
++        for (String line : text.split("\n", -1)) {
++            if (line.isEmpty()) {
++                continue;
++            }
++            String[] f = line.split("\t", -1);
++            if (!header) {
++                if (f.length != 2 || !f[0].equals("datamap-settings") || !f[1].equals("1")) {
++                    return defaults();
++                }
++                header = true;
++                continue;
++            }
++            if (f.length != 2) {
++                return defaults();
++            }
++            try {
++                switch (f[0]) {
++                    case "collecting":
++                        collecting = flag(f[1]);
++                        break;
++                    case "history":
++                        history = flag(f[1]);
++                        break;
++                    case "days":
++                        days = Integer.parseInt(f[1]);
++                        break;
++                    default:
++                        return defaults();
++                }
++            } catch (IllegalArgumentException e) {
++                return defaults();
++            }
++        }
++        if (!header || days < MIN_DAYS || days > MAX_DAYS) {
++            return defaults();
++        }
++        return new UserSettings(collecting, history, days);
++    }
++
++    private static boolean flag(String s) {
++        if (s.equals("1")) {
++            return true;
++        }
++        if (s.equals("0")) {
++            return false;
++        }
++        throw new IllegalArgumentException("not a flag");
++    }
++}
