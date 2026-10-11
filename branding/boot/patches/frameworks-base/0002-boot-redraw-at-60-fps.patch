@@ -1,0 +1,28 @@
+From 9e2711d084fb01b03a2f2b4f0f82895cc972052a Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 12:00:00 +0200
+Subject: [PATCH 2/3] sovereignos: redraw the boot picture at 60 fps (ADR-152)
+
+Unchanged from ADR-019. The loading bar moves at a fixed 4 px per redraw, so 12 fps would move it in 20 px steps.
+---
+ cmds/bootanimation/BootAnimation.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/cmds/bootanimation/BootAnimation.cpp b/cmds/bootanimation/BootAnimation.cpp
+index cd59c30..673b4b6 100644
+--- a/cmds/bootanimation/BootAnimation.cpp
++++ b/cmds/bootanimation/BootAnimation.cpp
+@@ -840,8 +840,8 @@ bool BootAnimation::android(const Display& display) {
+         if (res == EGL_FALSE)
+             break;
+ 
+-        // 12fps: don't animate too fast to preserve CPU
+-        const nsecs_t sleepTime = 83333 - ns2us(systemTime() - now);
++        // 60fps: don't animate too fast to preserve CPU
++        const nsecs_t sleepTime = 16667 - ns2us(systemTime() - now);
+         if (sleepTime > 0)
+             usleep(sleepTime);
+ 
+-- 
+2.56.0
+

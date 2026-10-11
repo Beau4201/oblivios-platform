@@ -1,67 +1,60 @@
-# SovereignOS boot identity
+# SovereignOS boot picture
 
-This package implements Superdesign draft
-`05aa247d-7776-4385-83f0-0f01238729be` for GrapheneOS's built-in,
-low-overhead boot renderer.
+The lighthouse boot picture of the built-in boot renderer (ADR-152, which
+supersedes ADR-019). Design:
+`sovereignos-foundation/docs/superpowers/specs/2026-10-11-boot-picture-design.md`;
+visual reference: `sovereignos-foundation/docs/design/lighthouse-2026-10-10.html`.
 
-## Boundary
+## What it is
 
-Do not apply this package to a Phase 1 baseline tree without a corresponding
-ADR in `sovereignos-foundation/docs/governance/decision-log.md` naming this exact
-patch set (`sovereignos-platform/AGENTS.md`'s hard rule). The Phase 1 baseline
-itself is `Accepted (Task 5 waived)` per ADR-018 — that gate alone is not a
-substitute for the per-patch ADR.
+`BootAnimation::android()` in `frameworks/base` (`cmds/bootanimation/BootAnimation.cpp`)
+draws two textures: a static mask, centred on the display, over a texture that
+scrolls horizontally at a constant 240 px/s. This package replaces both PNGs
+and the clear colour:
 
-## Generate
+| File | Size | Texture memory | Content |
+| --- | --- | --- | --- |
+| `core/res/assets/images/android-logo-mask.png` | 1080 x 2400 | 10.4 MB | The whole picture: sky, lighthouse with two beams, island, still water, the name. A 260 x 5 window at (410, 2152) is transparent. |
+| `core/res/assets/images/android-logo-shine.png` | 720 x 2160 | 6.2 MB | The loading bar behind the window: a dark track with one mint segment. |
+
+The PNG names are fixed by the renderer; the content is original artwork.
+
+## Rules the renderer imposes
+
+- The scrolling texture is drawn twice, side by side, from the mask's top left
+  minus an offset. It must be at least as wide as the window's right edge
+  (670 px), or part of the bar is blank in every pass.
+  `tests/test_boot_assets.sh` simulates the renderer and fails otherwise.
+- It is drawn from the mask's top, so it must reach the window: 2160 rows.
+- Scrolling is linear at 240 px/s: the segment crosses the 260 px window in
+  about 1.5 s and the pattern repeats every 3.0 s. Eased motion is not possible.
+- A display taller than 2400 px shows the clear colour above and below the
+  mask. The mask's top and bottom rows are `#030706`, the clear colour set by
+  patch `0001`, so no seam shows.
+
+## Generate and test
 
 ```sh
-branding/boot/tools/generate_boot_assets.sh /tmp/sovereignos-boot-assets
+branding/boot/tools/generate_boot_assets.sh /tmp/boot-assets
 branding/boot/tests/test_boot_assets.sh
 ```
 
-The generated files replace:
+Needs `rsvg-convert`, ImageMagick 7 (`magick`, `identify`) and `sha256sum`.
+The SVGs in `source/` are the committed truth; `tools/make_sources.py`
+documents how they were derived and is not part of the build.
 
-- `core/res/assets/images/android-logo-mask.png`
-- `core/res/assets/images/android-logo-shine.png`
+The mask carries up to 0.75 of one 8-bit level of noise in the colour channels
+(never alpha) to break up banding in the dark gradients. The noise is a pure
+function of the pixel position, so the output is byte-identical on every run.
 
-Apply both patches from the `frameworks/base` repository root:
-`patches/frameworks-base-boot-background.patch` (clear color) and
-`patches/frameworks-base-boot-framerate.patch` (redraw cap, see below).
+## Patches
 
-## Design mapping
+`patches/frameworks-base/0001` to `0003`, to be applied in order with `git am`
+on the stock GrapheneOS files; see `SOURCE.md` for the bases, the landing and
+what each patch changes.
 
-Android centers the 448x800 mask on the display. On the approved 1080x2400
-target this maps the mask origin to `(316, 800)`, preserving:
+## Not done
 
-- shield: `(360, 921)`, `360x410`;
-- wordmark line box: top `1379`, `100px`;
-- loading track: `(400, 1564)`, `280x6`.
-
-The moving texture repeats every 384 pixels. Verified directly against
-`BootAnimation::android()` in the real (unmodified) GrapheneOS source: the
-renderer's position formula (`t = 4.0f * (time/16.667ms) / shine.width`)
-resolves to a constant 240 pixels per second regardless of texture width —
-this is hardcoded, not an asset parameter, so the bar recurs every 1.6
-seconds and cannot be changed from this package. The approved Superdesign
-draft's single sweeping bar uses `cubic-bezier(0.4, 0, 0.2, 1)` easing over
-a fixed 280px track; the renderer's position math is linear in wall-clock
-time with no easing at all, and structurally cannot reproduce a
-non-repeating, clipped, eased sweep — only a constant-speed repeating
-texture. That gap is accepted, not solved, by this package: linear texture
-motion approximates the cubic easing to avoid a much larger C++ patch
-(dynamic per-frame geometry, edge clipping, and an easing-curve evaluator
-in the earliest boot path, before ADB or most safety nets exist).
-
-`patches/frameworks-base-boot-framerate.patch` raises the stock redraw cap
-from 12&nbsp;fps to 60&nbsp;fps (`sleepTime` constant `83333`us &rarr;
-`16667`us — reusing the same 60Hz tick already used elsewhere in this
-function). This does not change the 240px/s motion itself, only how often
-it's resampled; owner-selected over an uncapped redraw to bound the
-extra CPU/battery/thermal cost this adds to every single boot.
-
-## Typography provenance
-
-The wordmark paths were derived from Plus Jakarta Sans weights 500 and 600 from
-the Google Fonts repository. The typeface is licensed under the SIL Open Font
-License 1.1. No font file or runtime font dependency is required by these boot
-assets.
+Boot time, memory, CPU, heat and banding are not measured on a device;
+marks and scene are not checked against existing logos or trademarks.
+See the `BOOT-*` rows of the validation matrix.

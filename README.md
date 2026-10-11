@@ -6,9 +6,9 @@ and device logs do not belong in this repository.
 
 ## Current packages
 
-- [`branding/boot`](branding/boot/README.md) — SovereignOS boot identity,
-  reproducible assets and the `frameworks/base` background/framerate
-  patches (ADR-019).
+- [`branding/boot`](branding/boot/README.md) — the SovereignOS lighthouse boot
+  picture: reproducible textures and three `frameworks/base` patches
+  (ADR-152, superseding ADR-019).
 - [`credential/duress-unlock-dummy`](credential/duress-unlock-dummy/README.md) —
   Duress Unlock Stage 1: the cost-symmetric dummy-credential-check
   primitive (ADR-040).

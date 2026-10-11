@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="2160" viewBox="0 0 720 2160">
+<title>SovereignOS boot picture: loading texture</title>
+<desc>Repeats every 720 px; the renderer scrolls it at a fixed 240 px/s (one pass every 3.0 s). Only the rows behind the mask window matter.</desc>
+<defs><linearGradient id="seg"><stop offset="0" stop-color="#4FD1B0" stop-opacity="0"/><stop offset=".35" stop-color="#4FD1B0" stop-opacity=".9"/><stop offset=".65" stop-color="#4FD1B0" stop-opacity=".9"/><stop offset="1" stop-color="#4FD1B0" stop-opacity="0"/></linearGradient></defs>
+<rect width="720" height="2160" fill="#030706"/>
+<rect y="2146" width="720" height="17" fill="#1A3B35"/>
+<rect x="305" y="2146" width="110" height="17" fill="url(#seg)"/>
+</svg>
