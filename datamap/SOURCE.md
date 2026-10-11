@@ -125,4 +125,10 @@ The third build exited 0 with no failed step. Checked in the output, not from th
 - `plat_sepolicy.cil` contains the new type and domain (48 mentions), `plat_service_contexts` the `datamap` entry, `plat_seapp_contexts` the app entry. The policy compile, with its neverallow checks, passed.
 - `services.jar` holds all 13 classes of `com.android.server.datamap` (found in `classes.dex`).
 
-Still open: the privapp and sysconfig files are built but ship only with patch `vendor-adevtool/0002` (not landed); nothing has run on a device.
+Still open: nothing has run on a device.
+
+## Shipping the app (Task 10)
+
+2026-10-12, no build running, tree clean: `vendor/adevtool` patch 0002 landed as `0d91ffbe` (`device-common.mk` blob `1992526` identical to the worktree commit). The pins of `lynx` and `stallion` name `0d91ffbe2cef3de1ccbbf92ef43c2ed1811871...` (full hash in the file); the previous files are kept as `adevtool-version-check.mk.pre-datamap-app`. `vendor/sovereignos/datamap` holds the finished app and the classifier with its data (`f5d3628`, 48 files, `sha256sum` identical to the package; the `data/`, `tests/` and `tools/` directories are not deployed).
+
+The package gate `tools/build-vm/check-required-packages.sh` (foundation repository) now requires `DataMapApp.apk`, both system files and `datamap/classifier.tsv`. The live copy was identical to the repository version before the change, was replaced (old file kept as `.pre-datamap`) and its `sha256` equals the repository's. Run against the previous `lynx` output it prints the four `MISSING:` lines and exits 1; it will pass only for an image built with patch 0002.
