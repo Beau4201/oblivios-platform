@@ -17,12 +17,12 @@ W=$(mktemp -d)
 datamap/service/tools/materialize-core.sh $W
 datamap/service/tools/run-host-checks.sh $W | tail -2
 python3 datamap/service/tools/run-mutations.py $W | tail -1
-(cd datamap/app && LAND_BIN=res/raw/land.bin tools/run-host-checks.sh | tail -1 && python3 tools/run-mutations.py | tail -1 && tools/check-resources.py && tools/check-static.sh)
+(cd datamap/app && LAND_BIN=res/raw/land.bin tools/run-host-checks.sh | tail -1 && python3 tools/run-mutations.py | tail -1 && python3 -I tests/logos_mutations.py | tail -1 && tools/check-resources.py && tools/check-static.sh)
 datamap/classifier/tests/run-builder-checks.sh $W | tail -1
 python3 datamap/classifier/tests/run-builder-mutations.py $W | tail -1
 ```
 
-Expected: `all host checks passed`, `29 of 29 mutations killed`, `all app host checks passed`, `41 of 41 mutations killed`, `static checks passed`, `all builder checks passed`, `3 of 3 mutations killed`.
+Expected: `all host checks passed`, `39 of 39 mutations killed`, `all app host checks passed` (this includes the logo tool checks), `96 of 96 mutations killed`, `44 of 44 mutations killed` (the logo tool), `static checks passed`, `all builder checks passed`, `11 of 11 mutations killed`.
 
 ## Type-check on the build server (changes nothing in the tree)
 

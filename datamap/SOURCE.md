@@ -145,3 +145,19 @@ Checked in the output, not from the exit code:
 - Trees at the build: `frameworks/base` `e53353ced37f`, `system/sepolicy` `fd1b880f3`, `vendor/adevtool` `0d91ffbe`, `vendor/sovereignos/datamap` `f5d3628`, all clean.
 
 Not yet seen: any behaviour on a device (plan Task 12).
+
+## Redesign (ADR-159)
+
+Branch `datamap-redesign`, 2026-10-12, from `f330414`. Nothing is built; the first image ran on `lynx` and its results are in the validation matrix.
+
+Commits: runners and land checks `02b6f5a`; local names `2f155ff`; relation wording `8e3ca4d`; "Keep for" `b79a83c`; limb, start view and logo pick `ada7917`; land bounds and layout `68d516d`; logo tool `45ab3dc`; resources `1c50716`; themed icons `da49c21`; text, Settings and logos in lists `8fa4217`; activity `e903f68`; globe `de01b0f`; land file `3187980`; logo tool command line `951f6ce`; logos `7a3cfb3`. The history change (patch `frameworks-base/0009`) is written, checked on the host and type-checked on the server, and is not yet landed: its `git am` was refused by the tooling and waits for the owner.
+
+Facts the tasks found:
+- The app mutation runner copied only `src/` and `tests/`, so the unmutated copy failed too and every mutation was reported as killed; the service runner counted a mutation that does not compile as killed. Both are fixed (Task 1); the land reader's limits (`MAX_SHAPES`, three points per ring) had no check and have one.
+- `res/raw/land.bin` had no recorded origin. It is now built from Natural Earth `v5.1.2` at 1:50 million with no simplification (1512 shapes, 93166 points, 378743 bytes), recorded in `datamap/app/SOURCES.md` and `NOTICE`.
+- `import-logos.py add` refused a call with a note (it accepted 9 or 10 arguments, the call has 10 or 11); found while adding the logos, fixed with a test that failed first.
+- Logos: 42 of 309 companies, all from Simple Icons 16.33.0 (CC0-1.0). Google has one, PubMatic has none. Of 61 Wikimedia Commons files whose page states a public domain licence, 34 were fetched and every one was refused by the path-only svg check, and 27 were not fetched because of a rate limit; the check was not relaxed.
+- Themed icons follow the launcher's colours and construction, not its choice of themed icons: the launcher keeps that choice private (spec C24, decision D4).
+- The run of `run-builder-mutations.py` kills 11 of 11; the earlier figure of 3 in this file and in the plan is out of date.
+
+Results of the full run (2026-10-12): `all host checks passed`; `39 of 39 mutations killed`; `all app host checks passed`; `96 of 96 mutations killed`; `44 of 44 mutations killed`; `static checks passed`; `logo checks passed: 42 logos`; `all builder checks passed`; `11 of 11 mutations killed`; `app type-check passed: 35 files` (four known deprecation warnings only).
