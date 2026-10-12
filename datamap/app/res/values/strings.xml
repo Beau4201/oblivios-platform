@@ -18,14 +18,10 @@
 
     <string name="tracker_short">Tracker</string>
     <string name="not_on_map">Not on the map</string>
-    <string name="not_on_map_explained">Services with no known owner, or an owner with no single place (a content network), are listed here and are given no place.</string>
     <string name="not_contacted_directly">Not contacted directly</string>
     <string name="unknown_service">Unknown service</string>
     <string name="owner_unknown">Unknown owner</string>
 
-    <string name="app_totals">%1$d contacts: %2$d in the foreground, %3$d in the background</string>
-    <string name="app_span">First seen %1$s, last seen %2$s</string>
-    <string name="app_not_on_map">Its publisher is not in the classifier file, so it has no place on the map.</string>
     <string name="contacted">Contacted</string>
     <string name="contact_counts">%1$d times (%2$d in the foreground, %3$d in the background)</string>
 
@@ -38,34 +34,23 @@
     <string name="rel_partner_of">partner of</string>
     <string name="rel_buys_ad_space_from">buys advertising space from</string>
     <string name="rel_connected">connected</string>
-    <string name="rel_reverse">%1$s this company</string>
     <string name="show_on_map">Show on map</string>
-    <string name="apps_reach">%1$d apps reached %2$d companies in %3$d countries since the phone started.</string>
-    <string name="most_companies_first">Most companies first</string>
-    <string name="companies_met">%1$d companies met by your apps, in %2$d countries.</string>
     <string name="met_by_several">Met by several apps</string>
     <string name="met_by_one">Met by one app</string>
     <string name="standing_behind">Standing behind another</string>
     <string name="behind">behind</string>
-    <string name="connected_explained">Documented connections between the companies behind your apps. Each has a source.</string>
-    <string name="links_explained">Apps that talk to the same company. That company could connect them. Whether it does is not visible from the phone.</string>
-    <string name="group_here">Based close together on the map.</string>
     <string name="app_publisher_line">%1$s · %2$s</string>
     <string name="in_background">in the background</string>
     <string name="calls">calls</string>
     <string name="could_be_linked_to">Could be linked to</string>
     <string name="could_be_linked_through">Could be linked through it</string>
-    <string name="linked_through_many">%1$s all talk to %2$s, which could connect them. What it holds is not visible from the phone.</string>
-    <string name="the_two_companies">The two companies</string>
+    <string name="linked_through_two">%1$s both talk to %2$s, which could connect them.</string>
+    <string name="linked_through_many">%1$s all talk to %2$s, which could connect them.</string>
     <string name="source_id">Source %1$s</string>
-    <string name="relation_explained">A connection is shown only when it is documented, and each one carries a source. A connection that is not shown is not known; it is not proof that there is none.</string>
-    <string name="company_base">Company base</string>
-    <string name="company_base_law">%1$s. The laws of this country govern what the company holds. This is where the company is based, not where its servers are.</string>
-    <string name="relations_note">Connections come from the public sources named in the classifier file. A connection that is not listed is not known.</string>
     <string name="no_relations">No documented connections between the companies seen.</string>
 
     <string name="could_be_linked">Apps that could be linked</string>
-    <string name="no_links">No two apps have contacted the same company that is known to track, or companies of the same owner.</string>
+    <string name="no_links">No apps could be linked.</string>
     <string name="link_same_service">Could be linked: both contacted %1$s.</string>
     <string name="link_same_owner">Could be linked: services of the same company (%1$s).</string>
     <string name="link_stronger">Within five minutes of each other.</string>
@@ -75,13 +60,30 @@
     <string name="history">Keep a history on this phone</string>
     <string name="history_summary">Daily totals, encrypted, for the days you choose</string>
     <string name="history_days">Keep for</string>
-    <string name="history_explained">With the history off nothing is written to this phone and the lists are cleared when the phone restarts. With it on, one file of daily totals is kept for the chosen days. Events are never kept.</string>
+    <string name="about">About</string>
+    <string name="summary_counts">%1$s · %2$s · %3$s</string>
     <string name="clear">Delete everything collected</string>
     <string name="clear_confirm">Delete the names and counts collected for this user, in memory and on this phone?</string>
-    <string name="cannot_see">What this screen cannot see</string>
     <string name="data_sources">Company data: AdGuard Companies DB (CC BY-SA 4.0, built on whotracks.me, CC BY 4.0) and Wikidata (CC0), with facts from company filings. See NOTICE in the classifier.</string>
     <string name="blind_spots">Not seen: apps that look up names themselves (DNS over HTTPS inside the app), connections to a fixed address over UDP, and traffic that needs no lookup of its own. An app that is not listed may still be talking.</string>
     <string name="not_listed_not_proof">A connection that is not listed is not known. That is not proof that there is none.</string>
+
+    <!-- What a company is to the one whose page it is, in the order of RelationRole.typeIndex: owns, merged with,
+         partner of, buys advertising space from, anything else. -->
+    <string-array name="rel_as_subject">
+        <item>Owns this company</item>
+        <item>Merged with this company</item>
+        <item>Partner of this company</item>
+        <item>Buys advertising space from this company</item>
+        <item>Connected to this company</item>
+    </string-array>
+    <string-array name="rel_as_object">
+        <item>Owned by this company</item>
+        <item>Merged with this company</item>
+        <item>Partner of this company</item>
+        <item>Sells advertising space to this company</item>
+        <item>Connected to this company</item>
+    </string-array>
 
     <string-array name="categories">
         <item>Unknown</item>
@@ -101,6 +103,10 @@
     <plurals name="n_companies">
         <item quantity="one">%d company</item>
         <item quantity="other">%d companies</item>
+    </plurals>
+    <plurals name="n_countries">
+        <item quantity="one">%d country</item>
+        <item quantity="other">%d countries</item>
     </plurals>
     <plurals name="n_companies_label">
         <item quantity="one">company</item>

@@ -102,8 +102,24 @@ final class Ui {
         return v;
     }
 
-    View companyTile(String name, int sizeDp) {
-        return initialsTile(name, true, sizeDp);
+    /** A company: its logo on a round light backing, or its initials when no logo is shipped for it (ADR-159). */
+    View companyTile(String ownerId, String name, int sizeDp) {
+        Drawable logo = Logos.of(ctx, ownerId);
+        if (logo == null) {
+            return initialsTile(name, true, sizeDp);
+        }
+        ImageView v = new ImageView(ctx);
+        v.setImageDrawable(logo);
+        v.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int pad = dp(sizeDp * 0.22f);
+        v.setPadding(pad, pad, pad, pad);
+        GradientDrawable backing = new GradientDrawable();
+        backing.setShape(GradientDrawable.OVAL);
+        backing.setColor(color(R.color.dm_logo_bg));
+        v.setBackground(backing);
+        v.setContentDescription(name);
+        v.setLayoutParams(new LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp)));
+        return v;
     }
 
     ImageView flag(String countryCode) {
@@ -173,11 +189,19 @@ final class Ui {
         tx.setOrientation(LinearLayout.VERTICAL);
         tx.addView(text(title, 16, true, R.color.dm_on));
         if (summary != null && summary.length() > 0) {
-            tx.addView(text(summary, 14, false, R.color.dm_onv));
+            TextView s = text(summary, 14, false, R.color.dm_onv);
+            s.setMaxLines(2);
+            s.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            tx.addView(s);
         }
         row.addView(tx, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         if (end != null && end.length() > 0) {
-            row.addView(text(end, 14, false, R.color.dm_onv));
+            TextView e = text(end, 14, false, R.color.dm_onv);
+            e.setSingleLine(true);
+            LinearLayout.LayoutParams ep = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            ep.setMarginStart(dp(12));
+            row.addView(e, ep);
         }
         if (onClick != null) {
             row.setOnClickListener(onClick);

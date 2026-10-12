@@ -9,6 +9,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.sovereignos.datamap.model.MapModel;
+import org.sovereignos.datamap.model.RelationRole;
 
 import java.util.Map;
 
@@ -131,9 +132,15 @@ final class Screens {
         return l;
     }
 
-    private View title(int stringRes) {
-        TextView t = mUi.text(mUi.ctx.getString(stringRes), 36, false, R.color.dm_on);
-        t.setPadding(mUi.dp(24), mUi.dp(64), mUi.dp(24), mUi.dp(8));
+    /** One line of counts at the top of a list: "4 apps · 1 company · 1 country". */
+    private View counts(int apps, int companies, int countries) {
+        android.content.res.Resources r = mUi.ctx.getResources();
+        String s = mUi.ctx.getString(R.string.summary_counts,
+                r.getQuantityString(R.plurals.n_apps, apps, apps),
+                r.getQuantityString(R.plurals.n_companies, companies, companies),
+                r.getQuantityString(R.plurals.n_countries, countries, countries));
+        TextView t = mUi.text(s, 14, false, R.color.dm_onv);
+        t.setPadding(mUi.dp(24), mUi.dp(8), mUi.dp(24), mUi.dp(8));
         return t;
     }
 
@@ -141,7 +148,6 @@ final class Screens {
 
     View appsPage() {
         LinearLayout p = page();
-        p.addView(title(R.string.tab_apps));
         if (mModel.apps.isEmpty()) {
             p.addView(mUi.para(mUi.ctx.getString(R.string.empty_nothing)));
         } else {
@@ -153,9 +159,7 @@ final class Screens {
                     countries.add(c.owner.countryCode);
                 }
             }
-            p.addView(mUi.para(mUi.ctx.getString(R.string.apps_reach, mModel.apps.size(), met.size(),
-                    countries.size())));
-            p.addView(mUi.label(mUi.ctx.getString(R.string.most_companies_first)));
+            p.addView(counts(mModel.apps.size(), met.size(), countries.size()));
             java.util.List<MapModel.AppRow> byCompanies = new java.util.ArrayList<>(mModel.apps);
             java.util.Collections.sort(byCompanies, (x, y) -> y.companies - x.companies);
             Ui.Group g = new Ui.Group(mUi);
@@ -163,9 +167,6 @@ final class Screens {
                 StringBuilder s = new StringBuilder(mUi.ctx.getResources().getQuantityString(
                         R.plurals.n_companies, a.companies, a.companies));
                 s.append(" · ").append(ago(a.lastWall));
-                if (!a.onMap) {
-                    s.append(" · ").append(mUi.ctx.getString(R.string.not_on_map));
-                }
                 final String pkg = a.pkg;
                 g.add(mUi.row(mUi.appTile(mApps, pkg, 40), mApps.label(pkg), s.toString(),
                         a.touchesTracker ? mUi.ctx.getString(R.string.tracker_short) : "",
@@ -173,7 +174,6 @@ final class Screens {
             }
             p.addView(g.seal().view);
         }
-        p.addView(mUi.note(mUi.ctx.getString(R.string.blind_spots)));
         return p;
     }
 
@@ -215,11 +215,6 @@ final class Screens {
                 new String[] {mUi.ctx.getResources().getQuantityString(R.plurals.n_companies_label, a.companies),
                         mUi.ctx.getResources().getQuantityString(R.plurals.n_countries_label, countries.size()),
                         mUi.ctx.getString(R.string.in_background)}));
-        p.addView(mUi.para(mUi.ctx.getString(R.string.app_totals, a.count, a.foreground, a.background)));
-        p.addView(mUi.para(mUi.ctx.getString(R.string.app_span, ago(a.firstWall), ago(a.lastWall))));
-        if (!a.onMap) {
-            p.addView(mUi.para(mUi.ctx.getString(R.string.app_not_on_map)));
-        }
         p.addView(mUi.label(mUi.ctx.getString(R.string.contacted)));
         Ui.Group g = new Ui.Group(mUi);
         for (MapModel.Contact c : a.contacts) {
@@ -229,7 +224,7 @@ final class Screens {
                     + mUi.ctx.getString(R.string.contact_counts, c.count, c.foreground, c.background) + " · "
                     + ago(c.lastWall);
             final String id = c.ownerId;
-            g.add(mUi.row(known ? mUi.companyTile(owner, 40) : mUi.initialsTile("?", true, 40),
+            g.add(mUi.row(known ? mUi.companyTile(c.ownerId, owner, 40) : mUi.initialsTile("?", true, 40),
                     c.serviceKey.startsWith("ip:") ? mUi.ctx.getString(R.string.unknown_service) : c.serviceKey,
                     summary, "", known ? v -> mNav.openCompany(id) : null));
         }
@@ -256,7 +251,6 @@ final class Screens {
             p.addView(mUi.label(mUi.ctx.getString(R.string.could_be_linked_to)));
             p.addView(linked.seal().view);
         }
-        p.addView(mUi.note(mUi.ctx.getString(R.string.not_listed_not_proof)));
         return p;
     }
 
@@ -264,7 +258,6 @@ final class Screens {
 
     View companiesPage() {
         LinearLayout p = page();
-        p.addView(title(R.string.tab_companies));
         if (mModel.companies.isEmpty() && mModel.unplacedServices.isEmpty()) {
             p.addView(mUi.para(mUi.ctx.getString(R.string.empty_nothing)));
             return p;
@@ -284,14 +277,12 @@ final class Screens {
                 countries.add(c.owner.countryCode);
             }
         }
-        p.addView(mUi.para(mUi.ctx.getString(R.string.companies_met, several.size() + one.size(),
-                countries.size())));
+        p.addView(counts(mModel.apps.size(), several.size() + one.size(), countries.size()));
         companyGroup(p, R.string.met_by_several, several);
         companyGroup(p, R.string.met_by_one, one);
         companyGroup(p, R.string.standing_behind, behind);
         if (!mModel.unplacedServices.isEmpty()) {
             p.addView(mUi.label(mUi.ctx.getString(R.string.not_on_map)));
-            p.addView(mUi.para(mUi.ctx.getString(R.string.not_on_map_explained)));
             Ui.Group u = new Ui.Group(mUi);
             for (MapModel.UnplacedService s : mModel.unplacedServices) {
                 u.add(mUi.row(mUi.initialsTile("?", true, 40),
@@ -316,7 +307,7 @@ final class Screens {
             String end = c.contacted
                     ? mUi.ctx.getResources().getQuantityString(R.plurals.n_apps, c.apps.size(), c.apps.size())
                     : mUi.ctx.getString(R.string.behind);
-            g.add(mUi.row(mUi.companyTile(c.owner.name, 40), c.owner.name, where, end, v -> mNav.openCompany(id)));
+            g.add(mUi.row(mUi.companyTile(id, c.owner.name, 40), c.owner.name, where, end, v -> mNav.openCompany(id)));
         }
         page.addView(g.seal().view);
     }
@@ -346,11 +337,11 @@ final class Screens {
             }
         }
         if (o == null) {
-            p.addView(head(mUi.companyTile(ownerId, 56), ownerId, "", topDp));
+            p.addView(head(mUi.companyTile(ownerId, ownerId, 56), ownerId, "", topDp));
             return p;
         }
         String legal = !o.legalName.isEmpty() && !o.legalName.equals(o.name) ? o.legalName : "";
-        p.addView(head(mUi.companyTile(o.name, 56), o.name, legal, topDp));
+        p.addView(head(mUi.companyTile(o.id, o.name, 56), o.name, legal, topDp));
         LinearLayout meta = new LinearLayout(mUi.ctx);
         meta.setGravity(android.view.Gravity.CENTER_VERTICAL);
         meta.setPadding(mUi.dp(24), mUi.dp(10), mUi.dp(24), 0);
@@ -391,15 +382,17 @@ final class Screens {
             p.addView(mUi.label(mUi.ctx.getString(R.string.connected_companies)));
             Ui.Group g = new Ui.Group(mUi);
             for (MapModel.Relation r : mModel.relations) {
-                String other = r.ownerA.equals(ownerId) ? r.ownerB : r.ownerB.equals(ownerId) ? r.ownerA : null;
-                if (other == null) {
+                final String id = RelationRole.other(ownerId, r);
+                if (id == null) {
                     continue;
                 }
-                final String id = other;
-                String what = r.ownerA.equals(ownerId) ? relation(r.type) : mUi.ctx.getString(R.string.rel_reverse,
-                        relation(r.type));
+                // The words are said of the other company: it "owns this company" or it "is owned by" it.
+                String[] words = mUi.ctx.getResources().getStringArray(
+                        RelationRole.of(ownerId, r) == RelationRole.SUBJECT ? R.array.rel_as_subject
+                                : R.array.rel_as_object);
+                String what = words[RelationRole.typeIndex(r.type)];
                 String note = r.note.isEmpty() ? "" : " · " + r.note;
-                g.add(mUi.row(mUi.companyTile(ownerName(other), 40), ownerName(other), what + note,
+                g.add(mUi.row(mUi.companyTile(id, ownerName(id), 40), ownerName(id), what + note,
                         "", v -> mNav.openCompany(id)));
             }
             p.addView(g.seal().view);
@@ -413,7 +406,8 @@ final class Screens {
                 }
                 names.append(mApps.label(pkg));
             }
-            p.addView(mUi.para(mUi.ctx.getString(R.string.linked_through_many, names.toString(), o.name)));
+            p.addView(mUi.para(mUi.ctx.getString(row.apps.size() == 2 ? R.string.linked_through_two
+                    : R.string.linked_through_many, names.toString(), o.name)));
         }
         if (row != null && !row.services.isEmpty()) {
             p.addView(mUi.label(mUi.ctx.getString(R.string.services)));
@@ -423,9 +417,6 @@ final class Screens {
             }
             p.addView(g.seal().view);
         }
-        p.addView(mUi.label(mUi.ctx.getString(R.string.company_base)));
-        p.addView(mUi.para(mUi.ctx.getString(R.string.company_base_law, countryName(o.countryCode))));
-        p.addView(mUi.note(mUi.ctx.getString(R.string.relations_note)));
         return p;
     }
 
@@ -442,7 +433,7 @@ final class Screens {
         LinearLayout tiles = new LinearLayout(mUi.ctx);
         tiles.setPadding(mUi.dp(24), mUi.dp(topDp), mUi.dp(24), 0);
         for (String id : new String[] {r.ownerA, r.ownerB}) {
-            View t = mUi.companyTile(ownerName(id), 56);
+            View t = mUi.companyTile(id, ownerName(id), 56);
             LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(t.getLayoutParams());
             tp.setMarginEnd(mUi.dp(8));
             t.setLayoutParams(tp);
@@ -455,15 +446,14 @@ final class Screens {
         p.addView(name);
         p.addView(mUi.para((r.note.isEmpty() ? "" : r.note + " · ")
                 + mUi.ctx.getString(R.string.source_id, r.sourceId)));
-        p.addView(mUi.label(mUi.ctx.getString(R.string.the_two_companies)));
         Ui.Group g = new Ui.Group(mUi);
         for (final String id : new String[] {r.ownerA, r.ownerB}) {
             MapModel.Owner o = mOwners.get(id);
-            g.add(mUi.row(mUi.companyTile(ownerName(id), 40), ownerName(id),
+            g.add(mUi.row(mUi.companyTile(id, ownerName(id), 40), ownerName(id),
                     o == null ? "" : o.city + ", " + o.countryCode, "", v -> mNav.openCompany(id)));
         }
+        p.addView(mUi.space(16));
         p.addView(g.seal().view);
-        p.addView(mUi.para(mUi.ctx.getString(R.string.relation_explained)));
         return p;
     }
 
@@ -474,7 +464,6 @@ final class Screens {
                 ownerIds.size(), ownerIds.size()), 24, false, R.color.dm_on);
         name.setPadding(mUi.dp(24), mUi.dp(topDp), mUi.dp(24), mUi.dp(4));
         p.addView(name);
-        p.addView(mUi.para(mUi.ctx.getString(R.string.group_here)));
         Ui.Group g = new Ui.Group(mUi);
         for (final String id : ownerIds) {
             String summary = "";
@@ -483,7 +472,7 @@ final class Screens {
                     summary = c.contacted ? category(c.category) : mUi.ctx.getString(R.string.not_contacted_directly);
                 }
             }
-            g.add(mUi.row(mUi.companyTile(ownerName(id), 40), ownerName(id), summary, "", v -> mNav.openCompany(id)));
+            g.add(mUi.row(mUi.companyTile(id, ownerName(id), 40), ownerName(id), summary, "", v -> mNav.openCompany(id)));
         }
         p.addView(g.seal().view);
         return p;
@@ -493,9 +482,7 @@ final class Screens {
 
     View linksPage() {
         LinearLayout p = page();
-        p.addView(title(R.string.tab_links));
         p.addView(mUi.label(mUi.ctx.getString(R.string.connected_companies)));
-        p.addView(mUi.para(mUi.ctx.getString(R.string.connected_explained)));
         if (mModel.relations.isEmpty()) {
             p.addView(mUi.para(mUi.ctx.getString(R.string.no_relations)));
         } else {
@@ -503,14 +490,13 @@ final class Screens {
             for (MapModel.Relation r : mModel.relations) {
                 final String a = r.ownerA;
                 String note = r.note.isEmpty() ? "" : " · " + r.note;
-                g.add(mUi.row(mUi.companyTile(ownerName(a), 40),
+                g.add(mUi.row(mUi.companyTile(a, ownerName(a), 40),
                         ownerName(a) + " " + relation(r.type) + " " + ownerName(r.ownerB),
                         mUi.ctx.getString(R.string.source_id, r.sourceId) + note, "", v -> mNav.openCompany(a)));
             }
             p.addView(g.seal().view);
         }
         p.addView(mUi.label(mUi.ctx.getString(R.string.could_be_linked)));
-        p.addView(mUi.para(mUi.ctx.getString(R.string.links_explained)));
         if (mModel.links.isEmpty()) {
             p.addView(mUi.para(mUi.ctx.getString(R.string.no_links)));
         } else {

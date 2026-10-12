@@ -2,17 +2,19 @@
 package org.sovereignos.datamap;
 
 import android.app.AlertDialog;
+import android.view.Gravity;
 import android.view.View;
-import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.LinearLayout;
-import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
 
+import org.sovereignos.datamap.model.KeepFor;
+
 /**
  * The choices of the owner: whether anything is collected, whether a history is kept on this phone and for
- * how many days, and the deletion of everything collected. Each change goes to the service at once.
+ * how long, and the deletion of everything collected. Each change goes to the service at once. The page has
+ * no title of its own: it opens under the back arrow of the activity.
  */
 final class SettingsScreen {
     /** What the screen asks of the service; implemented by the activity, which runs it off the main thread. */
@@ -23,9 +25,6 @@ final class SettingsScreen {
 
         void clear();
     }
-
-    private static final int MIN_DAYS = 1;
-    private static final int MAX_DAYS = 90;
 
     private final Ui mUi;
     private final Actions mActions;
@@ -38,9 +37,10 @@ final class SettingsScreen {
     View build(boolean collecting, boolean historyOn, int historyDays, int invalidCount) {
         final LinearLayout p = new LinearLayout(mUi.ctx);
         p.setOrientation(LinearLayout.VERTICAL);
-        TextView title = mUi.text(mUi.ctx.getString(R.string.settings), 36, false, R.color.dm_on);
-        title.setPadding(mUi.dp(24), mUi.dp(64), mUi.dp(24), mUi.dp(8));
-        p.addView(title);
+        p.addView(mUi.space(60));
+
+        final int[] choices = KeepFor.choices(historyDays);
+        final int[] days = {choices[KeepFor.selected(historyDays)]};
 
         Ui.Group g = new Ui.Group(mUi);
         final Switch collect = new Switch(mUi.ctx);
@@ -51,76 +51,95 @@ final class SettingsScreen {
         history.setChecked(historyOn);
         g.add(switchRow(R.string.history, R.string.history_summary, history));
 
-        final int days = Math.max(MIN_DAYS, Math.min(MAX_DAYS, historyDays <= 0 ? 7 : historyDays));
-        final TextView daysText = mUi.text(daysLabel(days), 14, false, R.color.dm_onv);
-        final SeekBar seek = new SeekBar(mUi.ctx);
-        seek.setMax(MAX_DAYS - MIN_DAYS);
-        seek.setProgress(days - MIN_DAYS);
-        seek.setEnabled(historyOn);
-        LinearLayout daysRow = new LinearLayout(mUi.ctx);
-        daysRow.setOrientation(LinearLayout.VERTICAL);
-        daysRow.setPadding(mUi.dp(16), mUi.dp(12), mUi.dp(16), mUi.dp(12));
-        daysRow.addView(mUi.text(mUi.ctx.getString(R.string.history_days), 16, true, R.color.dm_on));
-        daysRow.addView(daysText);
-        daysRow.addView(seek);
-        g.add(daysRow);
-        p.addView(g.seal().view);
+        final LinearLayout keepRow = keepForRow(choices, KeepFor.selected(historyDays), days);
+        keepRow.setVisibility(historyOn ? View.VISIBLE : View.GONE);
+        g.add(keepRow);
 
-        collect.setOnCheckedChangeListener((CompoundButton b, boolean on) -> mActions.setCollecting(on));
-        history.setOnCheckedChangeListener((CompoundButton b, boolean on) -> {
-            seek.setEnabled(on);
-            mActions.setHistory(on, seek.getProgress() + MIN_DAYS);
-        });
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
-                daysText.setText(daysLabel(progress + MIN_DAYS));
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar s) {}
-
-            @Override
-            public void onStopTrackingTouch(SeekBar s) {
-                if (history.isChecked()) {
-                    mActions.setHistory(true, s.getProgress() + MIN_DAYS);
-                }
-            }
-        });
-
-        p.addView(mUi.para(mUi.ctx.getString(R.string.history_explained)));
-
-        Button clear = new Button(mUi.ctx);
-        clear.setText(R.string.clear);
+        TextView clear = mUi.text(mUi.ctx.getString(R.string.clear), 16, true, R.color.dm_err);
+        clear.setGravity(Gravity.CENTER_VERTICAL);
+        clear.setMinimumHeight(mUi.dp(56));
+        clear.setPadding(mUi.dp(16), mUi.dp(10), mUi.dp(16), mUi.dp(10));
         clear.setOnClickListener(v -> new AlertDialog.Builder(mUi.ctx)
                 .setMessage(R.string.clear_confirm)
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(R.string.clear, (d, w) -> mActions.clear())
                 .show());
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(mUi.dp(24), mUi.dp(16), mUi.dp(24), 0);
-        p.addView(clear, lp);
+        g.add(clear);
 
-        p.addView(mUi.label(mUi.ctx.getString(R.string.cannot_see)));
-        p.addView(mUi.para(mUi.ctx.getString(R.string.blind_spots)));
-        p.addView(mUi.para(mUi.ctx.getString(R.string.not_listed_not_proof)));
-        p.addView(mUi.note(mUi.ctx.getString(R.string.data_sources)));
+        final LinearLayout about = new LinearLayout(mUi.ctx);
+        about.setOrientation(LinearLayout.VERTICAL);
+        about.setVisibility(View.GONE);
+        about.addView(mUi.para(mUi.ctx.getString(R.string.blind_spots)));
+        about.addView(mUi.para(mUi.ctx.getString(R.string.not_listed_not_proof)));
+        about.addView(mUi.note(mUi.ctx.getString(R.string.data_sources)));
         if (invalidCount > 0) {
-            p.addView(mUi.note(mUi.ctx.getResources().getQuantityString(
+            about.addView(mUi.note(mUi.ctx.getResources().getQuantityString(
                     R.plurals.n_invalid, invalidCount, invalidCount)));
         }
+        TextView aboutRow = mUi.text(mUi.ctx.getString(R.string.about), 16, true, R.color.dm_on);
+        aboutRow.setGravity(Gravity.CENTER_VERTICAL);
+        aboutRow.setMinimumHeight(mUi.dp(56));
+        aboutRow.setPadding(mUi.dp(16), mUi.dp(10), mUi.dp(16), mUi.dp(10));
+        aboutRow.setOnClickListener(v -> about.setVisibility(about.getVisibility() == View.VISIBLE
+                ? View.GONE : View.VISIBLE));
+        g.add(aboutRow);
+        p.addView(g.seal().view);
+        p.addView(about);
+
+        collect.setOnCheckedChangeListener((CompoundButton b, boolean on) -> mActions.setCollecting(on));
+        history.setOnCheckedChangeListener((CompoundButton b, boolean on) -> {
+            keepRow.setVisibility(on ? View.VISIBLE : View.GONE);
+            mActions.setHistory(on, days[0]);
+        });
         return p;
     }
 
-    private String daysLabel(int days) {
-        return mUi.ctx.getResources().getQuantityString(R.plurals.n_days, days, days);
+    /** "Keep for" as one tap on a choice: the presets of {@link KeepFor}, the selected one filled. */
+    private LinearLayout keepForRow(final int[] choices, int selected, final int[] days) {
+        LinearLayout row = new LinearLayout(mUi.ctx);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(mUi.dp(16), mUi.dp(12), mUi.dp(16), mUi.dp(14));
+        row.addView(mUi.text(mUi.ctx.getString(R.string.history_days), 16, true, R.color.dm_on));
+        final LinearLayout options = new LinearLayout(mUi.ctx);
+        options.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        op.topMargin = mUi.dp(10);
+        row.addView(options, op);
+        final TextView[] labels = new TextView[choices.length];
+        for (int i = 0; i < choices.length; i++) {
+            final int value = choices[i];
+            TextView t = mUi.text(mUi.ctx.getResources().getQuantityString(R.plurals.n_days, value, value),
+                    14, true, R.color.dm_onv);
+            t.setGravity(Gravity.CENTER);
+            t.setMinHeight(mUi.dp(40));
+            t.setSingleLine(true);
+            t.setOnClickListener(v -> {
+                days[0] = value;
+                paint(labels, choices, value);
+                mActions.setHistory(true, value);
+            });
+            labels[i] = t;
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            lp.setMarginEnd(i == choices.length - 1 ? 0 : mUi.dp(6));
+            options.addView(t, lp);
+        }
+        paint(labels, choices, choices[selected]);
+        return row;
+    }
+
+    private void paint(TextView[] labels, int[] choices, int selectedValue) {
+        for (int i = 0; i < labels.length; i++) {
+            boolean on = choices[i] == selectedValue;
+            labels[i].setBackground(mUi.shape(on ? R.color.dm_sc : R.color.dm_hst, 20, 20));
+            labels[i].setTextColor(mUi.color(on ? R.color.dm_osc : R.color.dm_onv));
+        }
     }
 
     private View switchRow(int titleRes, int summaryRes, Switch toggle) {
         LinearLayout row = new LinearLayout(mUi.ctx);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
         row.setMinimumHeight(mUi.dp(64));
         row.setPadding(mUi.dp(16), mUi.dp(10), mUi.dp(16), mUi.dp(10));
         LinearLayout tx = new LinearLayout(mUi.ctx);
