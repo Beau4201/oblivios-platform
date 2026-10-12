@@ -34,6 +34,7 @@ Task 4 step 2 compared these blobs with the HEAD of each tree before anything wa
 | `system-sepolicy/0002` | `system_app` and `traceur_app` are app domains with an allow rule for every service type except a fixed list, which conflicts with the neverallow that only `datamap_app` may find `datamap_service`; the policy would not compile. Both lists gain `-datamap_service`. | `private/system_app.te`, `private/traceur_app.te` |
 
 | `frameworks-base/0008` | Found by the first module build: a permission declared in `core/res/AndroidManifest.xml` becomes a public `Manifest.permission` constant, and `check_current_api` refuses an API change that `current.txt` does not list. `READ_DATA_MAP` is for one app of this system only, so the comment above it gets `@hide`. | `core/res/AndroidManifest.xml` |
+| `frameworks-base/0009` | ADR-159 (D1, D2, C18): a history row holds its first and last time to the hour; switching the history on takes the rows in memory as a baseline and writes only what came after it (`HistoryCodec.since`); the `dumpsys datamap` counter says `events since boot`. | `services/core/java/com/android/server/datamap/HistoryCodec.java`, `DataMapService.java` |
 | `system-sepolicy/0003` | Found by the first module build: `fuzzer_bindings_test` refuses a new service that has no fuzzer on file. A Java service has no automatic fuzzer (b/287102710); the build names `service_fuzzer_bindings.go` as the place for the exception. | `build/soong/service_fuzzer_bindings.go` |
 
 A loose file `0005-datamap-import-IpConnectivityLog-...patch` in the authoring directory is folded into `0004` and is not part of the series.
@@ -110,7 +111,7 @@ The pin `vendor/google_devices/{lynx,stallion}/adevtool-version-check.mk` now na
 
 Not built. The Soong and sepolicy compile is proven only by a build (Task 9).
 
-Later landings, by `git am` after the first module build: `system/sepolicy` 0003 (`fd1b880f3`) and `frameworks/base` 0008 (`e53353ced37f`); the blobs of `build/soong/service_fuzzer_bindings.go` (`cff8582`) and `core/res/AndroidManifest.xml` (`a421805`) are identical to the worktree commits. `vendor/sovereignos/datamap` gained the finished app screens (`17a3a03`).
+Later landings, by `git am` after the first module build: `system/sepolicy` 0003 (`fd1b880f3`) and `frameworks/base` 0008 (`e53353ced37f`) and 0009 (`056f7900e13d`, 2026-10-12, no build running, tree clean before and after; the blobs of `HistoryCodec.java` (`3775f68`) and `DataMapService.java` (`2adad94`) are identical to the worktree commit); the blobs of `build/soong/service_fuzzer_bindings.go` (`cff8582`) and `core/res/AndroidManifest.xml` (`a421805`) are identical to the worktree commits. `vendor/sovereignos/datamap` gained the finished app screens (`17a3a03`).
 
 ## Module build
 
@@ -150,7 +151,7 @@ Not yet seen: any behaviour on a device (plan Task 12).
 
 Branch `datamap-redesign`, 2026-10-12, from `f330414`. Nothing is built; the first image ran on `lynx` and its results are in the validation matrix.
 
-Commits: runners and land checks `02b6f5a`; local names `2f155ff`; relation wording `8e3ca4d`; "Keep for" `b79a83c`; limb, start view and logo pick `ada7917`; land bounds and layout `68d516d`; logo tool `45ab3dc`; resources `1c50716`; themed icons `da49c21`; text, Settings and logos in lists `8fa4217`; activity `e903f68`; globe `de01b0f`; land file `3187980`; logo tool command line `951f6ce`; logos `7a3cfb3`. The history change (patch `frameworks-base/0009`) is written, checked on the host and type-checked on the server, and is not yet landed: its `git am` was refused by the tooling and waits for the owner.
+Commits: runners and land checks `02b6f5a`; local names `2f155ff`; relation wording `8e3ca4d`; "Keep for" `b79a83c`; limb, start view and logo pick `ada7917`; land bounds and layout `68d516d`; logo tool `45ab3dc`; resources `1c50716`; themed icons `da49c21`; text, Settings and logos in lists `8fa4217`; activity `e903f68`; globe `de01b0f`; land file `3187980`; logo tool command line `951f6ce`; logos `7a3cfb3`. The history change (patch `frameworks-base/0009`) is checked on the host, type-checked on the server and landed on the build server as `056f7900e13d`; the package alone reproduces the core (`all host checks passed`, `39 of 39 mutations killed`). It is not built.
 
 Facts the tasks found:
 - The app mutation runner copied only `src/` and `tests/`, so the unmutated copy failed too and every mutation was reported as killed; the service runner counted a mutation that does not compile as killed. Both are fixed (Task 1); the land reader's limits (`MAX_SHAPES`, three points per ring) had no check and have one.
