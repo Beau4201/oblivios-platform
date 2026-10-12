@@ -11,7 +11,6 @@
     <string name="tab_companies">Companies</string>
     <string name="tab_links">Links</string>
 
-    <string name="lead_map">Which apps talk to which companies, and where those companies are based.</string>
     <string name="empty_nothing">Nothing has been observed yet. Use some apps, then come back.</string>
     <string name="empty_app">Nothing has been observed for this app.</string>
     <string name="service_missing">The Data Map service is not available to this app.</string>

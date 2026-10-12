@@ -65,12 +65,14 @@ public final class MainActivity extends Activity
     private ScrollView mScroll;
     private SheetView mSheet;
     private FrostedBar mTabBar;
-    private View mHeader;
-    private View mHeaderTitle;
+    private View mOverlay;
+    private View mGear;
     private View mHeaderBack;
-    private android.widget.TextView mLead;
+    private android.widget.TextView mStatus;
+    private int mStatusRes;
     private int mTab = TAB_MAP;
     private int mBottomInset;
+    private int mTopInset;
 
     private volatile IDataMapService mService;
     private DataMapSnapshot mLast;
@@ -106,8 +108,15 @@ public final class MainActivity extends Activity
         mSheet.jumpTo(0);
         mRoot.addView(mBackdrop, new FrameLayout.LayoutParams(-1, -1));
 
-        mHeader = header();
-        mRoot.addView(mHeader, new FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
+        // One line over an empty globe, when there is nothing to show or the service is missing.
+        mStatus = mUi.text("", 16, false, R.color.dm_onv);
+        mStatus.setGravity(Gravity.CENTER);
+        mStatus.setPadding(mUi.dp(40), 0, mUi.dp(40), 0);
+        mStatus.setVisibility(View.GONE);
+        mRoot.addView(mStatus, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
+
+        mOverlay = overlay();
+        mRoot.addView(mOverlay, new FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         mTabBar = tabBar();
         mTabBar.setBackdrop(mBackdrop);
@@ -122,10 +131,11 @@ public final class MainActivity extends Activity
         mRoot.setOnApplyWindowInsetsListener((v, insets) -> {
             android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars());
             mBottomInset = bars.bottom;
-            mHeader.setPadding(0, bars.top, 0, 0);
+            mTopInset = bars.top;
+            mOverlay.setPadding(0, bars.top, 0, 0);
             ((FrameLayout.LayoutParams) mTabBar.getLayoutParams()).bottomMargin = mUi.dp(12) + bars.bottom;
             mTabBar.requestLayout();
-            mScroll.setPadding(0, bars.top, 0, mUi.dp(104) + bars.bottom);
+            mScroll.setPadding(0, bars.top + mUi.dp(56), 0, mUi.dp(104) + bars.bottom);
             mScroll.setClipToPadding(false);
             mSheet.setBottomPadding(mUi.dp(104) + bars.bottom);
             return insets;
@@ -154,7 +164,7 @@ public final class MainActivity extends Activity
         super.onStart();
         mService = DataMapClient.connect();
         if (mService == null) {
-            mLead.setText(R.string.service_missing);
+            showStatus(R.string.service_missing);
             return;
         }
         try {
@@ -204,7 +214,7 @@ public final class MainActivity extends Activity
                 final MapModel.Output out = MapModel.build(in);
                 runOnUiThread(() -> apply(snap, in, out));
             } catch (RemoteException | RuntimeException e) {
-                runOnUiThread(() -> mLead.setText(R.string.service_missing));
+                runOnUiThread(() -> showStatus(R.string.service_missing));
             }
         });
     }
@@ -214,7 +224,7 @@ public final class MainActivity extends Activity
         mScreens.set(out, in.owners, snap.nowWallMs);
         mGlobe.setModel(out, in.owners);
         mGlobe.setSelection(mSel);
-        mLead.setText(out.apps.isEmpty() ? R.string.empty_nothing : R.string.lead_map);
+        showStatus(out.apps.isEmpty() ? R.string.empty_nothing : 0);
         renderSheet(true);
         if (mTab != TAB_MAP) {
             final int y = mScroll.getScrollY();   // a live refresh must not throw the reader back to the top
@@ -225,19 +235,9 @@ public final class MainActivity extends Activity
 
     // ----------------------------------------------------------------------------- screens
 
-    private View header() {
+    /** The two buttons that stand over the content: the way back from a sheet, and Settings. No title. */
+    private View overlay() {
         FrameLayout h = new FrameLayout(this);
-        LinearLayout col = new LinearLayout(this);
-        col.setOrientation(LinearLayout.VERTICAL);
-        android.widget.TextView t = mUi.text(getString(R.string.app_name), 28, false, R.color.dm_on);
-        t.setPadding(mUi.dp(24), mUi.dp(10), mUi.dp(24), 0);
-        mLead = mUi.text("", 14, false, R.color.dm_onv);
-        mLead.setPadding(mUi.dp(24), 0, mUi.dp(72), 0);
-        col.addView(t);
-        col.addView(mLead);
-        mHeaderTitle = col;
-        h.addView(col);
-        // With the sheet open the title gives way to a way back, as on the design page.
         ImageView back = new ImageView(this);
         back.setImageResource(R.drawable.ic_back);
         back.setImageTintList(android.content.res.ColorStateList.valueOf(mUi.color(R.color.dm_on)));
@@ -247,15 +247,31 @@ public final class MainActivity extends Activity
         back.setVisibility(View.GONE);
         mHeaderBack = back;
         h.addView(back, new FrameLayout.LayoutParams(mUi.dp(48), mUi.dp(48), Gravity.TOP | Gravity.START));
-        ImageView menu = new ImageView(this);
-        menu.setImageResource(R.drawable.ic_menu);
-        menu.setImageTintList(android.content.res.ColorStateList.valueOf(mUi.color(R.color.dm_on)));
-        menu.setScaleType(ImageView.ScaleType.CENTER);
-        menu.setContentDescription(getString(R.string.settings));
-        menu.setOnClickListener(v -> openSettings());
-        h.addView(menu, new FrameLayout.LayoutParams(mUi.dp(48), mUi.dp(48), Gravity.TOP | Gravity.END));
+        ImageView gear = new ImageView(this);
+        gear.setImageResource(R.drawable.ic_settings);
+        gear.setImageTintList(android.content.res.ColorStateList.valueOf(mUi.color(R.color.dm_on)));
+        gear.setScaleType(ImageView.ScaleType.CENTER);
+        gear.setContentDescription(getString(R.string.settings));
+        gear.setOnClickListener(v -> openSettings());
+        mGear = gear;
+        h.addView(gear, new FrameLayout.LayoutParams(mUi.dp(48), mUi.dp(48), Gravity.TOP | Gravity.END));
         h.setClickable(false);
         return h;
+    }
+
+    /** One line over the empty globe; 0 hides it. */
+    private void showStatus(int stringRes) {
+        mStatusRes = stringRes;
+        updateStatus();
+    }
+
+    private void updateStatus() {
+        boolean show = mStatusRes != 0 && mTab == TAB_MAP && mSel.sheet() == MapSelection.SHEET_NONE
+                && !screenOpen();
+        if (show) {
+            mStatus.setText(mStatusRes);
+        }
+        mStatus.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private FrostedBar tabBar() {
@@ -276,7 +292,10 @@ public final class MainActivity extends Activity
             android.widget.TextView label = mUi.text(getString(names[i]), 14, true, R.color.dm_on);
             label.setPadding(mUi.dp(8), 0, 0, 0);
             item.addView(label);
-            item.setOnClickListener(v -> showTab(tab));
+            item.setOnClickListener(v -> {
+                closeScreen();   // a screen opened from a list covers the tabs; choosing a tab leaves it
+                showTab(tab);
+            });
             bar.addView(item, new LinearLayout.LayoutParams(0, mUi.dp(52), 1f));
         }
         return bar;
@@ -296,7 +315,6 @@ public final class MainActivity extends Activity
             ((LinearLayout.LayoutParams) item.getLayoutParams()).weight = on ? 2f : 1f;
         }
         mTabBar.requestLayout();
-        mHeader.setVisibility(tab == TAB_MAP ? View.VISIBLE : View.GONE);
         mGlobe.setVisibility(tab == TAB_MAP ? View.VISIBLE : View.INVISIBLE);
         mScroll.setVisibility(tab == TAB_MAP ? View.GONE : View.VISIBLE);
         mScroll.removeAllViews();
@@ -315,9 +333,10 @@ public final class MainActivity extends Activity
         sv.setBackgroundColor(mUi.color(R.color.dm_bg));
         sv.setVerticalScrollBarEnabled(false);
         sv.addView(content);
+        sv.setClipToPadding(false);
         sv.setOnApplyWindowInsetsListener((v, insets) -> {
             android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars());
-            v.setPadding(0, bars.top, 0, bars.bottom);
+            v.setPadding(0, bars.top, 0, mUi.dp(104) + bars.bottom);   // the bar floats over the end of the list
             return insets;
         });
         mScreenHost.removeAllViews();
@@ -329,7 +348,7 @@ public final class MainActivity extends Activity
         back.setContentDescription(getString(R.string.back));
         back.setOnClickListener(v -> closeScreen());
         FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(mUi.dp(48), mUi.dp(48), Gravity.TOP | Gravity.START);
-        bp.topMargin = mUi.dp(8);
+        bp.topMargin = mTopInset + mUi.dp(4);
         mScreenHost.addView(back, bp);
         mScreenHost.setVisibility(View.VISIBLE);
         updateBack();
@@ -359,9 +378,6 @@ public final class MainActivity extends Activity
             mSheet.jumpTo(target);
         }
         renderSheet(false);
-        boolean open = onMap && mSel.sheet() != MapSelection.SHEET_NONE;
-        mHeaderTitle.setVisibility(open ? View.GONE : View.VISIBLE);
-        mHeaderBack.setVisibility(open ? View.VISIBLE : View.GONE);
         updateBack();
     }
 
@@ -399,6 +415,10 @@ public final class MainActivity extends Activity
     }
 
     private void updateBack() {
+        boolean sheetOpen = mTab == TAB_MAP && mSel.sheet() != MapSelection.SHEET_NONE && !screenOpen();
+        mHeaderBack.setVisibility(sheetOpen ? View.VISIBLE : View.GONE);
+        mGear.setVisibility(screenOpen() ? View.GONE : View.VISIBLE);
+        updateStatus();
         boolean need = needsBack();
         if (need && !mBackRegistered) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
