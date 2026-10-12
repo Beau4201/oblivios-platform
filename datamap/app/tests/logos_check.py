@@ -256,6 +256,14 @@ with tempfile.TemporaryDirectory() as d:
     assert rc == 1 and "element not allowed" in out and not (logos / "svg" / "small.svg").exists(), out
     rc, out = run(L.cmd_add, logos, cls, "small", src, "FF0000", "https://example.org/s", "CC-BY-4.0", "2026-10-12")
     assert rc == 1 and "licences.txt" in out, out
+    # the command line: the eight arguments of the plan, with and without the note
+    logos3, cls3 = make(tmp / "cli")
+    cli = ["import-logos.py", "add", str(logos3), str(cls3)]
+    rc, out = run(L.main, cli + ["a_b", str(src), "00FF00", "https://example.org/ab", "CC0-1.0", "2026-10-12"])
+    eq(0, rc, "add from the command line without a note: " + out)
+    rc, out = run(L.main, cli + ["small", str(src), "00FF00", "https://example.org/s", "CC0-1.0", "2026-10-12", "a note"])
+    eq(0, rc, "add from the command line with a note: " + out)
+    assert "\ta note" in (logos3 / "logos.tsv").read_text(encoding="utf-8"), "the note is recorded"
 
 # ---- the resource name agrees with the app
 fixture = HERE / "fixtures" / "logo-names.tsv"

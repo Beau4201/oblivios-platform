@@ -388,7 +388,7 @@ def main(argv):
         return cmd_coverage(argv[2], argv[3])
     if len(argv) == 5 and argv[1] == "propose":
         return cmd_propose(argv[2], argv[3], argv[4])
-    if len(argv) in (9, 10) and argv[1] == "add":
+    if len(argv) in (10, 11) and argv[1] == "add":   # eight arguments and an optional note
         return cmd_add(*argv[2:])
     print(__doc__)
     return 2
