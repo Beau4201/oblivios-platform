@@ -178,6 +178,9 @@ public final class MapModel {
         Set<String> edgeKeys = new HashSet<>();
 
         for (Entry e : in.entries) {
+            if (HostFilter.isLocal(e.serviceKey)) {
+                continue;   // a name or address of the phone's own network: no company stands behind it
+            }
             AppRow a = apps.get(e.pkg);
             if (a == null) {
                 a = new AppRow();
