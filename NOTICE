@@ -65,6 +65,12 @@ Natural Earth (land outlines and country borders of the Data Map app, datamap/ap
   Natural Earth, public domain (https://www.naturalearthdata.com/about/terms-of-use/). No licence conditions;
   the source and the version are recorded in datamap/app/SOURCES.md.
 
+Simple Icons (company logos of the Data Map app, datamap/logos and datamap/app/res/drawable/logo_*.xml)
+  The icon files of the Simple Icons project are released under CC0-1.0. The logos are trademarks of their
+  owners; the licence covers the file only. Each logo has a record (source, licence, date, checksum) in
+  datamap/logos/logos.tsv, and the files stay out of the public source until the trademark review has passed
+  (datamap/PUBLICATION-EXCLUDE.txt).
+
 TRADEMARKS
 
 The name SovereignOS and its logo are not licensed; section 6 of the Apache

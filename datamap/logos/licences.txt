@@ -1,0 +1,4 @@
+# Licences that a logo file may carry (tools/import-logos.py). A logo is also a trademark of its owner: the
+# licence covers the copyright of the file, never the trademark.
+CC0-1.0
+LicenseRef-Public-Domain
