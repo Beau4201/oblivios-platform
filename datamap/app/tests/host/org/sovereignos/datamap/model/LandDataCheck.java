@@ -2,6 +2,8 @@
 package org.sovereignos.datamap.model;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -21,6 +23,24 @@ public final class LandDataCheck {
             return;
         }
         throw new AssertionError("accepted: " + what);
+    }
+
+    /** A complete file of {@code shapes} polygons, each one ring of {@code points} points. */
+    private static byte[] shapesFile(int shapes, int points) throws IOException {
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        DataOutputStream o = new DataOutputStream(b);
+        o.writeBytes("DMLD");
+        o.writeByte(1);
+        o.writeShort(shapes);
+        for (int s = 0; s < shapes; s++) {
+            o.writeShort(1);
+            o.writeShort(points);
+            for (int i = 0; i < points; i++) {
+                o.writeShort(i * 100);
+                o.writeShort(i % 2 == 0 ? 0 : 100);
+            }
+        }
+        return b.toByteArray();
     }
 
     public static void main(String[] args) throws Exception {
@@ -48,6 +68,11 @@ public final class LandDataCheck {
         manyShapes[5] = (byte) 0xFF;
         manyShapes[6] = (byte) 0xFF;
         refuses(manyShapes, "65535 shapes");
+        // the limits of a file that is complete: a truncated file would be refused anyway and prove nothing
+        LandData.read(new ByteArrayInputStream(shapesFile(LandData.MAX_SHAPES, 3)));
+        refuses(shapesFile(LandData.MAX_SHAPES + 1, 3), "one shape more than the limit");
+        LandData.read(new ByteArrayInputStream(shapesFile(1, 3)));
+        refuses(shapesFile(1, 2), "a ring of two points");
         if (args.length > 1) {   // the real data: every point is a valid place and every ring a polygon
             LandData real = LandData.read(new ByteArrayInputStream(Files.readAllBytes(Paths.get(args[1]))));
             check(real.shapes.length > 200, "the real data has more than 200 shapes");

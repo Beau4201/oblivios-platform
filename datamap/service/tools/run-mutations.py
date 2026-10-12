@@ -43,7 +43,7 @@ MUTATIONS = [
     ("history: no limit on rows", "HistoryCodec.java",
      "if (++rows > MAX_ROWS) {", "if (false) {", 1),
     ("history: day index rounds toward zero", "HistoryCodec.java",
-     "Math.floorDiv(wallMs + tzOffsetMs, DAY_MS)", "(wallMs + tzOffsetMs) / DAY_MS", 1),
+     "Math.floorDiv(wallMs + tzOffsetMs, DAY_MS)", "((wallMs + tzOffsetMs) / DAY_MS)", 1),
     ("answers: not kept per app", "RecentAnswers.java",
      "LinkedHashMap<String, String> m = byUid.get(uid);\n        return m == null", "LinkedHashMap<String, String> m = byUid.get(10001);\n        return m == null", 1),
     ("keys: no two-level suffixes", "ServiceKeys.java",
@@ -72,11 +72,16 @@ MUTATIONS = [
      "if (n >= limit) {", "if (false) {", 1),
     ("pending: a finished event keeps its place", "PendingLimit.java",
      "held.decrementAndGet();", "held.get();", 1),
+    # (end of the list: the mutations of a later task are added above this line)
 ]
 
 def main():
     src = pathlib.Path(sys.argv[1]).resolve()
     survivors = []
+    base = subprocess.run([str(HERE / "tools/run-host-checks.sh"), str(src)], capture_output=True, text=True)
+    if base.returncode != 0:
+        print("the unmutated sources do not pass the host checks:\n" + base.stdout + base.stderr)
+        sys.exit(2)
     for name, fname, old, new, count in MUTATIONS:
         tmp = pathlib.Path(tempfile.mkdtemp())
         try:
@@ -90,6 +95,9 @@ def main():
             try:
                 r = subprocess.run([str(HERE / "tools/run-host-checks.sh"), str(tmp)],
                                    capture_output=True, text=True, timeout=300)
+                if "error:" in r.stderr:   # javac, not a check: the mutation is not valid Java and proves nothing
+                    print(f"BROKEN MUTATION {name}: it does not compile\n{r.stderr}")
+                    sys.exit(2)
                 killed = r.returncode != 0
             except subprocess.TimeoutExpired:
                 killed = True   # a mutation that hangs a check is caught too

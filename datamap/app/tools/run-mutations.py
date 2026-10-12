@@ -96,17 +96,29 @@ MUTATIONS = [
      "countryCode.length() != 2", "countryCode.length() < 1", 1),
     ("flags: any character is accepted", "FlagEmoji.java",
      "if (c < 'A' || c > 'Z') {", "if (false) {", 1),
+    # (end of the list: the mutations of a later task are added above this line)
 ]
 
 
 def main():
     src = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else HERE.parent
     survivors = []
+    base = pathlib.Path(tempfile.mkdtemp())
+    try:
+        for d in ("src", "tests", "tools"):
+            shutil.copytree(src / d, base / d)
+        r = subprocess.run([str(HERE / "run-host-checks.sh"), str(base)], capture_output=True, text=True)
+        if r.returncode != 0:
+            print("the unmutated sources do not pass the host checks:\n" + r.stdout + r.stderr)
+            sys.exit(2)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
     for name, fname, old, new, count in MUTATIONS:
         tmp = pathlib.Path(tempfile.mkdtemp())
         try:
             shutil.copytree(src / "src", tmp / "src")
             shutil.copytree(src / "tests", tmp / "tests")
+            shutil.copytree(src / "tools", tmp / "tools")
             f = tmp / PKG / fname
             text = f.read_text(encoding="utf-8")
             if text.count(old) != count:
@@ -114,6 +126,9 @@ def main():
                 sys.exit(2)
             f.write_text(text.replace(old, new), encoding="utf-8")
             r = subprocess.run([str(HERE / "run-host-checks.sh"), str(tmp)], capture_output=True, text=True)
+            if "error:" in r.stderr:   # javac, not a check: the mutation is not valid Java and proves nothing
+                print(f"BROKEN MUTATION {name}: it does not compile\n{r.stderr}")
+                sys.exit(2)
             killed = r.returncode != 0
             print(("KILLED   " if killed else "SURVIVED ") + name)
             if not killed:
