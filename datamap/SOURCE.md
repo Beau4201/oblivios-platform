@@ -166,3 +166,16 @@ Facts the tasks found:
 Review (2026-10-12): one read-only review of the whole branch by a separate reviewer (Sonnet 5.5), no Critical finding. Fixed afterwards, each with a check that failed first: the path-data check of `import-logos.py` accepted letters and digits outside ASCII (a long s counted as the command `S`) and did not count the numbers of a command (49 mutations now); an svg with no record was not reported; the real logo data was checked by no script (`run-host-checks.sh` now runs `import-logos.py check` on `datamap/logos`). Also changed, without a host check (a device or the server type-check is the evidence): `GlobeView` fades a logo with a layer, because `setAlpha` on a vector drawable is not applied on a hardware canvas (to be seen at the rim on the device, `MAP-024`); `Logos.of` returns nothing for a drawable that cannot be read, so that the initials are drawn.
 
 Results of the full run (2026-10-12, before the review fixes; the figures that changed are in the review paragraph): `all host checks passed`; `39 of 39 mutations killed`; `all app host checks passed`; `96 of 96 mutations killed`; `49 of 49 mutations killed`; `static checks passed`; `logo checks passed: 42 logos`; `all builder checks passed`; `11 of 11 mutations killed`; `app type-check passed: 35 files` (four known deprecation warnings only).
+
+## Image 2026101202 (Data Map redesign)
+
+`lynx-cur-userdebug` build `2026101202` on 2026-10-12, 18:53 to 19:08, one detached build (`tools/build-vm/build-lynx-2026101202.sh` of the foundation repository) with `OFFICIAL_BUILD=true` and the ccache exports, after the trees were clean, no build or emulator ran and the pin named the current `vendor/adevtool` HEAD (`0d91ffbe`). `build completed successfully (14:58)`, exit code 0, no failed step. Not signed and not flashed.
+
+Checked in the output, not from the exit code:
+- `check-required-packages.sh` on the product directory, run by the build and again by hand: `all required packages present`, exit 0.
+- `ro.build.version.incremental=2026101202`; `system.img`, `vendor.img`, `vbmeta.img`, `init_boot.img` and `vendor_boot.img` date from this build (19:03 to 19:08); `boot.img` is the unchanged one of 2026-10-01.
+- `DataMapApp.apk` (544 705 bytes) holds 42 `logo_*.xml`, `ic_settings.xml` and `res/raw/land.bin` of 378 743 bytes. The classifier in the system tree has 4369 lines and 231 325 bytes, the size of the package file.
+- `services.jar` (19:07) holds `toHour` and the label `events since boot`: patch `frameworks-base/0009` is in the build.
+- Trees at the build: `frameworks/base` `056f7900`, `vendor/sovereignos/datamap` `685eead`, `system/sepolicy` `fd1b880f`, `vendor/adevtool` `0d91ffbe`, all clean.
+
+Not yet seen: any behaviour on a device (plan, "After the image").
