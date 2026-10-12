@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.TreeMap;
 
 public final class HistoryCodecCheck {
+    private static final long H = HistoryCodec.HOUR_MS;
+
     private static DataMapStore.Row row(int uid, String key, long first, long last, int count) {
         return new DataMapStore.Row(uid, "com.a", key, first, last, count, count / 2, count - count / 2, true);
     }
@@ -17,11 +19,11 @@ public final class HistoryCodecCheck {
     public static void main(String[] args) throws Exception {
         TreeMap<Integer, List<DataMapStore.Row>> days = new TreeMap<>();
         List<DataMapStore.Row> d1 = new ArrayList<>();
-        d1.add(row(10100, "x.com", 100, 200, 4));
-        d1.add(row(10100, "ip:203.0.113.7", 150, 250, 1));
+        d1.add(row(10100, "x.com", 100 * H, 200 * H, 4));
+        d1.add(row(10100, "ip:203.0.113.7", 150 * H, 250 * H, 1));
         days.put(20000, d1);
         List<DataMapStore.Row> d2 = new ArrayList<>();
-        d2.add(row(10200, "y.com", 300, 400, 7));
+        d2.add(row(10200, "y.com", 300 * H, 400 * H, 7));
         days.put(20001, d2);
 
         String text = HistoryCodec.encode(days);
@@ -32,8 +34,8 @@ public final class HistoryCodecCheck {
         DataMapStore.Row r = back.get(20000).get(0);
         Check.eq("x.com", r.key, "key");
         Check.eq(10100, r.uid, "uid");
-        Check.eq(100L, r.firstWall, "first");
-        Check.eq(200L, r.lastWall, "last");
+        Check.eq(100L * H, r.firstWall, "first");
+        Check.eq(200L * H, r.lastWall, "last");
         Check.eq(4, r.count, "count");
         Check.eq(2, r.fg, "foreground");
         Check.eq(2, r.bg, "background");
@@ -103,6 +105,45 @@ public final class HistoryCodecCheck {
         Check.eq(100L, x.firstWall, "the earliest first");
         Check.eq(600L, x.lastWall, "the latest last");
         Check.eq(0, HistoryCodec.aggregate(new TreeMap<>(), new ArrayList<>()).size(), "nothing in, nothing out");
+
+        // times are kept to the hour in the file (D1); a file of exact times from before is still read
+        List<DataMapStore.Row> mid = new ArrayList<>();
+        mid.add(row(10100, "t.com", 5 * H + 1234, 6 * H + 59_999, 2));
+        TreeMap<Integer, List<DataMapStore.Row>> midDays = new TreeMap<>();
+        midDays.put(7, mid);
+        DataMapStore.Row rounded = HistoryCodec.decode(HistoryCodec.encode(midDays)).get(7).get(0);
+        Check.eq(5 * H, rounded.firstWall, "the first time is the hour it falls in");
+        Check.eq(6 * H, rounded.lastWall, "the last time is the hour it falls in");
+        Check.eq(-H, HistoryCodec.toHour(-1), "before the epoch rounds down");
+        Check.eq(0L, HistoryCodec.toHour(H - 1), "just before the hour");
+        Check.eq(H, HistoryCodec.toHour(H), "on the hour");
+        Check.eq(1234L, HistoryCodec.decode("datamap-history\t1\nday\t1\nrow\t1\tp\tk\t1234\t5678\t3\t1\t2\t1\n")
+                .get(1).get(0).firstWall, "the exact time of an earlier file");
+
+        // since: what was in memory when the history was switched on is not kept (D2)
+        List<DataMapStore.Row> before = new ArrayList<>();
+        before.add(row(10100, "old.com", 10, 20, 5));
+        before.add(row(10100, "both.com", 30, 40, 4));
+        before.add(row(10100, "ev.com", 50, 60, 5));
+        List<DataMapStore.Row> now = new ArrayList<>();
+        now.add(row(10100, "old.com", 10, 20, 5));      // not seen again: dropped
+        now.add(row(10100, "both.com", 30, 900, 7));    // seen before and again: the 3 new contacts
+        now.add(row(10100, "ev.com", 800, 850, 2));     // started again after eviction: below its old count, dropped
+        now.add(row(10100, "new.com", 800, 850, 2));    // new: kept as it is
+        now.add(row(10200, "old.com", 700, 710, 1));    // the same service for another app: new
+        List<DataMapStore.Row> kept = HistoryCodec.since(now, before, 500L);
+        Check.eq(3, kept.size(), "three rows are kept");
+        Check.eq("both.com", kept.get(0).key, "in the order of the live rows");
+        Check.eq(3, kept.get(0).count, "7 - 4");
+        Check.eq(1, kept.get(0).fg, "3 - 2 in the foreground");
+        Check.eq(2, kept.get(0).bg, "4 - 2 in the background");
+        Check.eq(500L, kept.get(0).firstWall, "not before the switch-on");
+        Check.eq(900L, kept.get(0).lastWall, "the last time stays");
+        Check.eq("new.com", kept.get(1).key, "a new row");
+        Check.eq(800L, kept.get(1).firstWall, "is kept as it is");
+        Check.eq(10200, kept.get(2).uid, "another uid is another row");
+        Check.eq(5, HistoryCodec.since(now, new ArrayList<>(), 500L).size(), "no baseline keeps everything");
+        Check.eq(0, HistoryCodec.since(new ArrayList<>(), before, 500L).size(), "nothing live, nothing kept");
         Check.passed("HistoryCodecCheck");
     }
 }
