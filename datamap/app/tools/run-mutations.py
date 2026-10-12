@@ -68,7 +68,7 @@ MUTATIONS = [
     ("selection: the globe is smaller with the sheet", "MapSelection.java",
      "Math.min(width * 0.30f,", "Math.min(width * 0.31f,", 1),
     ("selection: the layout is in pixels, not dp", "MapSelection.java",
-     "float top = 108 * density;", "float top = 108;", 1),
+     "float top = 72 * density;", "float top = 72;", 1),
     ("selection: other apps' lines are drawn", "MapSelection.java",
      "if (app != null && !app.equals(pkg)) {", "if (false) {", 1),
     ("selection: a relation does not fade the lines", "MapSelection.java",
@@ -184,6 +184,16 @@ MUTATIONS = [
      "Math.max(0, groupSize - 1)", "groupSize", 1),
     ("logopick: the badge can be negative", "LogoPick.java",
      "Math.max(0, groupSize - 1)", "groupSize - 1", 1),
+    ("land: the bounds ignore the radius", "LandData.java",
+     "return angle < Math.PI / 2 + radius[shape];", "return angle < Math.PI / 2;", 1),
+    ("land: the radius never grows", "LandData.java",
+     "far = Math.max(far,", "far = Math.min(far,", 1),
+    ("land: the centre latitude is zero", "LandData.java",
+     "centreLat[s] = Math.toDegrees(Math.asin(z / len));", "centreLat[s] = 0;", 1),
+    ("land: the centre longitude is zero", "LandData.java",
+     "centreLon[s] = Math.toDegrees(Math.atan2(y, x));", "centreLon[s] = 0;", 1),
+    ("land: a ring with no centre hides the shape", "LandData.java",
+     "radius[s] = Math.PI;   // no usable centre: always possibly visible", "radius[s] = 0;", 1),
     # (end of the list: the mutations of a later task are added above this line)
 ]
 

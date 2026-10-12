@@ -102,15 +102,15 @@ public final class MapSelectionCheck {
         eq(940, MapSelection.sheetHeight(MapSelection.SHEET_FULL, 1000, 60), "full leaves 60 at the top");
 
         MapSelection.Layout plain = MapSelection.layout(400, 800, 0, 1f);
-        near(406f, plain.centerY, "no sheet: the globe sits between 108 and H-96");
+        near(388f, plain.centerY, "no sheet: the globe sits between 72 and H-96");
         near(176f, plain.baseRadius, "no sheet: 44 percent of the width");
         MapSelection.Layout half = MapSelection.layout(400, 800, 416, 1f);
         near(216f, half.centerY, "sheet: the globe sits between 56 and the sheet");
         near(120f, half.baseRadius, "sheet: 30 percent of the width");
         MapSelection.Layout tall = MapSelection.layout(1000, 800, 0, 1f);
-        near(280.12f, tall.baseRadius, "the height limits a wide globe");
+        near(297.04f, tall.baseRadius, "the height limits a wide globe");
         MapSelection.Layout dense = MapSelection.layout(800, 1600, 0, 2f);
-        near(812f, dense.centerY, "the constants are dp: twice the density, twice the pixels");
+        near(776f, dense.centerY, "the constants are dp: twice the density, twice the pixels");
 
         // ---- what is dimmed
         MapSelection d = new MapSelection();

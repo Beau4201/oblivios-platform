@@ -148,7 +148,7 @@ public final class MapSelection {
             float bottom = height - sheetHeight - 8 * density;
             return new Layout((top + bottom) / 2, Math.min(width * 0.30f, (bottom - top) / 2 * 0.9f));
         }
-        float top = 108 * density;
+        float top = 72 * density;
         float bottom = height - 96 * density;
         return new Layout((top + bottom) / 2, Math.min(width * 0.44f, (bottom - top) / 2 * 0.94f));
     }

@@ -19,8 +19,49 @@ public final class LandData {
     /** shapes[shape][ring] = longitude, latitude, longitude, latitude ... in degrees */
     public final float[][][] shapes;
 
+    private final double[] centreLat;
+    private final double[] centreLon;
+    private final double[] radius;   // radians: the farthest point of the outline from the centre
+
     private LandData(float[][][] shapes) {
         this.shapes = shapes;
+        centreLat = new double[shapes.length];
+        centreLon = new double[shapes.length];
+        radius = new double[shapes.length];
+        for (int s = 0; s < shapes.length; s++) {
+            float[] ring = shapes[s][0];
+            double x = 0;
+            double y = 0;
+            double z = 0;
+            for (int i = 0; i < ring.length; i += 2) {
+                double lon = Math.toRadians(ring[i]);
+                double lat = Math.toRadians(ring[i + 1]);
+                x += Math.cos(lat) * Math.cos(lon);
+                y += Math.cos(lat) * Math.sin(lon);
+                z += Math.sin(lat);
+            }
+            double len = Math.sqrt(x * x + y * y + z * z);
+            if (len < 1e-9) {
+                radius[s] = Math.PI;   // no usable centre: always possibly visible
+                continue;
+            }
+            centreLat[s] = Math.toDegrees(Math.asin(z / len));
+            centreLon[s] = Math.toDegrees(Math.atan2(y, x));
+            double far = 0;
+            for (int i = 0; i < ring.length; i += 2) {
+                far = Math.max(far, GlobeMath.angle(centreLat[s], centreLon[s], ring[i + 1], ring[i]));
+            }
+            radius[s] = far;
+        }
+    }
+
+    /**
+     * Whether any part of a shape can be on the near half of the globe turned to {@code (lat0, lon0)}. A
+     * shape for which this is false need not be projected: it is on the far side.
+     */
+    public boolean mayBeVisible(int shape, double lat0, double lon0) {
+        double angle = GlobeMath.angle(centreLat[shape], centreLon[shape], lat0, lon0);
+        return angle < Math.PI / 2 + radius[shape];
     }
 
     public static LandData read(InputStream raw) throws IOException {
