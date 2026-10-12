@@ -43,8 +43,17 @@ def resource_name(owner_id):
 
 # ---------------------------------------------------------------------------------------------- path data
 
-_NUM = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
+_NUM = re.compile(r"[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?")   # ASCII digits only: \d takes more
 _ARGS = {"M": 2, "L": 2, "H": 1, "V": 1, "C": 6, "S": 4, "Q": 4, "T": 2, "A": 7, "Z": 0}
+_CMDS = "MmLlHhVvCcSsQqTtAaZz"   # str.isalpha and str.upper take more letters ("ſ".upper() is "S")
+
+
+def _whole_sets(cmd, k):
+    """A command takes one or more whole sets of arguments (none for close); a path that breaks this cannot be
+    read by Android, which would fail when the drawable is drawn."""
+    per = _ARGS[cmd.upper()]
+    if per and (k == 0 or k % per):
+        raise LogoError("the path command %s has %d numbers, not a multiple of %d" % (cmd, k, per))
 
 
 def normalise_path(d):
@@ -58,9 +67,9 @@ def normalise_path(d):
         c = d[i]
         if c in " \t\r\n,":
             i += 1
-        elif c.isalpha():
-            if c.upper() not in _ARGS:
-                raise LogoError("unknown path command " + c)
+        elif c in _CMDS:
+            if cmd is not None:
+                _whole_sets(cmd, k)
             cmd = c
             k = 0
             out.append(c)
@@ -85,6 +94,7 @@ def normalise_path(d):
             k += 1
     if not out or out[0].upper() != "M":
         raise LogoError("path data must start with a move")
+    _whole_sets(cmd, k)
     return " ".join(out)
 
 
@@ -204,7 +214,12 @@ def validate(logos_dir, classifier_tsv):
     licences = load_licences(logos_dir)
     problems, parsed = [], {}
     seen_owner, seen_res = set(), {}
-    for rec in load_records(logos_dir):
+    records = load_records(logos_dir)
+    named = {(base / r["file"]).resolve() for r in records}
+    for f in sorted((base / "svg").glob("*.svg")):   # artwork that no record names has no source and no licence
+        if f.resolve() not in named:
+            problems.append("svg/%s has no record in logos.tsv" % f.name)
+    for rec in records:
         where = "logos.tsv line %d (%s)" % (rec["line"], rec["owner_id"])
         oid = rec["owner_id"]
         if oid not in owners:

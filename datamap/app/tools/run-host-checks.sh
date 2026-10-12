@@ -25,4 +25,9 @@ fi
 if [ -f "$APP/tests/logos_check.py" ]; then
   python3 -I "$APP/tests/logos_check.py"
 fi
+# The logos that are in the package: every file has a record, every drawable equals what the tool makes from it.
+# Skipped for a copy of the app that holds no logos/ next to it (the mutation runner tests such a copy).
+if [ -f "$APP/../logos/logos.tsv" ]; then
+  python3 -I "$APP/tools/import-logos.py" check "$APP/../logos" "$APP/../classifier/classifier.tsv" "$APP/res/drawable"
+fi
 echo "all app host checks passed"

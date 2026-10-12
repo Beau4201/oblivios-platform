@@ -22,7 +22,7 @@ datamap/classifier/tests/run-builder-checks.sh $W | tail -1
 python3 datamap/classifier/tests/run-builder-mutations.py $W | tail -1
 ```
 
-Expected: `all host checks passed`, `39 of 39 mutations killed`, `all app host checks passed` (this includes the logo tool checks), `96 of 96 mutations killed`, `44 of 44 mutations killed` (the logo tool), `static checks passed`, `all builder checks passed`, `11 of 11 mutations killed`.
+Expected: `all host checks passed`, `39 of 39 mutations killed`, `all app host checks passed` (this includes the logo tool checks), `96 of 96 mutations killed`, `49 of 49 mutations killed` (the logo tool), `static checks passed`, `all builder checks passed`, `11 of 11 mutations killed`.
 
 ## Type-check on the build server (changes nothing in the tree)
 

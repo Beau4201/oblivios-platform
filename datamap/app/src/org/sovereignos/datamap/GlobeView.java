@@ -717,9 +717,16 @@ final class GlobeView extends View {
             float inset = half * 0.28f;
             logo.setBounds((int) (x - half + inset), (int) (y - half + inset), (int) (x + half - inset),
                     (int) (y + half - inset));
-            logo.setAlpha((int) (alpha * 255));
-            logo.draw(canvas);
-            logo.setAlpha(255);
+            // A vector drawable on a hardware canvas takes its alpha when the frame is synced, so setAlpha around
+            // draw() is lost and the logo would stay opaque at the rim and when dimmed: a layer fades it instead.
+            if (alpha < 0.999f) {
+                int save = canvas.saveLayerAlpha(logo.getBounds().left, logo.getBounds().top,
+                        logo.getBounds().right, logo.getBounds().bottom, (int) (alpha * 255));
+                logo.draw(canvas);
+                canvas.restoreToCount(save);
+            } else {
+                logo.draw(canvas);
+            }
             if (m.ghost) {
                 mStroke.setPathEffect(new DashPathEffect(new float[] {mUi.dp(4), mUi.dp(3)}, 0));
             } else {

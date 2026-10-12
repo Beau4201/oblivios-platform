@@ -44,6 +44,17 @@ refuses(lambda: L.normalise_path("M1 1z 5"), "a number after close")
 refuses(lambda: L.normalise_path("M0 0 A1 1 0 2 1 1 1"), "an arc flag of 2")
 refuses(lambda: L.normalise_path("5 5"), "a number first")
 refuses(lambda: L.normalise_path("M1 ."), "a dot is no number")
+# Only the ASCII command letters and digits of SVG: str.isalpha, str.upper and \d accept more than that.
+refuses(lambda: L.normalise_path("M0 0 ſ1 1"), "a long s that upper-cases to the command S")
+refuses(lambda: L.normalise_path("M0 0 L ١٢ ٣ z"), "Arabic-Indic digits")
+# Every command takes a whole number of argument sets; an unparseable pathData would fail at draw time.
+refuses(lambda: L.normalise_path("M 1"), "a move with one number")
+refuses(lambda: L.normalise_path("M0 0 L 1 2 3"), "a line with three numbers")
+refuses(lambda: L.normalise_path("M0 0 L 1 z"), "a line with one number before close")
+refuses(lambda: L.normalise_path("M0 0 A1 1 0 0 1 1"), "an arc with six numbers")
+refuses(lambda: L.normalise_path("M0 0 L z"), "a line with no numbers")
+eq("M 1 1 2 2", L.normalise_path("M1 1 2 2"), "an implicit line after a move is kept")
+eq("M 0 0 L 1 2 3 4 z", L.normalise_path("M0 0 L 1 2 3 4 z"), "a line repeated without its letter")
 
 # ---- svg
 w, h, paths = L.parse_svg(SVG)
@@ -140,6 +151,10 @@ def row(oid="google", file="svg/google.svg", colour="4285F4", source="https://ex
 
 with tempfile.TemporaryDirectory() as d:
     eq([], problems(pathlib.Path(d)), "the good record has no problems")
+with tempfile.TemporaryDirectory() as d:   # an svg that no record names would be third-party artwork with no source
+    probs = problems(pathlib.Path(d), files={"svg/google.svg": SVG, "svg/meta.svg": SVG.replace("M12", "M13"),
+                                             "svg/stray.svg": SVG})
+    assert has(probs, "svg/stray.svg has no record"), probs
 cases = [
     ("an owner the classifier does not know", [row(oid="nobody")], "not an owner"),
     ("a second logo for one owner", [row(), row(file="svg/google.svg")], "second logo"),

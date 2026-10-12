@@ -19,6 +19,13 @@ final class Logos {
             return null;
         }
         int id = context.getResources().getIdentifier(LogoName.of(ownerId), "drawable", context.getPackageName());
-        return id == 0 ? null : context.getDrawable(id);
+        if (id == 0) {
+            return null;
+        }
+        try {
+            return context.getDrawable(id);
+        } catch (RuntimeException e) {
+            return null;   // a drawable that cannot be read must cost a logo, not the app: the initials are drawn
+        }
     }
 }
