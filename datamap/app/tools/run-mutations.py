@@ -146,6 +146,16 @@ MUTATIONS = [
      "return TYPES.length;", "return 0;", 1),
     ("role: no company is a company", "RelationRole.java",
      "if (viewedId == null) {\n            return NONE;\n        }", "", 1),
+    ("keepfor: 91 days is valid", "KeepFor.java",
+     "days >= 1 && days <= MAX", "days >= 1 && days <= MAX + 1", 1),
+    ("keepfor: 0 days is valid", "KeepFor.java",
+     "days >= 1 && days <= MAX", "days >= 0 && days <= MAX", 1),
+    ("keepfor: a value out of range is kept", "KeepFor.java",
+     "return valid(stored) ? stored : DEFAULT;", "return stored;", 1),
+    ("keepfor: the extra value is put last", "KeepFor.java",
+     "if (!placed && v < p) {", "if (false) {", 1),
+    ("keepfor: the default is 7", "KeepFor.java",
+     "public static final int DEFAULT = 30;", "public static final int DEFAULT = 7;", 1),
     # (end of the list: the mutations of a later task are added above this line)
 ]
 
