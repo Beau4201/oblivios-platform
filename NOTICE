@@ -61,6 +61,10 @@ does not declare a Reserved Font Name; the distribution package metadata does.
 Whether the outlines in the PNG files are a modified version in the sense of
 the licence has not been legally reviewed.
 
+Natural Earth (land outlines and country borders of the Data Map app, datamap/app/res/raw/land.bin)
+  Natural Earth, public domain (https://www.naturalearthdata.com/about/terms-of-use/). No licence conditions;
+  the source and the version are recorded in datamap/app/SOURCES.md.
+
 TRADEMARKS
 
 The name SovereignOS and its logo are not licensed; section 6 of the Apache
