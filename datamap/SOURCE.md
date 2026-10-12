@@ -153,6 +153,8 @@ Branch `datamap-redesign`, 2026-10-12, from `f330414`. Nothing is built; the fir
 
 Commits: runners and land checks `02b6f5a`; local names `2f155ff`; relation wording `8e3ca4d`; "Keep for" `b79a83c`; limb, start view and logo pick `ada7917`; land bounds and layout `68d516d`; logo tool `45ab3dc`; resources `1c50716`; themed icons `da49c21`; text, Settings and logos in lists `8fa4217`; activity `e903f68`; globe `de01b0f`; land file `3187980`; logo tool command line `951f6ce`; logos `7a3cfb3`. The history change (patch `frameworks-base/0009`) is checked on the host, type-checked on the server and landed on the build server as `056f7900e13d`; the package alone reproduces the core (`all host checks passed`, `39 of 39 mutations killed`). It is not built.
 
+The redesigned app is landed in `vendor/sovereignos/datamap` (branch `master`) as `685eead` (2026-10-12, no build running, tree clean before; 101 files, `sha256sum` of every file equal to the package; `classifier/data/`, `tests/` and `tools/` are not deployed, as before, so `classifier/` did not change). The plan's `rsync` of `classifier/` would have copied `data/`; it was excluded, because the server never held it. No image is built.
+
 Facts the tasks found:
 - The app mutation runner copied only `src/` and `tests/`, so the unmutated copy failed too and every mutation was reported as killed; the service runner counted a mutation that does not compile as killed. Both are fixed (Task 1); the land reader's limits (`MAX_SHAPES`, three points per ring) had no check and have one.
 - `res/raw/land.bin` had no recorded origin. It is now built from Natural Earth `v5.1.2` at 1:50 million with no simplification (1512 shapes, 93166 points, 378743 bytes), recorded in `datamap/app/SOURCES.md` and `NOTICE`.
