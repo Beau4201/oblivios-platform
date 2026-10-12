@@ -145,6 +145,26 @@ public final class GlobeMath {
         return Math.max(1.5, Math.min(2.6, 1.7 / Math.max(angle, 0.5)));
     }
 
+    /** A marker is fully visible up to this angle from the view centre and fades to nothing at the horizon. */
+    public static final double LIMB_FULL_DEG = 70.0;
+    private static final double LIMB_FULL_DEPTH = Math.cos(Math.toRadians(LIMB_FULL_DEG));
+
+    /** The opacity of a marker from its depth: 1 up to {@link #LIMB_FULL_DEG}, 0 at the horizon. */
+    public static double limbAlpha(double depth) {
+        return Math.max(0.0, Math.min(1.0, depth / LIMB_FULL_DEPTH));
+    }
+
+    /** The same rule by the distance from the middle of the disk in globe radii (0 centre, 1 rim). */
+    public static double limbAlphaAtRadius(double rho) {
+        double r = Math.max(0.0, Math.min(1.0, rho));
+        return limbAlpha(Math.sqrt(1.0 - r * r));
+    }
+
+    /** A faded marker is not a target: a tap only counts from this opacity. */
+    public static boolean tappable(double alpha) {
+        return alpha >= 0.5;
+    }
+
     private static double[] unit(double latDeg, double lonDeg) {
         double lat = Math.toRadians(latDeg);
         double lon = Math.toRadians(lonDeg);
