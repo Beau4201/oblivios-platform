@@ -138,6 +138,14 @@ MUTATIONS = [
      'a.startsWith("fe8")', 'a.startsWith("fe8x")', 1),
     ("hostfilter: an empty key is local", "HostFilter.java",
      "if (serviceKey == null || serviceKey.isEmpty()) {\n            return false;", "if (serviceKey == null || serviceKey.isEmpty()) {\n            return true;", 1),
+    ("role: the roles are swapped", "RelationRole.java",
+     "if (viewedId.equals(r.ownerA)) {\n            return OBJECT;", "if (viewedId.equals(r.ownerA)) {\n            return SUBJECT;", 1),
+    ("role: the other end is swapped", "RelationRole.java",
+     "return role == OBJECT ? r.ownerB : role == SUBJECT ? r.ownerA : null;", "return role == OBJECT ? r.ownerA : role == SUBJECT ? r.ownerB : null;", 1),
+    ("role: an unknown type is owns", "RelationRole.java",
+     "return TYPES.length;", "return 0;", 1),
+    ("role: no company is a company", "RelationRole.java",
+     "if (viewedId == null) {\n            return NONE;\n        }", "", 1),
     # (end of the list: the mutations of a later task are added above this line)
 ]
 
