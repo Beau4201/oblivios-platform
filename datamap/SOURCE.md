@@ -2,7 +2,7 @@
 
 ADR-157. Observe-only collector in `system_server`, a read-only classifier file in the system image, and the privileged app `DataMapApp`.
 
-State: **landed on the build server on 2026-10-12 (section "Landed"), built as modules (section "Module build"), not an image, not on a device.**
+State: **landed on the build server on 2026-10-12 (section "Landed"), built as modules (section "Module build") and as an image (section "Image"), not on a device.**
 
 ## Baselines
 
@@ -132,3 +132,16 @@ Still open: nothing has run on a device.
 2026-10-12, no build running, tree clean: `vendor/adevtool` patch 0002 landed as `0d91ffbe` (`device-common.mk` blob `1992526` identical to the worktree commit). The pins of `lynx` and `stallion` name `0d91ffbe2cef3de1ccbbf92ef43c2ed1811871...` (full hash in the file); the previous files are kept as `adevtool-version-check.mk.pre-datamap-app`. `vendor/sovereignos/datamap` holds the finished app and the classifier with its data (`f5d3628`, 48 files, `sha256sum` identical to the package; the `data/`, `tests/` and `tools/` directories are not deployed).
 
 The package gate `tools/build-vm/check-required-packages.sh` (foundation repository) now requires `DataMapApp.apk`, both system files and `datamap/classifier.tsv`. The live copy was identical to the repository version before the change, was replaced (old file kept as `.pre-datamap`) and its `sha256` equals the repository's. Run against the previous `lynx` output it prints the four `MISSING:` lines and exits 1; it will pass only for an image built with patch 0002.
+
+## Image
+
+`lynx-cur-userdebug` build `2026101201` on 2026-10-12, one detached build with `OFFICIAL_BUILD=true` and the ccache exports (script `tools/build-vm/build-lynx-2026101201.sh` of the foundation repository), after the trees were clean and the pins named the current `vendor/adevtool` HEAD. Exit code 0, no failed step. Not signed and not flashed.
+
+Checked in the output, not from the exit code:
+- `tools/build-vm/check-required-packages.sh` on the product directory, run by the build and again by hand: `all required packages present`, exit 0.
+- The installation lists name `/system/priv-app/DataMapApp/DataMapApp.apk`, `/system/etc/permissions/privapp-permissions-org.sovereignos.datamap.xml`, `/system/etc/sysconfig/hidden-api-whitelisted-app-org.sovereignos.datamap.xml` and `/system/etc/datamap/classifier.tsv`.
+- `ro.build.version.incremental=2026101201`; `system.img`, `vendor.img`, `vbmeta.img`, `init_boot.img` and `vendor_boot.img` date from this build; `boot.img` is the unchanged one of 2026-10-01.
+- The classifier in the system tree has 4369 lines and 231 325 bytes, the size of the package file.
+- Trees at the build: `frameworks/base` `e53353ced37f`, `system/sepolicy` `fd1b880f3`, `vendor/adevtool` `0d91ffbe`, `vendor/sovereignos/datamap` `f5d3628`, all clean.
+
+Not yet seen: any behaviour on a device (plan Task 12).
