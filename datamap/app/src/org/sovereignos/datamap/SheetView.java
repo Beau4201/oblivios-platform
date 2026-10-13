@@ -6,120 +6,108 @@ import android.content.Context;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.animation.PathInterpolator;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 
 /**
- * The sheet over the map for a chosen app, company, relation or group (design reference page). It has a
- * handle that switches between half and full height, a scrolling body, and a height that moves with the
- * stock 200 ms standard curve. It draws nothing while it stands still.
+ * {@code #sheet}: the sheet over the map. A handle 18 dp high with a bar of 34 by 4, and a body that scrolls; its top
+ * corners are 28 dp round and it is bordered. Its height is set by the map tab; it changes in 300 ms and the sheet
+ * slides away in 500 ms when the map is shown alone.
  */
-final class SheetView extends LinearLayout {
+final class SheetView extends FrameLayout {
     interface Host {
         void onHandle();
-
-        /** The height in pixels while it moves, so that the globe can keep clear of the sheet. */
-        void onHeight(float px);
     }
 
-    private static final PathInterpolator STANDARD = new PathInterpolator(0.2f, 0f, 0f, 1f);
-
-    private final Host mHost;
+    private final Ds mDs;
     private final ScrollView mScroll;
-    private ValueAnimator mAnim;
-    private int mHeight;
+    private final LinearLayout mBody;
+    private ValueAnimator mHeight;
 
-    SheetView(Context context, Ui ui, Host host) {
+    SheetView(Context context, Ds ds, final Host host) {
         super(context);
-        mHost = host;
-        setOrientation(VERTICAL);
-        setBackground(ui.shape(R.color.dm_row, 28, 0));
-        setElevation(ui.dp(8));
+        mDs = ds;
+        setId(R.id.at_sheet);
+        setBackground(ds.sheetBox(28));
         setClipToOutline(true);
-
-        FrameLayout handleRow = new FrameLayout(context);
-        View bar = new View(context);
-        bar.setBackground(ui.shape(R.color.dm_ol, 2, 2));
-        handleRow.addView(bar, new FrameLayout.LayoutParams(ui.dp(32), ui.dp(4), Gravity.CENTER));
-        handleRow.setContentDescription(context.getString(R.string.sheet_handle));
-        handleRow.setOnClickListener(v -> mHost.onHandle());
-        addView(handleRow, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(28)));
-
-        mScroll = new ScrollView(context);
-        mScroll.setVerticalScrollBarEnabled(false);
-        addView(mScroll, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-    }
-
-    /** The scrolling body; {@code bottomPadding} keeps the end of a long list clear of the tab bar. */
-    void setBottomPadding(int px) {
-        mScroll.setPadding(0, 0, 0, px);
-        mScroll.setClipToPadding(false);
-    }
-
-    /** Replaces the body. {@code keepScroll}: a live refresh must not throw the reader back to the top. */
-    void setContent(View content, boolean keepScroll) {
-        final int y = mScroll.getScrollY();
-        mScroll.removeAllViews();
-        if (content != null) {
-            mScroll.addView(content);
-        }
-        if (keepScroll) {
-            mScroll.post(() -> mScroll.scrollTo(0, y));
-        } else {
-            mScroll.scrollTo(0, 0);
-        }
-    }
-
-    /** Moves to a height in pixels; 0 hides the sheet when the move has ended. */
-    void animateTo(int px) {
-        if (mAnim != null) {
-            mAnim.cancel();
-        }
-        final int from = mHeight;
-        if (from == px) {
-            return;
-        }
-        setVisibility(View.VISIBLE);
-        mAnim = ValueAnimator.ofInt(from, px);
-        mAnim.setDuration(200);
-        mAnim.setInterpolator(STANDARD);
-        mAnim.addUpdateListener(a -> apply((int) a.getAnimatedValue()));
-        mAnim.addListener(new android.animation.AnimatorListenerAdapter() {
-            private boolean mCancelled;
-
+        final float r = ds.px(28);
+        setOutlineProvider(new android.view.ViewOutlineProvider() {
             @Override
-            public void onAnimationCancel(android.animation.Animator animation) {
-                mCancelled = true;
-            }
-
-            @Override
-            public void onAnimationEnd(android.animation.Animator animation) {
-                if (!mCancelled && mHeight == 0) {
-                    setVisibility(View.GONE);
-                }
+            public void getOutline(View view, android.graphics.Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight() + (int) r, r);
             }
         });
-        mAnim.start();
+        LinearLayout column = new LinearLayout(context);
+        column.setOrientation(LinearLayout.VERTICAL);
+        FrameLayout grab = new FrameLayout(context);
+        grab.setId(R.id.at_sheet_handle);
+        View bar = new View(context);
+        bar.setBackground(ds.box(R.color.at_handle, 2, 0));
+        grab.addView(bar, new FrameLayout.LayoutParams(ds.dp(34), ds.dp(4), Gravity.CENTER));
+        grab.setContentDescription(context.getString(R.string.sheet_handle));
+        grab.setClickable(true);
+        grab.setOnClickListener(v -> host.onHandle());
+        column.addView(grab, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ds.dp(18)));
+        mScroll = new ScrollView(context);
+        mScroll.setVerticalScrollBarEnabled(false);
+        mScroll.setClipToPadding(false);
+        mScroll.setPadding(ds.dp(16), 0, ds.dp(16), ds.dp(104));
+        mBody = new LinearLayout(context);
+        mBody.setOrientation(LinearLayout.VERTICAL);
+        mScroll.addView(mBody, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        column.addView(mScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        addView(column, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
-    /** Jumps to a height without moving, for the first layout. */
-    void jumpTo(int px) {
-        if (mAnim != null) {
-            mAnim.cancel();
+    /** The bottom inset: the body ends this far above the foot so that the tab bar can float over its last row. */
+    void setBottomPadding(int px) {
+        mScroll.setPadding(mDs.dp(16), 0, mDs.dp(16), px);
+    }
+
+    /** Replaces what the sheet shows; the children rise in one after the other. */
+    void setContent(View[] parts, boolean animate) {
+        mBody.removeAllViews();
+        for (View v : parts) {
+            mBody.addView(v);
         }
-        apply(px);
-        setVisibility(px == 0 ? View.GONE : View.VISIBLE);
+        mScroll.scrollTo(0, 0);
+        if (animate) {
+            Anim.fadeUp(mDs, mBody);
+        }
     }
 
-    private void apply(int px) {
-        mHeight = px;
-        ViewGroup.LayoutParams lp = getLayoutParams();
-        if (lp != null) {
+    /** The height of the sheet in pixels: 300 ms to the new one, or at once. */
+    void setHeightPx(int px, boolean animate) {
+        final ViewGroup.LayoutParams lp = getLayoutParams();
+        if (mHeight != null) {
+            mHeight.cancel();
+        }
+        int from = lp.height > 0 ? lp.height : px;
+        if (!animate || mDs.calm() || from == px) {
             lp.height = px;
             setLayoutParams(lp);
+            return;
         }
-        mHost.onHeight(px);
+        mHeight = ValueAnimator.ofInt(from, px);
+        mHeight.setDuration(300);
+        mHeight.setInterpolator(Ds.STANDARD);
+        mHeight.addUpdateListener(a -> {
+            lp.height = (int) a.getAnimatedValue();
+            setLayoutParams(lp);
+        });
+        mHeight.start();
+    }
+
+    /** Slides the sheet away (the map alone) or back, in 500 ms. */
+    void slideAway(boolean away, boolean animate) {
+        float to = away ? getHeight() * 1.04f : 0f;
+        animate().cancel();
+        if (!animate || mDs.calm()) {
+            setTranslationY(to);
+            return;
+        }
+        animate().translationY(to).setDuration(500).setInterpolator(Ds.STANDARD).start();
     }
 }
