@@ -6,3 +6,8 @@
 104.16.0.0,104.16.0.255,US,California,,San Francisco,,37.7749,-122.4194,
 185.0.0.0,185.0.0.255,FR,Ile-de-France,,Paris,,48.8566,2.3522,
 203.0.0.0,203.0.0.255,AU,New South Wales,,Sydney,,-33.8688,151.2093,
+11.0.0.0,11.0.0.255,US,Virginia,,Ashburn,,39.0438,-77.4874,
+11.0.1.0,11.0.1.255,US,Virginia,,Reston,,38.9586,-77.357,
+11.0.2.0,11.0.2.255,US,Washington,,Redmond,,47.674,-122.1215,
+11.0.3.0,11.0.3.255,US,California,,Mountain View,,37.386,-122.0838,
+12.0.0.0,12.0.0.255,NL,North Holland,,Amsterdam,,52.3676,4.9041,

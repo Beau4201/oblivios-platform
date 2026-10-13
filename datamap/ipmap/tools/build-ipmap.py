@@ -26,30 +26,49 @@ mapped file with no parsing:
     NAMES    u8 length, UTF-8 bytes       deduplicated
     ANY4     u32 prefix                   the address >> 8 of an anycast /24, sorted
     ANY6     u64 prefix                   the first 48 bits of an anycast /48, sorted
-    STEER    u32 asn                      networks that steer by DNS (STEERED_OPERATORS), sorted
+    STEER    u32 asn                      networks that steer by DNS (STEERED_NAMES), sorted
     ANCHOR   u16 cc, i16 lat*100, i16 lon*100, u32 0     where a country without a city is drawn, sorted by cc
     SOURCES  UTF-8 text: what the file was made from (the pins)
 """
-import bisect, csv, gzip, ipaddress, struct, sys
+import bisect, csv, gzip, ipaddress, re, struct, sys
 
 MAGIC = b"DMIP"
 VERSION = 1
 SECTIONS = ["CC4", "ASN4", "CITY4", "LOC", "CC6", "ASN6", "ORG", "NAMES", "ANY4", "ANY6", "STEER", "ANCHOR", "SOURCES"]
 HEADER = 8 + 8 * len(SECTIONS)
 NONE32 = 0xFFFFFFFF
+NAT64 = int(ipaddress.ip_address("64:ff9b::")) >> 32
 MAX_NAME = 120
-# D3 of the design: networks that answer with unicast addresses chosen by DNS. Their ranges are not anycast prefixes
-# (the census cannot see them) and the country of a range is that of the operator's registration, not of the edge.
-STEERED_OPERATORS = ("Amazon", "Akamai", "Microsoft Corporation")
+# D3 of the design: networks that answer with unicast addresses chosen by DNS, or whose edge is not where the range is
+# registered. Their ranges are not (all) anycast prefixes (the census cannot see them) and the country of a range is that of
+# the operator's registration, not of the edge. A name matches when its words (letters and digits, any case) contain one of
+# these phrases as whole words: "AMAZON-02" and "MICROSOFT-CORP-MSN-AS-BLOCK" match, "Amazonia Telecom" does not.
+# Measured on 2026-10-13 (datamap-ip-location-data.md): Google 49 of 93, Microsoft 14 of 16 and Fastly 1 of 17 resolved
+# domains lie outside the census, and the two country sources agree for 70% of the steered networks, against 93% elsewhere.
+# The list that a build produces is printed by tools/audit-steered.py and is read before a file is shipped.
+STEERED_NAMES = (("amazon",), ("akamai",), ("microsoft",), ("google",), ("cloudflare",), ("fastly",), ("facebook",),
+                 ("meta", "platforms"), ("apple",), ("edgecast",), ("edgio",), ("limelight",), ("cdn77",), ("stackpath",),
+                 ("imperva",), ("incapsula",))
 
 
 def opener(path):
     return gzip.open(path, "rt", encoding="utf-8", newline="") if path.endswith(".gz") else open(path, encoding="utf-8", newline="")
 
 
+def is_steered(name):
+    """Whether an operator name holds one of STEERED_NAMES as whole words."""
+    words = re.findall(r"[a-z0-9]+", name.lower())
+    return any(words[i:i + len(p)] == list(p) for p in STEERED_NAMES for i in range(len(words)))
+
+
+def steered_asns(org):
+    """The sorted AS numbers of {asn: operator name} whose operator steers by DNS."""
+    return sorted(asn for asn, name in org.items() if is_steered(name))
+
+
 def pack_cc(cc):
     cc = cc.strip().upper()
-    if len(cc) != 2 or not cc.isalpha():
+    if len(cc) != 2 or not cc.isascii() or not cc.isalpha():   # a letter outside ASCII would not fit the 16 bits
         return 0
     return (ord(cc[0]) << 8) | ord(cc[1])
 
@@ -174,7 +193,7 @@ def build(args):
         for _, _, r in rows:
             org.setdefault(int(r[0]), r[1].strip())
     org_records = [(asn, names.add(org[asn])) for asn in sorted(org)]
-    steer = sorted(asn for asn, n in org.items() if any(p in n for p in STEERED_OPERATORS))
+    steer = steered_asns(org)
 
     locs, loc_index = [], {}
 
@@ -277,6 +296,10 @@ class Reader:
     def lookup(self, text):
         """(kind, country, city, lat, lon, asn, operator) with kind one of NONE, CITY, COUNTRY, UNCERTAIN, ANYCAST, STEERED."""
         ip = ipaddress.ip_address(text)
+        if ip.version == 6 and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        elif ip.version == 6 and int(ip) >> 32 == NAT64:   # 64:ff9b::/96 carries an IPv4 address (RFC 6052)
+            ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
         if ip.version == 4:
             n = int(ip)
             cc = self._value("CC4", 6, 4, n, ">H") or 0

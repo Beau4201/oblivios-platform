@@ -21,11 +21,11 @@ Rejected: MaxMind GeoLite2 (EULA), the RIR WHOIS databases for geography (their 
 
 `tools/make-ipmap.sh INPUT_DIR OUT.bin` checks the seven inputs against `PINS.sha256`, runs `tools/build-ipmap.py` and prints the SHA-256 of the result. The layout is in the docstring of the tool. The build is deterministic (two builds are byte-identical). The "latest" release of `ip-location-db` and the census change every day, so a pin can only be met from an archived copy of the inputs, kept on the build server outside this repository.
 
-Result of the first build, 2026-10-13: `ipmap.bin`, 47 942 775 bytes, SHA-256 `0f3729b07e380e8fdf2943f14e80790f3d306fd72e4ac030a4ae10f0d6a8d247`. Sections: country IPv4 1.7 MB, ASN IPv4 3.8 MB, city IPv4 28.4 MB with 2.9 MB of locations, country IPv6 3.2 MB, ASN IPv6 2.3 MB, operator names 4.6 MB (768 KB index), anycast 0.16 MB, 50 steered networks.
+Result of the first build, 2026-10-13, with the earlier rule for steered networks (three operator names as substrings; 50 networks matched) and inputs that are not archived: `ipmap.bin`, 47 942 775 bytes, SHA-256 `0f3729b07e380e8fdf2943f14e80790f3d306fd72e4ac030a4ae10f0d6a8d247`. Sections: country IPv4 1.7 MB, ASN IPv4 3.8 MB, city IPv4 28.4 MB with 2.9 MB of locations, country IPv6 3.2 MB, ASN IPv6 2.3 MB, operator names 4.6 MB (768 KB index), anycast 0.16 MB, 50 steered networks.
 
 ## Rules of the data
 
-1. An address has one answer: anycast first (a /24 or /48 the census lists), then a network that steers by DNS (an operator whose name holds `Amazon`, `Akamai` or `Microsoft Corporation`), then the city when the country of the city data and of `server-country` agree, `UNCERTAIN` when they differ, the anchor of the country when only the country is known.
+1. An address has one answer: anycast first (a /24 or /48 the census lists), then a network that steers by DNS (an operator whose name holds, as whole words in any case, one of `STEERED_NAMES` of the tool: amazon, akamai, microsoft, google, cloudflare, fastly, facebook, meta platforms, apple, edgecast, edgio, limelight, cdn77, stackpath, imperva, incapsula; ADR-164), then the city when the country of the city data and of `server-country` agree, `UNCERTAIN` when they differ, the anchor of the country when only the country is known.
 2. IPv6 is kept to its first 64 bits; when ranges meet inside one /64 the earlier range keeps it. IPv6 has no city (IPv4 only, D6).
 3. A coordinate is rounded to 0.01 degree.
 4. The file says where an address lies in the data, never where a company is based; every text that shows it says "hosted in".
@@ -34,6 +34,8 @@ Result of the first build, 2026-10-13: `ipmap.bin`, 47 942 775 bytes, SHA-256 `0
 
 - Many geofeeds that feed the PDDL part have no explicit licence (accepted, ADR-161 (6)).
 - DB-IP Lite is updated monthly and the country part daily: the file is as old as the image.
-- The census finds anycast only; DNS-steered networks are named by a short list, and their country is that of the registration.
+- The census finds anycast only; DNS-steered networks are named by the words of the operator name, and their country is that of the registration. `tools/audit-steered.py` prints the networks that match; the list is read against the inputs before a file is shipped, and the choice of the names is `[assumption]` until then.
+- The inputs of the first build (2026-10-13) are not archived anywhere on the build server, and the "latest" release changes every day: the pins of `PINS.sha256` can only be met from a copy that someone kept. A new build takes new pins, a new table above and a new measurement.
+- An IPv4 server of a NAT64 network shows as an address of `64:ff9b::/96`; the reader takes the IPv4 address from it. Another prefix of that kind is not unwrapped.
 - Country agreement between the two sources is 93% for ordinary addresses and 35% for anycast ones (measured on 1877 resolved domains, `datamap-ip-location-data.md`).
 - Not measured: the phone's own resolver, IPv6 city data, and the cost of a lookup in `system_server` (`MAP-032`).

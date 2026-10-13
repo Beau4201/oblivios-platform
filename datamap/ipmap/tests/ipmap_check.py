@@ -22,7 +22,7 @@ ARGS["sources"] = "fixture"
 EXPECTED = [
     ("1.0.0.1", "ANYCAST", "AU", "", 0.0, 0.0, 13335, "Cloudflare, Inc."),
     ("1.0.1.1", "CITY", "CN", "Wenquan", 26.1, 119.3, 0, ""),
-    ("8.8.8.8", "CITY", "US", "Mountain View", 37.39, -122.08, 15169, "Google LLC"),
+    ("8.8.8.8", "CITY", "US", "Mountain View", 37.39, -122.08, 15169, "Example Network Ltd"),
     ("9.9.9.9", "ANYCAST", "CH", "", 0.0, 0.0, 19281, "Quad9"),
     ("52.0.1.1", "STEERED", "US", "", 0.0, 0.0, 16509, "Amazon.com, Inc."),
     ("104.16.0.5", "ANYCAST", "US", "", 0.0, 0.0, 13335, "Cloudflare, Inc."),
@@ -33,11 +33,28 @@ EXPECTED = [
     ("10.0.0.1", "NONE", "", "", 0.0, 0.0, 0, ""),
     ("0.0.0.0", "NONE", "", "", 0.0, 0.0, 0, ""),
     ("255.255.255.255", "NONE", "", "", 0.0, 0.0, 0, ""),
-    ("2001:4860::1", "COUNTRY", "US", "", 39.8, -98.6, 15169, "Google LLC"),
-    ("2a00:1450::1", "COUNTRY", "IE", "", 53.4, -8.2, 15169, "Google LLC"),
+    ("2001:4860::1", "COUNTRY", "US", "", 39.8, -98.6, 15169, "Example Network Ltd"),
+    ("2a00:1450::1", "COUNTRY", "IE", "", 53.4, -8.2, 15169, "Example Network Ltd"),
     ("2606:4700:10::1", "ANYCAST", "US", "", 0.0, 0.0, 13335, "Cloudflare, Inc."),
-    ("2606:4700:11::1", "COUNTRY", "US", "", 39.8, -98.6, 13335, "Cloudflare, Inc."),
+    ("2606:4700:11::1", "STEERED", "US", "", 0.0, 0.0, 13335, "Cloudflare, Inc."),
     ("2607::1", "NONE", "", "", 0.0, 0.0, 0, ""),
+    # a name is matched as whole words, any case; an AS number of 2**31 or more is read as unsigned
+    ("11.0.0.1", "STEERED", "US", "", 0.0, 0.0, 4200000000, "AMAZON-02"),
+    ("11.0.1.1", "CITY", "US", "Reston", 38.96, -77.36, 64496, "Amazonia Telecom"),
+    ("11.0.2.1", "STEERED", "US", "", 0.0, 0.0, 8075, "MICROSOFT-CORP-MSN-AS-BLOCK"),
+    ("11.0.3.1", "STEERED", "US", "", 0.0, 0.0, 396982, "GOOGLE-CLOUD-PLATFORM"),
+    ("12.0.0.1", "CITY", "NL", "Amsterdam", 52.37, 4.9, 4200000001, "Example Transit"),
+    # an IPv6 key with the top bit set sorts after the others only when it is compared as unsigned (country and AS ranges)
+    ("a000::1", "COUNTRY", "NL", "", 52.4, 4.9, 4200000001, "Example Transit"),
+    ("a000:1::5", "ANYCAST", "NL", "", 0.0, 0.0, 4200000001, "Example Transit"),
+    ("a000:2::5", "COUNTRY", "NL", "", 52.4, 4.9, 4200000001, "Example Transit"),
+    # the first name of an AS number is kept (IPv4 before IPv6); a name is cut at 120 bytes, on a character
+    ("13.0.0.1", "NONE", "", "", 0.0, 0.0, 64497, "a" + "\u00e9" * 59),
+    # the well-known NAT64 prefix carries an IPv4 address: it is that address; any other 64:ff9b:: address is IPv6
+    ("::ffff:8.8.8.8", "CITY", "US", "Mountain View", 37.39, -122.08, 15169, "Example Network Ltd"),
+    ("64:ff9b::808:808", "CITY", "US", "Mountain View", 37.39, -122.08, 15169, "Example Network Ltd"),
+    ("64:ff9b::8.8.8.8", "CITY", "US", "Mountain View", 37.39, -122.08, 15169, "Example Network Ltd"),
+    ("64:ff9b:1::808:808", "NONE", "", "", 0.0, 0.0, 0, ""),
 ]
 
 
@@ -95,10 +112,24 @@ def main():
         shared = os.path.join(d, "shared6.csv")
         open(shared, "w").write("2001:db8::,2001:db8::ff,US\n2001:db8::100,2001:db8::1ff,DE\n"
                                 "2001:db8::200,2001:db8:0:1:ffff:ffff:ffff:ffff,FR\n2001:db8:0:2::,2001:db8:0:2::ff,IT\n")
-        r6 = B.Reader(B.build(dict(ARGS, country6=shared)))
+        blob6 = B.build(dict(ARGS, country6=shared))
+        r6 = B.Reader(blob6)
+        off6, len6 = struct.unpack(">II", blob6[8 + 8 * B.SECTIONS.index("CC6"): 16 + 8 * B.SECTIONS.index("CC6")])
+        starts6 = [struct.unpack(">Q", blob6[off6 + i * 10: off6 + i * 10 + 8])[0] for i in range(len6 // 10)]
+        n6 = (0x20010db8 << 32)
+        expect(starts6[0] == 0 and all(starts6[i] < starts6[i + 1] for i in range(len(starts6) - 1)), "the starts of the IPv6 records increase")
+        expect(starts6[1:5] == [n6, n6 + 1, n6 + 2, n6 + 3], "the ranges that met in one /64 became one record each: %s" % starts6)
         expect(r6.lookup("2001:db8::5")[1] == "US", "the earlier range keeps a shared /64")
         expect(r6.lookup("2001:db8:0:1::1")[1] == "FR", "a range that reaches past it starts after it")
         expect(r6.lookup("2001:db8:0:2::9")[1] == "IT", "a later /64 is its own")
+        backwards = os.path.join(d, "backwards.csv")
+        open(backwards, "w").write("1.0.0.9,1.0.0.1,AU\n")
+        refused = False
+        try:
+            B.build(dict(ARGS, country4=backwards))
+        except SystemExit:
+            refused = True
+        expect(refused, "a range that ends before it starts must be refused")
         pfx = os.path.join(d, "any.csv")
         open(pfx, "w").write("prefix,number_of_sites,backing_prefix\n1.0.0.0/23,5,-\n")
         refused = False
@@ -107,6 +138,19 @@ def main():
         except SystemExit:
             refused = True
         expect(refused, "an anycast prefix that is not a /24 must be refused")
+    # the networks that steer by DNS: whole words of the operator name, any case, no part of a longer word
+    for n in ("AMAZON-02", "Amazon.com, Inc.", "Akamai International B.V.", "MICROSOFT-CORP-MSN-AS-BLOCK", "Microsoft Corporation",
+              "Google LLC", "GOOGLE-CLOUD-PLATFORM", "Cloudflare, Inc.", "Fastly, Inc.", "Facebook, Inc.", "Meta Platforms, Inc.",
+              "Apple Inc.", "EDGECAST", "cdn77 - Datacamp Limited"):
+        expect(B.is_steered(n), "%s steers by DNS" % n)
+    for n in ("Amazonia Telecom", "Hetzner Online GmbH", "Quad9", "Metadata Hosting", "Applewood Networks", "Googleplex Ltd",
+              "Microscopic Net", "", "Meta"):
+        expect(not B.is_steered(n), "%s does not" % n)
+    expect(B.steered_asns({1: "AMAZON-02", 2: "Quad9", 3: "Google LLC"}) == [1, 3], "the steered AS numbers, sorted")
+    # a country code is two ASCII letters: a letter outside ASCII would not fit the sixteen bits of the record
+    for cc in ("\u00e9a", "\u03a9a", "A", "ABC", "A1", "", "a b"):
+        expect(B.pack_cc(cc) == 0, "%r is no country code" % cc)
+    expect(B.pack_cc("de") == (ord("D") << 8) | ord("E"), "a country code is upper-cased")
     # the committed files for the Java check equal what the tool makes now
     tsv = "".join("%s\t%s\t%s\t%s\t%.2f\t%.2f\t%d\t%s\n" % row for row in EXPECTED)
     if "--regenerate" in sys.argv:
