@@ -29,15 +29,11 @@ final class Texts {
         return row.owner.city.isEmpty() ? country(row.owner.countryCode) : row.owner.city;
     }
 
-    /** The line of a server place in a list: the services, and the operators the data names. */
-    static String serverSub(Context c, MapModel.CompanyRow row) {
-        List<String> operators = new ArrayList<>();
-        for (String op : row.operatorOfService.values()) {
-            if (!operators.contains(op)) {
-                operators.add(op);
-            }
-        }
-        String services = c.getResources().getQuantityString(R.plurals.n_services, row.services.size(), row.services.size());
+    /** The line of a server place in a list: the services {@code pkg} reached (all when null), and the operators of those. */
+    static String serverSub(Context c, MapModel.CompanyRow row, String pkg) {
+        List<String> operators = row.operatorsOf(pkg);
+        int n = row.servicesOf(pkg).size();
+        String services = c.getResources().getQuantityString(R.plurals.n_services, n, n);
         return operators.isEmpty() ? services : services + " · " + (operators.size() > 2
                 ? c.getString(R.string.operators_more, operators.get(0), operators.get(1), operators.size() - 2)
                 : join(c, operators));

@@ -347,6 +347,11 @@ final class GlobeView extends View {
         return null;
     }
 
+    /** The app that is chosen on the map, or null. */
+    String app() {
+        return mApp;
+    }
+
     List<Places.Place> places() {
         return mPlaces;
     }

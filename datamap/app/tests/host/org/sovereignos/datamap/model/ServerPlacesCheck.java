@@ -89,6 +89,27 @@ public final class ServerPlacesCheck {
         check(!frankfurt.operatorOfService.containsKey("t2.example"), "no operator is made up");
         check(frankfurt.appsOfService.get("t1.example").size() == 1 && frankfurt.appsOfService.get("t2.example").contains("com.b"),
                 "the apps of each service");
+        MapModel.Input ops = new MapModel.Input();
+        ops.entries.add(entry("com.a", "o1.example", "", MapModel.SRV_CITY, "DE", "Frankfurt", 50.11, 8.68, "Hetzner Online GmbH"));
+        ops.entries.add(entry("com.a", "o2.example", "", MapModel.SRV_CITY, "DE", "Frankfurt", 50.11, 8.68, "Hetzner Online GmbH"));
+        ops.entries.add(entry("com.a", "o3.example", "", MapModel.SRV_CITY, "DE", "Frankfurt", 50.11, 8.68, "OVH SAS"));
+        check(MapModel.build(ops).serverRows.get(0).operatorsOf(null).equals(java.util.Arrays.asList("Hetzner Online GmbH", "OVH SAS")),
+                "an operator is listed once, in the order of the services");
+        // what one app reached: the page of an app counts its own services and names its own operators, not those of the others
+        check(frankfurt.servicesOf(null).size() == 2 && frankfurt.servicesOf("com.a").equals(java.util.Arrays.asList("t1.example")),
+                "com.a reached one of the two services of Frankfurt");
+        check(frankfurt.servicesOf("com.b").equals(java.util.Arrays.asList("t2.example")) && frankfurt.servicesOf("com.z").isEmpty(),
+                "com.b the other, an app that reached none has none");
+        check(frankfurt.operatorsOf(null).equals(java.util.Arrays.asList("Hetzner Online GmbH")), "the operators of the place");
+        check(frankfurt.operatorsOf("com.a").equals(java.util.Arrays.asList("Hetzner Online GmbH")) && frankfurt.operatorsOf("com.b").isEmpty(),
+                "com.b reached a service with no operator: it is not shown Hetzner");
+        check(brazil.servicesOf("com.a").size() == 1 && brazil.servicesOf("com.b").size() == 2, "the country of Brazil, by app");
+        for (Places.Place p : out.places(null)) {
+            if (p.lead == frankfurt) {
+                check(p.services() == 2 && p.services("com.a") == 1 && p.services("com.b") == 1 && p.services(null) == 2,
+                        "a place counts the services of the chosen app");
+            }
+        }
         check(out.serverRows.get(2) == stockholm && out.serverRows.get(0).apps.size() == 2, "most apps first, a tie by id");
         check(out.serverRows.get(0) == brazil && out.serverRows.get(1) == frankfurt, "the tie of two apps goes by id");
 

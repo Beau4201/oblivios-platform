@@ -239,6 +239,64 @@ public final class ServerPlaceCheck {
         two.put(0, noPlace);
         Check.eq(BERLIN, HistoryCodec.aggregate(two, live).get(0).place, "aggregate takes the place of the row that has one");
 
+        // aggregate: the place that can be drawn wins, the older one only among equals
+        List<DataMapStore.Row> newerCity = new ArrayList<>();
+        newerCity.add(new DataMapStore.Row(10100, "com.a", "x.com", 1000, 9000, 5, 3, 2, true, BERLIN));
+        List<DataMapStore.Row> olderAny = new ArrayList<>();
+        olderAny.add(new DataMapStore.Row(10100, "com.a", "x.com", 1000, 4000, 2, 1, 1, true, ANY));
+        TreeMap<Integer, List<DataMapStore.Row>> anyDay = new TreeMap<>();
+        anyDay.put(0, olderAny);
+        Check.eq(BERLIN, HistoryCodec.aggregate(anyDay, newerCity).get(0).place, "a place that is drawn beats an older one that is not");
+        List<DataMapStore.Row> newerAny = new ArrayList<>();
+        newerAny.add(new DataMapStore.Row(10100, "com.a", "x.com", 1000, 9000, 5, 3, 2, true, ANY));
+        List<DataMapStore.Row> olderCity = new ArrayList<>();
+        olderCity.add(new DataMapStore.Row(10100, "com.a", "x.com", 1000, 4000, 2, 1, 1, true, BERLIN));
+        anyDay.put(0, olderCity);
+        Check.eq(BERLIN, HistoryCodec.aggregate(anyDay, newerAny).get(0).place, "and one that is not never replaces one that is");
+        anyDay.put(0, java.util.Collections.singletonList(new DataMapStore.Row(10100, "com.a", "x.com", 1000, 4000, 2, 1, 1, true, FRANKFURT)));
+        Check.eq(FRANKFURT, HistoryCodec.aggregate(anyDay, newerCity).get(0).place, "between two that are drawn the older one stays");
+
+        List<DataMapStore.Row> liveNone = new ArrayList<>();
+        liveNone.add(new DataMapStore.Row(10100, "com.a", "x.com", 1000, 9000, 5, 3, 2, true));
+        anyDay.put(0, olderCity);
+        Check.eq(BERLIN, HistoryCodec.aggregate(anyDay, liveNone).get(0).place, "a live row with no place takes nothing away");
+        anyDay.put(0, olderAny);
+        Check.eq(ANY, HistoryCodec.aggregate(anyDay, liveNone).get(0).place, "nor does it take away a place that cannot be drawn");
+
+        // ---- the history file is bounded when it is written: the oldest days go, never the newest, and never all
+        TreeMap<Integer, List<DataMapStore.Row>> manyDays = new TreeMap<>();
+        for (int d = 1; d <= 30; d++) {
+            List<DataMapStore.Row> rs = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                rs.add(new DataMapStore.Row(10100, "com.a", "h" + i + ".example.com", 3_600_000L, 7_200_000L, 3, 1, 2, true, BERLIN));
+            }
+            manyDays.put(d, rs);
+        }
+        int whole = HistoryCodec.encode(manyDays, true).getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        Check.eq(HistoryCodec.encode(manyDays, true), HistoryCodec.encodeWithin(manyDays, true, whole), "under the bound nothing goes");
+        String half = HistoryCodec.encodeWithin(manyDays, true, whole / 2);
+        Check.isTrue(half.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= whole / 2, "the file fits the bound");
+        TreeMap<Integer, List<DataMapStore.Row>> kept = HistoryCodec.decode(half);
+        Check.isTrue(kept.size() >= 14 && kept.size() < 30, "about half of the days are kept: " + kept.size());
+        Check.eq(30, kept.lastKey().intValue(), "the newest day is kept");
+        Check.eq(30 - kept.size() + 1, kept.firstKey().intValue(), "the days kept are the newest, in a row");
+        Check.eq(manyDays.size(), 30, "the input is not changed");
+        TreeMap<Integer, List<DataMapStore.Row>> lone = new TreeMap<>();
+        lone.put(7, manyDays.get(7));
+        Check.eq(1, HistoryCodec.decode(HistoryCodec.encodeWithin(lone, true, 10)).size(), "the last day is written even when it is over the bound");
+        // names that take more than a byte a character count as bytes
+        TreeMap<Integer, List<DataMapStore.Row>> wide = new TreeMap<>();
+        List<DataMapStore.Row> wr = new ArrayList<>();
+        wr.add(new DataMapStore.Row(10100, "com.a", "x.example.com", 3_600_000L, 7_200_000L, 3, 1, 2, true,
+                new ServerPlace(ServerPlace.CITY, "DE", "\u00fc".repeat(200), 1f, 2f, 3, "op")));
+        wide.put(1, wr);
+        wide.put(2, wr);
+        String wtext = HistoryCodec.encode(wide, true);
+        Check.isTrue(wtext.length() < wtext.getBytes(java.nio.charset.StandardCharsets.UTF_8).length, "the fixture has multibyte text");
+        int wbytes = wtext.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        Check.eq(1, HistoryCodec.decode(HistoryCodec.encodeWithin(wide, true, wbytes - 1)).size(), "bytes, not characters");
+        Check.eq(2, HistoryCodec.decode(HistoryCodec.encodeWithin(wide, true, wbytes)).size(), "exactly the bound keeps both");
+
         // ---- the setting
         UserSettings d = UserSettings.defaults();
         Check.isTrue(!d.serverHistory, "server places are not kept by default");
@@ -248,7 +306,13 @@ public final class ServerPlaceCheck {
         // the choice is kept in a file of its own, so that a build without it reads the settings file as it always did
         Check.eq(d.withHistory(true, 7).encode(), on.encode(), "the settings text does not hold the choice");
         Check.isTrue(!on.encode().contains("serverHistory"), "no key of it in the settings file");
-        Check.isTrue(d.withServerHistory(true).isDefault(), "the choice alone leaves the settings file at the defaults");
+        Check.eq(d.withHistory(true, 30).encode(), d.withHistory(true, 30).withServerHistory(true).encode(), "the choice changes nothing in the settings file");
+        // the choice belongs to the history: it cannot be switched on without it, and it goes when the history goes
+        Check.isTrue(!d.withServerHistory(true).serverHistory, "the choice cannot be switched on while the history is off");
+        Check.isTrue(on.serverHistory && on.withHistory(true, 9).serverHistory, "it stays on when the days change");
+        Check.isTrue(!on.withHistory(false, 7).serverHistory, "it goes off with the history");
+        Check.isTrue(!on.withHistory(false, 7).withHistory(true, 7).serverHistory, "and is off when the history comes back");
+        Check.isTrue(!on.withCollecting(false).withHistory(false, 7).serverHistory, "also with collecting off");
         Check.isTrue(!UserSettings.decode(on.encode()).serverHistory, "reading the settings file never turns it on");
         Check.eq(7, UserSettings.decode(on.encode()).days, "the days round trip");
         Check.isTrue(on.withCollecting(false).serverHistory && on.withHistory(true, 9).serverHistory, "other changes keep it");

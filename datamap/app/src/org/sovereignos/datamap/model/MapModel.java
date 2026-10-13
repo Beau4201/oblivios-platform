@@ -147,6 +147,30 @@ public final class MapModel {
         /** Server places only: the apps that contacted each service, and its operator when the data names one. */
         public final Map<String, Set<String>> appsOfService = new LinkedHashMap<>();
         public final Map<String, String> operatorOfService = new LinkedHashMap<>();
+
+        /** Server places only: the services that {@code pkg} reached, or every service when {@code pkg} is null. */
+        public List<String> servicesOf(String pkg) {
+            List<String> out = new ArrayList<>();
+            for (String s : services) {
+                Set<String> apps = appsOfService.get(s);
+                if (pkg == null || apps != null && apps.contains(pkg)) {
+                    out.add(s);
+                }
+            }
+            return out;
+        }
+
+        /** Server places only: the operators of {@link #servicesOf}, once each, in order. */
+        public List<String> operatorsOf(String pkg) {
+            List<String> out = new ArrayList<>();
+            for (String s : servicesOf(pkg)) {
+                String op = operatorOfService.get(s);
+                if (op != null && !out.contains(op)) {
+                    out.add(op);
+                }
+            }
+            return out;
+        }
     }
 
     /** A line from an app to a company it contacted. */

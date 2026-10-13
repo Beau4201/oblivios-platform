@@ -231,7 +231,7 @@ final class Pages {
             Widgets.Card hosted = w.card();
             for (MapModel.CompanyRow r : data.out.serverRows) {
                 hosted.add(w.row(null, ctx.getString(R.string.hosted_in, Texts.serverName(r) + (r.owner.city.isEmpty() ? ""
-                        : ", " + Texts.country(r.owner.countryCode))), new Object[] {Texts.serverSub(ctx, r)},
+                        : ", " + Texts.country(r.owner.countryCode))), new Object[] {Texts.serverSub(ctx, r, null)},
                         w.stack(new ArrayList<>(r.apps)), false, null));
             }
             col.addView(hosted);
@@ -424,7 +424,7 @@ final class Pages {
                 col.addView(card);
             }
             card.add(w.row(null, ctx.getString(R.string.hosted_in, Texts.serverName(r) + (r.owner.city.isEmpty() ? ""
-                    : ", " + Texts.country(r.owner.countryCode))), new Object[] {Texts.serverSub(ctx, r)}, null, false, null));
+                    : ", " + Texts.country(r.owner.countryCode))), new Object[] {Texts.serverSub(ctx, r, pkg)}, null, false, null));
         }
     }
 

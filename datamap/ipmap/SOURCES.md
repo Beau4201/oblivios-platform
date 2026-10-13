@@ -25,7 +25,7 @@ Result of the first build, 2026-10-13, with the earlier rule for steered network
 
 ## Rules of the data
 
-1. An address has one answer: anycast first (a /24 or /48 the census lists), then a network that steers by DNS (an operator whose name holds, as whole words in any case, one of `STEERED_NAMES` of the tool: amazon, akamai, microsoft, google, cloudflare, fastly, facebook, meta platforms, apple, edgecast, edgio, limelight, cdn77, stackpath, imperva, incapsula; ADR-164), then the city when the country of the city data and of `server-country` agree, `UNCERTAIN` when they differ, the anchor of the country when only the country is known.
+1. An address has one answer: anycast first (a /24 or /48 the census lists), then a network that steers by DNS (an operator whose name holds, as whole words in any case, one of `STEERED_NAMES` of the tool: amazon, akamai, microsoft, google, cloudflare, fastly, facebook, meta platforms, apple, edgecast, edgio, limelight, cdn77, stackpath, imperva, incapsula; ADR-164), then the city when the country of the city data and of `server-country` agree, or `server-country` names none, `UNCERTAIN` when they differ, the anchor of the country when only the country is known.
 2. IPv6 is kept to its first 64 bits; when ranges meet inside one /64 the earlier range keeps it. IPv6 has no city (IPv4 only, D6).
 3. A coordinate is rounded to 0.01 degree.
 4. The file says where an address lies in the data, never where a company is based; every text that shows it says "hosted in".

@@ -466,7 +466,7 @@ final class MapTab extends FrameLayout implements SheetView.Host, GlobeView.List
             parts.add(header(flags, c.getString(R.string.hosted_in, Texts.serverName(place.lead)
                     + (place.lead.owner.city.isEmpty() ? "" : ", " + Texts.country(place.lead.owner.countryCode))),
                     c.getString(R.string.n_companies_n_apps, c.getResources().getQuantityString(R.plurals.n_services,
-                            place.services(), place.services()), Texts.apps(c, place.apps.size())), close, true));
+                            place.services(mGlobe.app()), place.services(mGlobe.app())), Texts.apps(c, place.apps.size())), close, true));
         } else {
             parts.add(header(flags, Texts.join(c, names), c.getString(R.string.n_companies_n_apps,
                     Texts.companies(c, place.members.size()), Texts.apps(c, place.apps.size())), close, true));
@@ -474,7 +474,7 @@ final class MapTab extends FrameLayout implements SheetView.Host, GlobeView.List
         Widgets.Card card = mW.card();
         for (final MapModel.CompanyRow co : place.members) {
             if (co.server) {
-                for (String service : co.services) {
+                for (String service : co.servicesOf(mGlobe.app())) {
                     String operator = co.operatorOfService.get(service);
                     card.add(mW.row(null, MapModel.address(service), operator == null ? null : new Object[] {operator},
                             mW.stack(new ArrayList<>(co.appsOfService.get(service))), false, null));

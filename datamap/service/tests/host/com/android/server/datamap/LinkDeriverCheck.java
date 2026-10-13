@@ -109,6 +109,27 @@ public final class LinkDeriverCheck {
         Check.eq(3, some.size(), "capped to three");
         Check.eq(all.get(0).pkgA + all.get(0).pkgB, some.get(0).pkgA + some.get(0).pkgB, "the same order as without the cap");
         Check.eq(10, LinkDeriver.derive(rows, c, window, 50).size(), "under the cap nothing is dropped");
+
+        // the evidence of a link is bounded too: a reply is one Binder transaction, and two ad-heavy apps share hundreds
+        // of service keys. The first pieces are kept, in order; the number of links is not changed.
+        List<String> evidence = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            evidence.add("s" + i + ".example");
+        }
+        List<LinkDeriver.Link> big = new ArrayList<>();
+        big.add(new LinkDeriver.Link("com.a", "com.b", LinkDeriver.SAME_OWNER, evidence, true));
+        big.add(new LinkDeriver.Link("com.a", "com.c", LinkDeriver.SHARED_COMPANY, evidence.subList(0, 3), false));
+        List<LinkDeriver.Link> capped = LinkDeriver.capEvidence(big, 16);
+        Check.eq(2, capped.size(), "no link is dropped");
+        Check.eq(16, capped.get(0).evidence.size(), "the evidence is cut to 16");
+        Check.eq("s0.example", capped.get(0).evidence.get(0), "the first pieces are kept");
+        Check.eq("s15.example", capped.get(0).evidence.get(15), "up to the 16th");
+        Check.eq(3, capped.get(1).evidence.size(), "a link under the cap is as it was");
+        Check.isTrue(capped.get(0).stronger && capped.get(0).kind == LinkDeriver.SAME_OWNER && capped.get(0).pkgB.equals("com.b"),
+                "the rest of the link is as it was");
+        Check.eq(40, big.get(0).evidence.size(), "the input is not changed");
+        Check.eq(16, LinkDeriver.capEvidence(big, 16).get(0).evidence.size() + 0, "again");
+        Check.eq(40, LinkDeriver.capEvidence(big, 40).get(0).evidence.size(), "a cap of exactly the size keeps all");
         Check.passed("LinkDeriverCheck");
     }
 }

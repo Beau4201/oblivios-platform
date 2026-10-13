@@ -49,9 +49,14 @@ public final class Places {
 
         /** The services of every member: for a server place, what is hosted there. */
         public int services() {
+            return services(null);
+        }
+
+        /** The services that the app {@code pkg} reached (all of them when it is null). */
+        public int services(String pkg) {
             Set<String> all = new LinkedHashSet<>();
             for (MapModel.CompanyRow m : members) {
-                all.addAll(m.services);
+                all.addAll(pkg == null ? m.services : m.servicesOf(pkg));
             }
             return all.size();
         }

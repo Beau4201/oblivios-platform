@@ -24,8 +24,9 @@ license {
 }
 
 // ADR-161. The read-only address data of the Data Map: country, city, ASN, operator and anycast flag of an address.
-// DataMapService reads exactly this path; a build in which the file is missing still boots, and no service then has a
-// server place.
+// DataMapService reads exactly this path; an image in which the file is missing still boots, and no service then has a
+// server place. The module itself needs src/ipmap.bin next to this file: the built file is not in this repository, so a
+// build that lists datamap-ipmap.bin fails in Soong until the file has been put there (SOURCE.md).
 prebuilt_etc {
     name: "datamap-ipmap.bin",
     src: "ipmap.bin",

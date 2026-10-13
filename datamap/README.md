@@ -7,6 +7,7 @@ The Live Data Map (ADR-157): a collector in `system_server`, a classifier file i
 | `patches/` | The AOSP changes as `git format-patch` files, per tree (`frameworks-base`, `system-sepolicy`, `vendor-adevtool`), applied in order with `git am`. A fix is a new patch on top, never an edit of an earlier one. |
 | `service/tests/host/`, `service/tools/` | Host checks and mutation check of the pure server classes, and the tools that fetch baselines and type-check the Android classes on the build server (`typecheck-on-server.sh`). |
 | `app/` | `DataMapApp` (`Android.bp`, manifest, `src/`, `res/`, `tools/`, `tests/`); `tools/typecheck-on-server.sh` compiles resources, AIDL and Java against the system SDK stubs. |
+| `ipmap/` | The address data of the server places (ADR-161, ADR-164): the build tool, its audit of the DNS-steered networks, the fixtures, the pins, the notices and `Android.bp`. The built file is not in the repository. |
 | `classifier/` | The classifier module, the builder, its tests and (later) the data with its sources. |
 | `SOURCE.md` | Baselines, one row per patch, review and landing records. |
 
@@ -18,11 +19,12 @@ datamap/service/tools/materialize-core.sh $W
 datamap/service/tools/run-host-checks.sh $W | tail -2
 python3 datamap/service/tools/run-mutations.py $W | tail -1
 (cd datamap/app && LAND_BIN=res/raw/land.bin tools/run-host-checks.sh | tail -1 && python3 tools/run-mutations.py | tail -1 && python3 -I tests/logos_mutations.py | tail -1 && tools/check-resources.py && tools/check-static.sh)
+bash datamap/ipmap/tests/run-checks.sh && python3 -I datamap/ipmap/tests/run-mutations.py | tail -1
 datamap/classifier/tests/run-builder-checks.sh $W | tail -1
 python3 datamap/classifier/tests/run-builder-mutations.py $W | tail -1
 ```
 
-Expected: `all host checks passed`, `39 of 39 mutations killed`, `all app host checks passed` (this includes the logo tool checks), `148 of 148 mutations killed`, `49 of 49 mutations killed` (the logo tool), `static checks passed`, `all builder checks passed`, `11 of 11 mutations killed`.
+Expected: `all host checks passed`, `118 of 118 mutations killed`, `all app host checks passed` (this includes the logo tool checks), `177 of 177 mutations killed`, `PASS ipmap_check`, `28 of 28 mutations killed` (the address tool), `49 of 49 mutations killed` (the logo tool), `static checks passed`, `all builder checks passed`, `11 of 11 mutations killed`.
 
 ## Type-check on the build server (changes nothing in the tree)
 

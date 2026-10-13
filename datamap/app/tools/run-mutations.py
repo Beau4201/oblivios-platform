@@ -336,8 +336,18 @@ MUTATIONS = [
      "this.serverHistory = serverHistory;", "this.serverHistory = false;", 1),
     ("data: the unavailable state keeps the choice on", "AtlasData.java",
      "KeepFor.DEFAULT, false, 0, false);", "KeepFor.DEFAULT, true, 0, false);", 1),
+    ("server: an app is shown the services of the others", "MapModel.java",
+     "if (pkg == null || apps != null && apps.contains(pkg)) {", "if (true) {", 1),
+    ("server: an app is shown only the services it did not reach", "MapModel.java",
+     "if (pkg == null || apps != null && apps.contains(pkg)) {", "if (pkg == null || apps != null && !apps.contains(pkg)) {", 1),
+    ("server: an operator is listed twice", "MapModel.java",
+     "if (op != null && !out.contains(op)) {", "if (op != null) {", 1),
+    ("server: the operators of the others are shown", "MapModel.java",
+     "for (String s : servicesOf(pkg)) {\n                String op", "for (String s : services) {\n                String op", 1),
+    ("places: a place counts the services of every app", "Places.java",
+     "all.addAll(pkg == null ? m.services : m.servicesOf(pkg));", "all.addAll(m.services);", 1),
     ("places: the services of a place are not counted", "Places.java",
-     "all.addAll(m.services);", "", 1),
+     "all.addAll(pkg == null ? m.services : m.servicesOf(pkg));", "", 1),
 ]
 
 
