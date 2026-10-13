@@ -3,7 +3,8 @@
 # Type-checks the Android classes of the Data Map service (and generates the Java of its AIDL) with the
 # build tree's own tools and the jars of an earlier build, in a scratch directory. It changes nothing
 # in the tree. Run it ON the build server:   typecheck-on-server.sh SCRATCH_DIR
-# SCRATCH_DIR holds a frameworks/ tree with the new and changed files (not the whole tree).
+# SCRATCH_DIR holds a frameworks/ tree with the new and changed files and the whole com/android/internal/datamap
+# directory of AIDL files (a changed AIDL file with its tree copy on the include path is a duplicate to aidl).
 set -o errexit -o nounset -o pipefail
 W="$(cd "$1" && pwd)"
 T="${AOSP_TREE:-/srv/sovereignos/platform-primary}"
@@ -26,7 +27,7 @@ public class EventLogTags {
 }
 JAVA
 while IFS= read -r f; do
-  "$AIDL" --lang=java -o "$OUT/gen" -I "$W/frameworks/base/core/java" -I "$T/frameworks/base/core/java" "$f"
+  "$AIDL" --lang=java -o "$OUT/gen" -I "$W/frameworks/base/core/java" "$f"
 done < <(find "$W/frameworks" -name '*.aidl' | sort)
 SRCS=$(find "$OUT/gen" "$OUT/stub" "$W/frameworks/base/services/core/java/com/android/server/datamap" -name '*.java' | sort)
 "$JAVAC" -proc:none -Xlint:-options -nowarn -cp "$FRAMEWORK:$SERVICES" -d "$OUT/classes" $SRCS

@@ -1,0 +1,1007 @@
+From 5b16f7e93c289d94c513c546276647268cf9a510 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Tue, 13 Oct 2026 17:26:41 +0200
+Subject: [PATCH] datamap: give every contacted address a server place
+ (ADR-161)
+
+The collector hands the first address of a lookup or connect to the service, which looks it up in the mapped ipmap.bin on the service thread and keeps only the country, the city, the ASN and the operator of the server, never the address. The place says where the server lies in the data, not where the company is based. The history keeps it only when the user chose so (HistoryCodec rows of seventeen fields, UserSettings.serverHistory, IDataMapService.setServerHistory at the end of the transaction order). The Binder entry gains seven fields and the snapshot one.
+---
+ .../internal/datamap/DataMapEntry.aidl        |  11 +
+ .../internal/datamap/DataMapSnapshot.aidl     |   2 +
+ .../internal/datamap/IDataMapService.aidl     |   3 +
+ .../server/datamap/DataMapCollector.java      |   8 +-
+ .../server/datamap/DataMapService.java        |  67 +++-
+ .../android/server/datamap/DataMapStore.java  |  23 +-
+ .../android/server/datamap/HistoryCodec.java  |  44 ++-
+ .../com/android/server/datamap/IpMap.java     | 369 ++++++++++++++++++
+ .../android/server/datamap/ServerPlace.java   |  68 ++++
+ .../android/server/datamap/ServiceKeys.java   |  25 ++
+ .../android/server/datamap/UserSettings.java  |  25 +-
+ 11 files changed, 625 insertions(+), 20 deletions(-)
+ create mode 100644 services/core/java/com/android/server/datamap/IpMap.java
+ create mode 100644 services/core/java/com/android/server/datamap/ServerPlace.java
+
+diff --git a/core/java/com/android/internal/datamap/DataMapEntry.aidl b/core/java/com/android/internal/datamap/DataMapEntry.aidl
+index 15fb886..5bfc0be 100644
+--- a/core/java/com/android/internal/datamap/DataMapEntry.aidl
++++ b/core/java/com/android/internal/datamap/DataMapEntry.aidl
+@@ -21,4 +21,15 @@ parcelable DataMapEntry {
+     int backgroundCount;
+     /** The service came with a DNS answer for the app. False for a connect to a bare address. */
+     boolean viaDns;
++    /** What the first address of this service said (ADR-161): 0 nothing, 1 city, 2 country, 3 uncertain, 4 anycast,
++        5 steered. This is where the server lies in the data, never where the company is based. */
++    int serverKind;
++    /** Two capital letters, or an empty string. */
++    String serverCountry;
++    String serverCity;
++    /** Where to draw kind 1 and 2; zero otherwise. */
++    float serverLat;
++    float serverLon;
++    int serverAsn;
++    String serverOperator;
+ }
+diff --git a/core/java/com/android/internal/datamap/DataMapSnapshot.aidl b/core/java/com/android/internal/datamap/DataMapSnapshot.aidl
+index ddb794c..e146938 100644
+--- a/core/java/com/android/internal/datamap/DataMapSnapshot.aidl
++++ b/core/java/com/android/internal/datamap/DataMapSnapshot.aidl
+@@ -24,4 +24,6 @@ parcelable DataMapSnapshot {
+     /** Names the service refused as not valid host names since the user started. */
+     int invalidCount;
+     long nowWallMs;
++    /** The history also keeps server places. */
++    boolean serverHistory;
+ }
+diff --git a/core/java/com/android/internal/datamap/IDataMapService.aidl b/core/java/com/android/internal/datamap/IDataMapService.aidl
+index ed3cb28..3666a59 100644
+--- a/core/java/com/android/internal/datamap/IDataMapService.aidl
++++ b/core/java/com/android/internal/datamap/IDataMapService.aidl
+@@ -37,4 +37,7 @@ interface IDataMapService {
+ 
+     /** Deletes everything collected for the calling user, in memory and on disk. */
+     void clear();
++
++    /** The history keeps the hosting country, city and operator of a service, or not (ADR-161). */
++    void setServerHistory(boolean enabled);
+ }
+diff --git a/services/core/java/com/android/server/datamap/DataMapCollector.java b/services/core/java/com/android/server/datamap/DataMapCollector.java
+index a7261a6..bba830b 100644
+--- a/services/core/java/com/android/server/datamap/DataMapCollector.java
++++ b/services/core/java/com/android/server/datamap/DataMapCollector.java
+@@ -19,7 +19,8 @@ final class DataMapCollector extends BaseNetdEventCallback {
+     interface Recorder {
+         boolean collecting(int userId);
+ 
+-        void record(int uid, String key, boolean viaDns, long wallMs);
++        /** @param address one address the contact answered with, or null: the server place is looked up from it */
++        void record(int uid, String key, boolean viaDns, long wallMs, String address);
+ 
+         void invalid(int uid);
+ 
+@@ -65,7 +66,8 @@ final class DataMapCollector extends BaseNetdEventCallback {
+                     }
+                 }
+             }
+-            mRecorder.record(uid, host, true, timestamp);
++            mRecorder.record(uid, host, true, timestamp,
++                    ServiceKeys.preferredAddress(ipAddresses, MAX_ADDRESSES));
+         } catch (Throwable t) {
+             mRecorder.dropped();
+         }
+@@ -85,7 +87,7 @@ final class DataMapCollector extends BaseNetdEventCallback {
+                 mRecorder.invalid(uid);
+                 return;
+             }
+-            mRecorder.record(uid, key, false, timestamp);
++            mRecorder.record(uid, key, false, timestamp, ipAddr);
+         } catch (Throwable t) {
+             mRecorder.dropped();
+         }
+diff --git a/services/core/java/com/android/server/datamap/DataMapService.java b/services/core/java/com/android/server/datamap/DataMapService.java
+index 2adad94..c1e95ce 100644
+--- a/services/core/java/com/android/server/datamap/DataMapService.java
++++ b/services/core/java/com/android/server/datamap/DataMapService.java
+@@ -67,6 +67,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     static final String PERMISSION = "org.sovereignos.permission.READ_DATA_MAP";
+     private static final String CLASSIFIER_PATH = "/system/etc/datamap/classifier.tsv";
+     private static final int MAX_CLASSIFIER_BYTES = 4 * 1024 * 1024;
++    private static final String IPMAP_PATH = "/system/etc/datamap/ipmap.bin";
++    private static final long MAX_IPMAP_BYTES = 256L * 1024 * 1024;
+     private static final long MAX_HISTORY_BYTES = 64L * 1024 * 1024;
+     private static final long WRITE_INTERVAL_MS = 60_000L;
+     private static final long NOTIFY_INTERVAL_MS = 500L;
+@@ -123,6 +125,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     private final ConcurrentHashMap<Integer, Integer> mLiveDay = new ConcurrentHashMap<>();
+ 
+     private volatile Classifier mClassifier = Classifier.empty();
++    /** The mapped address data (ADR-161), or null: then no service has a server place. */
++    private volatile IpMap mIpMap;
+     private volatile ActivityManagerInternal mAm;
+     private IIpConnectivityMetrics mMetrics;
+     private boolean mRegistered;
+@@ -200,6 +204,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         }, new IntentFilter(Intent.ACTION_SHUTDOWN), null, mHandler);
+         mHandler.post(() -> {
+             mClassifier = loadClassifier();
++            mIpMap = loadIpMap();
+             refreshRegistration();
+             scheduleWrite();
+         });
+@@ -223,6 +228,22 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         }
+     }
+ 
++    private IpMap loadIpMap() {
++        File f = new File(IPMAP_PATH);
++        try {
++            if (!f.isFile()) {
++                Slog.w(TAG, "no address data; no service has a server place");
++                return null;
++            }
++            IpMap m = IpMap.open(f, MAX_IPMAP_BYTES);
++            Slog.i(TAG, "address data: " + f.length() + " bytes");
++            return m;
++        } catch (IpMap.FormatException | IOException e) {
++            Slog.e(TAG, "the address data is refused: " + e.getMessage());
++            return null;
++        }
++    }
++
+     // ------------------------------------------------ the callback in netd's list
+ 
+     /** Puts the collector on, or takes it off, according to what the users chose. */
+@@ -270,14 +291,14 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+      * no place is dropped and counted.
+      */
+     @Override
+-    public void record(int uid, String key, boolean viaDns, long wallMs) {
++    public void record(int uid, String key, boolean viaDns, long wallMs, String address) {
+         if (!mPending.tryAcquire()) {
+             mDropped.incrementAndGet();
+             return;
+         }
+         mHandler.post(() -> {
+             try {
+-                recordOnServiceThread(uid, key, viaDns, wallMs);
++                recordOnServiceThread(uid, key, viaDns, wallMs, address);
+             } catch (RuntimeException e) {
+                 mDropped.incrementAndGet();   // never take the system server down for one event
+             } finally {
+@@ -286,18 +307,29 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         });
+     }
+ 
+-    private void recordOnServiceThread(int uid, String key, boolean viaDns, long wallMs) {
++    private void recordOnServiceThread(int uid, String key, boolean viaDns, long wallMs, String address) {
+         int userId = UserHandle.getUserId(uid);
+         if (!collecting(userId)) {
+             return;   // the user turned it off while the event waited
+         }
+         int storeUid = uid < Process.FIRST_APPLICATION_UID ? Process.SYSTEM_UID : uid;
+         mStore.record(userId, storeUid, packageOf(uid),
+-                ServiceKeys.storageKey(key, viaDns, mClassifier), isForeground(uid), viaDns, wallMs);
++                ServiceKeys.storageKey(key, viaDns, mClassifier), isForeground(uid), viaDns, wallMs,
++                placeOf(address));
+         mEvents.incrementAndGet();
+         notifyObservers(userId);
+     }
+ 
++    /** The server place of an address, or null. The address is looked up here and goes no further. */
++    private ServerPlace placeOf(String address) {
++        IpMap m = mIpMap;
++        if (m == null || address == null) {
++            return null;
++        }
++        ServerPlace p = m.lookup(address);
++        return p != null && p.known() ? p : null;
++    }
++
+     @Override
+     public void invalid(int uid) {
+         mStore.countInvalid(UserHandle.getUserId(uid));
+@@ -403,6 +435,14 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+             e.foregroundCount = r.fg;
+             e.backgroundCount = r.bg;
+             e.viaDns = r.viaDns;
++            ServerPlace sp = r.place;
++            e.serverKind = sp == null ? ServerPlace.NONE : sp.kind;
++            e.serverCountry = sp == null ? "" : sp.country;
++            e.serverCity = sp == null ? "" : sp.city;
++            e.serverLat = sp == null ? 0f : sp.lat;
++            e.serverLon = sp == null ? 0f : sp.lon;
++            e.serverAsn = sp == null ? 0 : sp.asn;
++            e.serverOperator = sp == null ? "" : sp.operator;
+             entries.add(e);
+             if (!e.ownerId.isEmpty()) {
+                 ownerIds.add(e.ownerId);
+@@ -474,6 +514,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         out.collecting = st.collecting;
+         out.historyOn = st.history;
+         out.historyDays = st.days;
++        out.serverHistory = st.serverHistory;
+         out.invalidCount = mStore.invalidCount(user);
+         out.nowWallMs = wall;
+         return out;
+@@ -571,6 +612,20 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         });
+     }
+ 
++    @Override
++    public void setServerHistory(boolean enabled) {
++        int user = enforceCaller();
++        UserSettings next = mSettings.compute(user, (k, cur) ->
++                (cur == null ? UserSettings.defaults() : cur).withServerHistory(enabled));
++        mHistoryGeneration.incrementAndGet();
++        mHandler.post(() -> {
++            saveSettings(user, next);
++            if (next.history) {
++                writeHistory(user);   // writes the file again, with the places or without them
++            }
++        });
++    }
++
+     @Override
+     public void clear() {
+         int user = enforceCaller();
+@@ -725,7 +780,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         }
+         days.put(liveDay, persistable(user));
+         days = HistoryCodec.prune(days, today, st.days);
+-        if (writeAtomically(historyFile(user), HistoryCodec.encode(days))) {
++        if (writeAtomically(historyFile(user), HistoryCodec.encode(days, st.serverHistory))) {
+             mHistoryGeneration.incrementAndGet();
+             if (today != liveDay) {
+                 mStore.clearUser(user);   // yesterday is on disk; today starts empty
+@@ -778,6 +833,6 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         // Counts only: no package, no service, no owner.
+         pw.println("events since boot: " + mEvents.get() + ", dropped: " + mDropped.get()
+                 + ", entries: " + mStore.size() + ", registered: " + mRegistered
+-                + ", classifier services: " + mClassifier.serviceCount());
++                + ", classifier services: " + mClassifier.serviceCount() + ", address data: " + (mIpMap != null));
+     }
+ }
+diff --git a/services/core/java/com/android/server/datamap/DataMapStore.java b/services/core/java/com/android/server/datamap/DataMapStore.java
+index c1a2d0c..d22573e 100644
+--- a/services/core/java/com/android/server/datamap/DataMapStore.java
++++ b/services/core/java/com/android/server/datamap/DataMapStore.java
+@@ -31,9 +31,16 @@ final class DataMapStore {
+         final int fg;
+         final int bg;
+         final boolean viaDns;
++        /** What the first address of this service said (ADR-161), or null. Never the address. */
++        final ServerPlace place;
+ 
+         Row(int uid, String pkg, String key, long firstWall, long lastWall, int count, int fg,
+                 int bg, boolean viaDns) {
++            this(uid, pkg, key, firstWall, lastWall, count, fg, bg, viaDns, null);
++        }
++
++        Row(int uid, String pkg, String key, long firstWall, long lastWall, int count, int fg,
++                int bg, boolean viaDns, ServerPlace place) {
+             this.uid = uid;
+             this.pkg = pkg;
+             this.key = key;
+@@ -43,6 +50,7 @@ final class DataMapStore {
+             this.fg = fg;
+             this.bg = bg;
+             this.viaDns = viaDns;
++            this.place = place;
+         }
+     }
+ 
+@@ -56,6 +64,7 @@ final class DataMapStore {
+         int fg;
+         int bg;
+         boolean dns;
++        ServerPlace place;
+     }
+ 
+     private static final class UserData {
+@@ -77,7 +86,16 @@ final class DataMapStore {
+     /** Records one contact of an app with a service. */
+     synchronized void record(int userId, int uid, String pkg, String key, boolean foreground,
+             boolean viaDns, long wallMs) {
++        record(userId, uid, pkg, key, foreground, viaDns, wallMs, null);
++    }
++
++    /** @param place what the first address said, or null; the first one that says something stays */
++    synchronized void record(int userId, int uid, String pkg, String key, boolean foreground,
++            boolean viaDns, long wallMs, ServerPlace place) {
+         Entry e = entryFor(userId, uid, pkg, key, wallMs);
++        if (e.place == null && place != null && place.known()) {
++            e.place = place;   // the first address that said something stays
++        }
+         e.count++;
+         if (foreground) {
+             e.fg++;
+@@ -99,6 +117,9 @@ final class DataMapStore {
+             e.first = Math.min(e.first, r.firstWall);
+             e.last = Math.max(e.last, r.lastWall);
+             e.dns |= r.viaDns;
++            if (e.place == null) {
++                e.place = r.place;
++            }
+         }
+         UserData u = users.get(userId);
+         if (u == null) {   // no rows: a cleared history leaves an empty day
+@@ -192,7 +213,7 @@ final class DataMapStore {
+         if (u != null) {
+             for (LinkedHashMap<String, Entry> m : u.byUid.values()) {
+                 for (Entry e : m.values()) {
+-                    out.add(new Row(e.uid, e.pkg, e.key, e.first, e.last, e.count, e.fg, e.bg, e.dns));
++                    out.add(new Row(e.uid, e.pkg, e.key, e.first, e.last, e.count, e.fg, e.bg, e.dns, e.place));
+                 }
+             }
+         }
+diff --git a/services/core/java/com/android/server/datamap/HistoryCodec.java b/services/core/java/com/android/server/datamap/HistoryCodec.java
+index 3775f68..78d9091 100644
+--- a/services/core/java/com/android/server/datamap/HistoryCodec.java
++++ b/services/core/java/com/android/server/datamap/HistoryCodec.java
+@@ -15,6 +15,8 @@ import java.util.TreeMap;
+  * day  index
+  * row  uid  package  key  first  last  count  foreground  background  viaDns(0|1)
+  * </pre>
++ * A row has seven more fields, kind country city latitude longitude asn operator, when the user chose to keep
++ * server places (ADR-161). The decoder reads both forms.
+  * A day index is the number of local days since 1970-01-01. The decoder is bounded: it refuses a file
+  * with more than {@link #MAX_ROWS} rows or a line longer than {@link #MAX_LINE}.
+  */
+@@ -49,6 +51,11 @@ final class HistoryCodec {
+     }
+ 
+     static String encode(TreeMap<Integer, List<DataMapStore.Row>> days) {
++        return encode(days, false);
++    }
++
++    /** @param withPlaces the user chose to keep server places (ADR-161): each row then carries its place */
++    static String encode(TreeMap<Integer, List<DataMapStore.Row>> days, boolean withPlaces) {
+         StringBuilder sb = new StringBuilder("datamap-history\t1\n");
+         for (Map.Entry<Integer, List<DataMapStore.Row>> d : days.entrySet()) {
+             sb.append("day\t").append(d.getKey()).append('\n');
+@@ -60,12 +67,25 @@ final class HistoryCodec {
+                         .append(r.key).append('\t').append(toHour(r.firstWall)).append('\t')
+                         .append(toHour(r.lastWall)).append('\t').append(r.count).append('\t')
+                         .append(r.fg).append('\t').append(r.bg).append('\t')
+-                        .append(r.viaDns ? 1 : 0).append('\n');
++                        .append(r.viaDns ? 1 : 0);
++                ServerPlace p = r.place;
++                if (withPlaces && p != null && p.known() && clean(p.country) && clean(p.city)
++                        && clean(p.operator)) {
++                    sb.append('\t').append(p.kind).append('\t').append(p.country).append('\t').append(p.city)
++                            .append('\t').append(p.lat).append('\t').append(p.lon).append('\t').append(p.asn)
++                            .append('\t').append(p.operator);
++                }
++                sb.append('\n');
+             }
+         }
+         return sb.toString();
+     }
+ 
++    /** A text that may be empty but has no tab or line break. */
++    private static boolean clean(String s) {
++        return s != null && s.indexOf('\t') < 0 && s.indexOf('\n') < 0 && s.indexOf('\r') < 0;
++    }
++
+     private static boolean bad(String s) {
+         return s == null || s.isEmpty() || s.indexOf('\t') >= 0 || s.indexOf('\n') >= 0
+                 || s.indexOf('\r') >= 0;
+@@ -100,7 +120,7 @@ final class HistoryCodec {
+                         current = new ArrayList<>();
+                         days.put(day, current);
+                     }
+-                } else if (f[0].equals("row") && f.length == 10 && current != null) {
++                } else if (f[0].equals("row") && (f.length == 10 || f.length == 17) && current != null) {
+                     if (++rows > MAX_ROWS) {
+                         throw new FormatException("too many rows");
+                     }
+@@ -111,9 +131,22 @@ final class HistoryCodec {
+                             || !(f[9].equals("0") || f[9].equals("1"))) {
+                         throw new FormatException("bad row");
+                     }
++                    ServerPlace place = null;
++                    if (f.length == 17) {
++                        int kind = Integer.parseInt(f[10]);
++                        if (kind < ServerPlace.NONE || kind > ServerPlace.STEERED || f[11].length() > 2) {
++                            throw new FormatException("bad server place");
++                        }
++                        float lat = Float.parseFloat(f[13]);
++                        float lon = Float.parseFloat(f[14]);
++                        if (Float.isNaN(lat) || Float.isInfinite(lat) || Float.isNaN(lon) || Float.isInfinite(lon)) {
++                            throw new FormatException("bad coordinates");
++                        }
++                        place = new ServerPlace(kind, f[11], f[12], lat, lon, Integer.parseInt(f[15]), f[16]);
++                    }
+                     current.add(new DataMapStore.Row(Integer.parseInt(f[1]), f[2], f[3],
+                             Long.parseLong(f[4]), Long.parseLong(f[5]), count, fg, bg,
+-                            f[9].equals("1")));
++                            f[9].equals("1"), place));
+                 } else {
+                     throw new FormatException("unexpected record");
+                 }
+@@ -154,7 +187,7 @@ final class HistoryCodec {
+             int fg = Math.max(0, r.fg - b.fg);
+             int bg = Math.max(0, r.bg - b.bg);
+             out.add(new DataMapStore.Row(r.uid, r.pkg, r.key, Math.max(r.firstWall, switchedOnWall), r.lastWall,
+-                    count, fg, bg, r.viaDns));
++                    count, fg, bg, r.viaDns, r.place));
+         }
+         return out;
+     }
+@@ -186,7 +219,8 @@ final class HistoryCodec {
+                 } else {
+                     merged.put(k, new DataMapStore.Row(r.uid, r.pkg, r.key,
+                             Math.min(m.firstWall, r.firstWall), Math.max(m.lastWall, r.lastWall),
+-                            m.count + r.count, m.fg + r.fg, m.bg + r.bg, m.viaDns || r.viaDns));
++                            m.count + r.count, m.fg + r.fg, m.bg + r.bg, m.viaDns || r.viaDns,
++                            m.place != null ? m.place : r.place));
+                 }
+             }
+         }
+diff --git a/services/core/java/com/android/server/datamap/IpMap.java b/services/core/java/com/android/server/datamap/IpMap.java
+new file mode 100644
+index 0000000..c93cc8f
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/IpMap.java
+@@ -0,0 +1,369 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++import java.nio.ByteBuffer;
++import java.nio.charset.StandardCharsets;
++
++/**
++ * Reads ipmap.bin (the layout is in tools/build-ipmap.py of the datamap package) and says what it knows about an
++ * address: country, operator, city, and whether the address is anycast or steered by DNS (ADR-161). It only reads:
++ * a lookup is a few binary searches over a mapped buffer and allocates one {@link ServerPlace}. It never throws on
++ * input, never resolves a name and never keeps the address.
++ */
++final class IpMap {
++    /** The file is not ours, or damaged. */
++    static final class FormatException extends Exception {
++        private static final long serialVersionUID = 1L;
++
++        FormatException(String message) {
++            super(message);
++        }
++    }
++
++    private static final int CC4 = 0;
++    private static final int ASN4 = 1;
++    private static final int CITY4 = 2;
++    private static final int LOC = 3;
++    private static final int CC6 = 4;
++    private static final int ASN6 = 5;
++    private static final int ORG = 6;
++    private static final int NAMES = 7;
++    private static final int ANY4 = 8;
++    private static final int ANY6 = 9;
++    private static final int STEER = 10;
++    private static final int ANCHOR = 11;
++    private static final int SOURCES = 12;
++    private static final int SECTIONS = 13;
++    /** The record size of each section; 0 where the section is not an array. */
++    private static final int[] STRIDE = {6, 8, 8, 10, 10, 12, 8, 0, 4, 8, 4, 10, 0};
++    private static final int HEADER = 8 + 8 * SECTIONS;
++    private static final long NONE32 = 0xFFFFFFFFL;
++
++    private final ByteBuffer mBuf;
++    private final int[] mOff = new int[SECTIONS];
++    private final int[] mLen = new int[SECTIONS];
++
++    /** Maps the file read-only. The mapping outlives the channel; pages are read when a lookup touches them. */
++    static IpMap open(java.io.File file, long maxBytes) throws java.io.IOException, FormatException {
++        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r");
++                java.nio.channels.FileChannel ch = raf.getChannel()) {
++            long size = ch.size();
++            if (size > maxBytes || size > Integer.MAX_VALUE) {
++                throw new FormatException("file too large");
++            }
++            return new IpMap(ch.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, size));
++        }
++    }
++
++    IpMap(ByteBuffer buffer) throws FormatException {
++        mBuf = buffer.duplicate();
++        mBuf.order(java.nio.ByteOrder.BIG_ENDIAN);
++        int size = mBuf.limit();
++        if (size < HEADER || mBuf.get(0) != 'D' || mBuf.get(1) != 'M' || mBuf.get(2) != 'I' || mBuf.get(3) != 'P'
++                || mBuf.getShort(4) != 1) {
++            throw new FormatException("not an ipmap file");
++        }
++        long end = HEADER;
++        for (int i = 0; i < SECTIONS; i++) {
++            long off = mBuf.getInt(8 + 8 * i) & 0xFFFFFFFFL;
++            long len = mBuf.getInt(12 + 8 * i) & 0xFFFFFFFFL;
++            if (off != end || off + len > size || (STRIDE[i] != 0 && len % STRIDE[i] != 0)) {
++                throw new FormatException("section " + i + " is out of place");
++            }
++            mOff[i] = (int) off;
++            mLen[i] = (int) len;
++            end = off + len;
++        }
++        if (end != size) {
++            throw new FormatException("bytes after the last section");
++        }
++    }
++
++    /** What the file was made from, as written by the build tool. */
++    String sources() {
++        byte[] b = new byte[mLen[SOURCES]];
++        for (int i = 0; i < b.length; i++) {
++            b[i] = mBuf.get(mOff[SOURCES] + i);
++        }
++        return new String(b, StandardCharsets.UTF_8);
++    }
++
++    /** @return what is known about the address, or null when {@code text} is not an IP address literal */
++    ServerPlace lookup(String text) {
++        long[] a = parse(text);
++        if (a == null) {
++            return null;
++        }
++        int cc;
++        int asn;
++        long loc = NONE32;
++        boolean anycast;
++        if (a[0] == 4) {
++            long n = a[1];
++            cc = (int) value32(CC4, 6, n, 2);
++            asn = (int) value32(ASN4, 8, n, 4);
++            loc = value32(CITY4, 8, n, 4);
++            anycast = member32(ANY4, n >>> 8);
++        } else {
++            long hi = a[1];
++            cc = (int) value64(CC6, 10, hi, 2);
++            asn = (int) value64(ASN6, 12, hi, 4);
++            anycast = member64(ANY6, hi >>> 16);
++        }
++        String operator = asn == 0 ? "" : org(asn);
++        String country = unpackCc(cc);
++        if (anycast) {
++            return new ServerPlace(ServerPlace.ANYCAST, country, "", 0f, 0f, asn, operator);
++        }
++        if (asn != 0 && member32(STEER, asn & 0xFFFFFFFFL)) {
++            return new ServerPlace(ServerPlace.STEERED, country, "", 0f, 0f, asn, operator);
++        }
++        if (loc != NONE32) {
++            if (loc * 10 + 10 > mLen[LOC]) {
++                return ServerPlace.NOTHING;
++            }
++            int at = mOff[LOC] + (int) loc * 10;
++            int lcc = mBuf.getShort(at) & 0xFFFF;
++            if (cc == 0 || lcc == cc) {
++                return new ServerPlace(ServerPlace.CITY, unpackCc(lcc), name(mBuf.getInt(at + 6) & 0xFFFFFFFFL),
++                        mBuf.getShort(at + 2) / 100f, mBuf.getShort(at + 4) / 100f, asn, operator);
++            }
++            return new ServerPlace(ServerPlace.UNCERTAIN, country, "", 0f, 0f, asn, operator);
++        }
++        if (cc == 0) {
++            return new ServerPlace(ServerPlace.NONE, "", "", 0f, 0f, asn, operator);
++        }
++        int n = mLen[ANCHOR] / 10;
++        int lo = 0;
++        int hi = n - 1;
++        while (lo <= hi) {
++            int mid = (lo + hi) >>> 1;
++            int at = mOff[ANCHOR] + mid * 10;
++            int k = mBuf.getShort(at) & 0xFFFF;
++            if (k == cc) {
++                return new ServerPlace(ServerPlace.COUNTRY, country, "", mBuf.getShort(at + 2) / 100f,
++                        mBuf.getShort(at + 4) / 100f, asn, operator);
++            }
++            if (k < cc) {
++                lo = mid + 1;
++            } else {
++                hi = mid - 1;
++            }
++        }
++        return new ServerPlace(ServerPlace.NONE, country, "", 0f, 0f, asn, operator);
++    }
++
++    // -------------------------------------------------------------------------------------- the file
++
++    /** The value of the last record whose start is not after {@code key}, or 0 before the first. */
++    private long value32(int sec, int stride, long key, int width) {
++        int i = floor32(sec, stride, key);
++        return i < 0 ? (width == 4 && sec == CITY4 ? NONE32 : 0) : readValue(mOff[sec] + i * stride + 4, width);
++    }
++
++    private long value64(int sec, int stride, long key, int width) {
++        int n = mLen[sec] / stride;
++        int lo = 0;
++        int hi = n - 1;
++        int best = -1;
++        while (lo <= hi) {
++            int mid = (lo + hi) >>> 1;
++            if (Long.compareUnsigned(mBuf.getLong(mOff[sec] + mid * stride), key) <= 0) {
++                best = mid;
++                lo = mid + 1;
++            } else {
++                hi = mid - 1;
++            }
++        }
++        return best < 0 ? 0 : readValue(mOff[sec] + best * stride + 8, width);
++    }
++
++    private long readValue(int at, int width) {
++        return width == 2 ? mBuf.getShort(at) & 0xFFFFL : mBuf.getInt(at) & 0xFFFFFFFFL;
++    }
++
++    private int floor32(int sec, int stride, long key) {
++        int n = mLen[sec] / stride;
++        int lo = 0;
++        int hi = n - 1;
++        int best = -1;
++        while (lo <= hi) {
++            int mid = (lo + hi) >>> 1;
++            if ((mBuf.getInt(mOff[sec] + mid * stride) & 0xFFFFFFFFL) <= key) {
++                best = mid;
++                lo = mid + 1;
++            } else {
++                hi = mid - 1;
++            }
++        }
++        return best;
++    }
++
++    private boolean member32(int sec, long key) {
++        int i = floor32(sec, 4, key);
++        return i >= 0 && (mBuf.getInt(mOff[sec] + i * 4) & 0xFFFFFFFFL) == key;
++    }
++
++    private boolean member64(int sec, long key) {
++        int n = mLen[sec] / 8;
++        int lo = 0;
++        int hi = n - 1;
++        while (lo <= hi) {
++            int mid = (lo + hi) >>> 1;
++            int c = Long.compareUnsigned(mBuf.getLong(mOff[sec] + mid * 8), key);
++            if (c == 0) {
++                return true;
++            }
++            if (c < 0) {
++                lo = mid + 1;
++            } else {
++                hi = mid - 1;
++            }
++        }
++        return false;
++    }
++
++    private String org(int asn) {
++        long key = asn & 0xFFFFFFFFL;
++        int i = floor32(ORG, 8, key);
++        if (i < 0 || (mBuf.getInt(mOff[ORG] + i * 8) & 0xFFFFFFFFL) != key) {
++            return "";
++        }
++        return name(mBuf.getInt(mOff[ORG] + i * 8 + 4) & 0xFFFFFFFFL);
++    }
++
++    private String name(long offset) {
++        if (offset >= mLen[NAMES]) {
++            return "";
++        }
++        int at = mOff[NAMES] + (int) offset;
++        int n = mBuf.get(at) & 0xFF;
++        if (offset + 1 + n > mLen[NAMES]) {
++            return "";
++        }
++        byte[] b = new byte[n];
++        for (int i = 0; i < n; i++) {
++            b[i] = mBuf.get(at + 1 + i);
++        }
++        return new String(b, StandardCharsets.UTF_8);
++    }
++
++    private static String unpackCc(int v) {
++        return v == 0 ? "" : "" + (char) (v >> 8) + (char) (v & 0xFF);
++    }
++
++    // ------------------------------------------------------------------------------------- the address
++
++    /**
++     * @return {4, address} or {6, first 64 bits}, or null for anything that is not an IP address literal. An IPv4-mapped
++     *         IPv6 address is an IPv4 address. No name is ever resolved.
++     */
++    static long[] parse(String text) {
++        if (text == null || text.isEmpty() || text.length() > 64) {
++            return null;
++        }
++        String s = text;
++        int zone = s.indexOf('%');
++        if (zone >= 0) {
++            s = s.substring(0, zone);
++        }
++        if (s.indexOf(':') < 0) {
++            long v4 = parse4(s);
++            return v4 < 0 ? null : new long[] {4, v4};
++        }
++        int[] g = parse6(s);
++        if (g == null) {
++            return null;
++        }
++        if (g[0] == 0 && g[1] == 0 && g[2] == 0 && g[3] == 0 && g[4] == 0 && g[5] == 0xFFFF) {
++            return new long[] {4, ((long) g[6] << 16) | g[7]};
++        }
++        long hi = ((long) g[0] << 48) | ((long) g[1] << 32) | ((long) g[2] << 16) | g[3];
++        return new long[] {6, hi};
++    }
++
++    private static long parse4(String s) {
++        String[] p = s.split("\\.", -1);
++        if (p.length != 4) {
++            return -1;
++        }
++        long v = 0;
++        for (String part : p) {
++            if (part.isEmpty() || part.length() > 3 || (part.length() > 1 && part.charAt(0) == '0')) {
++                return -1;
++            }
++            int n = 0;
++            for (int i = 0; i < part.length(); i++) {
++                char c = part.charAt(i);
++                if (c < '0' || c > '9') {
++                    return -1;
++                }
++                n = n * 10 + (c - '0');
++            }
++            if (n > 255) {
++                return -1;
++            }
++            v = (v << 8) | n;
++        }
++        return v;
++    }
++
++    private static int[] parse6(String s) {
++        int dbl = s.indexOf("::");
++        if (dbl >= 0 && s.indexOf("::", dbl + 1) >= 0) {
++            return null;
++        }
++        String head = dbl >= 0 ? s.substring(0, dbl) : s;
++        String tail = dbl >= 0 ? s.substring(dbl + 2) : "";
++        int[] a = groups(head, dbl < 0);
++        int[] b = dbl >= 0 ? groups(tail, true) : new int[0];
++        if (a == null || b == null) {
++            return null;
++        }
++        int total = a.length + b.length;
++        if (dbl < 0 ? total != 8 : total > 7) {
++            return null;
++        }
++        int[] out = new int[8];
++        System.arraycopy(a, 0, out, 0, a.length);
++        System.arraycopy(b, 0, out, 8 - b.length, b.length);
++        return out;
++    }
++
++    /** The groups of one side of the address; the last may be a dotted IPv4 when {@code allowTail4}. */
++    private static int[] groups(String s, boolean allowTail4) {
++        if (s.isEmpty()) {
++            return new int[0];
++        }
++        String[] p = s.split(":", -1);
++        int[] out = new int[p.length + 1];
++        int n = 0;
++        for (int i = 0; i < p.length; i++) {
++            String part = p[i];
++            if (part.indexOf('.') >= 0) {
++                long v4 = i == p.length - 1 ? parse4(part) : -1;
++                if (v4 < 0 || !allowTail4) {
++                    return null;
++                }
++                out[n++] = (int) (v4 >>> 16);
++                out[n++] = (int) (v4 & 0xFFFF);
++                continue;
++            }
++            if (part.isEmpty() || part.length() > 4) {
++                return null;
++            }
++            int v = 0;
++            for (int k = 0; k < part.length(); k++) {
++                int d = Character.digit(part.charAt(k), 16);
++                if (d < 0) {
++                    return null;
++                }
++                v = (v << 4) | d;
++            }
++            out[n++] = v;
++        }
++        int[] r = new int[n];
++        System.arraycopy(out, 0, r, 0, n);
++        return r;
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/ServerPlace.java b/services/core/java/com/android/server/datamap/ServerPlace.java
+new file mode 100644
+index 0000000..4a33ea8
+--- /dev/null
++++ b/services/core/java/com/android/server/datamap/ServerPlace.java
+@@ -0,0 +1,68 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.datamap;
++
++/**
++ * What the Data Map knows about the server that answered, from the address alone (ADR-161): a hosting country and
++ * network operator, a city when the data has one, and whether the address can be placed at all. It says where an
++ * address lies in the data, not where a company is based. The address itself is never kept.
++ */
++final class ServerPlace {
++    /** Nothing is known, or the data does not say. */
++    static final int NONE = 0;
++    /** A city, in a country that two sources agree on. */
++    static final int CITY = 1;
++    /** Only the country is known; the point is the country's anchor. */
++    static final int COUNTRY = 2;
++    /** The two sources name different countries: no place. */
++    static final int UNCERTAIN = 3;
++    /** The address lies in an anycast prefix: it answers from many places, so it has none. */
++    static final int ANYCAST = 4;
++    /** The operator steers by DNS to unicast addresses: the country is that of the registration, not of the edge. */
++    static final int STEERED = 5;
++
++    static final ServerPlace NOTHING = new ServerPlace(NONE, "", "", 0f, 0f, 0, "");
++
++    final int kind;
++    /** Two capital letters, or an empty string. */
++    final String country;
++    final String city;
++    final float lat;
++    final float lon;
++    final int asn;
++    final String operator;
++
++    ServerPlace(int kind, String country, String city, float lat, float lon, int asn, String operator) {
++        this.kind = kind;
++        this.country = country;
++        this.city = city;
++        this.lat = lat;
++        this.lon = lon;
++        this.asn = asn;
++        this.operator = operator;
++    }
++
++    /** Whether the point (lat, lon) is a place to draw. */
++    boolean placed() {
++        return kind == CITY || kind == COUNTRY;
++    }
++
++    /** A value is worth keeping when it says anything at all. */
++    boolean known() {
++        return kind != NONE || asn != 0 || !country.isEmpty();
++    }
++
++    @Override
++    public boolean equals(Object o) {
++        if (!(o instanceof ServerPlace)) {
++            return false;
++        }
++        ServerPlace p = (ServerPlace) o;
++        return kind == p.kind && country.equals(p.country) && city.equals(p.city) && lat == p.lat && lon == p.lon
++                && asn == p.asn && operator.equals(p.operator);
++    }
++
++    @Override
++    public int hashCode() {
++        return ((kind * 31 + country.hashCode()) * 31 + city.hashCode()) * 31 + asn;
++    }
++}
+diff --git a/services/core/java/com/android/server/datamap/ServiceKeys.java b/services/core/java/com/android/server/datamap/ServiceKeys.java
+index b90ec5c..1a8ef65 100644
+--- a/services/core/java/com/android/server/datamap/ServiceKeys.java
++++ b/services/core/java/com/android/server/datamap/ServiceKeys.java
+@@ -93,4 +93,29 @@ final class ServiceKeys {
+         }
+         return "ip:" + normalizeIp(ip);
+     }
++
++    /**
++     * The address of a DNS answer that the server place is looked up from: the first IPv4 address, otherwise the
++     * first address, looking at no more than {@code max}. The city data is IPv4 only (ADR-161, D6). Null when the
++     * answer has none.
++     */
++    static String preferredAddress(String[] addresses, int max) {
++        String first = null;
++        if (addresses == null) {
++            return null;
++        }
++        for (int i = 0; i < addresses.length && i < max; i++) {
++            String a = addresses[i];
++            if (a == null || a.isEmpty()) {
++                continue;
++            }
++            if (a.indexOf(':') < 0) {
++                return a;
++            }
++            if (first == null) {
++                first = a;
++            }
++        }
++        return first;
++    }
+ }
+diff --git a/services/core/java/com/android/server/datamap/UserSettings.java b/services/core/java/com/android/server/datamap/UserSettings.java
+index f28f6a6..e082aee 100644
+--- a/services/core/java/com/android/server/datamap/UserSettings.java
++++ b/services/core/java/com/android/server/datamap/UserSettings.java
+@@ -13,14 +13,21 @@ final class UserSettings {
+     final boolean collecting;
+     final boolean history;
+     final int days;
++    /** The history also keeps the hosting country, city and operator of a service (never an address). */
++    final boolean serverHistory;
+ 
+     UserSettings(boolean collecting, boolean history, int days) {
++        this(collecting, history, days, false);
++    }
++
++    UserSettings(boolean collecting, boolean history, int days, boolean serverHistory) {
+         if (days < MIN_DAYS || days > MAX_DAYS) {
+             throw new IllegalArgumentException("days must be " + MIN_DAYS + " to " + MAX_DAYS);
+         }
+         this.collecting = collecting;
+         this.history = history;
+         this.days = days;
++        this.serverHistory = serverHistory;
+     }
+ 
+     static UserSettings defaults() {
+@@ -37,20 +44,24 @@ final class UserSettings {
+     }
+ 
+     boolean isDefault() {
+-        return collecting && !history && days == DEFAULT_DAYS;
++        return collecting && !history && days == DEFAULT_DAYS && !serverHistory;
+     }
+ 
+     UserSettings withCollecting(boolean value) {
+-        return new UserSettings(value, history, days);
++        return new UserSettings(value, history, days, serverHistory);
+     }
+ 
+     UserSettings withHistory(boolean enabled, int newDays) {
+-        return new UserSettings(collecting, enabled, newDays);
++        return new UserSettings(collecting, enabled, newDays, serverHistory);
++    }
++
++    UserSettings withServerHistory(boolean value) {
++        return new UserSettings(collecting, history, days, value);
+     }
+ 
+     String encode() {
+         return "datamap-settings\t1\ncollecting\t" + (collecting ? 1 : 0) + "\nhistory\t"
+-                + (history ? 1 : 0) + "\ndays\t" + days + "\n";
++                + (history ? 1 : 0) + "\ndays\t" + days + (serverHistory ? "\nserverHistory\t1" : "") + "\n";
+     }
+ 
+     /** An unreadable or unknown file gives the defaults: it never stops the service. */
+@@ -58,6 +69,7 @@ final class UserSettings {
+         boolean collecting = true;
+         boolean history = false;
+         int days = DEFAULT_DAYS;
++        boolean serverHistory = false;
+         boolean header = false;
+         for (String line : text.split("\n", -1)) {
+             if (line.isEmpty()) {
+@@ -85,6 +97,9 @@ final class UserSettings {
+                     case "days":
+                         days = Integer.parseInt(f[1]);
+                         break;
++                    case "serverHistory":
++                        serverHistory = flag(f[1]);
++                        break;
+                     default:
+                         return defaults();
+                 }
+@@ -95,7 +110,7 @@ final class UserSettings {
+         if (!header || days < MIN_DAYS || days > MAX_DAYS) {
+             return defaults();
+         }
+-        return new UserSettings(collecting, history, days);
++        return new UserSettings(collecting, history, days, serverHistory);
+     }
+ 
+     private static boolean flag(String s) {
+-- 
+2.56.0
+
