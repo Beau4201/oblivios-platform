@@ -71,6 +71,32 @@ Simple Icons (company logos of the Data Map app, datamap/logos and datamap/app/r
   datamap/logos/logos.tsv, and the files stay out of the public source until the trademark review has passed
   (datamap/PUBLICATION-EXCLUDE.txt).
 
+flag-icons (country flags of the Data Map app, datamap/app/res/drawable-nodpi/flag_*.webp)
+  Release v7.5.0 of github.com/lipis/flag-icons, 4 by 3 drawings, made into 120 by 90 pixel images by
+  datamap/app/tools/make-flags.sh; the tarball is pinned by its checksum in that script. MIT licence:
+
+  The MIT License (MIT)
+
+  Copyright (c) 2013 Panayiotis Lipiridis
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of
+  this software and associated documentation files (the "Software"), to deal in
+  the Software without restriction, including without limitation the rights to
+  use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+  of the Software, and to permit persons to whom the Software is furnished to do
+  so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
 TRADEMARKS
 
 The name SovereignOS and its logo are not licensed; section 6 of the Apache

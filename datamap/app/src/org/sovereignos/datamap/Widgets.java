@@ -477,27 +477,15 @@ final class Widgets {
         return new StackView(pkgs);
     }
 
-    /** A flag as a circle with a thin ring, the size in dp ({@code .flg}). */
-    View flag(String countryCode, float sizeDp) {
+    /** A flag, 4 by 3, the height in dp ({@code .flg}); the drawing has its own rounded corners and edge. */
+    View flag(String countryCode, float heightDp) {
         Drawable d = Flags.of(ds.ctx, countryCode);
         ImageView v = new ImageView(ds.ctx);
         if (d != null) {
             v.setImageDrawable(d);
         }
         v.setScaleType(ImageView.ScaleType.FIT_XY);
-        v.setOutlineProvider(new ViewOutlineProvider() {
-            @Override
-            public void getOutline(View view, android.graphics.Outline outline) {
-                outline.setOval(0, 0, view.getWidth(), view.getHeight());
-            }
-        });
-        v.setClipToOutline(true);
-        android.graphics.drawable.GradientDrawable ring = new android.graphics.drawable.GradientDrawable();
-        ring.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        ring.setColor(android.graphics.Color.TRANSPARENT);
-        ring.setStroke(Math.max(1, ds.dp(1)), 0x66808CA0);
-        v.setForeground(ring);
-        v.setLayoutParams(new LinearLayout.LayoutParams(ds.dp(sizeDp), ds.dp(sizeDp)));
+        v.setLayoutParams(new LinearLayout.LayoutParams(ds.dp(heightDp * Flags.ASPECT), ds.dp(heightDp)));
         return v;
     }
 

@@ -1287,12 +1287,13 @@ final class GlobeView extends View {
         }
     }
 
-    private final Path mClipChip = new Path();
 
     // ---- the card of a place
 
     /** The widest a card gets, in dp; a longer name or line is cut with an ellipsis. */
     private static final float MAX_CARD_DP = 260;
+    /** The flag of a card is 16 dp high and 4 by 3. */
+    private static final float FLAG_W = 16f * Flags.ASPECT;
 
     /** The name of each place as the card shows it (cut to the width of the card). */
     private String[] mNameShown = new String[0];
@@ -1323,8 +1324,8 @@ final class GlobeView extends View {
         mText.setTypeface(Ds.face(Ds.REGULAR));
         mText.setTextSize(mDs.sp(12));
         float sub = mText.measureText(mSub[i]) / unit;
-        // the room: 11 dp, the flag 16, a gap of 7 and 11 dp at the end; the second line has a pin of 13 and a gap of 4
-        float width = (float) Math.ceil(Math.max(name + 16 + 7 + plus, sub + 17) + 26);
+        // the room: 11 dp, the flag 16 high and FLAG_W wide, a gap of 7 and 11 dp at the end; the second line has a pin of 13 and a gap of 4
+        float width = (float) Math.ceil(Math.max(name + FLAG_W + 7 + plus, sub + 17) + 26);
         float screen = getWidth() > 0 ? getWidth() / unit - 12 : MAX_CARD_DP;
         float most = Math.min(MAX_CARD_DP, Math.max(120, screen));
         mNameShown[i] = placeName(p);
@@ -1332,7 +1333,7 @@ final class GlobeView extends View {
             width = most;
             mText.setTypeface(Ds.face(Ds.MEDIUM));
             mText.setTextSize(mDs.sp(14));
-            mNameShown[i] = cut(placeName(p), (width - 26 - 16 - 7 - plus) * unit);
+            mNameShown[i] = cut(placeName(p), (width - 26 - FLAG_W - 7 - plus) * unit);
             mText.setTypeface(Ds.face(Ds.REGULAR));
             mText.setTextSize(mDs.sp(12));
             mSub[i] = cut(mSub[i], (width - 26 - 17) * unit);
@@ -1375,18 +1376,13 @@ final class GlobeView extends View {
         float fy = line1 - mDs.px(8);
         Drawable flag = mFlag[index];
         if (flag != null) {
-            c.save();
-            mClipChip.rewind();
-            mClipChip.addCircle(fx + mDs.px(8), fy + mDs.px(8), mDs.px(8), Path.Direction.CW);
-            c.clipPath(mClipChip);
-            flag.setBounds(Math.round(fx), Math.round(fy), Math.round(fx + mDs.px(16)), Math.round(fy + mDs.px(16)));
+            flag.setBounds(Math.round(fx), Math.round(fy), Math.round(fx + mDs.px(FLAG_W)), Math.round(fy + mDs.px(16)));
             flag.draw(c);
-            c.restore();
         }
         mText.setTypeface(Ds.face(Ds.MEDIUM));
         mText.setTextSize(mDs.sp(14));
         mText.setColor(cOn);
-        float nx = x + mDs.px(11 + 16 + 7);
+        float nx = x + mDs.px(11 + FLAG_W + 7);
         String name = mNameShown[index];
         c.drawText(name, nx, line1 - (mText.ascent() + mText.descent()) / 2, mText);
         int extra = p.members.size() - 1;
