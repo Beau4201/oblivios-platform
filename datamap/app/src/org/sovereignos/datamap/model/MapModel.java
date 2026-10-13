@@ -214,19 +214,28 @@ public final class MapModel {
         return serviceKey.startsWith("ip:") ? serviceKey.substring(3) : serviceKey;
     }
 
-    /** Adds a service with no known company to the server place that its address was found in. */
-    private static void addServer(Map<String, CompanyRow> servers, Entry e) {
-        String key = e.serverKind == SRV_CITY
-                ? e.serverCountry + "|" + e.serverCity + "|" + e.serverLat + "|" + e.serverLon : e.serverCountry;
+    /** How much an entry says about the server: a place that can be drawn, anything else, nothing. */
+    private static int serverRank(int kind) {
+        return kind == SRV_CITY || kind == SRV_COUNTRY ? 2 : kind == SRV_NONE ? 0 : 1;
+    }
+
+    /**
+     * Adds a service with no known company to the server place of {@code s}, the entry that says the most about its
+     * server. A service has one answer, whichever app saw it (the first entry of the highest rank), so that the map and
+     * the lists agree; the apps are those of every entry of the service.
+     */
+    private static void addServer(Map<String, CompanyRow> servers, Entry e, Entry s) {
+        String key = s.serverKind == SRV_CITY
+                ? s.serverCountry + "|" + s.serverCity + "|" + s.serverLat + "|" + s.serverLon : s.serverCountry;
         CompanyRow r = servers.get(key);
         if (r == null) {
             Owner o = new Owner();
             o.id = "srv:" + key;
-            o.name = e.serverKind == SRV_CITY ? e.serverCity : "";
-            o.countryCode = e.serverCountry;
-            o.city = e.serverKind == SRV_CITY ? e.serverCity : "";
-            o.lat = e.serverLat;
-            o.lon = e.serverLon;
+            o.name = s.serverKind == SRV_CITY ? s.serverCity : "";
+            o.countryCode = s.serverCountry;
+            o.city = s.serverKind == SRV_CITY ? s.serverCity : "";
+            o.lat = s.serverLat;
+            o.lon = s.serverLon;
             r = new CompanyRow();
             r.owner = o;
             r.contacted = true;
@@ -245,8 +254,8 @@ public final class MapModel {
             r.appsOfService.put(e.serviceKey, apps);
         }
         apps.add(e.pkg);
-        if (!e.serverOperator.isEmpty() && !r.operatorOfService.containsKey(e.serviceKey)) {
-            r.operatorOfService.put(e.serviceKey, e.serverOperator);
+        if (!s.serverOperator.isEmpty() && !r.operatorOfService.containsKey(e.serviceKey)) {
+            r.operatorOfService.put(e.serviceKey, s.serverOperator);
         }
     }
 
@@ -257,6 +266,14 @@ public final class MapModel {
         Map<String, UnplacedService> unplaced = new LinkedHashMap<>();
         Set<String> edgeKeys = new HashSet<>();
         Map<String, CompanyRow> servers = new LinkedHashMap<>();
+        // the entry of each service that says the most about its server; the first one of the highest rank
+        Map<String, Entry> serverOf = new HashMap<>();
+        for (Entry e : in.entries) {
+            Entry best = serverOf.get(e.serviceKey);
+            if (best == null || serverRank(e.serverKind) > serverRank(best.serverKind)) {
+                serverOf.put(e.serviceKey, e);
+            }
+        }
 
         for (Entry e : in.entries) {
             if (HostFilter.isLocal(e.serviceKey)) {
@@ -302,14 +319,13 @@ public final class MapModel {
                     u.category = e.category;
                 }
                 u.viaDns |= e.viaDns;
-                if (u.serverKind == SRV_NONE && e.serverKind != SRV_NONE) {
-                    u.serverKind = e.serverKind;
-                    u.serverCountry = e.serverCountry;
-                    u.serverCity = e.serverCity;
-                    u.serverOperator = e.serverOperator;
-                }
-                if (e.serverKind == SRV_CITY || e.serverKind == SRV_COUNTRY) {
-                    addServer(servers, e);
+                Entry s = serverOf.get(e.serviceKey);
+                u.serverKind = s.serverKind;
+                u.serverCountry = s.serverCountry;
+                u.serverCity = s.serverCity;
+                u.serverOperator = s.serverOperator;
+                if (s.serverKind == SRV_CITY || s.serverKind == SRV_COUNTRY) {
+                    addServer(servers, e, s);
                 }
                 continue;
             }

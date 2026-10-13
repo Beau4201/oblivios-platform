@@ -151,12 +151,61 @@ public final class ServerPlacesCheck {
         near.entries.add(entry("com.a", "x.example", "", MapModel.SRV_CITY, "US", "Mountain View", 37.4, -122.1, ""));
         List<Places.Place> same = MapModel.build(near).places(null);
         check(same.size() == 2 && (same.get(0).lead.server != same.get(1).lead.server), "a server place is not merged into a company's");
-        // cities close together are one server place, as companies are (Places.JOIN_DEG)
+        // cities close together stay separate server places: a server place is named after its own city, and a card that
+        // said "Hosted in Frankfurt" for servers in Amsterdam and Paris would claim more than the data does
         MapModel.Input close = new MapModel.Input();
         close.entries.add(entry("com.a", "t1.example", "", MapModel.SRV_CITY, "DE", "Frankfurt", 50.11, 8.68, ""));
-        close.entries.add(entry("com.a", "t2.example", "", MapModel.SRV_CITY, "DE", "Berlin", 52.52, 13.4, ""));
-        List<Places.Place> joined = MapModel.build(close).places(null);
-        check(joined.size() == 1 && joined.get(0).members.size() == 2, "Frankfurt and Berlin are one place");
+        close.entries.add(entry("com.a", "t2.example", "", MapModel.SRV_CITY, "NL", "Amsterdam", 52.37, 4.9, ""));
+        close.entries.add(entry("com.a", "t3.example", "", MapModel.SRV_CITY, "FR", "Paris", 48.86, 2.35, ""));
+        close.entries.add(entry("com.a", "t4.example", "", MapModel.SRV_COUNTRY, "DE", "", 52.52, 13.38, ""));
+        List<Places.Place> separate = MapModel.build(close).places(null);
+        check(separate.size() == 4, "four places, none merged: " + separate.size());
+        for (Places.Place p : separate) {
+            check(p.members.size() == 1 && p.countries.size() == 1, "one member and one country in each");
+            check(p.lat() == p.lead.owner.lat && p.services() == 1, "at its own point, with its own service");
+        }
+        // the companies are still joined by distance
+        MapModel.Input nearby = new MapModel.Input();
+        nearby.owners.put("a", owner("a", "DE", 50.11, 8.68));
+        nearby.owners.put("b", owner("b", "NL", 52.37, 4.9));
+        nearby.entries.add(entry("com.a", "a.example", "a", MapModel.SRV_NONE, "", "", 0, 0, ""));
+        nearby.entries.add(entry("com.a", "b.example", "b", MapModel.SRV_NONE, "", "", 0, 0, ""));
+        check(MapModel.build(nearby).places(null).size() == 1, "two companies 5 degrees apart are one place");
+
+        // one service has one answer, whichever app saw it: the one that names a place wins, and the service is on the
+        // map or in the list, never both
+        MapModel.Input two = new MapModel.Input();
+        two.entries.add(entry("com.a", "m1.example", "", MapModel.SRV_ANYCAST, "US", "", 0, 0, "Cloudflare, Inc."));
+        two.entries.add(entry("com.b", "m1.example", "", MapModel.SRV_CITY, "DE", "Frankfurt", 50.11, 8.68, "Hetzner Online GmbH"));
+        two.entries.add(entry("com.c", "m2.example", "", MapModel.SRV_CITY, "DE", "Frankfurt", 50.11, 8.68, ""));
+        two.entries.add(entry("com.d", "m2.example", "", MapModel.SRV_CITY, "NL", "Amsterdam", 52.37, 4.9, ""));
+        two.entries.add(entry("com.a", "m3.example", "", MapModel.SRV_STEERED, "US", "", 0, 0, "AMAZON-02"));
+        two.entries.add(entry("com.b", "m3.example", "", MapModel.SRV_UNCERTAIN, "DE", "", 0, 0, ""));
+        two.entries.add(entry("com.a", "m4.example", "", MapModel.SRV_NONE, "", "", 0, 0, ""));
+        two.entries.add(entry("com.b", "m4.example", "", MapModel.SRV_ANYCAST, "US", "", 0, 0, ""));
+        MapModel.Output twoOut = MapModel.build(two);
+        check(twoOut.serverRows.size() == 1, "m1 and m2 are both in Frankfurt, the first answer at that rank: " + twoOut.serverRows.size());
+        MapModel.CompanyRow fra = twoOut.serverRows.get(0);
+        check(fra.owner.city.equals("Frankfurt") && fra.services.size() == 2, "Frankfurt holds m1 and m2");
+        check(fra.appsOfService.get("m1.example").size() == 2 && fra.appsOfService.get("m2.example").size() == 2,
+                "every app that reached the service is listed with it");
+        check("Hetzner Online GmbH".equals(fra.operatorOfService.get("m1.example")), "the operator is the one of the answer that is used");
+        for (MapModel.UnplacedService u : twoOut.unplacedServices) {
+            if (u.serviceKey.equals("m1.example") || u.serviceKey.equals("m2.example")) {
+                check(u.serverKind == MapModel.SRV_CITY, "the list says what the map says: " + u.serviceKey);
+            }
+            if (u.serviceKey.equals("m3.example")) {
+                check(u.serverKind == MapModel.SRV_STEERED && u.serverOperator.equals("AMAZON-02"), "the first answer of the same rank is used");
+            }
+            if (u.serviceKey.equals("m4.example")) {
+                check(u.serverKind == MapModel.SRV_ANYCAST, "an answer beats none");
+            }
+        }
+        AtlasModel twoAtlas = AtlasModel.of(twoOut);
+        for (AtlasModel.Unplaced u : twoAtlas.unplaced) {
+            check(!u.key.equals("m1.example") && !u.key.equals("m2.example"), "a service on the map is not in the list: " + u.key);
+        }
+        check(twoAtlas.unplaced.size() == 2, "m3 and m4 are in the list");
         // one chosen app: only the places that app reaches
         List<Places.Place> ofB = out.places("com.b");
         check(ofB.size() == 2, "the places of com.b: Frankfurt and Brazil, not Stockholm: " + ofB.size());
@@ -177,6 +226,23 @@ public final class ServerPlacesCheck {
             check(!pair.a.lead.server && !pair.b.lead.server, "no line to or from a server place");
         }
         check(PlaceLinks.pairs(linked.places(null), linked.relations, null).size() == 1, "the relation of two companies still joins them");
+
+        // "connected to" never lists companies for a server place, and a company page never counts a server row
+        for (Places.Place p : linked.places(null)) {
+            if (p.lead.server) {
+                check(PlaceLinks.joined(p.members, linked.companies, linked.relations).isEmpty(), "nothing is connected to a server place");
+            } else {
+                check(!PlaceLinks.joined(p.members, linked.companies, linked.relations).isEmpty()
+                        || p.members.size() == 1, "a company place still has its connections");
+            }
+        }
+        check(PlaceLinks.joined(linked.serverRows, linked.companies, linked.relations).isEmpty(), "none for all the server rows");
+        List<MapModel.CompanyRow> mixed = new java.util.ArrayList<>(linked.serverRows);
+        mixed.add(linked.companies.get(0));
+        for (PlaceLinks.Joined j : PlaceLinks.joined(mixed, linked.companies, linked.relations)) {
+            check(j.apps.isEmpty() || !j.apps.equals(linked.serverRows.get(0).apps) || j.rels.size() > 0,
+                    "a server row in the list adds no app to a connection");
+        }
 
         // the address of a key
         check(MapModel.address("ip:93.184.216.34").equals("93.184.216.34") && MapModel.address("x.com").equals("x.com"), "address of a key");

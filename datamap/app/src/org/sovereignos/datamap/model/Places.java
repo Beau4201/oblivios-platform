@@ -11,7 +11,9 @@ import java.util.Set;
 /**
  * The places of the map (ADR-160): the companies within {@value #JOIN_DEG} degrees of the company that the most apps
  * contact are one place, named after that company. A company joins the lead of a place and never a later member, so
- * the same companies always make the same places. A company that no app contacts is not a place.
+ * the same companies always make the same places. A company that no app contacts is not a place. A server place
+ * (ADR-161) is never joined: it is named after its own city or country, and a card that said "Hosted in Frankfurt"
+ * for servers in Amsterdam and Paris would claim more than the data does.
  */
 public final class Places {
     public static final double JOIN_DEG = 6.0;
@@ -86,7 +88,7 @@ public final class Places {
             double[] u = unit(r.owner.lat, r.owner.lon);
             Place home = null;
             for (Place p : places) {
-                if (p.unit[0] * u[0] + p.unit[1] * u[1] + p.unit[2] * u[2] > JOIN_COS) {
+                if (!r.server && p.unit[0] * u[0] + p.unit[1] * u[1] + p.unit[2] * u[2] > JOIN_COS) {
                     home = p;
                     break;
                 }

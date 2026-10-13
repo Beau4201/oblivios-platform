@@ -51,10 +51,21 @@ if grep -rnE 'ThemedIcons|AppIcons|getMonochrome' "$APP/src" --include='*.java';
   fail "app icons must be the system's own icons (no themed or bled icons)"
 fi
 # ADR-161: a server place says where a server lies, never where a company is based, and the app has no way to open a link.
-if grep -niE '<string name="(hosted_in|hosted_in_title|server_[a-z_]+|settings_server_history[a-z_]*)">[^<]*(based|headquarter|located|home country)' "$APP/res/values/strings.xml"; then
+if grep -niE '<string name="(hosted_in|hosted_in_title|server_[a-z_]+|settings_server_history[a-z_]*|operators_more)">[^<]*(based|headquarter|located|home country)' "$APP/res/values/strings.xml"; then
   fail "a server text says where a company is based or located"
 fi
 grep -q 'name="hosted_in">Hosted in ' "$APP/res/values/strings.xml" || fail "the server place text must read 'Hosted in'"
 grep -q 'IP Geolocation by DB-IP' "$APP/res/values/strings.xml" || fail "the attribution to DB-IP is gone (CC BY 4.0)"
+# The Binder fields of a server place reach the model (SnapshotMapper is Android code, so no host check reads it), the
+# marker of a server place is hollow, and the three kinds with no place keep their own line in the list.
+for f in serverKind serverCountry serverCity serverLat serverLon serverOperator; do
+  grep -q "^    [a-zA-Z]* $f;" "$APP/src/com/android/internal/datamap/DataMapEntry.aidl" || fail "DataMapEntry.aidl has no $f"
+  grep -qE "m\.$f = (nz\()?e\.$f\)?;" "$APP/src/org/sovereignos/datamap/SnapshotMapper.java" || fail "SnapshotMapper does not copy $f"
+done
+[ "$(grep -c 'if (!hollow) {' "$APP/src/org/sovereignos/datamap/GlobeView.java")" -eq 2 ] || fail "a server place must be drawn as a ring with nothing in it"
+grep -q 'mPlaces.get(i).lead.server);' "$APP/src/org/sovereignos/datamap/GlobeView.java" || fail "the marker of a server place must be hollow"
+for k in SRV_UNCERTAIN SRV_ANYCAST SRV_STEERED; do
+  grep -q "case MapModel.$k:" "$APP/src/org/sovereignos/datamap/Texts.java" || fail "Texts.serverLine has no line for $k"
+done
 [ "$bad" -eq 0 ] && echo "static checks passed"
 exit "$bad"

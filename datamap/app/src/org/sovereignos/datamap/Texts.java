@@ -39,7 +39,7 @@ final class Texts {
         }
         String services = c.getResources().getQuantityString(R.plurals.n_services, row.services.size(), row.services.size());
         return operators.isEmpty() ? services : services + " · " + (operators.size() > 2
-                ? operators.get(0) + ", " + operators.get(1) + " +" + (operators.size() - 2)
+                ? c.getString(R.string.operators_more, operators.get(0), operators.get(1), operators.size() - 2)
                 : join(c, operators));
     }
 

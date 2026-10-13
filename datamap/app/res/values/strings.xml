@@ -58,6 +58,7 @@
     <string name="server_anycast">Anycast network</string>
     <string name="server_behind">Behind %1$s</string>
     <string name="server_a_network">a content network</string>
+    <string name="operators_more">%1$s, %2$s +%3$d</string>
     <string name="unplaced_none">Every address Atlas saw has a known owner.</string>
     <string name="owner_unknown_line">%1$s, owner unknown</string>
     <string name="address_no_lookup">No name lookup, owner unknown</string>

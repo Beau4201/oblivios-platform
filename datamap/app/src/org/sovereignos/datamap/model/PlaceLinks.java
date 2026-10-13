@@ -135,6 +135,9 @@ public final class PlaceLinks {
             }
             Joined j = new Joined(o);
             for (MapModel.CompanyRow t : list) {
+                if (t.server) {
+                    continue;   // where a server lies joins no company to another
+                }
                 for (String app : t.apps) {
                     if (o.apps.contains(app) && !j.apps.contains(app)) {
                         j.apps.add(app);
