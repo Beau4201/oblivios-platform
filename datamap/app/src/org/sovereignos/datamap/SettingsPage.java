@@ -70,6 +70,11 @@ final class SettingsPage {
         collect.setOnCheckedChangeListener((b, on) -> actions.setCollecting(on));
         rec.add(w.row(tile(R.drawable.ic_eye, false), ctx.getString(R.string.settings_collect),
                 new Object[] {ctx.getString(R.string.settings_collect_summary)}, collect, true, null));
+        final Controls.Switch serverHistory = new Controls.Switch(ds, data.serverHistory);
+        serverHistory.setContentDescription(ctx.getString(R.string.settings_server_history));
+        serverHistory.setOnCheckedChangeListener((b, on) -> actions.setServerHistory(on));
+        rec.add(w.row(tile(R.drawable.ic_pin, false), ctx.getString(R.string.settings_server_history),
+                new Object[] {ctx.getString(R.string.settings_server_history_summary)}, serverHistory, true, null));
         final Controls.Switch history = new Controls.Switch(ds, data.historyOn);
         history.setContentDescription(ctx.getString(R.string.settings_history));
         rec.add(w.row(tile(R.drawable.ic_hist, false), ctx.getString(R.string.settings_history),
@@ -104,12 +109,6 @@ final class SettingsPage {
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         sp.setMargins(ds.dp(12), 0, ds.dp(12), 0);
         keep.addView(seg, sp);
-        final Controls.Switch serverHistory = new Controls.Switch(ds, data.serverHistory);
-        serverHistory.setContentDescription(ctx.getString(R.string.settings_server_history));
-        serverHistory.setOnCheckedChangeListener((b, on) -> actions.setServerHistory(on));
-        keep.addView(w.row(tile(R.drawable.ic_pin, false), ctx.getString(R.string.settings_server_history),
-                new Object[] {ctx.getString(R.string.settings_server_history_summary)}, serverHistory, true, null),
-                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         final Controls.Collapse keepFor = new Controls.Collapse(ds, keep, data.historyOn);
         rec.add(keepFor);
         history.setOnCheckedChangeListener((b, on) -> {
