@@ -14,9 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The names and icons of the apps of the current user, as the system gives them: the icon is the one the
- * launcher shows (MAP-014), and no logo of any app is stored in this package. (Company logos are another
- * matter: ADR-159.)
+ * The names and icons of the apps of the current user, as the system gives them: no logo of any app is stored in
+ * this package. (Company logos are another matter: ADR-159.)
  */
 final class Apps {
     private final Context mContext;
@@ -77,9 +76,8 @@ final class Apps {
     }
 
     /**
-     * The icon of the app as the launcher draws it (MAP-014): the themed icon when the app has a monochrome
-     * layer, else its own icon. An app with no icon at all gives null, so that the caller draws the initials
-     * and not the platform's default robot.
+     * The icon of the app as the design page draws it (ADR-160): the app's own icon, the whole picture. An app with
+     * no icon at all gives null, so that the caller draws the initials and not the platform's default robot.
      */
     Drawable icon(String pkg) {
         if ("android".equals(pkg) || !isInstalled(pkg)) {
@@ -88,7 +86,7 @@ final class Apps {
         try {
             ApplicationInfo info = mPm.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0));
             Drawable raw = info.icon != 0 ? mPm.getApplicationIcon(pkg) : launcherIcon(pkg);
-            return raw == null ? null : ThemedIcons.of(mContext, raw);
+            return raw == null ? null : AppIcons.fullBleed(raw);
         } catch (PackageManager.NameNotFoundException e) {
             return null;
         }

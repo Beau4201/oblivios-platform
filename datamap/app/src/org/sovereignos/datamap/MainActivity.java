@@ -3,13 +3,14 @@ package org.sovereignos.datamap;
 
 import android.app.Activity;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.window.OnBackInvokedCallback;
@@ -19,28 +20,31 @@ import com.android.internal.datamap.DataMapSnapshot;
 import com.android.internal.datamap.IDataMapObserver;
 import com.android.internal.datamap.IDataMapService;
 
+import org.sovereignos.datamap.model.AtlasData;
+import org.sovereignos.datamap.model.AtlasState;
 import org.sovereignos.datamap.model.LandData;
 import org.sovereignos.datamap.model.MapModel;
-import org.sovereignos.datamap.model.MapSelection;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * The only component of the app. There is no service, receiver or provider: when this activity is closed
- * no process of the app remains (MAP-013, MAP-015). The service is asked while the activity is started and
- * the observer is removed when it stops.
+ * The only component of the app. There is no service, receiver or provider: when this activity is closed no process of
+ * the app remains (MAP-013, MAP-015). The service is asked while the activity is started and the observer is removed when
+ * it stops. The activity holds the four tabs, one detail page above them, and what stands over a screen for a moment (the
+ * menu, the filter, the question before a delete); it makes no screen of its own (ADR-160).
  */
-public final class MainActivity extends Activity
-        implements Screens.Nav, SettingsScreen.Actions, GlobeView.Listener, SheetView.Host {
-    private static final int TAB_MAP = 0;
-    private static final int TAB_APPS = 1;
-    private static final int TAB_COMPANIES = 2;
-    private static final int TAB_LINKS = 3;
+public final class MainActivity extends Activity implements Pages.Nav, SettingsPage.Actions {
+    private static final String STATE_ATLAS = "atlas";
+    private static final String STATE_DETAIL = "detail";
+    private static final String STATE_FILTER = "filter";
+    private static final String STATE_OPEN = "open";
+    private static final int DETAIL_NONE = 0;
+    private static final int DETAIL_COMPANY = 1;
+    private static final int DETAIL_APP = 2;
 
     private final ExecutorService mIo = Executors.newSingleThreadExecutor();
     private final AtomicBoolean mRefreshQueued = new AtomicBoolean();
@@ -52,107 +56,118 @@ public final class MainActivity extends Activity
     };
     private final OnBackInvokedCallback mBack = this::onBack;
     private boolean mBackRegistered;
-    private final MapSelection mSel = new MapSelection();
 
-    private Ui mUi;
+    private Ds mDs;
     private Apps mApps;
-    private Screens mScreens;
-    private GlobeView mGlobe;
+    private Widgets mW;
+    private Pages mPages;
+    private AtlasState mState = new AtlasState();
+    private final Pages.Filter mFilter = new Pages.Filter();
+    private final SettingsPage.Open mOpen = new SettingsPage.Open();
+    private AtlasData mData = AtlasData.empty();
+    private GlobeView.Prepared mPrepared;
+
     private FrameLayout mRoot;
-    private FrostedBar.Backdrop mBackdrop;
-    private FrameLayout mPageHost;
-    private FrameLayout mScreenHost;
-    private ScrollView mScroll;
-    private SheetView mSheet;
-    private FrostedBar mTabBar;
-    private View mOverlay;
-    private View mGear;
-    private View mHeaderBack;
-    private android.widget.TextView mStatus;
-    private int mStatusRes;
-    private int mTab = TAB_MAP;
-    private int mBottomInset;
-    private int mTopInset;
+    private FrameLayout mContent;
+    private TabBar.Backdrop mBackdrop;
+    private MapTab mMap;
+    private final ScrollView[] mScrolls = new ScrollView[4];
+    private FrameLayout mDetail;
+    private TabBar mTabBar;
+    private int mDetailKind = DETAIL_NONE;
+    private String mDetailId = "";
+    private Overlays.FilterSheet mFilterSheet;
 
     private volatile IDataMapService mService;
-    private DataMapSnapshot mLast;
 
     @Override
-    protected void onCreate(Bundle state) {
-        super.onCreate(state);
-        mUi = new Ui(this);
+    protected void onCreate(Bundle saved) {
+        super.onCreate(saved);
+        mDs = new Ds(this);
         mApps = new Apps(this);
-        mScreens = new Screens(mUi, mApps, this);
+        mW = new Widgets(mDs, mApps);
+        mPages = new Pages(mW, this, mFilter);
+        if (saved != null) {
+            mState = AtlasState.fromBundleData(saved.getStringArray(STATE_ATLAS));
+            String[] d = saved.getStringArray(STATE_DETAIL);
+            if (d != null && d.length == 2) {
+                mDetailKind = parse(d[0]);
+                mDetailId = d[1];
+            }
+            int[] f = saved.getIntArray(STATE_FILTER);
+            if (f != null && f.length == 2) {
+                mFilter.type = f[0];
+                mFilter.sort = f[1];
+            }
+            boolean[] o = saved.getBooleanArray(STATE_OPEN);
+            if (o != null && o.length == 2) {
+                mOpen.how = o[0];
+                mOpen.cannot = o[1];
+            }
+        }
         getWindow().setDecorFitsSystemWindows(false);
         getWindow().setStatusBarColor(Color.TRANSPARENT);
         getWindow().setNavigationBarColor(Color.TRANSPARENT);
 
         mRoot = new FrameLayout(this);
-        mRoot.setBackgroundColor(mUi.color(R.color.dm_bg));
+        mRoot.setBackgroundColor(mDs.color(R.color.at_bg));
+        // the content area is what the design page calls .scr: between the status bar and the gesture bar
+        mContent = new FrameLayout(this);
+        mContent.setClipChildren(true);
+        mRoot.addView(mContent, new FrameLayout.LayoutParams(-1, -1));
 
-        // Everything the tab bar looks through: the globe, the pages and the sheet.
-        mBackdrop = new FrostedBar.Backdrop(this);
-        mGlobe = new GlobeView(this, mApps);
-        mGlobe.setListener(this);
-        mBackdrop.addView(mGlobe, new FrameLayout.LayoutParams(-1, -1));
+        mBackdrop = new TabBar.Backdrop(this);
+        mMap = new MapTab(this, mW, mState, this);
+        mBackdrop.addView(mMap, new FrameLayout.LayoutParams(-1, -1));
+        for (int tab = AtlasState.APPS; tab <= AtlasState.SETTINGS; tab++) {
+            ScrollView s = new ScrollView(this);
+            s.setVerticalScrollBarEnabled(false);
+            s.setBackgroundColor(mDs.color(R.color.at_bg));
+            s.setClipToPadding(false);
+            s.setPadding(mDs.dp(16), mDs.dp(14), mDs.dp(16), mDs.dp(108));
+            s.setVisibility(View.GONE);
+            mScrolls[tab] = s;
+            mBackdrop.addView(s, new FrameLayout.LayoutParams(-1, -1));
+        }
+        mDetail = new FrameLayout(this);
+        mDetail.setBackgroundColor(mDs.color(R.color.at_bg));
+        mDetail.setVisibility(View.GONE);
+        mDetail.setClickable(true);
+        mBackdrop.addView(mDetail, new FrameLayout.LayoutParams(-1, -1));
+        mContent.addView(mBackdrop, new FrameLayout.LayoutParams(-1, -1));
 
-        mScroll = new ScrollView(this);
-        mScroll.setBackgroundColor(mUi.color(R.color.dm_bg));
-        mScroll.setVerticalScrollBarEnabled(false);
-        mPageHost = new FrameLayout(this);
-        mPageHost.addView(mScroll, new FrameLayout.LayoutParams(-1, -1));
-        mBackdrop.addView(mPageHost, new FrameLayout.LayoutParams(-1, -1));
-
-        mSheet = new SheetView(this, mUi, this);
-        mBackdrop.addView(mSheet, new FrameLayout.LayoutParams(-1, 0, Gravity.BOTTOM));
-        mSheet.jumpTo(0);
-        mRoot.addView(mBackdrop, new FrameLayout.LayoutParams(-1, -1));
-
-        // One line over an empty globe, when there is nothing to show or the service is missing.
-        mStatus = mUi.text("", 16, false, R.color.dm_onv);
-        mStatus.setGravity(Gravity.CENTER);
-        mStatus.setPadding(mUi.dp(40), 0, mUi.dp(40), 0);
-        mStatus.setVisibility(View.GONE);
-        mRoot.addView(mStatus, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
-
-        mOverlay = overlay();
-        mRoot.addView(mOverlay, new FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        mTabBar = tabBar();
+        mTabBar = new TabBar(this, mDs, tab -> {
+            closeDetail();
+            showTab(tab, true);
+        });
         mTabBar.setBackdrop(mBackdrop);
-        FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-1, mUi.dp(68), Gravity.BOTTOM);
-        tp.setMargins(mUi.dp(14), 0, mUi.dp(14), mUi.dp(12));
-        mRoot.addView(mTabBar, tp);
-
-        mScreenHost = new FrameLayout(this);
-        mScreenHost.setVisibility(View.GONE);
-        mRoot.addView(mScreenHost, new FrameLayout.LayoutParams(-1, -1));
+        mContent.addView(mTabBar, TabBar.params(mDs));
 
         mRoot.setOnApplyWindowInsetsListener((v, insets) -> {
-            android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars());
-            mBottomInset = bars.bottom;
-            mTopInset = bars.top;
-            mOverlay.setPadding(0, bars.top, 0, 0);
-            ((FrameLayout.LayoutParams) mTabBar.getLayoutParams()).bottomMargin = mUi.dp(12) + bars.bottom;
-            mTabBar.requestLayout();
-            mScroll.setPadding(0, bars.top + mUi.dp(56), 0, mUi.dp(104) + bars.bottom);
-            mScroll.setClipToPadding(false);
-            mSheet.setBottomPadding(mUi.dp(104) + bars.bottom);
+            Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContent.getLayoutParams();
+            lp.topMargin = bars.top;
+            lp.bottomMargin = bars.bottom;
+            mContent.setLayoutParams(lp);
             return insets;
         });
-        // The sheet is a share of the height of the screen: it follows a rotation.
-        mBackdrop.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-            if (b - t != ob - ot) {
-                applySelection(false);
-            }
-        });
         setContentView(mRoot);
-        showTab(TAB_MAP);
-
+        mMap.restore();
+        showTab(mState.tab(), false);
+        if (mDetailKind != DETAIL_NONE) {
+            showDetail(mDetailKind, mDetailId, false);
+        }
         mIo.execute(() -> {
             try (InputStream in = getResources().openRawResource(R.raw.land)) {
-                final LandData land = LandData.read(in);
-                runOnUiThread(() -> mGlobe.setLand(land));
+                final GlobeView.Prepared p = GlobeView.Prepared.of(LandData.read(in));
+                runOnUiThread(() -> {
+                    mPrepared = p;
+                    mMap.setPrepared(p);
+                    mPages.setData(mData, p);
+                    if (mDetailKind == DETAIL_COMPANY) {
+                        showDetail(mDetailKind, mDetailId, false);
+                    }
+                });
             } catch (IOException e) {
                 // the globe is drawn without land; the lists still work
             }
@@ -160,11 +175,29 @@ public final class MainActivity extends Activity
     }
 
     @Override
+    protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        out.putStringArray(STATE_ATLAS, mState.toBundleData());
+        out.putStringArray(STATE_DETAIL, new String[] {Integer.toString(mDetailKind), mDetailId});
+        out.putIntArray(STATE_FILTER, new int[] {mFilter.type, mFilter.sort});
+        out.putBooleanArray(STATE_OPEN, new boolean[] {mOpen.how, mOpen.cannot});
+    }
+
+    private static int parse(String s) {
+        try {
+            int k = Integer.parseInt(s);
+            return k == DETAIL_COMPANY || k == DETAIL_APP ? k : DETAIL_NONE;
+        } catch (NumberFormatException e) {
+            return DETAIL_NONE;
+        }
+    }
+
+    @Override
     protected void onStart() {
         super.onStart();
         mService = DataMapClient.connect();
         if (mService == null) {
-            showStatus(R.string.service_missing);
+            apply(AtlasData.unavailable());
             return;
         }
         try {
@@ -195,7 +228,7 @@ public final class MainActivity extends Activity
         super.onDestroy();
     }
 
-    // -------------------------------------------------------------------------------- data
+    // ================================================================================= data
 
     /** Reads a new snapshot off the main thread. A burst of changes causes one read. */
     private void refresh() {
@@ -210,219 +243,138 @@ public final class MainActivity extends Activity
             }
             try {
                 final DataMapSnapshot snap = s.getSnapshot(mApps.installedPackages());
-                final MapModel.Input in = SnapshotMapper.toInput(snap);
-                final MapModel.Output out = MapModel.build(in);
-                runOnUiThread(() -> apply(snap, in, out));
+                final MapModel.Output out = MapModel.build(SnapshotMapper.toInput(snap));
+                final AtlasData data = new AtlasData(out, snap.collecting, snap.historyOn, snap.historyDays,
+                        snap.nowWallMs);
+                runOnUiThread(() -> apply(data));
             } catch (RemoteException | RuntimeException e) {
-                runOnUiThread(() -> showStatus(R.string.service_missing));
+                // the screen keeps what it has
             }
         });
     }
 
-    private void apply(DataMapSnapshot snap, MapModel.Input in, MapModel.Output out) {
-        mLast = snap;
-        mScreens.set(out, in.owners, snap.nowWallMs);
-        mGlobe.setModel(out, in.owners);
-        mGlobe.setSelection(mSel);
-        showStatus(out.apps.isEmpty() ? R.string.empty_nothing : 0);
-        renderSheet(true);
-        if (mTab != TAB_MAP) {
-            final int y = mScroll.getScrollY();   // a live refresh must not throw the reader back to the top
-            showTab(mTab);
-            mScroll.post(() -> mScroll.scrollTo(0, y));
+    private void apply(AtlasData data) {
+        mData = data;
+        mPages.setData(data, mPrepared);
+        mMap.setData(data);
+        buildPage(mState.tab(), true);
+        if (mDetailKind != DETAIL_NONE) {
+            showDetail(mDetailKind, mDetailId, false);
+        }
+        if (mFilterSheet != null) {
+            mFilterSheet.setContent(mPages.filterPanel(mFilterSheet::dismiss));
         }
     }
 
-    // ----------------------------------------------------------------------------- screens
+    // ================================================================================= tabs
 
-    /** The two buttons that stand over the content: the way back from a sheet, and Settings. No title. */
-    private View overlay() {
-        FrameLayout h = new FrameLayout(this);
-        ImageView back = new ImageView(this);
-        back.setImageResource(R.drawable.ic_back);
-        back.setImageTintList(android.content.res.ColorStateList.valueOf(mUi.color(R.color.dm_on)));
-        back.setScaleType(ImageView.ScaleType.CENTER);
-        back.setContentDescription(getString(R.string.back));
-        back.setOnClickListener(v -> backFromSelection());
-        back.setVisibility(View.GONE);
-        mHeaderBack = back;
-        h.addView(back, new FrameLayout.LayoutParams(mUi.dp(48), mUi.dp(48), Gravity.TOP | Gravity.START));
-        ImageView gear = new ImageView(this);
-        gear.setImageResource(R.drawable.ic_settings);
-        gear.setImageTintList(android.content.res.ColorStateList.valueOf(mUi.color(R.color.dm_on)));
-        gear.setScaleType(ImageView.ScaleType.CENTER);
-        gear.setContentDescription(getString(R.string.settings));
-        gear.setOnClickListener(v -> openSettings());
-        mGear = gear;
-        h.addView(gear, new FrameLayout.LayoutParams(mUi.dp(48), mUi.dp(48), Gravity.TOP | Gravity.END));
-        h.setClickable(false);
-        return h;
-    }
-
-    /** One line over the empty globe; 0 hides it. */
-    private void showStatus(int stringRes) {
-        mStatusRes = stringRes;
-        updateStatus();
-    }
-
-    private void updateStatus() {
-        boolean show = mStatusRes != 0 && mTab == TAB_MAP && mSel.sheet() == MapSelection.SHEET_NONE
-                && !screenOpen();
-        if (show) {
-            mStatus.setText(mStatusRes);
+    private void showTab(int tab, boolean animate) {
+        boolean changed = tab != mState.tab();
+        mState.go(tab);
+        mMap.setVisibility(tab == AtlasState.MAP ? View.VISIBLE : View.GONE);
+        for (int t = AtlasState.APPS; t <= AtlasState.SETTINGS; t++) {
+            mScrolls[t].setVisibility(t == tab ? View.VISIBLE : View.GONE);
         }
-        mStatus.setVisibility(show ? View.VISIBLE : View.GONE);
-    }
-
-    private FrostedBar tabBar() {
-        FrostedBar bar = new FrostedBar(this, mUi);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(mUi.dp(8), 0, mUi.dp(8), 0);
-        int[] icons = {R.drawable.ic_map, R.drawable.ic_apps, R.drawable.ic_companies, R.drawable.ic_links};
-        int[] names = {R.string.tab_map, R.string.tab_apps, R.string.tab_companies, R.string.tab_links};
-        for (int i = 0; i < 4; i++) {
-            final int tab = i;
-            LinearLayout item = new LinearLayout(this);
-            item.setGravity(Gravity.CENTER);
-            ImageView icon = new ImageView(this);
-            icon.setImageResource(icons[i]);
-            icon.setContentDescription(getString(names[i]));
-            item.addView(icon, new LinearLayout.LayoutParams(mUi.dp(24), mUi.dp(24)));
-            android.widget.TextView label = mUi.text(getString(names[i]), 14, true, R.color.dm_on);
-            label.setPadding(mUi.dp(8), 0, 0, 0);
-            item.addView(label);
-            item.setOnClickListener(v -> {
-                closeScreen();   // a screen opened from a list covers the tabs; choosing a tab leaves it
-                showTab(tab);
-            });
-            bar.addView(item, new LinearLayout.LayoutParams(0, mUi.dp(52), 1f));
+        if (tab != AtlasState.MAP) {
+            buildPage(tab, false);
+            if (animate && changed) {
+                Anim.pageIn(mDs, mScrolls[tab]);
+            }
         }
-        return bar;
-    }
-
-    private void showTab(int tab) {
-        mTab = tab;
-        for (int i = 0; i < mTabBar.getChildCount(); i++) {
-            LinearLayout item = (LinearLayout) mTabBar.getChildAt(i);
-            boolean on = i == tab;
-            item.setBackground(on ? mUi.shape(R.color.dm_sc, 26, 26) : null);
-            ImageView icon = (ImageView) item.getChildAt(0);
-            icon.setImageTintList(android.content.res.ColorStateList.valueOf(
-                    mUi.color(on ? R.color.dm_osc : R.color.dm_onv)));
-            item.getChildAt(1).setVisibility(on ? View.VISIBLE : View.GONE);
-            // the active tab is wider, as on the design page (flex 1 1 auto against 1 1 0)
-            ((LinearLayout.LayoutParams) item.getLayoutParams()).weight = on ? 2f : 1f;
-        }
-        mTabBar.requestLayout();
-        mGlobe.setVisibility(tab == TAB_MAP ? View.VISIBLE : View.INVISIBLE);
-        mScroll.setVisibility(tab == TAB_MAP ? View.GONE : View.VISIBLE);
-        mScroll.removeAllViews();
-        if (tab == TAB_APPS) {
-            mScroll.addView(mScreens.appsPage());
-        } else if (tab == TAB_COMPANIES) {
-            mScroll.addView(mScreens.companiesPage());
-        } else if (tab == TAB_LINKS) {
-            mScroll.addView(mScreens.linksPage());
-        }
-        applySelection(false);
-    }
-
-    private void showScreen(View content) {
-        ScrollView sv = new ScrollView(this);
-        sv.setBackgroundColor(mUi.color(R.color.dm_bg));
-        sv.setVerticalScrollBarEnabled(false);
-        sv.addView(content);
-        sv.setClipToPadding(false);
-        sv.setOnApplyWindowInsetsListener((v, insets) -> {
-            android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars());
-            v.setPadding(0, bars.top, 0, mUi.dp(104) + bars.bottom);   // the bar floats over the end of the list
-            return insets;
-        });
-        mScreenHost.removeAllViews();
-        mScreenHost.addView(sv, new FrameLayout.LayoutParams(-1, -1));
-        ImageView back = new ImageView(this);
-        back.setImageResource(R.drawable.ic_back);
-        back.setImageTintList(android.content.res.ColorStateList.valueOf(mUi.color(R.color.dm_on)));
-        back.setScaleType(ImageView.ScaleType.CENTER);
-        back.setContentDescription(getString(R.string.back));
-        back.setOnClickListener(v -> closeScreen());
-        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(mUi.dp(48), mUi.dp(48), Gravity.TOP | Gravity.START);
-        bp.topMargin = mTopInset + mUi.dp(4);
-        mScreenHost.addView(back, bp);
-        mScreenHost.setVisibility(View.VISIBLE);
+        mTabBar.select(tab, animate);
         updateBack();
     }
 
-    private void closeScreen() {
-        mScreenHost.removeAllViews();
-        mScreenHost.setVisibility(View.GONE);
-        updateBack();
+    /** Builds the page of a tab again; a live refresh keeps where the reader was. */
+    private void buildPage(int tab, boolean keepScroll) {
+        if (tab == AtlasState.MAP) {
+            return;
+        }
+        ScrollView s = mScrolls[tab];
+        int y = keepScroll ? s.getScrollY() : 0;
+        View page = tab == AtlasState.APPS ? mPages.apps()
+                : tab == AtlasState.COMPANIES ? mPages.companies()
+                : new SettingsPage(mW, this, mOpen).build(mData);
+        s.removeAllViews();
+        s.addView(page, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        final int to = y;
+        s.post(() -> s.scrollTo(0, to));
     }
 
-    private boolean screenOpen() {
-        return mScreenHost.getVisibility() == View.VISIBLE;
-    }
+    // ================================================================================ detail
 
-    // ------------------------------------------------------------- the choice and the sheet
-
-    /** Draws the choice: the sheet to its height, its body, the globe clear of it, the header and the back key. */
-    private void applySelection(boolean animate) {
-        mGlobe.setSelection(mSel);
-        boolean onMap = mTab == TAB_MAP;
-        int target = onMap
-                ? MapSelection.sheetHeight(mSel.sheet(), mBackdrop.getHeight(), mUi.dp(60)) : 0;
+    private void showDetail(int kind, String id, boolean animate) {
+        mDetailKind = kind;
+        mDetailId = id;
+        mDetail.removeAllViews();
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        // the header: a back arrow and the menu, 56 dp, with nothing between them
+        LinearLayout head = new LinearLayout(this);
+        head.setId(R.id.at_detail_header);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(mDs.dp(8), 0, mDs.dp(16), 0);
+        ImageViewHolder back = new ImageViewHolder(mW.iconButton(R.drawable.ic_back, getString(R.string.back), v -> closeDetail()));
+        back.view.setId(R.id.at_back);
+        head.addView(back.view, new LinearLayout.LayoutParams(mDs.dp(40), mDs.dp(40)));
+        head.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        View more = mW.iconButton(R.drawable.ic_more, getString(R.string.more), v -> openMenu());
+        more.setId(R.id.at_more);
+        head.addView(more, new LinearLayout.LayoutParams(mDs.dp(40), mDs.dp(40)));
+        column.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, mDs.dp(56)));
+        ScrollView body = new ScrollView(this);
+        body.setVerticalScrollBarEnabled(false);
+        body.setClipToPadding(false);
+        body.setPadding(mDs.dp(16), mDs.dp(4), mDs.dp(16), mDs.dp(108));
+        body.addView(kind == DETAIL_COMPANY ? mPages.company(id) : mPages.app(id), new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        column.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        mDetail.addView(column, new FrameLayout.LayoutParams(-1, -1));
+        mDetail.setVisibility(View.VISIBLE);
         if (animate) {
-            mSheet.animateTo(target);
-        } else {
-            mSheet.jumpTo(target);
+            Anim.detailIn(mDs, mDetail);
         }
-        renderSheet(false);
         updateBack();
     }
 
-    private void renderSheet(boolean keepScroll) {
-        View v = null;
-        switch (mSel.content()) {
-            case MapSelection.CONTENT_APP:
-                v = mScreens.appBody(mSel.app(), 8);
-                break;
-            case MapSelection.CONTENT_COMPANY:
-                v = mScreens.companyBody(mSel.company(), 8);
-                break;
-            case MapSelection.CONTENT_RELATION:
-                v = mScreens.relationBody(mSel.relation(), 8);
-                break;
-            case MapSelection.CONTENT_GROUP:
-                v = mScreens.groupBody(mSel.group(), 8);
-                break;
-            default:
-                break;
+    /** A thin holder, so that the header can name the view it made. */
+    private static final class ImageViewHolder {
+        final View view;
+
+        ImageViewHolder(View v) {
+            view = v;
         }
-        mSheet.setContent(v, keepScroll);
     }
 
-    private void backFromSelection() {
-        mSel.back();
-        if (mSel.sheet() == MapSelection.SHEET_NONE) {
-            mGlobe.zoomOut();
-        }
-        applySelection(true);
+    private void closeDetail() {
+        mDetailKind = DETAIL_NONE;
+        mDetail.removeAllViews();
+        mDetail.setVisibility(View.GONE);
+        updateBack();
     }
+
+    private void openMenu() {
+        mContent.addView(Overlays.menu(mW, mContent, 0, () -> {
+            closeDetail();
+            showTab(AtlasState.SETTINGS, true);
+        }, () -> {
+            closeDetail();
+            showTab(AtlasState.MAP, true);
+        }), new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    // ================================================================================== back
 
     private boolean needsBack() {
-        return screenOpen() || (mTab == TAB_MAP && mSel.sheet() != MapSelection.SHEET_NONE);
+        return mDetailKind != DETAIL_NONE || mFilterSheet != null
+                || (mState.tab() == AtlasState.MAP && mMap.canGoBack());
     }
 
     private void updateBack() {
-        boolean sheetOpen = mTab == TAB_MAP && mSel.sheet() != MapSelection.SHEET_NONE && !screenOpen();
-        mHeaderBack.setVisibility(sheetOpen ? View.VISIBLE : View.GONE);
-        mGear.setVisibility(screenOpen() ? View.GONE : View.VISIBLE);
-        updateStatus();
         boolean need = needsBack();
         if (need && !mBackRegistered) {
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                    OnBackInvokedDispatcher.PRIORITY_DEFAULT, mBack);
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, mBack);
             mBackRegistered = true;
         } else if (!need && mBackRegistered) {
             getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(mBack);
@@ -431,105 +383,83 @@ public final class MainActivity extends Activity
     }
 
     private void onBack() {
-        if (screenOpen()) {
-            closeScreen();
-        } else if (mTab == TAB_MAP && mSel.sheet() != MapSelection.SHEET_NONE) {
-            backFromSelection();
+        if (mFilterSheet != null) {
+            mFilterSheet.dismiss();
+        } else if (mDetailKind != DETAIL_NONE) {
+            closeDetail();
+        } else if (mState.tab() == AtlasState.MAP) {
+            mMap.back();
         }
+        updateBack();
     }
 
-    // ---------------------------------------------------------------- SheetView.Host
-
-    @Override
-    public void onHandle() {
-        mSel.toggleSheet();
-        applySelection(true);
-    }
-
-    @Override
-    public void onHeight(float px) {
-        mGlobe.setSheetHeightPx(px);
-    }
-
-    // --------------------------------------------------------------- GlobeView.Listener
-
-    @Override
-    public void onApp(String pkg) {
-        openApp(pkg);
-    }
-
-    @Override
-    public void onCompany(String ownerId) {
-        openCompany(ownerId);
-    }
-
-    @Override
-    public void onGroup(List<String> ownerIds) {
-        mSel.openGroup(ownerIds);
-        mGlobe.turnToGroup(ownerIds);
-        applySelection(true);
-    }
-
-    @Override
-    public void onRelation(int index) {
-        mSel.selectRelation(index);
-        mGlobe.turnToRelation(index);
-        applySelection(true);
-    }
-
-    @Override
-    public void onNothing() {
-        if (mSel.sheet() != MapSelection.SHEET_NONE) {
-            backFromSelection();
-        }
-    }
-
-    // ------------------------------------------------------------------- Screens.Nav
-
-    @Override
-    public void openApp(String pkg) {
-        if (mTab == TAB_MAP && !screenOpen()) {
-            mSel.selectApp(pkg);
-            mGlobe.turnToApp(pkg);
-            applySelection(true);
-        } else {
-            showScreen(mScreens.appDetail(pkg));
-        }
-    }
+    // ============================================================================= Pages.Nav
 
     @Override
     public void openCompany(String ownerId) {
-        if (mTab == TAB_MAP && !screenOpen()) {
-            mSel.selectCompany(ownerId);
-            mGlobe.turnToCompany(ownerId);
-            applySelection(true);
-        } else {
-            showScreen(mScreens.companyDetail(ownerId));
-        }
+        showDetail(DETAIL_COMPANY, ownerId, true);
+    }
+
+    @Override
+    public void openApp(String pkg) {
+        showDetail(DETAIL_APP, pkg, true);
     }
 
     @Override
     public void showAppOnMap(String pkg) {
-        closeScreen();
-        showTab(TAB_MAP);
-        openApp(pkg);
+        closeDetail();
+        showTab(AtlasState.MAP, true);
+        mMap.chooseApp(pkg);
     }
 
     @Override
     public void showCompanyOnMap(String ownerId) {
-        closeScreen();
-        showTab(TAB_MAP);
-        openCompany(ownerId);
+        closeDetail();
+        showTab(AtlasState.MAP, true);
+        mMap.showCompanyOnMap(ownerId);
     }
 
-    private void openSettings() {
-        DataMapSnapshot s = mLast;
-        boolean collecting = s == null || s.collecting;
-        showScreen(new SettingsScreen(mUi, this).build(collecting, s != null && s.historyOn,
-                s == null ? 0 : s.historyDays, s == null ? 0 : s.invalidCount));
+    @Override
+    public void showLimits() {
+        closeDetail();
+        mOpen.cannot = true;
+        mState.go(AtlasState.SETTINGS);
+        showTab(AtlasState.SETTINGS, true);
     }
 
-    // ------------------------------------------------------------------- SettingsScreen.Actions
+    @Override
+    public void turnOnCollection() {
+        setCollecting(true);
+    }
+
+    @Override
+    public void openFilter() {
+        if (mFilterSheet != null) {
+            return;
+        }
+        mFilterSheet = new Overlays.FilterSheet(mW, mContent, () -> {
+            mFilterSheet = null;
+            updateBack();
+        });
+        mFilterSheet.setContent(mPages.filterPanel(mFilterSheet::dismiss));
+        mFilterSheet.open();
+        updateBack();
+    }
+
+    @Override
+    public void filterChanged() {
+        buildPage(AtlasState.COMPANIES, true);
+        if (mFilterSheet != null) {
+            mFilterSheet.setContent(mPages.filterPanel(mFilterSheet::dismiss));
+        }
+    }
+
+    @Override
+    public void stateChanged() {
+        updateBack();
+    }
+
+    // ======================================================================== SettingsPage.Actions
 
     @Override
     public void setCollecting(boolean collecting) {
@@ -542,8 +472,10 @@ public final class MainActivity extends Activity
     }
 
     @Override
-    public void clear() {
-        call(IDataMapService::clear);
+    public void askDelete() {
+        mContent.addView(Overlays.dialog(mW, mContent, getString(R.string.delete_title), getString(R.string.delete_text),
+                getString(R.string.cancel), getString(R.string.delete), () -> call(IDataMapService::clear)),
+                new FrameLayout.LayoutParams(-1, -1));
     }
 
     private interface Call {
