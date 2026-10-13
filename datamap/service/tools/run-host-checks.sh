@@ -20,6 +20,12 @@ javac -Xlint:all -Werror -d "$OUT" "${FILES[@]}" "$HERE"/tests/host/com/android/
 for c in HostnameValidatorCheck ClassifierCheck ServiceKeysCheck RecentAnswersCheck DataMapStoreCheck LinkDeriverCheck HistoryCodecCheck UserSettingsCheck PendingLimitCheck ServerPlaceCheck; do
   java -ea -cp "$OUT" com.android.server.datamap.$c
 done
+# ADR-161: the callback of netd (DataMapCollector) only passes an address on. The lookup runs on the service thread, in
+# DataMapService.recordOnServiceThread; a lookup in the callback would block name resolution for every other consumer.
+if grep -nE 'IpMap|placeOf|ServerPlace' "$PKG/DataMapCollector.java"; then
+  echo "DataMapCollector must not look an address up" >&2
+  exit 1
+fi
 # The reader of the address data against the file that tools/build-ipmap.py of the ipmap package made from its fixtures.
 IPMAP="$HERE/../ipmap/tests/fixtures"
 java -ea -cp "$OUT" com.android.server.datamap.IpMapCheck "$IPMAP/ipmap.bin" "$IPMAP/ipmap-expected.tsv"
