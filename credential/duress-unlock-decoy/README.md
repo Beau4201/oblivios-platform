@@ -36,6 +36,8 @@ owner's identity.
 
 ## Boundary
 
+Patch numbers in this file are those of the series before the squash of 2026-10-13; `SOURCE.md` maps them to the exported patches.
+
 Do not apply this package to a Phase 1 (or later) baseline tree without a
 corresponding ADR naming this exact patch set
 (`CONTRIBUTING.md`'s hard rule). That ADR is **ADR-053** for Task 1

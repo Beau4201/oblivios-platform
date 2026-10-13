@@ -1,5 +1,31 @@
 # Source record
 
+## Patch series squashed again (2026-10-13) — read this before using any patch number
+
+The twelve `frameworks-base` and four `packages-apps-settings` patches were regrouped into five and
+two. Only neighbouring patches were joined, so the order is unchanged. On the bases below the new
+series gives the same tree as the old series applied in order (equal tree hash after `git am` of
+each in a disposable repository seeded from the build server), so nothing in the end state
+changed. Every number in this file and in the records that cite it is a number of the series as
+it stood before this squash (the 2026-10-09 export, or older where the text says so); the table
+maps those to the exported patches. `build-release/0001` and `packages-apps-multiuser/0001` are
+unchanged.
+
+| Exported patch | Former patches |
+| --- | --- |
+| `frameworks-base/0001` add the decoy user type, routing and keyguard hook, and quiesce the real user | `0001`, `0002` |
+| `frameworks-base/0002` hide the real user from the decoy session's UI and conceal multi-user existence | `0003` to `0006` |
+| `frameworks-base/0003` authorize a single-credential decoy switch and the return path, remove the swipe | `0007` to `0009` |
+| `frameworks-base/0004` report real quiesce failures; ignore a registration whose user no longer exists | `0010`, `0011` |
+| `frameworks-base/0005` let Settings ask whether a PIN is the duress wipe PIN | `0012` |
+| `packages-apps-settings/0001` hide the real user from Settings and present the decoy as the owner | `0001`, `0002` |
+| `packages-apps-settings/0002` the Duress Unlock set-up flow, screens and the Device unlock row | `0003`, `0004` |
+
+Bases: `frameworks/base` `40ef3305fb73` (the second `duress-unlock-dummy` patch as landed),
+`packages/apps/Settings` `4ed80d47c0f`. The Settings base sits before the AirPods Settings patch
+that was landed between the two Settings pairs; the patches touch different files, so the order
+does not matter.
+
 ## Feature 2026-10-07: Duress Unlock Settings UI (`frameworks-base/0012`, `packages-apps-settings/0003`, `0004`)
 
 A Settings screen to set up, change and remove the decoy, as a second row below

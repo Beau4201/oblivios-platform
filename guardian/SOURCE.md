@@ -333,8 +333,15 @@ commits on the build server's `platform-primary` checkout.
 
 | Tree | Base commit | Patches | Approving ADR |
 | --- | --- | --- | --- |
-| `vendor/adevtool` | `4c9a78e2e7428818291a8c1e620f1e07e33ef185` | `patches/vendor-adevtool/0001`-`0002` | 0001: ADR-035 (names this branch/commit literally: `aegisos-guardian-lynx`, `43b73335`; carried onto the `2026091900` rebase branch `sovereignos-2026091900` as `5aa3fac8`). 0002: ADR-111 — moves the Guardian `PRODUCT_PACKAGES` entry from `device/lynx/device.mk` to `common/device-common.mk` so every Pixel target ships it; landed as `6ebe8024291a5c003f0615a896574afbb9cbf29b` on `sovereignos-2026091900`, authored from a fetch-only local repo of the two touched files (the live repo is a partial clone, so a full clone fails). |
-| `device/generic/goldfish` | `1facfe03b3519c3413a51d2ea56400bbade0b4c3` | `patches/device-generic-goldfish/0001`-`0003` | ADR-051 (amends ADR-033) |
+| `vendor/adevtool` | `4c9a78e2e7428818291a8c1e620f1e07e33ef185` | `patches/vendor-adevtool/0001` | Squash of two landed commits. First: ADR-035 (names this branch/commit literally: `aegisos-guardian-lynx`, `43b73335`; carried onto the `2026091900` rebase branch `sovereignos-2026091900` as `5aa3fac8`). Second: ADR-111 — moves the Guardian `PRODUCT_PACKAGES` entry from `device/lynx/device.mk` to `common/device-common.mk` so every Pixel target ships it; landed as `6ebe8024291a5c003f0615a896574afbb9cbf29b` on `sovereignos-2026091900`, authored from a fetch-only local repo of the two touched files (the live repo is a partial clone, so a full clone fails). |
+| `device/generic/goldfish` | `1facfe03b3519c3413a51d2ea56400bbade0b4c3` | `patches/device-generic-goldfish/0001` | ADR-051 (amends ADR-033); squash of three landed commits (base_phone product, generic_system path requirement, dynamic-partitions budget) |
+
+The exported series were squashed on 2026-10-13: `vendor-adevtool` two landed commits into one
+(the second removes the `device/lynx/device.mk` lines of the first, so only the
+`common/device-common.mk` addition is left) and `device-generic-goldfish` three into one. On the
+base above, the squashed patch gives the same tree as the landed commits applied in order, checked
+in a disposable repository seeded from the build server. The commit hashes in the table are the
+landed commits.
 
 Apply from the tree's own repository root:
 

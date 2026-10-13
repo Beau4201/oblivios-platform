@@ -1,0 +1,831 @@
+From 3372cbbf5826e9aae9dcda8f083986059f8b3b19 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Mon, 28 Sep 2026 13:49:13 +0200
+Subject: [PATCH 1/5] airpods: scope the Device ID vendor and L2CAP mode to
+ registered peers and add BluetoothDevice#setAirPodsIdentity
+
+airpods: scope Device-ID vendor and L2CAP mode to registered AirPods peers only
+
+Adds a bonded-device-scoped identity mechanism (ADR-108, amending ADR-106
+design section 6.2): a new privileged permission and AIDL method let
+SovereignOS's own signed AirPods app register a bonded device it has
+validated via its own protocol handshake, using the existing native
+interop-database mechanism under a new INTEROP_AIRPODS_IDENTITY feature.
+Native SDP and L2CAP code then consult this registration, following the
+existing per-peer sdp_dynamic_change_hfp_version and l2c_should_skip_ertm
+precedents, to scope the Device-ID vendor presentation and the L2CAP
+channel-mode fallback to that one registered BD_ADDR only. Every other
+peer's SDP query and every other Bluetooth connection is unaffected, and
+the local Device-ID record BTA_DmSetLocalDiRecord sets is never touched.
+
+airpods: add exact-match, bond-gated identity registry
+
+airpods: register identity through a dedicated btif call and clear it on unbond
+
+airpods: serve the SDP vendor override from a copy, gate hooks on registry and bond, drop the interop feature
+
+airpods: add BluetoothDevice#setAirPodsIdentity for the AirPods app
+---
+ android/app/AndroidManifest.xml               | 10 ++
+ .../aidl/android/bluetooth/IBluetooth.aidl    |  9 ++
+ ...oid_bluetooth_btservice_AdapterService.cpp | 34 +++++++
+ android/app/res/values/strings.xml            |  2 +
+ .../btservice/AdapterNativeInterface.java     |  6 ++
+ .../bluetooth/btservice/AdapterService.java   | 25 +++++
+ .../btservice/AdapterServiceBinder.java       | 21 ++++
+ framework/api/system-current.txt              |  1 +
+ .../android/bluetooth/BluetoothDevice.java    | 28 ++++++
+ system/btif/src/bluetooth.cc                  | 16 +++
+ system/device/Android.bp                      |  1 +
+ system/device/include/airpods_identity.h      | 89 +++++++++++++++++
+ system/device/test/airpods_identity_test.cc   | 98 +++++++++++++++++++
+ system/include/hardware/bluetooth.h           |  7 ++
+ system/stack/include/hcidefs.h                |  5 +
+ system/stack/l2cap/l2c_fcr.cc                 |  7 ++
+ system/stack/sdp/sdp_server.cc                | 13 +++
+ system/stack/sdp/sdp_utils.cc                 | 30 ++++++
+ system/stack/sdp/sdpint.h                     |  2 +
+ system/stack/test/sdp/stack_sdp_utils_test.cc | 77 +++++++++++++++
+ 20 files changed, 481 insertions(+)
+ create mode 100644 system/device/include/airpods_identity.h
+ create mode 100644 system/device/test/airpods_identity_test.cc
+
+diff --git a/android/app/AndroidManifest.xml b/android/app/AndroidManifest.xml
+index d160f2c..0daad67 100644
+--- a/android/app/AndroidManifest.xml
++++ b/android/app/AndroidManifest.xml
+@@ -16,6 +16,16 @@
+          android:description="@string/permdesc_bluetoothAcceptlist"
+          android:protectionLevel="signature|privileged"/>
+ 
++    <!-- Allows SovereignOS's own signed AirPods app to register a bonded
++         device it has validated via its own protocol handshake as a
++         recognized AirPods accessory, scoping the identity-presentation
++         patch (ADR-108) to that one bonded device. Never granted to any
++         other app. -->
++    <permission android:name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY"
++         android:label="@string/permlab_sovereignosAirpodsIdentity"
++         android:description="@string/permdesc_sovereignosAirpodsIdentity"
++         android:protectionLevel="signature|privileged"/>
++
+     <!-- Allows access to backup broadcast receiver -->
+     <permission android:name="android.permission.ALLOW_BLUETOOTH_BACKUP_DATA"
+         android:label="@string/permlab_bluetoothBackup"
+diff --git a/android/app/aidl/android/bluetooth/IBluetooth.aidl b/android/app/aidl/android/bluetooth/IBluetooth.aidl
+index 16d58b5..0e21c4d 100644
+--- a/android/app/aidl/android/bluetooth/IBluetooth.aidl
++++ b/android/app/aidl/android/bluetooth/IBluetooth.aidl
+@@ -197,6 +197,15 @@ interface IBluetooth {
+     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.BLUETOOTH_PRIVILEGED})")
+     byte[] getMetadata(in BluetoothDevice device, in int key, in AttributionSource attributionSource);
+ 
++    // For AirPods identity scoping (ADR-108). Also requires
++    // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime
++    // (enforced in AdapterServiceBinder, not expressible here -- no
++    // existing precedent in this file embeds a literal, non-Manifest
++    // permission string in this annotation, so this comment carries that
++    // requirement instead of an unverified escape syntax).
++    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
++    boolean setAirPodsIdentity(in BluetoothDevice device, in boolean recognized, in AttributionSource attributionSource);
++
+     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.BLUETOOTH_PRIVILEGED})")
+     oneway void requestActivityInfo(in IBluetoothActivityEnergyInfoListener listener, in AttributionSource attributionSource);
+ 
+diff --git a/android/app/jni/com_android_bluetooth_btservice_AdapterService.cpp b/android/app/jni/com_android_bluetooth_btservice_AdapterService.cpp
+index 05a2cc4..296816f 100644
+--- a/android/app/jni/com_android_bluetooth_btservice_AdapterService.cpp
++++ b/android/app/jni/com_android_bluetooth_btservice_AdapterService.cpp
+@@ -1736,6 +1736,38 @@ static void interopDatabaseAddRemoveAddrNative(JNIEnv* env, jclass /* clazz */,
+   env->ReleaseStringUTFChars(feature_name, feature_name_str);
+ }
+ 
++static jboolean setAirPodsIdentityNative(JNIEnv* env, jclass /* clazz */, jstring address,
++                                         jboolean recognized) {
++  if (!sBluetoothInterface) {
++    log::warn("sBluetoothInterface is null.");
++    return JNI_FALSE;
++  }
++
++  if (address == nullptr) {
++    log::warn("address is null.");
++    return JNI_FALSE;
++  }
++
++  const char* tmp_addr = env->GetStringUTFChars(address, NULL);
++  if (!tmp_addr) {
++    log::warn("address is null.");
++    return JNI_FALSE;
++  }
++
++  auto bdaddr = RawAddress::FromString(tmp_addr);
++
++  env->ReleaseStringUTFChars(address, tmp_addr);
++
++  if (!bdaddr.has_value()) {
++    log::warn("address is invalid.");
++    return JNI_FALSE;
++  }
++
++  return sBluetoothInterface->set_airpods_identity(bdaddr.value(), recognized == JNI_TRUE)
++                 ? JNI_TRUE
++                 : JNI_FALSE;
++}
++
+ static void interopDatabaseAddRemoveNameNative(JNIEnv* env, jclass /* clazz */, jboolean do_add,
+                                                jstring feature_name, jstring name) {
+   log::verbose("");
+@@ -1933,6 +1965,8 @@ static int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env)
+            reinterpret_cast<void*>(interopDatabaseAddRemoveAddrNative)},
+           {"interopDatabaseAddRemoveNameNative", "(ZLjava/lang/String;Ljava/lang/String;)V",
+            reinterpret_cast<void*>(interopDatabaseAddRemoveNameNative)},
++          {"setAirPodsIdentityNative", "(Ljava/lang/String;Z)Z",
++           reinterpret_cast<void*>(setAirPodsIdentityNative)},
+           {"getRemotePbapPceVersionNative", "(Ljava/lang/String;)I",
+            reinterpret_cast<void*>(getRemotePbapPceVersionNative)},
+           {"pbapPseDynamicVersionUpgradeIsEnabledNative", "()Z",
+diff --git a/android/app/res/values/strings.xml b/android/app/res/values/strings.xml
+index 136aa4c..476f65d 100644
+--- a/android/app/res/values/strings.xml
++++ b/android/app/res/values/strings.xml
+@@ -35,6 +35,8 @@
+         BluetoothShare manager and use it to transfer files. </string>
+ 
+     <string name="permlab_bluetoothAcceptlist">Acceptlist bluetooth device access.</string>
++    <string name="permlab_sovereignosAirpodsIdentity">Register recognized AirPods accessory.</string>
++    <string name="permdesc_sovereignosAirpodsIdentity">Allows SovereignOS\'s own signed AirPods app to register a bonded device it has validated as a recognized AirPods accessory, scoped to that one device only.</string>
+ 
+     <string name="permdesc_bluetoothAcceptlist">Allows the app to temporarily acceptlist
+         a Bluetooth device, allowing that device to send files to this device without user
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterNativeInterface.java b/android/app/src/com/android/bluetooth/btservice/AdapterNativeInterface.java
+index ef9f7d4..1b4e56e 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterNativeInterface.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterNativeInterface.java
+@@ -232,6 +232,10 @@ public class AdapterNativeInterface {
+         return interopMatchAddrOrNameNative(featureName, address);
+     }
+ 
++    boolean setAirPodsIdentity(String address, boolean recognized) {
++        return setAirPodsIdentityNative(address, recognized);
++    }
++
+     int getRemotePbapPceVersion(String address) {
+         return getRemotePbapPceVersionNative(address);
+     }
+@@ -376,6 +380,8 @@ public class AdapterNativeInterface {
+     private native void interopDatabaseAddRemoveAddrNative(
+             boolean doAdd, String featureName, String address, int length);
+ 
++    private native boolean setAirPodsIdentityNative(String address, boolean recognized);
++
+     private native void interopDatabaseAddRemoveNameNative(
+             boolean doAdd, String featureName, String name);
+ 
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterService.java b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+index 8ac1bbf..15151c2 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterService.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+@@ -2330,6 +2330,26 @@ public class AdapterService extends Service {
+         return status;
+     }
+ 
++    /**
++     * Registers or clears the given bonded device as a recognized AirPods
++     * accessory (ADR-108). Only the confirmed bonded BD_ADDR is ever
++     * scoped this way -- never a device-wide identity change. The caller
++     * (AdapterServiceBinder) has already enforced
++     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY before this is
++     * reached.
++     *
++     * @return true on success; false when the device is not bonded (register
++     *     only) or the native registry is full.
++     */
++    public boolean setAirPodsIdentity(BluetoothDevice device, boolean recognized) {
++        // Only registering needs a current bond; clearing must always be possible.
++        if (recognized && getBondState(device) != BOND_BONDED) {
++            Log.w(TAG, "setAirPodsIdentity: refusing to register a non-bonded device");
++            return false;
++        }
++        return mNativeInterface.setAirPodsIdentity(device.getAddress(), recognized);
++    }
++
+     private void logManufacturerInfo(BluetoothDevice device, int key, byte[] bytesValue) {
+         String callingApp = getPackageManager().getNameForUid(Binder.getCallingUid());
+         String manufacturerName = "";
+@@ -4519,6 +4539,11 @@ public class AdapterService extends Service {
+ 
+         mStorage.onBondStateChanged(device, fromState, toState);
+ 
++        // SovereignOS ADR-115: an AirPods identity registration never outlives the bond.
++        if (toState == BluetoothDevice.BOND_NONE) {
++            mNativeInterface.setAirPodsIdentity(device.getAddress(), false);
++        }
++
+         // Remove the bond caller info when bonding is concluded
+         if (toState != BOND_BONDING) {
+             CallerInfo callerInfo = mBondAttemptCallerInfo.remove(device.getAddress());
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java b/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java
+index 6c14a62..f250486 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterServiceBinder.java
+@@ -1449,6 +1449,27 @@ class AdapterServiceBinder extends IBluetooth.Stub {
+         return service.setMetadata(device, key, value);
+     }
+ 
++    /**
++     * Registers or clears a bonded device as a recognized AirPods accessory
++     * (ADR-108). Scoped to the caller holding
++     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY -- SovereignOS's own
++     * signed AirPods app only, never a general BLUETOOTH_PRIVILEGED holder.
++     */
++    @Override
++    public boolean setAirPodsIdentity(
++            BluetoothDevice device, boolean recognized, AttributionSource source) {
++        requireNonNull(device);
++        var service = getServiceAndEnforceCallerUserAndConnect(source, "setAirPodsIdentity");
++        if (service == null) {
++            return false;
++        }
++
++        service.enforceCallingOrSelfPermission(
++                "org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY", null);
++
++        return service.setAirPodsIdentity(device, recognized);
++    }
++
+     @Override
+     public byte[] getMetadata(BluetoothDevice device, int key, AttributionSource source) {
+         requireNonNull(device);
+diff --git a/framework/api/system-current.txt b/framework/api/system-current.txt
+index 8bd1691..7db50a6 100644
+--- a/framework/api/system-current.txt
++++ b/framework/api/system-current.txt
+@@ -272,6 +272,7 @@ package android.bluetooth {
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}, conditional=true) public boolean removeBond();
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public int requestAudioPolicyAsSink(@NonNull android.bluetooth.BluetoothSinkAudioPolicy);
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public int setActiveAudioDevicePolicy(int);
++    method @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) public boolean setAirPodsIdentity(boolean);
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public boolean setLowLatencyAudioAllowed(boolean);
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public boolean setMessageAccessPermission(int);
+     method @RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_PRIVILEGED}) public boolean setMetadata(int, @NonNull byte[]);
+diff --git a/framework/java/android/bluetooth/BluetoothDevice.java b/framework/java/android/bluetooth/BluetoothDevice.java
+index 2b15548..f88ce3d 100644
+--- a/framework/java/android/bluetooth/BluetoothDevice.java
++++ b/framework/java/android/bluetooth/BluetoothDevice.java
+@@ -3364,6 +3364,34 @@ public final class BluetoothDevice implements Parcelable, Attributable {
+         }
+     }
+ 
++    /**
++     * Registers ({@code recognized == true}) or clears this <em>bonded</em> device as a
++     * recognized AirPods accessory, scoping SovereignOS's Device-ID and L2CAP-mode
++     * presentation to this one peer only (ADR-106/ADR-108/ADR-115). Registration is held in
++     * memory by the Bluetooth stack, is refused for a device that is not bonded, and is cleared
++     * automatically when the bond is removed.
++     *
++     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
++     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service.
++     *
++     * @param recognized true to register, false to clear
++     * @return true on success, false on error, when not bonded, or when the registry is full
++     */
++    @Hide
++    @SystemApi
++    @RequiresBluetoothConnectPermission
++    @RequiresPermission(BLUETOOTH_CONNECT)
++    public boolean setAirPodsIdentity(boolean recognized) {
++        if (DBG) log("setAirPodsIdentity()");
++        try {
++            return callServiceIfEnabled(
++                    s -> s.setAirPodsIdentity(this, recognized, mAttributionSource), false);
++        } catch (SecurityException se) {
++            GmsCompat.catchOrRethrow(se);
++            return false;
++        }
++    }
++
+     /**
+      * Get a keyed metadata for this {@link BluetoothDevice} as {@link String}
+      *
+diff --git a/system/btif/src/bluetooth.cc b/system/btif/src/bluetooth.cc
+index 52d5c1a..c92f5e5 100644
+--- a/system/btif/src/bluetooth.cc
++++ b/system/btif/src/bluetooth.cc
+@@ -93,6 +93,7 @@
+ #include "btif/include/stack_manager_t.h"
+ #include "common/address_obfuscator.h"
+ #include "common/os_utils.h"
++#include "device/include/airpods_identity.h"
+ #include "device/include/device_iot_config.h"
+ #include "device/include/esco_parameters.h"
+ #include "device/include/interop.h"
+@@ -122,6 +123,7 @@
+ #include "stack/include/bnep_api.h"
+ #include "stack/include/bt_name.h"
+ #include "stack/include/btm_client_interface.h"
++#include "stack/include/btm_sec_api.h"
+ #include "stack/include/btm_status.h"
+ #include "stack/include/gatt_api.h"
+ #include "stack/include/hcidefs.h"
+@@ -1201,6 +1203,19 @@ static void interop_database_add_remove_addr(bool do_add, const char* feature_na
+   }
+ }
+ 
++// SovereignOS ADR-115: the current-bond check consulted by the AirPods identity
++// scope at use time, so a registration alone is never sufficient (covers a bond
++// that disappears without a per-device bond-state event, e.g. a factory reset).
++static bool airpods_identity_is_bonded(const RawAddress& addr) {
++  return get_security_client_interface().BTM_IsBonded(addr, BT_TRANSPORT_AUTO);
++}
++
++static bool set_airpods_identity(RawAddress addr, bool recognized) {
++  // Idempotent; installed before any registration can exist.
++  airpods_identity_set_bond_checker(&airpods_identity_is_bonded);
++  return airpods_identity_set(addr, recognized);
++}
++
+ static void interop_database_add_remove_name(bool do_add, const char* feature_name,
+                                              const char* name) {
+   if (feature_name == NULL || name == NULL) {
+@@ -1281,6 +1296,7 @@ EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
+         .interop_database_add_remove_name = interop_database_add_remove_name,
+         .get_remote_pbap_pce_version = get_remote_pbap_pce_version,
+         .pbap_pse_dynamic_version_upgrade_is_enabled = pbap_pse_dynamic_version_upgrade_is_enabled,
++        .set_airpods_identity = set_airpods_identity,
+ };
+ 
+ // callback reporting helpers
+diff --git a/system/device/Android.bp b/system/device/Android.bp
+index 6204886..2cb40d1 100644
+--- a/system/device/Android.bp
++++ b/system/device/Android.bp
+@@ -50,6 +50,7 @@ cc_test {
+     host_supported: true,
+     include_dirs: ["packages/modules/Bluetooth/system"],
+     srcs: [
++        "test/airpods_identity_test.cc",
+         "test/interop_test.cc",
+     ],
+     shared_libs: [
+diff --git a/system/device/include/airpods_identity.h b/system/device/include/airpods_identity.h
+new file mode 100644
+index 0000000..85a6656
+--- /dev/null
++++ b/system/device/include/airpods_identity.h
+@@ -0,0 +1,89 @@
++/*
++ * SovereignOS ADR-115 (amends ADR-108): exact-match, in-memory registry of
++ * bonded peers that SovereignOS's own signed AirPods app has validated as
++ * AirPods accessories.
++ *
++ * Deliberately NOT the interop database: that API asserts
++ * length < sizeof(RawAddress) (so it cannot hold a full 6-byte address and
++ * would only prefix-match), persists entries to disk, and also matches by
++ * device name. None of that is acceptable for a per-peer identity scope.
++ *
++ * Header-only on purpose: sdp_server.cc is compiled into several unit-test
++ * targets, and this adds no link dependency to any of them. The current-bond
++ * check is injected by btif (airpods_identity_set_bond_checker); with no
++ * checker installed airpods_identity_applies() is false (fail closed).
++ */
++#pragma once
++
++#include <bluetooth/types/address.h>
++
++#include <cstddef>
++#include <mutex>
++#include <set>
++
++constexpr size_t AIRPODS_IDENTITY_MAX_PEERS = 16;
++
++namespace airpods_identity_internal {
++
++struct State {
++  std::mutex lock;
++  std::set<RawAddress> peers;
++  bool (*is_bonded)(const RawAddress&) = nullptr;
++};
++
++inline State& state() {
++  static State s;
++  return s;
++}
++
++}  // namespace airpods_identity_internal
++
++// Adds (recognized == true) or removes an exact peer. Adding returns false when
++// the registry is full and the peer is not already present; removing always
++// returns true.
++inline bool airpods_identity_set(const RawAddress& addr, bool recognized) {
++  auto& s = airpods_identity_internal::state();
++  std::lock_guard<std::mutex> guard(s.lock);
++  if (!recognized) {
++    s.peers.erase(addr);
++    return true;
++  }
++  if (s.peers.count(addr) == 0 && s.peers.size() >= AIRPODS_IDENTITY_MAX_PEERS) {
++    return false;
++  }
++  s.peers.insert(addr);
++  return true;
++}
++
++inline bool airpods_identity_is_registered(const RawAddress& addr) {
++  auto& s = airpods_identity_internal::state();
++  std::lock_guard<std::mutex> guard(s.lock);
++  return s.peers.count(addr) != 0;
++}
++
++inline void airpods_identity_set_bond_checker(bool (*is_bonded)(const RawAddress&)) {
++  auto& s = airpods_identity_internal::state();
++  std::lock_guard<std::mutex> guard(s.lock);
++  s.is_bonded = is_bonded;
++}
++
++// True only for a peer that is registered AND currently bonded. The bond
++// checker runs outside the registry lock (BTM takes its own locks).
++inline bool airpods_identity_applies(const RawAddress& addr) {
++  auto& s = airpods_identity_internal::state();
++  bool (*is_bonded)(const RawAddress&) = nullptr;
++  {
++    std::lock_guard<std::mutex> guard(s.lock);
++    if (s.peers.count(addr) == 0) {
++      return false;
++    }
++    is_bonded = s.is_bonded;
++  }
++  return is_bonded != nullptr && is_bonded(addr);
++}
++
++inline void airpods_identity_clear() {
++  auto& s = airpods_identity_internal::state();
++  std::lock_guard<std::mutex> guard(s.lock);
++  s.peers.clear();
++}
+diff --git a/system/device/test/airpods_identity_test.cc b/system/device/test/airpods_identity_test.cc
+new file mode 100644
+index 0000000..c9d0b3f
+--- /dev/null
++++ b/system/device/test/airpods_identity_test.cc
+@@ -0,0 +1,98 @@
++/*
++ * Tests for the AirPods identity registry (ADR-115).
++ */
++#include <gtest/gtest.h>
++
++#include <cstdio>
++
++#include "device/include/airpods_identity.h"
++
++namespace {
++
++const RawAddress kPeer = RawAddress::FromString("11:22:33:44:55:66").value();
++// Differs from kPeer only in the last byte: must never match (the interop
++// database this replaces could only prefix-match up to 5 bytes).
++const RawAddress kNeighbour = RawAddress::FromString("11:22:33:44:55:67").value();
++
++bool g_bonded = false;
++int g_checker_calls = 0;
++bool FakeIsBonded(const RawAddress& /*addr*/) {
++  g_checker_calls++;
++  return g_bonded;
++}
++
++class AirPodsIdentityTest : public ::testing::Test {
++protected:
++  void SetUp() override {
++    airpods_identity_clear();
++    airpods_identity_set_bond_checker(nullptr);
++    g_bonded = false;
++    g_checker_calls = 0;
++  }
++  void TearDown() override {
++    airpods_identity_clear();
++    airpods_identity_set_bond_checker(nullptr);
++  }
++};
++
++TEST_F(AirPodsIdentityTest, nothing_registered_by_default) {
++  EXPECT_FALSE(airpods_identity_is_registered(kPeer));
++  EXPECT_FALSE(airpods_identity_applies(kPeer));
++}
++
++TEST_F(AirPodsIdentityTest, registration_is_exact_six_byte_match) {
++  ASSERT_TRUE(airpods_identity_set(kPeer, true));
++  EXPECT_TRUE(airpods_identity_is_registered(kPeer));
++  EXPECT_FALSE(airpods_identity_is_registered(kNeighbour));
++}
++
++TEST_F(AirPodsIdentityTest, remove_unregisters_and_is_idempotent) {
++  ASSERT_TRUE(airpods_identity_set(kPeer, true));
++  EXPECT_TRUE(airpods_identity_set(kPeer, false));
++  EXPECT_FALSE(airpods_identity_is_registered(kPeer));
++  EXPECT_TRUE(airpods_identity_set(kPeer, false));
++}
++
++TEST_F(AirPodsIdentityTest, applies_fails_closed_without_bond_checker) {
++  ASSERT_TRUE(airpods_identity_set(kPeer, true));
++  EXPECT_FALSE(airpods_identity_applies(kPeer));
++}
++
++TEST_F(AirPodsIdentityTest, applies_requires_current_bond) {
++  airpods_identity_set_bond_checker(FakeIsBonded);
++  ASSERT_TRUE(airpods_identity_set(kPeer, true));
++
++  g_bonded = false;
++  EXPECT_FALSE(airpods_identity_applies(kPeer));
++
++  g_bonded = true;
++  EXPECT_TRUE(airpods_identity_applies(kPeer));
++}
++
++TEST_F(AirPodsIdentityTest, applies_does_not_consult_bond_checker_for_unregistered_peer) {
++  airpods_identity_set_bond_checker(FakeIsBonded);
++  g_bonded = true;
++  EXPECT_FALSE(airpods_identity_applies(kNeighbour));
++  EXPECT_EQ(0, g_checker_calls);
++}
++
++// Built from a string so the test does not depend on which RawAddress constructors exist.
++RawAddress Addr(unsigned hi, unsigned lo) {
++  char buf[18];
++  snprintf(buf, sizeof(buf), "02:00:00:00:%02x:%02x", hi & 0xFF, lo & 0xFF);
++  return RawAddress::FromString(buf).value();
++}
++
++TEST_F(AirPodsIdentityTest, registry_is_bounded) {
++  for (size_t i = 0; i < AIRPODS_IDENTITY_MAX_PEERS; i++) {
++    ASSERT_TRUE(airpods_identity_set(Addr(0, i), true)) << "peer " << i;
++  }
++  RawAddress overflow = Addr(1, 0);
++  EXPECT_FALSE(airpods_identity_set(overflow, true));
++  EXPECT_FALSE(airpods_identity_is_registered(overflow));
++
++  // Re-adding an already registered peer at capacity is not an overflow.
++  EXPECT_TRUE(airpods_identity_set(Addr(0, 0), true));
++}
++
++}  // namespace
+diff --git a/system/include/hardware/bluetooth.h b/system/include/hardware/bluetooth.h
+index e095340..cc2ddc5 100644
+--- a/system/include/hardware/bluetooth.h
++++ b/system/include/hardware/bluetooth.h
+@@ -1165,6 +1165,13 @@ typedef struct {
+ 
+   /** check if pbap pse dynamic version upgrade is enable */
+   bool (*pbap_pse_dynamic_version_upgrade_is_enabled)();
++
++  /**
++   * SovereignOS (ADR-115): register (recognized == true) or unregister an
++   * exact bonded peer as a recognized AirPods accessory. Returns false when
++   * the registry is full.
++   */
++  bool (*set_airpods_identity)(RawAddress addr, bool recognized);
+ } bt_interface_t;
+ 
+ #define BLUETOOTH_INTERFACE_STRING "bluetoothInterface"
+diff --git a/system/stack/include/hcidefs.h b/system/stack/include/hcidefs.h
+index fdfd36c..b9cd9fe 100644
+--- a/system/stack/include/hcidefs.h
++++ b/system/stack/include/hcidefs.h
+@@ -885,6 +885,11 @@ typedef struct {
+ #define HCI_BRCM_ACL_HIGH_PRIORITY_DISABLE_RATE_CONTROL 0xF6
+ 
+ #define LMP_COMPID_GOOGLE 0xE0
++// Bluetooth SIG-assigned company identifier for Apple, Inc. (publicly
++// documented in the Bluetooth SIG assigned-numbers list). Used only by the
++// bonded-device-scoped AirPods identity patch (ADR-108), never presented
++// device-wide.
++#define LMP_COMPID_APPLE 0x004C
+ #define LMP_COMPID_INTEL 0x02
+ 
+ // TODO(zachoverflow): remove this once broadcom specific hacks are removed
+diff --git a/system/stack/l2cap/l2c_fcr.cc b/system/stack/l2cap/l2c_fcr.cc
+index 60ddaff..1f86047 100644
+--- a/system/stack/l2cap/l2c_fcr.cc
++++ b/system/stack/l2cap/l2c_fcr.cc
+@@ -28,6 +28,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++#include "device/include/airpods_identity.h"
+ #include "internal_include/bt_target.h"
+ #include "osi/include/allocator.h"
+ #include "stack/include/bt_hdr.h"
+@@ -1609,6 +1610,12 @@ uint8_t l2c_fcr_chk_chan_modes(tL2C_CCB* p_ccb) {
+     if (l2c_should_skip_ertm(p_ccb->p_lcb->remote_bd_addr)) {
+       log::info("candidate device for skip ertm");
+       return true;
++    } else if (airpods_identity_applies(p_ccb->p_lcb->remote_bd_addr)) {
++      // Bonded-device-scoped AirPods channel mode (ADR-108/ADR-115): only a peer
++      // that AirPodsApp registered (AdapterService#setAirPodsIdentity) AND that is
++      // still bonded gets this fallback -- never a device-wide behavior change.
++      log::info("recognized AirPods peer, allowing basic-mode fallback");
++      return true;
+     } else {
+       return false;
+     }
+diff --git a/system/stack/sdp/sdp_server.cc b/system/stack/sdp/sdp_server.cc
+index a0ffa83..26dacc2 100644
+--- a/system/stack/sdp/sdp_server.cc
++++ b/system/stack/sdp/sdp_server.cc
+@@ -31,6 +31,7 @@
+ 
+ #include "bta/ag/bta_ag_int.h"
+ #include "btif/include/btif_storage.h"
++#include "device/include/airpods_identity.h"
+ #include "device/include/interop.h"
+ #include "device/include/interop_config.h"
+ #include "internal_include/bt_target.h"
+@@ -132,6 +133,7 @@ bool sdp_dynamic_change_hfp_version(const tSDP_ATTRIBUTE* p_attr,
+                remote_address);
+   return true;
+ }
++
+ /******************************************************************************
+  *
+  * Function         hfp_fallback
+@@ -309,6 +311,10 @@ static void process_service_attr_req(tCONN_CB* p_ccb, uint16_t trans_num, uint16
+   bool is_cont = false;
+   bool is_hfp_fallback = false;
+   uint16_t attr_len;
++  tSDP_ATTRIBUTE airpods_view;
++  uint8_t airpods_view_value[2];
++  // Once per request: registered AND currently bonded (ADR-115).
++  const bool airpods_peer = airpods_identity_applies(p_ccb->device_address);
+ 
+   if (p_req + sizeof(rec_handle) + sizeof(max_list_len) > p_req_end) {
+     sdpu_build_n_send_error(p_ccb, trans_num, tSDP_STATUS::SDP_INVALID_SERV_REC_HDL,
+@@ -426,6 +432,7 @@ static void process_service_attr_req(tCONN_CB* p_ccb, uint16_t trans_num, uint16
+           sdpu_set_avrc_target_features(p_attr, p_ccb->device_address, avrc_sdp_version);
+         }
+       }
++      p_attr = sdpu_airpods_vendor_view(p_attr, airpods_peer, &airpods_view, airpods_view_value);
+       is_hfp_fallback = sdp_dynamic_change_hfp_version(p_attr, p_ccb->device_address);
+       /* Check if attribute fits. Assume 3-byte value type/length */
+       rem_len = max_list_len - (int16_t)(p_rsp - &p_ccb->rsp_list[0]);
+@@ -589,6 +596,10 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
+   uint8_t* p_seq_start;
+   bool is_hfp_fallback = false;
+   uint16_t seq_len, attr_len;
++  tSDP_ATTRIBUTE airpods_view;
++  uint8_t airpods_view_value[2];
++  // Once per request: registered AND currently bonded (ADR-115).
++  const bool airpods_peer = airpods_identity_applies(p_ccb->device_address);
+ 
+   /* Extract the UUID sequence to search for */
+   p_req = sdpu_extract_uid_seq(p_req, param_len, &uid_seq);
+@@ -713,6 +724,8 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
+             sdpu_set_avrc_target_features(p_attr, p_ccb->device_address, avrc_sdp_version);
+           }
+         }
++        p_attr = sdpu_airpods_vendor_view(p_attr, airpods_peer, &airpods_view,
++                                          airpods_view_value);
+         is_hfp_fallback = sdp_dynamic_change_hfp_version(p_attr, p_ccb->device_address);
+         /* Check if attribute fits. Assume 3-byte value type/length */
+         rem_len = max_list_len - (int16_t)(p_rsp - &p_ccb->rsp_list[0]);
+diff --git a/system/stack/sdp/sdp_utils.cc b/system/stack/sdp/sdp_utils.cc
+index 4473aee..523d2c4 100644
+--- a/system/stack/sdp/sdp_utils.cc
++++ b/system/stack/sdp/sdp_utils.cc
+@@ -50,6 +50,7 @@
+ #include "stack/include/bt_types.h"
+ #include "stack/include/bt_uuid16.h"
+ #include "stack/include/btm_sec_api_types.h"
++#include "stack/include/hcidefs.h"
+ #include "stack/include/l2cap_interface.h"
+ #include "stack/include/sdpdefs.h"
+ #include "stack/sdp/internal/sdp_api.h"
+@@ -1746,3 +1747,32 @@ size_t sdp_get_num_attributes(const tSDP_DISC_REC& sdp_disc_rec) {
+   }
+   return num_sdp_attributes;
+ }
++
++/*******************************************************************************
++ *
++ * Function         sdpu_airpods_vendor_view
++ *
++ * Description      SovereignOS ADR-115. Returns the attribute to serialize for
++ *                  this one SDP response. For a peer the AirPods identity scope
++ *                  applies to, the Device-ID vendor attribute is served from a
++ *                  caller-owned copy carrying Apple's Bluetooth SIG company ID.
++ *                  The shared SDP record (p_attr->value_ptr points into it) is
++ *                  never written, so no other peer, present or future, can see
++ *                  the override and nothing needs restoring on any early return.
++ *
++ * Returns          p_attr, or scratch when the override applies
++ *
++ ******************************************************************************/
++const tSDP_ATTRIBUTE* sdpu_airpods_vendor_view(const tSDP_ATTRIBUTE* p_attr, bool airpods_peer,
++                                               tSDP_ATTRIBUTE* scratch,
++                                               uint8_t (&scratch_value)[2]) {
++  if (!airpods_peer || p_attr->id != ATTR_ID_VENDOR_ID || p_attr->type != UINT_DESC_TYPE ||
++      p_attr->len != sizeof(scratch_value)) {
++    return p_attr;
++  }
++  scratch_value[0] = static_cast<uint8_t>(LMP_COMPID_APPLE >> 8);
++  scratch_value[1] = static_cast<uint8_t>(LMP_COMPID_APPLE & 0xFF);
++  *scratch = *p_attr;
++  scratch->value_ptr = scratch_value;
++  return scratch;
++}
+diff --git a/system/stack/sdp/sdpint.h b/system/stack/sdp/sdpint.h
+index 047b64f..e445d58 100644
+--- a/system/stack/sdp/sdpint.h
++++ b/system/stack/sdp/sdpint.h
+@@ -276,6 +276,8 @@ void sdpu_sort_attr_list(uint16_t num_attr, tSDP_DISCOVERY_DB* p_db);
+ uint16_t sdpu_get_list_len(tSDP_UUID_SEQ* uid_seq, tSDP_ATTR_SEQ* attr_seq);
+ uint16_t sdpu_get_attrib_seq_len(const tSDP_RECORD* p_rec, const tSDP_ATTR_SEQ* attr_seq);
+ uint16_t sdpu_get_attrib_entry_len(const tSDP_ATTRIBUTE* p_attr);
++const tSDP_ATTRIBUTE* sdpu_airpods_vendor_view(const tSDP_ATTRIBUTE* p_attr, bool airpods_peer,
++                                               tSDP_ATTRIBUTE* scratch, uint8_t (&scratch_value)[2]);
+ uint8_t* sdpu_build_partial_attrib_entry(uint8_t* p_out, const tSDP_ATTRIBUTE* p_attr, uint16_t len,
+                                          uint16_t* offset);
+ uint16_t sdpu_is_avrcp_profile_description_list(const tSDP_ATTRIBUTE* p_attr);
+diff --git a/system/stack/test/sdp/stack_sdp_utils_test.cc b/system/stack/test/sdp/stack_sdp_utils_test.cc
+index 18e29fd..4ab82a7 100644
+--- a/system/stack/test/sdp/stack_sdp_utils_test.cc
++++ b/system/stack/test/sdp/stack_sdp_utils_test.cc
+@@ -670,3 +670,80 @@ TEST_F(StackSdpUtilsTest, sdpu_build_partial_attrib_entry_within_bounds) {
+   ASSERT_EQ(p_ret, out_buf + 5);
+   ASSERT_EQ(offset, 5);
+ }
++
++// ---- SovereignOS ADR-115: sdpu_airpods_vendor_view ----------------------------
++
++TEST_F(StackSdpUtilsTest, sdpu_airpods_vendor_view_ordinary_peer_is_untouched) {
++  uint8_t value[2] = {0x00, 0xE0};
++  tSDP_ATTRIBUTE attr = {};
++  attr.len = 2;
++  attr.value_ptr = value;
++  attr.id = ATTR_ID_VENDOR_ID;
++  attr.type = UINT_DESC_TYPE;
++  tSDP_ATTRIBUTE scratch = {};
++  uint8_t scratch_value[2] = {0, 0};
++
++  ASSERT_EQ(&attr, sdpu_airpods_vendor_view(&attr, false, &scratch, scratch_value));
++  ASSERT_EQ(0x00, value[0]);
++  ASSERT_EQ(0xE0, value[1]);
++}
++
++TEST_F(StackSdpUtilsTest, sdpu_airpods_vendor_view_serves_a_copy_and_never_mutates_the_record) {
++  uint8_t value[2] = {0x00, 0xE0};
++  tSDP_ATTRIBUTE attr = {};
++  attr.len = 2;
++  attr.value_ptr = value;
++  attr.id = ATTR_ID_VENDOR_ID;
++  attr.type = UINT_DESC_TYPE;
++  tSDP_ATTRIBUTE scratch = {};
++  uint8_t scratch_value[2] = {0, 0};
++
++  const tSDP_ATTRIBUTE* view = sdpu_airpods_vendor_view(&attr, true, &scratch, scratch_value);
++
++  ASSERT_EQ(&scratch, view);
++  ASSERT_EQ(scratch_value, view->value_ptr);
++  ASSERT_EQ(0x00, view->value_ptr[0]);  // 0x004C, Apple, big-endian
++  ASSERT_EQ(0x4C, view->value_ptr[1]);
++  ASSERT_EQ(attr.id, view->id);
++  ASSERT_EQ(attr.type, view->type);
++  ASSERT_EQ(attr.len, view->len);
++  // Regression for the shared-record mutation: the real record is unchanged, so
++  // the next (non-AirPods) peer still sees the ordinary identity.
++  ASSERT_EQ(0x00, value[0]);
++  ASSERT_EQ(0xE0, value[1]);
++  ASSERT_NE(attr.value_ptr, view->value_ptr);
++}
++
++TEST_F(StackSdpUtilsTest, sdpu_airpods_vendor_view_other_attributes_are_untouched) {
++  uint8_t value[2] = {0x12, 0x34};
++  tSDP_ATTRIBUTE attr = {};
++  attr.len = 2;
++  attr.value_ptr = value;
++  attr.id = ATTR_ID_VENDOR_ID_SOURCE;
++  attr.type = UINT_DESC_TYPE;
++  tSDP_ATTRIBUTE scratch = {};
++  uint8_t scratch_value[2] = {0, 0};
++
++  ASSERT_EQ(&attr, sdpu_airpods_vendor_view(&attr, true, &scratch, scratch_value));
++  ASSERT_EQ(0x12, value[0]);
++  ASSERT_EQ(0x34, value[1]);
++}
++
++TEST_F(StackSdpUtilsTest, sdpu_airpods_vendor_view_wrong_length_or_type_is_untouched) {
++  uint8_t value[4] = {0x00, 0xE0, 0x00, 0x00};
++  tSDP_ATTRIBUTE attr = {};
++  attr.len = 4;
++  attr.value_ptr = value;
++  attr.id = ATTR_ID_VENDOR_ID;
++  attr.type = UINT_DESC_TYPE;
++  tSDP_ATTRIBUTE scratch = {};
++  uint8_t scratch_value[2] = {0, 0};
++
++  ASSERT_EQ(&attr, sdpu_airpods_vendor_view(&attr, true, &scratch, scratch_value));
++
++  attr.len = 2;
++  attr.type = TEXT_STR_DESC_TYPE;
++  ASSERT_EQ(&attr, sdpu_airpods_vendor_view(&attr, true, &scratch, scratch_value));
++  ASSERT_EQ(0x00, value[0]);
++  ASSERT_EQ(0xE0, value[1]);
++}
+-- 
+2.56.0
+

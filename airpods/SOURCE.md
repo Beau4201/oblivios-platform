@@ -97,7 +97,7 @@ changed, added or missing file; two mutations verified). Re-vendor and re-check 
 Userdebug-only validation apps for `AIR-029` to `AIR-032` and `AIR-036` (ADR-120; plan:
 the internal record "airpods debug harness" (not published)).
 Not part of the product: they are installed through `PRODUCT_PACKAGES_DEBUG`
-(`patches/vendor-adevtool/0002`) and the package gate refuses them in a
+(landed `patches/vendor-adevtool/0002`, now part of `0001`) and the package gate refuses them in a
 `user` image.
 
 - One source file (`HarnessProvider`) and one parser (`HexBytes`) built into three
@@ -126,7 +126,28 @@ the note on this in `docs/research/build-and-signing-engineering-notes.md` in `s
 here (same convention as `guardian/SOURCE.md`). Real, dated commit on the
 build server's `platform-primary` checkout.
 
-| Tree | Base commit | Patches | Approving ADR |
+The exported series were squashed on 2026-10-13. On the base of each tree the squashed patches
+give the same tree as the landed patches applied in order, checked in a disposable repository
+seeded from the build server (`git am` of the landed series, then of the squashed series, equal
+tree hash). The commit hashes below are the landed commits; the sections of this record that speak
+of "patch 00NN" use the landed numbers, mapped here:
+
+| Tree | Exported patch | Landed patches |
+| --- | --- | --- |
+| `packages/modules/Bluetooth` | `0001` identity, SDP and L2CAP scoping, `setAirPodsIdentity` | `0001` to `0005` |
+| `packages/modules/Bluetooth` | `0002` `setAirPodsMetadata` | `0006` |
+| `packages/modules/Bluetooth` | `0003` `setAirPodsAudioRoute` | `0007`, `0008` |
+| `packages/modules/Bluetooth` | `0004` `setAirPodsMusicDuck` | `0009` to `0011` |
+| `packages/modules/Bluetooth` | `0005` `setAirPodsAlias` | `0012`, `0013` |
+| `vendor/adevtool` | `0001` | `0001`, `0002` |
+| `frameworks/base` | `0001` | `0001` to `0003` |
+| `packages/apps/Settings` | `0001` | `0001` |
+
+The squashed `0001` of `packages/modules/Bluetooth` does not contain the interop feature and the
+unscoped SDP hooks of the first landed patch: the fourth landed patch removed them, so they are not in
+the end state.
+
+| Tree | Base commit | Landed patch | Approving ADR |
 | --- | --- | --- | --- |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0001` | ADR-109 (names this branch/commit literally: `sovereignos-airpods-identity`, `1102e506bdb774bf2a4ccb24d8057e3e370d6290`). **Must not ship alone**, see Corrections below. |
 | `packages/modules/Bluetooth` | `469799157dcd901470465b243f0ccc762de40d36` | `patches/packages-modules-bluetooth/0002` | ADR-115: exact-match, bond-gated identity registry, header-only (`593ddedbad37e477737b83302f20b9825eb0c96f`) |

@@ -33,7 +33,7 @@ the hidden `BluetoothSocket` constructor. It does not hold
 `BLUETOOTH_PRIVILEGED` (ADR-117), `MODIFY_AUDIO_ROUTING` or
 `MODIFY_AUDIO_SETTINGS_PRIVILEGED` (ADR-125, ADR-127): moving the audio to the phone and
 lowering the music volume are two narrow `@SystemApi` calls in the Bluetooth module behind
-`MANAGE_AIRPODS_IDENTITY` (patches `0007` to `0010`).
+`MANAGE_AIRPODS_IDENTITY` (Bluetooth patches `0003` and `0004`).
 
 ## Built and run
 
@@ -43,4 +43,4 @@ with the image each row ran on, is in the internal record "validation matrix" (n
 to `AIR-192`; the open rows are tracked in the internal project status record (not published).
 An app-only change cannot be installed with `adb install` (a system app update needs an
 fs-verity signature), so every change is an image build. Plan 9 is the last plan of this
-package: the control rows, Play sound, the alias call (patch `0012`) and the connection sheet.
+package: the control rows, Play sound, the alias call (Bluetooth patch `0005`) and the connection sheet.

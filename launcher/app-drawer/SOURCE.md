@@ -17,7 +17,13 @@ the one recorded in each patch; the committer on the server is the generic
 
 ## Patches
 
-| Patch | Subject | Files | Why it diverges from upstream |
+The exported series was squashed on 2026-10-13 into two patches: `0001` is the landed `0001` and
+`0002` (themed icons and the grouping logic), `0002` is the landed `0003` to `0012` (the drawer
+UI and every later fix). On the base above the two patches give the same tree as the twelve
+landed commits applied in order, checked in a disposable repository seeded from the build
+server. The table lists the twelve landed commits under their landed numbers.
+
+| Landed commit | Subject | Files | Why it diverges from upstream |
 | --- | --- | --- | --- |
 | `0001` | theme the icons of the app drawer | `BubbleTextView.java` (3 insertions, 1 deletion) | Upstream themes only the workspace, folders and the taskbar, so the drawer stays in the apps' own colours. |
 | `0002` | group apps by category | new `allapps/category/AppGrouper.kt`, new `AppGrouperTest.kt` | The drawer has no grouping upstream; `enabled_folders_in_all_apps` is declared but unused. Pure logic; its unit tests are in `AppGrouperTest.kt` (nine after `0006`). |

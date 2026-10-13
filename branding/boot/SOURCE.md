@@ -41,15 +41,21 @@ ADR-019 commits (`376774862cf9^` on the build server, branch
 PNGs of the stock tree have the sha256 `75efac98...` (mask) and `73c2cb64...`
 (shine), equal to upstream commit `0f505137b78e`.
 
-| Patch | Subject | Files | Why it diverges from upstream |
+| Landed commit | Subject | Files | Why it diverges from upstream |
 | --- | --- | --- | --- |
 | `frameworks-base/0001` | boot clear colour matches the boot picture | `cmds/bootanimation/BootAnimation.cpp` (one line and a comment) | A display taller than the mask shows the clear colour above and below it, so it must equal the picture's top and bottom rows. |
 | `frameworks-base/0002` | redraw at 60 fps | `cmds/bootanimation/BootAnimation.cpp` (the sleep constant and its comment) | The bar moves a fixed 4 px per redraw; the stock 12 fps would move it in 20 px steps. Unchanged from ADR-019. |
 | `frameworks-base/0003` | boot picture assets | the two PNGs under `core/res/assets/images/` | The picture itself. The loading texture is 720 x 256: the renderer lines a texture up with the bottom edge of the mask, so only the rows behind the window are needed (0.74 MB instead of 6.2 MB). |
 
+The exported series was squashed on 2026-10-13 into two patches: `0001` is the landed `0001` and
+`0002` (clear colour and 60 fps, one file), `0002` is the landed `0003` (the two PNGs). On the
+stock files the two patches give the same tree as the three landed commits applied in order,
+checked in a disposable repository seeded from the build server. The table lists the three
+landed commits under their landed numbers.
+
 The three patches were authored in a disposable local repository that held only
 the three files at the stock blobs (`sovereignos-platform/.worktrees/boot-lighthouse-patches`).
-`git am` of the three exported patches on the stock files gives the blobs
+`git am` of the three landed patches on the stock files gives the blobs
 `BootAnimation.cpp` `673b4b6d`, `android-logo-mask.png` `d2a77598` and
 `android-logo-shine.png` `6761fae9` (the first version of the shine, `dff60465`, was 720 x 2160 and left
 the loading bar empty, see below). The build server tree already carries the
@@ -73,7 +79,7 @@ shine on the bottom edge to 5e-8 of the pixels and differed by 8e-5 from the one
 `framework-res.apk` for the replay only, restored and compared by sha256 afterwards), draws the dark track and a
 mint segment at changing positions in eight frames. Landed as the delta commit `fda11b7a2c9d` in
 `frameworks/base` (no build was running, tree clean, `git apply --check` first); `HEAD` reads back the shine `6761fae9`
-and the mask `d2a77598`. Package patch `0003` was regenerated against the stock blobs and gives the same two blobs.
+and the mask `d2a77598`. Package patch `0003` (now `0002`) was regenerated against the stock blobs and gives the same two blobs.
 
 ## Apply
 
@@ -81,7 +87,7 @@ On the build server, with no build running and the tree clean at the expected
 `HEAD`, on a tree that does not yet carry the ADR-019 commits:
 
 ```sh
-cd frameworks/base && git am <path>/branding/boot/patches/frameworks-base/000*.patch
+cd frameworks/base && git am <path>/branding/boot/patches/frameworks-base/000[12]-*.patch
 ```
 
 ## Not checked

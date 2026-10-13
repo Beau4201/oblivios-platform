@@ -1,0 +1,46 @@
+From f78244ac8b16856f30728a01264aef66584f74d1 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Sun, 11 Oct 2026 12:00:00 +0200
+Subject: [PATCH 1/2] sovereignos: boot clear colour matches the boot picture
+ and the bar redraws at 60 fps (ADR-152)
+
+sovereignos: boot clear colour matches the boot picture (ADR-152)
+
+The picture's top and bottom rows are #030706. A display taller than the 1080 x 2400 mask shows the clear colour
+above and below it, so the clear colour has to be the same colour or a seam shows.
+
+sovereignos: redraw the boot picture at 60 fps (ADR-152)
+
+Unchanged from ADR-019. The loading bar moves at a fixed 4 px per redraw, so 12 fps would move it in 20 px steps.
+---
+ cmds/bootanimation/BootAnimation.cpp | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/cmds/bootanimation/BootAnimation.cpp b/cmds/bootanimation/BootAnimation.cpp
+index ea42566..673b4b6 100644
+--- a/cmds/bootanimation/BootAnimation.cpp
++++ b/cmds/bootanimation/BootAnimation.cpp
+@@ -800,7 +800,8 @@ bool BootAnimation::android(const Display& display) {
+     glDisable(GL_SCISSOR_TEST);
+     glUseProgram(mImageShader);
+ 
+-    glClearColor(0,0,0,1);
++    // SovereignOS: clear to the colour of the boot picture's top and bottom rows (ADR-152), so a taller display shows no seam.
++    glClearColor(3.0f / 255.0f, 7.0f / 255.0f, 6.0f / 255.0f, 1.0f);
+     glClear(GL_COLOR_BUFFER_BIT);
+     eglSwapBuffers(mEgl, display.eglSurface);
+ 
+@@ -839,8 +840,8 @@ bool BootAnimation::android(const Display& display) {
+         if (res == EGL_FALSE)
+             break;
+ 
+-        // 12fps: don't animate too fast to preserve CPU
+-        const nsecs_t sleepTime = 83333 - ns2us(systemTime() - now);
++        // 60fps: don't animate too fast to preserve CPU
++        const nsecs_t sleepTime = 16667 - ns2us(systemTime() - now);
+         if (sleepTime > 0)
+             usleep(sleepTime);
+ 
+-- 
+2.56.0
+

@@ -23,15 +23,20 @@ pin of `lynx` and `stallion` was updated to `c0fa4e99` (copies kept as
 
 | Patch | Subject | Files | Why it diverges from upstream |
 | --- | --- | --- | --- |
-| `0001` | raise the zram swap capacity to 80% of RAM | `config/device/common/sysprop-inclusion.yml` (two lines removed), `config/mk/google_devices/common/device-common.mk` (one property and a comment) | The stock value is `mmd.zram.size=50%`. Secure app spawning makes every app process about 43 MB larger and not shareable, so the swap fills about 30 s after unlock and lmkd kills apps. |
-| `0002` | raise the zram swap capacity from 80% to 100% of RAM | `config/mk/google_devices/common/device-common.mk` (the value and a comment) | lmkd counts free swap below 10% of the total as low, so only 90% of the capacity is usable. With the same load 80% was below that line 55% of the time and 100% never, at the same physical zram (see Verification). |
+| `0001` | raise the zram swap capacity to 100% of RAM | `config/device/common/sysprop-inclusion.yml` (two lines removed), `config/mk/google_devices/common/device-common.mk` (one property and a comment) | The stock value is `mmd.zram.size=50%`. Secure app spawning makes every app process about 43 MB larger and not shareable, so the swap fills about 30 s after unlock and lmkd kills apps. lmkd counts free swap below 10% of the total as low, so only 90% of the capacity is usable. With the same load 80% was below that line 55% of the time and 100% never, at the same physical zram (see Verification). |
+
+The exported `0001` is the squash of two landed commits: the 80% commit `ccc1d8db` and the 100%
+commit `c0fa4e99` that rewrote its value. Applied to the same base, the two give the same tree
+as the one patch (checked on 2026-10-13 in a disposable repository seeded from the build
+server). The notes below that speak of `0001` and `0002` mean those two landed commits: `0001` is
+the 80% state and `0002` the move to 100%.
 
 ## Apply
 
 On the build server, with no build running:
 
 ```sh
-cd vendor/adevtool && git am <path>/memory/zram-size/patches/vendor-adevtool/000[12]-*.patch
+cd vendor/adevtool && git am <path>/memory/zram-size/patches/vendor-adevtool/0001-*.patch
 ```
 
 The adevtool output under `vendor/google_devices/<device>/sysprop/product.prop` is generated and

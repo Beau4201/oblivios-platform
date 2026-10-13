@@ -43,8 +43,8 @@ account details into commits.
 
 | Tree | Base commit | Patches |
 | --- | --- | --- |
-| `frameworks/base` | `7d7001f9c4e4` (`sovereignos: apply approved boot-identity assets`, ADR-019) | `patches/frameworks-base/0001`, `0002` |
-| `system/sepolicy` | `87a06ed71fd6` (`update zygote policy for zygote_next exec spawning support`, upstream) | `patches/system-sepolicy/0001`–`0003` |
+| `frameworks/base` | `7d7001f9c4e4` (`sovereignos: apply approved boot-identity assets`, ADR-019) | `patches/frameworks-base/0001` |
+| `system/sepolicy` | `87a06ed71fd6` (`update zygote policy for zygote_next exec spawning support`, upstream) | `patches/system-sepolicy/0001` |
 | `system/core` | `84ebea5e2111` (`use lazy preloading for compat zygote`, upstream) | `patches/system-core/0001` |
 
 Apply in numeric order within each tree, from that tree's own repository
@@ -56,6 +56,9 @@ cd system/sepolicy && git am ../../credential/duress-unlock-dummy/patches/system
 cd system/core && git am ../../credential/duress-unlock-dummy/patches/system-core/*.patch
 ```
 
+The sepolicy and `frameworks/base` commits named below are the landed ones; the exported patches
+are squashed (one per tree, see `SOURCE.md`).
+
 ## Why three trees, and why `system/sepolicy`/`system/core` exist at all
 
 The original plan scoped this to `frameworks/base` alone. Real execution (not
@@ -65,7 +68,7 @@ assumption) found this insufficient twice, on two different full builds:
    new `/metadata` subdirectory — a deliberate GrapheneOS SELinux hardening
    boundary (only `search` on the generic `metadata_file` type; every real
    `/metadata` consumer has its own dedicated type plus an `init.rc`-created
-   directory). `patches/system-sepolicy/0001` adds a narrowly-scoped new type
+   directory). The first sepolicy commit adds a narrowly-scoped new type
    (`duress_dummy_metadata_file`) — it does **not** widen the generic grant.
    `patches/system-core/0001` adds the matching `init.rc` mkdir, in the
    generic `/metadata` block (matching `watchdog`/`tradeinmode`'s own
@@ -73,16 +76,16 @@ assumption) found this insufficient twice, on two different full builds:
    own device-tree-specific init script, since this feature has no
    device-capability gate).
 2. **Physical `lynx` build** (Task 3, full `droid` goal — the emulator build
-   never exercises these two checks): `patches/system-sepolicy/0002` adds
+   never exercises these two checks): the second sepolicy commit adds
    test-data coverage `plat_file_contexts_data_test` requires and the
-   emulator build never enforced. `patches/system-sepolicy/0003` moves the
+   emulator build never enforced. The third moves the
    new type from `public/file.te` to `private/file.te` — `se_freeze_test`
    rejects any new *public* type added after this device's vendor API
    freeze, and grepping the full tree (including `device/`/`vendor/`)
    confirmed nothing outside `private/` ever references this type, so it
    never needed to be public.
 
-`frameworks/base/patches/0002` fixes a real defect a task review found
+The second `frameworks/base` commit fixes a real defect a task review found
 (`provisionDuressDummyIfNeeded` never cleared stale GateKeeper/Weaver state
 before re-enrolling, unlike the real per-profile path it mirrors) —
 independently re-reviewed and approved before landing here.

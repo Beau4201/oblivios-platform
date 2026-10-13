@@ -55,7 +55,7 @@ function of the pixel position, so the output is byte-identical on every run.
 
 ## Patches
 
-`patches/frameworks-base/0001` to `0003`, to be applied in order with `git am`
+`patches/frameworks-base/0001` and `0002`, to be applied in order with `git am`
 on the stock GrapheneOS files; see `SOURCE.md` for the bases, the landing and
 what each patch changes.
 

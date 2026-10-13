@@ -1,0 +1,77 @@
+From fde4699cf4811946da57569c593fb850a12fc2c1 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Thu, 6 Aug 2026 02:32:15 +0200
+Subject: [PATCH] sovereignos: add Guardian to the emulator base_phone product
+ and make room for it
+
+sovereignos: add Guardian packages to base_phone product
+
+PRODUCT_PACKAGES addition for GuardianApp, GuardianLocationFixture, and
+its privapp-permissions allowlist, feeding sdk_phone64_x86_64 via
+phone.mk -> base_phone.mk. See sovereignos-foundation ADR (to be filled in
+Task 9) and docs/superpowers/plans/2026-08-05-guardian-platform-integration.md.
+
+sovereignos: allow Guardian artifacts past generic_system.mk path requirement
+
+sdk_phone64_x86_64 relaxes PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS but
+still rejects unlisted files inside generic_system.mk own requirement.
+Found by Task 7 real build (soong_build error: internal error: Device
+makefile produces files inside build/make/target/product/generic_system.mk
+artifact path requirement).
+
+sovereignos: bump emulator dynamic-partitions budget for Guardian
+
+BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE 2800->3000 (MiB blocks). Guardian
+GuardianApp bundles an unshrunk Compose runtime (optimize.enabled=false),
+pushing the dynamic-partition group ~64MB over the original 2.75GiB
+budget. Found by Task 8's real super.img build (lpmake: not enough
+space on device for partition vendor).
+---
+ 64bitonly/product/sdk_phone64_x86_64.mk |  6 ++++--
+ product/base_phone.mk                   | 13 +++++++++++++
+ 2 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/64bitonly/product/sdk_phone64_x86_64.mk b/64bitonly/product/sdk_phone64_x86_64.mk
+index 405f414..27d5d4a 100644
+--- a/64bitonly/product/sdk_phone64_x86_64.mk
++++ b/64bitonly/product/sdk_phone64_x86_64.mk
+@@ -15,8 +15,10 @@
+ #
+ PRODUCT_USE_DYNAMIC_PARTITIONS := true
+ 
+-# 2.75 GiB
+-BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE ?= $(shell expr 2800 \* 1048576 )
++# 2.75 GiB, bumped to ~2.86 GiB for SovereignOS Guardian (adds a Compose-based
++# priv-app; unshrunk build put the dynamic-partition group ~64MB over the
++# original 2800 budget) -- see sovereignos-foundation ADR <to be filled in Task 9>
++BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE ?= $(shell expr 3000 \* 1048576 )
+ BOARD_SUPER_PARTITION_SIZE := $(shell expr $(BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE) + 8388608 )  # +8M
+ 
+ $(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit_only.mk)
+diff --git a/product/base_phone.mk b/product/base_phone.mk
+index b630dd1..e5fbae4 100644
+--- a/product/base_phone.mk
++++ b/product/base_phone.mk
+@@ -26,6 +26,19 @@ PRODUCT_PACKAGES += GoldfishSkinConfig \
+ 
+ $(call inherit-product, device/generic/goldfish/product/phone_overlays.mk)
+ 
++# SovereignOS Guardian -- see sovereignos-foundation ADR <to be filled in Task 9>
++PRODUCT_PACKAGES += \
++    GuardianApp \
++    GuardianLocationFixture \
++    privapp-permissions-org.sovereignos.guardian.xml
++
++# generic_system.mk's artifact path requirement otherwise rejects these --
++# real Soong error found by Task 7's build, not a general GSI assumption.
++PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
++    system/priv-app/GuardianApp/% \
++    system/app/GuardianLocationFixture/% \
++    system/etc/permissions/privapp-permissions-org.sovereignos.guardian.xml
++
+ PRODUCT_COPY_FILES += \
+     device/generic/goldfish/phone/overlay/frameworks/base/packages/overlays/GoldfishSkinConfig/readme.txt:$(TARGET_COPY_OUT_DATA)/misc/GoldfishSkinConfig \
+     device/generic/goldfish/data/etc/handheld_core_hardware.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/handheld_core_hardware.xml \
+-- 
+2.56.0
+

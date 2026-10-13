@@ -2,6 +2,15 @@
 
 ## Commits (verbatim from `git format-patch`, real build-server history)
 
+The exported series were squashed on 2026-10-13: `frameworks-base` two landed commits into one
+`0001`, `system-sepolicy` three landed commits into one `0001`. On the same base each squashed
+patch gives the same tree as the landed commits applied in order (checked in a disposable
+repository seeded from the build server). The commits below are the landed ones, and the patch
+names after them are the numbers they had before the squash: the `frameworks-base` pair is now
+`0001`, the three `system-sepolicy` commits are now `0001`, `system-core/0001` is unchanged. The
+sepolicy end state is the private type with its test-data entry; the intermediate public type of
+the first landed commit is no longer in the exported patch.
+
 ### `frameworks/base`
 
 - `e37c96c886ea1228ce69644cd8033390446e03f4` — "sovereignos: add hardware-backed

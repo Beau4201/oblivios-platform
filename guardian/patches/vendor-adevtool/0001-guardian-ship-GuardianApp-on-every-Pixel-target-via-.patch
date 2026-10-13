@@ -1,0 +1,35 @@
+From 1bc76c58dea56b120fb44847c1af328176e532f1 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Thu, 6 Aug 2026 19:35:26 +0200
+Subject: [PATCH] guardian: ship GuardianApp on every Pixel target via
+ device-common.mk
+
+guardian: add GuardianApp to lynx product packages
+
+guardian: ship on every Pixel target via device-common.mk
+
+The lynx-only PRODUCT_PACKAGES entry left stallion without Guardian.
+device-common.mk is included by every Pixel platform (gs101 directly, the
+rest through device-common-gs201-plus.mk), so one entry covers them all.
+---
+ config/mk/google_devices/common/device-common.mk | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
+index 675ba86..21d2fd6 100644
+--- a/config/mk/google_devices/common/device-common.mk
++++ b/config/mk/google_devices/common/device-common.mk
+@@ -70,3 +70,10 @@ ifeq ($(filter lynx tangorpro,$(TARGET_PRODUCT)),)
+ endif
+ 
+ PRODUCT_PACKAGES += restrict-pixel-health-association
++
++# SovereignOS: Guardian REVOKE_BACKGROUND_LOCATION ships on every Pixel target
++# (real hardware, no test fixture). Kept here, not per device: the per-device
++# entry for lynx silently left stallion without Guardian (2026-09-28).
++PRODUCT_PACKAGES += \
++    GuardianApp \
++    privapp-permissions-org.sovereignos.guardian.xml
+-- 
+2.56.0
+

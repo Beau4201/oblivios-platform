@@ -1,0 +1,68 @@
+From 94292a727c04d3fb0b914cee7d60e4bb3892ec8d Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Thu, 8 Oct 2026 17:47:27 +0200
+Subject: [PATCH] memory: raise the zram swap capacity to 100% of RAM
+
+memory: raise the zram swap capacity to 80% of RAM
+
+Secure app spawning makes every app process about 43 MB larger and not
+shareable with the zygote. With the stock 50% the swap is full about 30 s
+after unlock and lmkd kills apps. zram is compressed RAM used only when
+filled, so the limit costs no memory until needed, and the flash writeback
+ceiling does not grow with it.
+
+The stock value is removed from sysprop-inclusion.yml because a second
+assignment with a different value fails post_process_props.py.
+
+memory: raise the zram swap capacity from 80% to 100% of RAM
+
+lmkd treats free swap below 10% of the total as low and then kills apps
+when memory is short, so only 90% of the capacity is usable. On a lynx
+with the same load of 4 GB of cold swap, 80% was below that line 55% of
+the time and 100% never, with the same physical zram (1405 MB against
+1452 MB). The stock 50% was below it all the time. zram is compressed RAM
+used only when filled, so the larger limit costs no memory until needed.
+---
+ config/device/common/sysprop-inclusion.yml       |  2 --
+ config/mk/google_devices/common/device-common.mk | 15 +++++++++++++++
+ 2 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/config/device/common/sysprop-inclusion.yml b/config/device/common/sysprop-inclusion.yml
+index b01fc41..ab73e1e 100644
+--- a/config/device/common/sysprop-inclusion.yml
++++ b/config/device/common/sysprop-inclusion.yml
+@@ -139,8 +139,6 @@ sysprop_inclusions:
+   - mmd.zram.comp_algorithm = lz4
+   - mmd.zram.comp_algorithm = lz77eh
+   - mmd.zram.enabled = true
+-  - mmd.zram.size = 3221225472
+-  - mmd.zram.size = 50%
+   - mmd.zram.writeback.device_size = 1073741824
+   - mmd.zram.writeback.device_size = 2147483648
+   - mmd.zram.writeback.enabled = true
+diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
+index 30d2fc1..2e94e04 100644
+--- a/config/mk/google_devices/common/device-common.mk
++++ b/config/mk/google_devices/common/device-common.mk
+@@ -89,3 +89,18 @@ PRODUCT_PACKAGES_DEBUG += \
+     AirPodsDebugHarness \
+     AirPodsProbeNoPerm \
+     AirPodsProbeBtPriv
++
++# SovereignOS: zram swap capacity of 100% of RAM instead of the stock 50% (ADR-150).
++# Secure app spawning makes every app process about 43 MB larger and not shareable with
++# the zygote, so with 50% the swap is full about 30 s after unlock and lmkd kills apps.
++# zram is compressed RAM that is used only when filled (about 4.5x measured), so the
++# raise costs no memory until it is needed. The flash writeback ceiling does not grow
++# with it: mmd's idle writeback limit scales with used/total zram and is capped by
++# mmd.zram.writeback.max_bytes and device_size. The stock value is dropped from
++# sysprop-inclusion.yml because a second assignment with a different value fails
++# post_process_props.py. Kept in the common file like Guardian and AirPods.
++# 100% and not 80%: lmkd treats free swap below 10% of the total as low, which is 90% of the
++# capacity usable. With a cold swap demand of 4 GB on top of the apps, 80% sat below that line
++# 55% of the time and 100% never, at the same physical zram (docs/research/
++# stallion-memory-pressure-investigation.md, "Zram capacity").
++PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%
+-- 
+2.56.0
+
