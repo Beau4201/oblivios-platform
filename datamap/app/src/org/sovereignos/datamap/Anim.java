@@ -42,6 +42,37 @@ final class Anim {
         v.animate().alpha(1f).translationX(0f).setDuration(320).setInterpolator(Ds.STANDARD).start();
     }
 
+    /** The way out of {@link #pageIn}: the page fades out and lifts 6 dp over 160 ms; {@code end} runs when it is gone. */
+    static void pageOut(Ds ds, View v, Runnable end) {
+        if (ds.calm()) {
+            end.run();
+            return;
+        }
+        v.animate().alpha(0f).translationY(-ds.px(6)).setDuration(160).setInterpolator(Ds.STANDARD)
+                .withEndAction(end).start();
+    }
+
+    /** The way out of {@link #detailIn}: the page slides 30 dp to the right and fades out over 240 ms. */
+    static void detailOut(Ds ds, View v, Runnable end) {
+        if (ds.calm()) {
+            end.run();
+            return;
+        }
+        v.animate().alpha(0f).translationX(v.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? -ds.px(30) : ds.px(30))
+                .setDuration(240).setInterpolator(Ds.STANDARD).withEndAction(end).start();
+    }
+
+    /** The way out of {@link #pop}: a dialog or a menu fades out over 160 ms and is then removed from its host. */
+    static void dismiss(Ds ds, ViewGroup host, View layer) {
+        if (ds.calm() || !layer.isAttachedToWindow()) {
+            host.removeView(layer);
+            return;
+        }
+        layer.setClickable(false);
+        layer.animate().alpha(0f).setDuration(160).setInterpolator(Ds.STANDARD)
+                .withEndAction(() -> host.removeView(layer)).start();
+    }
+
     /** {@code pop}: a dialog or a menu scales in from 92 percent; {@code pivotX} and {@code pivotY} are the origin. */
     static void pop(Ds ds, View v, float pivotX, float pivotY, int ms) {
         if (ds.calm()) {

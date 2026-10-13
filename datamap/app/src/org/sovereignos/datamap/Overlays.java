@@ -48,7 +48,7 @@ final class Overlays {
             item.setClickable(true);
             item.setBackground(ds.pressable());
             item.setOnClickListener(v -> {
-                host.removeView(layer);
+                Anim.dismiss(ds, host, layer);
                 actions[k].run();
             });
             box.addView(item, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ds.dp(44)));
@@ -58,7 +58,7 @@ final class Overlays {
         bp.topMargin = ds.dp(52);
         bp.setMarginEnd(ds.dp(12));
         layer.addView(box, bp);
-        layer.setOnClickListener(v -> host.removeView(layer));
+        layer.setOnClickListener(v -> Anim.dismiss(ds, host, layer));
         box.post(() -> Anim.pop(ds, box, box.getWidth(), 0, 160));
         return layer;
     }
@@ -92,9 +92,9 @@ final class Overlays {
             b.setClickable(true);
             b.setBackground(ds.pressable());
         }
-        no.setOnClickListener(v -> host.removeView(layer));
+        no.setOnClickListener(v -> Anim.dismiss(ds, host, layer));
         yes.setOnClickListener(v -> {
-            host.removeView(layer);
+            Anim.dismiss(ds, host, layer);
             onConfirm.run();
         });
         actions.addView(no, w.wrap());
@@ -104,7 +104,7 @@ final class Overlays {
         box.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
         layer.addView(box, new FrameLayout.LayoutParams(ds.dp(316), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
-        layer.setOnClickListener(v -> host.removeView(layer));
+        layer.setOnClickListener(v -> Anim.dismiss(ds, host, layer));
         Anim.fadeIn(ds, layer, 200);
         box.post(() -> Anim.pop(ds, box, box.getWidth() / 2f, box.getHeight() / 2f, 240));
         return layer;

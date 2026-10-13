@@ -81,6 +81,9 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     private View mOverlay;
     private TabBar mTabBar;
     private int mDetailKind = DETAIL_NONE;
+    /** Counts the openings and closings of the detail page, so that a late end of an exit does nothing. */
+    private int mDetailToken;
+    private int mTabToken;
     private String mDetailId = "";
     private Overlays.FilterSheet mFilterSheet;
 
@@ -283,11 +286,29 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     // ================================================================================= tabs
 
     private void showTab(int tab, boolean animate) {
-        boolean changed = tab != mState.tab();
+        final int old = mState.tab();
+        boolean changed = tab != old;
         mState.go(tab);
-        mMap.setVisibility(tab == AtlasState.MAP ? View.VISIBLE : View.GONE);
+        final int token = ++mTabToken;
+        final View leaving = !changed || !animate ? null : old == AtlasState.MAP ? mMap : mScrolls[old];
+        mMap.animate().cancel();
+        mMap.setAlpha(1f);
+        mMap.setTranslationY(0f);
+        mMap.setVisibility(tab == AtlasState.MAP || leaving == mMap ? View.VISIBLE : View.GONE);
         for (int t = AtlasState.APPS; t <= AtlasState.SETTINGS; t++) {
-            mScrolls[t].setVisibility(t == tab ? View.VISIBLE : View.GONE);
+            mScrolls[t].animate().cancel();
+            mScrolls[t].setAlpha(1f);
+            mScrolls[t].setTranslationY(0f);
+            mScrolls[t].setVisibility(t == tab || mScrolls[t] == leaving ? View.VISIBLE : View.GONE);
+        }
+        if (leaving != null) {
+            Anim.pageOut(mDs, leaving, () -> {
+                if (token == mTabToken) {   // a later switch has already settled every page
+                    leaving.setVisibility(View.GONE);
+                    leaving.setAlpha(1f);
+                    leaving.setTranslationY(0f);
+                }
+            });
         }
         if (tab != AtlasState.MAP) {
             buildPage(tab, false);
@@ -321,6 +342,10 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         // a live refresh of the same page keeps where the reader was
         final int keepY = !animate && mDetailBody != null && mDetailBody.isAttachedToWindow()
                 && kind == mDetailKind && id.equals(mDetailId) ? mDetailBody.getScrollY() : 0;
+        mDetailToken++;   // an exit that is running ends without taking this page away
+        mDetail.animate().cancel();
+        mDetail.setAlpha(1f);
+        mDetail.setTranslationX(0f);
         mDetailKind = kind;
         mDetailId = id;
         mDetail.removeAllViews();
@@ -332,7 +357,7 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
         head.setPadding(mDs.dp(8), 0, mDs.dp(16), 0);
-        View back = mW.iconButton(R.drawable.ic_back, getString(R.string.back), v -> closeDetail());
+        View back = mW.iconButton(R.drawable.ic_back, getString(R.string.back), v -> closeDetailAnimated());
         back.setId(R.id.at_back);
         head.addView(back, new LinearLayout.LayoutParams(mDs.dp(40), mDs.dp(40)));
         head.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
@@ -359,11 +384,31 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         updateBack();
     }
 
+    /** Closes the detail page at once: the caller moves to another tab. */
     private void closeDetail() {
+        mDetailToken++;
+        mDetail.animate().cancel();
+        mDetail.setAlpha(1f);
+        mDetail.setTranslationX(0f);
         mDetailKind = DETAIL_NONE;
         mDetail.removeAllViews();
         mDetail.setVisibility(View.GONE);
         updateBack();
+    }
+
+    /** Closes the detail page the way it came: it slides out to the right. */
+    private void closeDetailAnimated() {
+        if (mDetailKind == DETAIL_NONE) {
+            return;
+        }
+        mDetailKind = DETAIL_NONE;
+        final int token = ++mDetailToken;
+        updateBack();
+        Anim.detailOut(mDs, mDetail, () -> {
+            if (token == mDetailToken) {   // a page opened meanwhile keeps the view
+                closeDetail();
+            }
+        });
     }
 
     private void openMenu() {
@@ -417,11 +462,11 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
 
     private void onBack() {
         if (mOverlay != null) {
-            mContent.removeView(mOverlay);
+            Anim.dismiss(mDs, mContent, mOverlay);
         } else if (mFilterSheet != null) {
             mFilterSheet.dismiss();
         } else if (mDetailKind != DETAIL_NONE) {
-            closeDetail();
+            closeDetailAnimated();
         } else if (mState.tab() == AtlasState.MAP) {
             mMap.back();
         }
