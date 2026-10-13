@@ -289,6 +289,8 @@ MUTATIONS = [
     ("state: a bad tab is accepted", "AtlasState.java", "if (t < MAP || t > SETTINGS) {", "if (false) {", 1),
     ("state: the sheet shows the app before the place", "AtlasState.java",
      "if (place != null) {\n            return SHEET_PLACE;", "if (place != null && app == null) {\n            return SHEET_PLACE;", 1),
+    ("rotation: the rows give the wrong middle row", "Rotation.java", "out[4] = (float) m4;", "out[4] = (float) m5;", 1),
+    ("rotation: the rows give a sign wrong", "Rotation.java", "out[2] = (float) m2;", "out[2] = (float) -m2;", 1),
     ("rotation: depth uses the wrong row", "Rotation.java", "return (float) (m6 * x + m7 * y + m8 * z);", "return (float) (m6 * x + m7 * y - m8 * z);", 1),
 ]
 

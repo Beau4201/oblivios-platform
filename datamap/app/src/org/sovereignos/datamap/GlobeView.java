@@ -75,6 +75,8 @@ final class GlobeView extends View {
         final float[][][] ringsLow;
         final Seeded.Points texture;
         final Seeded.Points lights;
+        /** fill, glow and coast masks of the land for the shader, or null (the paths are drawn then) */
+        final android.graphics.Bitmap[] masks;
 
         private Prepared(LandData full, LandData low, Seeded.Points texture, Seeded.Points lights) {
             this.full = full;
@@ -83,6 +85,7 @@ final class GlobeView extends View {
             this.ringsLow = rings(low);
             this.texture = texture;
             this.lights = lights;
+            this.masks = LandTexture.render(full);
         }
 
         static Prepared of(LandData land) {
@@ -172,6 +175,10 @@ final class GlobeView extends View {
     private final Path mClip = new Path();
     private final Path mGrat = new Path();
     private final Path mLandFull = new Path();
+    /** The land drawn by one shader on the GPU, or null when it could not be made. */
+    private android.graphics.RuntimeShader mLandShader;
+    private final Paint mLandPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final float[] mRows = new float[9];
     private final Path mLandLow = new Path();
     private final Path mLine = new Path();
     private final RectF mRect = new RectF();
@@ -297,6 +304,7 @@ final class GlobeView extends View {
     /** The land and the decoration, made by {@link Prepared#of} off the main thread. */
     void setPrepared(Prepared p) {
         mLand = p;
+        buildLandShader();
         invalidate();
     }
 
@@ -771,7 +779,43 @@ final class GlobeView extends View {
         c.drawCircle(cx, cy, r - mDs.px(0.8f), mStroke);
     }
 
+    private void buildLandShader() {
+        mLandShader = null;
+        if (mLand == null || mLand.masks == null) {
+            return;
+        }
+        try {
+            android.graphics.RuntimeShader s = new android.graphics.RuntimeShader(LandTexture.AGSL);
+            String[] names = {"fillTex", "glowTex", "coastTex"};
+            for (int i = 0; i < 3; i++) {
+                android.graphics.BitmapShader b = new android.graphics.BitmapShader(mLand.masks[i],
+                        Shader.TileMode.REPEAT, Shader.TileMode.CLAMP);
+                b.setFilterMode(android.graphics.BitmapShader.FILTER_MODE_LINEAR);
+                s.setInputShader(names[i], b);
+            }
+            s.setFloatUniform("texSize", (float) LandTexture.W, (float) LandTexture.H);
+            s.setColorUniform("landC", cLand);
+            s.setColorUniform("glowC", cCoastGlow);
+            s.setColorUniform("coastC", cCoast);
+            mLandShader = s;
+        } catch (RuntimeException e) {
+            Log.w(PERF_TAG, "land shader refused, drawing paths: " + e);
+        }
+    }
+
     private void drawLand(Canvas c, float cx, float cy, float r, Rotation rot) {
+        if (mLandShader != null) {
+            rot.rows(mRows);
+            mLandShader.setFloatUniform("centre", cx, cy);
+            mLandShader.setFloatUniform("radius", r);
+            mLandShader.setFloatUniform("rowA", mRows[0], mRows[1], mRows[2]);
+            mLandShader.setFloatUniform("rowB", mRows[3], mRows[4], mRows[5]);
+            mLandShader.setFloatUniform("rowC", mRows[6], mRows[7], mRows[8]);
+            mLandPaint.setShader(mLandShader);
+            c.drawCircle(cx, cy, r, mLandPaint);
+            drawLandDecoration(c, cx, cy, r, rot);
+            return;
+        }
         boolean detail = !mMoving;
         Path coast = mLandLow;
         trace(mLandLow, mLand.low, mLand.ringsLow, rot, cx, cy, r);
@@ -796,6 +840,10 @@ final class GlobeView extends View {
         mStroke.setColor(cCoast);
         mStroke.setStrokeWidth(mDs.px(0.6f));
         c.drawPath(fill, mStroke);
+        drawLandDecoration(c, cx, cy, r, rot);
+    }
+
+    private void drawLandDecoration(Canvas c, float cx, float cy, float r, Rotation rot) {
         if (DRAW_TEXTURE) {
             drawTexture(c, cx, cy, r, rot);
         }

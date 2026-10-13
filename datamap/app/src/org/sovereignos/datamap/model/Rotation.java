@@ -31,6 +31,23 @@ public final class Rotation {
         m8 = cp * cl;
     }
 
+    /**
+     * The three rows of the matrix, nine floats: a point of the sphere in front is {@code row0 * x + row1 * y + row2 * z}
+     * for a screen vector (x, y, z), because the matrix is a pure turn. The land shader of the globe uses it to find
+     * the longitude and latitude under a pixel.
+     */
+    public void rows(float[] out) {
+        out[0] = (float) m0;
+        out[1] = 0f;
+        out[2] = (float) m2;
+        out[3] = (float) m3;
+        out[4] = (float) m4;
+        out[5] = (float) m5;
+        out[6] = (float) m6;
+        out[7] = (float) m7;
+        out[8] = (float) m8;
+    }
+
     /** Only the depth: whether a point is in front, without the other two numbers. */
     public float depth(float x, float y, float z) {
         return (float) (m6 * x + m7 * y + m8 * z);

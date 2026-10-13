@@ -30,6 +30,36 @@ public final class RotationCheck {
                         + ": " + p.x + "," + p.y + "," + p.depth + " against " + o[0] + "," + o[1] + "," + o[2]);
             }
         }
+        // the land shader: from a screen position back to longitude and latitude with the rows, the way it does it
+        float[] rows = new float[9];
+        int seen = 0;
+        for (int i = 0; i < 2000; i++) {
+            double lat = rnd.nextDouble() * 170 - 85;
+            double lon = rnd.nextDouble() * 360 - 180;
+            double lat0 = rnd.nextDouble() * 140 - 70;
+            double lon0 = rnd.nextDouble() * 360 - 180;
+            Rotation r = new Rotation(lon0, lat0);
+            UnitVectors.of(lat, lon, u);
+            r.apply(u[0], u[1], u[2], o);
+            if (o[2] < 0.05f) {
+                continue;
+            }
+            seen++;
+            r.rows(rows);
+            double z = Math.sqrt(1 - o[0] * o[0] - o[1] * o[1]);
+            double wx = rows[0] * o[0] + rows[3] * o[1] + rows[6] * z;
+            double wy = rows[1] * o[0] + rows[4] * o[1] + rows[7] * z;
+            double wz = rows[2] * o[0] + rows[5] * o[1] + rows[8] * z;
+            double lat2 = Math.toDegrees(Math.asin(Math.max(-1, Math.min(1, wy))));
+            double lon2 = Math.toDegrees(Math.atan2(wx, wz));
+            double dLon = Math.abs(((lon2 - lon) % 360 + 540) % 360 - 180);
+            if (Math.abs(lat2 - lat) > 0.02 || dLon > 0.02 / Math.cos(Math.toRadians(lat))) {
+                throw new AssertionError("shader inverse " + lat + "," + lon + " gave " + lat2 + "," + lon2);
+            }
+        }
+        if (seen < 500) {
+            throw new AssertionError("too few visible points: " + seen);
+        }
         // the view centre is at the middle of the disk and toward the viewer
         UnitVectors.of(10, 20, u);
         new Rotation(20, 10).apply(u[0], u[1], u[2], o);
