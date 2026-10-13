@@ -383,15 +383,7 @@ final class Widgets {
         } else {
             ImageView iv = new ImageView(ds.ctx);
             iv.setImageDrawable(icon);
-            iv.setScaleType(ImageView.ScaleType.FIT_XY);
-            final float r = ds.px(radius);
-            iv.setOutlineProvider(new ViewOutlineProvider() {
-                @Override
-                public void getOutline(View view, android.graphics.Outline outline) {
-                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), r);
-                }
-            });
-            iv.setClipToOutline(true);
+            iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
             v = iv;
         }
         v.setId(sizeDp >= 72 ? R.id.at_tile_big : R.id.at_tile);
@@ -407,7 +399,6 @@ final class Widgets {
         private final Drawable[] mIcons;
         private final Paint mRing = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint mText = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Path mClip = new Path();
         private final RectF mRect = new RectF();
 
         StackView(List<String> pkgs) {
@@ -445,20 +436,15 @@ final class Widgets {
                 float ring = ds.px(2);
                 mRect.set(x - ring, top - ring, x + s + ring, top + s + ring);
                 canvas.drawRoundRect(mRect, ds.px(10), ds.px(10), mRing);
-                canvas.save();
                 mRect.set(x, top, x + s, top + s);
-                mClip.reset();
-                mClip.addRoundRect(mRect, ds.px(8), ds.px(8), Path.Direction.CW);
-                canvas.clipPath(mClip);
                 if (mIcons[i] != null) {
                     mIcons[i].setBounds(Math.round(x), Math.round(top), Math.round(x + s), Math.round(top + s));
                     mIcons[i].draw(canvas);
                 } else {
                     Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                     p.setColor(ds.color(R.color.at_pill));
-                    canvas.drawRect(mRect, p);
+                    canvas.drawRoundRect(mRect, ds.px(8), ds.px(8), p);
                 }
-                canvas.restore();
             }
             if (mExtra > 0) {
                 float x = (mPkgs.length - 1) * ds.px(16) + s + ds.px(6);

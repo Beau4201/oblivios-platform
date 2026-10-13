@@ -46,5 +46,9 @@ grep -q 'mLand.execute' "$APP/src/org/sovereignos/datamap/MainActivity.java" || 
 # ImageView killed the activity in onCreate. The icon is the child of the button.
 grep -q '(ImageView) ((FrameLayout) ((LinearLayout) mFullControl).getChildAt(0)).getChildAt(0)' "$APP/src/org/sovereignos/datamap/MapTab.java" \
   || fail "mFullIcon must be taken from inside the button FrameLayout (device crash in MapTab.<init>)"
+# Owner, 2026-10-13: an app's icon is the system's own icon, with no theme tint, no full bleed and no clipping of ours.
+if grep -rnE 'ThemedIcons|AppIcons|getMonochrome' "$APP/src" --include='*.java'; then
+  fail "app icons must be the system's own icons (no themed or bled icons)"
+fi
 [ "$bad" -eq 0 ] && echo "static checks passed"
 exit "$bad"

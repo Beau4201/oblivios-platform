@@ -79,8 +79,9 @@ final class Apps {
     }
 
     /**
-     * The icon of the app as the design page draws it (ADR-160): the app's own icon, the whole picture. An app with
-     * no icon at all gives null, so that the caller draws the initials and not the platform's default robot.
+     * The icon of the app as the system draws it: the app's own icon with the system's icon shape, with no theme
+     * colour, no tile and no clipping of ours (owner, 2026-10-13). An app with no icon at all gives null, so that the
+     * caller draws the initials and not the platform's default robot.
      */
     Drawable icon(String pkg) {
         Drawable themed = mIcons.get(pkg);
@@ -91,8 +92,7 @@ final class Apps {
             try {
                 ApplicationInfo info = mPm.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0));
                 Drawable raw = info.icon != 0 ? mPm.getApplicationIcon(pkg) : launcherIcon(pkg);
-                // C13 (MAP-014): the launcher's themed icon where the app has a monochrome layer
-                themed = raw == null ? null : ThemedIcons.of(mContext, raw);
+                themed = raw;
             } catch (PackageManager.NameNotFoundException e) {
                 themed = null;
             }
@@ -103,7 +103,8 @@ final class Apps {
             mIcons.put(pkg, themed);
         }
         // a copy for each caller: bounds and alpha are the caller's own
-        return AppIcons.fullBleed(themed);
+        Drawable.ConstantState state = themed.getConstantState();
+        return state == null ? themed : state.newDrawable().mutate();
     }
 
     /** Loads the labels and icons of these packages now, so that the screens do not do it while they are built. */

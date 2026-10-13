@@ -1259,14 +1259,8 @@ final class GlobeView extends View {
             mChipIcons.put(first, icon);
         }
         if (icon != null) {
-            c.save();
-            mRect.set(x, y, x + size, y + size);
-            mClipChip.rewind();
-            mClipChip.addRoundRect(mRect, mDs.px(6), mDs.px(6), Path.Direction.CW);
-            c.clipPath(mClipChip);
             icon.setBounds(Math.round(x), Math.round(y), Math.round(x + size), Math.round(y + size));
             icon.draw(c);
-            c.restore();
         }
         if (appCount > 1) {
             float bx = mid[0] + size / 2;
