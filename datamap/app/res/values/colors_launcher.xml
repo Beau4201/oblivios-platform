@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The launcher icon: a plain globe glyph on a tonal ground. The product logo is not decided (status.md); this is not a
+     brand mark. Not in colors.xml, which tools/extract-tokens.py writes from the design reference page. -->
+<resources>
+    <color name="at_launcher_bg">#FFD9E2FF</color>
+    <color name="at_launcher_fg">#FF334671</color>
+</resources>

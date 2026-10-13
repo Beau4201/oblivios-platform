@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: Apache-2.0
+package {
+    default_applicable_licenses: ["datamap-ipmap_license"],
+}
+
+// The data in ipmap.bin is not Apache-2.0: NOTICE names its sources and their licences (ADR-161). Soong has no kind
+// for the Public Domain Dedication and License, so it is declared here; the others are the kinds of build/soong/licenses.
+license_kind {
+    name: "datamap-ipmap-PDDL-1.0",
+    conditions: ["unencumbered"],
+    url: "https://opendatacommons.org/licenses/pddl/1-0/",
+}
+
+license {
+    name: "datamap-ipmap_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "datamap-ipmap-PDDL-1.0",
+        "SPDX-license-identifier-CC-BY-4.0",
+        "SPDX-license-identifier-MPL-2.0",
+        "SPDX-license-identifier-CC0-1.0",
+    ],
+    license_text: ["NOTICE"],
+}
+
+// ADR-161. The read-only address data of the Data Map: country, city, ASN, operator and anycast flag of an address.
+// DataMapService reads exactly this path; an image in which the file is missing still boots, and no service then has a
+// server place. The module itself needs src/ipmap.bin next to this file: the built file is not in this repository, so a
+// build that lists datamap-ipmap.bin fails in Soong until the file has been put there (SOURCE.md).
+prebuilt_etc {
+    name: "datamap-ipmap.bin",
+    src: "ipmap.bin",
+    filename: "ipmap.bin",
+    sub_dir: "datamap",
+}

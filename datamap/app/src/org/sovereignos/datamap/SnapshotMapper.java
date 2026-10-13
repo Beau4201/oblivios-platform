@@ -29,6 +29,12 @@ final class SnapshotMapper {
                 m.foreground = e.foregroundCount;
                 m.background = e.backgroundCount;
                 m.viaDns = e.viaDns;
+                m.serverKind = e.serverKind;
+                m.serverCountry = nz(e.serverCountry);
+                m.serverCity = nz(e.serverCity);
+                m.serverLat = e.serverLat;
+                m.serverLon = e.serverLon;
+                m.serverOperator = nz(e.serverOperator);
                 in.entries.add(m);
             }
         }

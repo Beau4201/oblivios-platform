@@ -24,4 +24,6 @@ parcelable DataMapSnapshot {
     /** Names the service refused as not valid host names since the user started. */
     int invalidCount;
     long nowWallMs;
+    /** The history also keeps server places. */
+    boolean serverHistory;
 }

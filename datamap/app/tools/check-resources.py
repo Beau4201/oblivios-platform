@@ -37,8 +37,17 @@ for kind, names in sorted(used.items()):
     for n in sorted(names - defined[kind]):
         print(f"MISSING {kind}/{n}")
         bad = 1
-unused = sorted(defined["string"] - used.get("string", set()))
-for n in unused:
-    print(f"UNUSED string/{n}")
+# strings, plurals, arrays and ids are written by hand, so one that nothing uses is a mistake; colours and drawables
+# come from the design page in full (extract-tokens.py, make-icons.py), so an unused one is only noted
+ids_defined = set()
+for f in res.rglob("*.xml"):
+    ids_defined |= set(re.findall(r'<item\s+name="([A-Za-z0-9_]+)"\s+type="id"', f.read_text(encoding="utf-8")))
+ids_used = set(re.findall(r"\bR\.id\.([A-Za-z0-9_]+)", src))
+for kind in ("string", "plurals", "array"):
+    for n in sorted(defined[kind] - used.get(kind, set())):
+        print(f"UNUSED {kind}/{n}")
+        bad = 1
+for n in sorted(ids_defined - ids_used):
+    print(f"UNUSED id/{n}")
     bad = 1
 sys.exit(bad)

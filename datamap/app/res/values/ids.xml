@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- One id for each kind of part of the design page, so that a dump of the screen (uiautomator) can find them
+     in the device round and compare each with the page. -->
+<resources>
+    <item name="at_title" type="id" />
+    <item name="at_h3" type="id" />
+    <item name="at_card" type="id" />
+    <item name="at_row" type="id" />
+    <item name="at_row_big" type="id" />
+    <item name="at_tile" type="id" />
+    <item name="at_tile_big" type="id" />
+    <item name="at_note" type="id" />
+    <item name="at_tab_bar" type="id" />
+    <item name="at_tab" type="id" />
+    <item name="at_tab_selected" type="id" />
+    <item name="at_sheet" type="id" />
+    <item name="at_sheet_handle" type="id" />
+    <item name="at_control" type="id" />
+    <item name="at_detail_header" type="id" />
+    <item name="at_back" type="id" />
+    <item name="at_more" type="id" />
+    <item name="at_menu" type="id" />
+    <item name="at_dialog" type="id" />
+    <item name="at_filter_sheet" type="id" />
+    <item name="at_filter_button" type="id" />
+    <item name="at_segmented" type="id" />
+    <item name="at_action_row" type="id" />
+    <item name="at_facts" type="id" />
+    <item name="at_flat_map" type="id" />
+    <item name="at_empty" type="id" />
+</resources>

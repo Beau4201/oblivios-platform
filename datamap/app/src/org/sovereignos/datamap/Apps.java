@@ -2,24 +2,29 @@
 package org.sovereignos.datamap;
 
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * The names and icons of the apps of the current user, as the system gives them: the icon is the one the
- * launcher shows (MAP-014), and no logo of any app is stored in this package.
+ * The names and icons of the apps of the current user, as the system gives them: no logo of any app is stored in
+ * this package. (Company logos are another matter: ADR-159.)
  */
 final class Apps {
     private final Context mContext;
     private final PackageManager mPm;
-    private final Map<String, String> mLabels = new HashMap<>();
-    private final Map<String, Boolean> mInstalled = new HashMap<>();
+    // read on the main thread and warmed on the reader thread, so the maps are concurrent
+    private final Map<String, String> mLabels = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Boolean> mInstalled = new java.util.concurrent.ConcurrentHashMap<>();
+    /** The themed icon of each package once loaded; a package with no icon is in {@code mNoIcon}. */
+    private final Map<String, Drawable> mIcons = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Set<String> mNoIcon = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     Apps(Context context) {
         mContext = context;
@@ -73,13 +78,55 @@ final class Apps {
         return label;
     }
 
-    /** The icon of the app, or null if it has none (the caller then draws the initials). */
+    /**
+     * The icon of the app as the system draws it: the app's own icon with the system's icon shape, with no theme
+     * colour, no tile and no clipping of ours (owner, 2026-10-13). An app with no icon at all gives null, so that the
+     * caller draws the initials and not the platform's default robot.
+     */
     Drawable icon(String pkg) {
-        if ("android".equals(pkg) || !isInstalled(pkg)) {
+        Drawable themed = mIcons.get(pkg);
+        if (themed == null) {
+            if (mNoIcon.contains(pkg) || "android".equals(pkg) || !isInstalled(pkg)) {
+                return null;
+            }
+            try {
+                ApplicationInfo info = mPm.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0));
+                Drawable raw = info.icon != 0 ? mPm.getApplicationIcon(pkg) : launcherIcon(pkg);
+                themed = raw;
+            } catch (PackageManager.NameNotFoundException e) {
+                themed = null;
+            }
+            if (themed == null) {
+                mNoIcon.add(pkg);
+                return null;
+            }
+            mIcons.put(pkg, themed);
+        }
+        // a copy for each caller: bounds and alpha are the caller's own
+        Drawable.ConstantState state = themed.getConstantState();
+        return state == null ? themed : state.newDrawable().mutate();
+    }
+
+    /** Loads the labels and icons of these packages now, so that the screens do not do it while they are built. */
+    void warm(java.util.Collection<String> packages) {
+        for (String pkg : packages) {
+            label(pkg);
+            icon(pkg);
+        }
+    }
+
+    /** An app with no icon of its own may still have one on its launcher entry. */
+    private Drawable launcherIcon(String pkg) {
+        Intent launch = mPm.getLaunchIntentForPackage(pkg);
+        if (launch == null || launch.getComponent() == null) {
             return null;
         }
         try {
-            return mPm.getApplicationIcon(pkg);
+            ActivityInfo activity = mPm.getActivityInfo(launch.getComponent(), PackageManager.ComponentInfoFlags.of(0));
+            if (activity.icon == 0 && activity.applicationInfo.icon == 0) {
+                return null;
+            }
+            return mPm.getActivityIcon(launch.getComponent());
         } catch (PackageManager.NameNotFoundException e) {
             return null;
         }

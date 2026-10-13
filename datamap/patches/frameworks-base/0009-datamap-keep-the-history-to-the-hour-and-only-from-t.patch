@@ -1,0 +1,196 @@
+From 56027ac772610e2a7654d2d9179d2f898ce62bf7 Mon Sep 17 00:00:00 2001
+From: SovereignOS Build <build@sovereignos.local>
+Date: Mon, 12 Oct 2026 16:55:29 +0200
+Subject: [PATCH] datamap: keep the history to the hour and only from the
+ moment it is switched on
+
+A history row now holds the first and the last time to the hour, so that a service seen once
+no longer leaves the moment of the contact in the file. Switching the history on takes the
+rows in memory at that moment as a baseline and writes only what came after it. The counter of
+dumpsys datamap is labelled events since boot.
+---
+ .../server/datamap/DataMapService.java        | 31 ++++++++++++-
+ .../android/server/datamap/HistoryCodec.java  | 45 ++++++++++++++++++-
+ 2 files changed, 72 insertions(+), 4 deletions(-)
+
+diff --git a/services/core/java/com/android/server/datamap/DataMapService.java b/services/core/java/com/android/server/datamap/DataMapService.java
+index 05534b1..2adad94 100644
+--- a/services/core/java/com/android/server/datamap/DataMapService.java
++++ b/services/core/java/com/android/server/datamap/DataMapService.java
+@@ -114,6 +114,11 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+ 
+     // Written on the handler thread only.
+     private final java.util.HashMap<Integer, Long> mWrittenVersion = new java.util.HashMap<>();
++    // What a history that was switched on later may keep: the rows that were in memory at that moment are taken
++    // off the live rows before they are written, so that the history never holds what happened before it was
++    // asked for (HistoryCodec.since). Handler thread only.
++    private final java.util.HashMap<Integer, List<DataMapStore.Row>> mBaseline = new java.util.HashMap<>();
++    private final java.util.HashMap<Integer, Long> mSwitchedOn = new java.util.HashMap<>();
+     // Written on the handler thread, read by binder threads (getSnapshot).
+     private final ConcurrentHashMap<Integer, Integer> mLiveDay = new ConcurrentHashMap<>();
+ 
+@@ -540,6 +545,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     @Override
+     public void setHistory(boolean enabled, int days) {
+         int user = enforceCaller();
++        UserSettings earlier = mSettings.get(user);
++        final boolean wasOn = earlier != null && earlier.history;
+         // refuses days outside 1 to 90
+         UserSettings next = mSettings.compute(user, (k, cur) ->
+                 (cur == null ? UserSettings.defaults() : cur).withHistory(enabled, days));
+@@ -549,11 +556,17 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+             saveSettings(user, next);
+             if (enabled) {
+                 mLiveDay.put(user, HistoryCodec.dayIndex(System.currentTimeMillis(), tzOffset()));
++                if (!wasOn) {   // switched on now, not a change of the days: what is in memory is not kept
++                    mBaseline.put(user, mStore.snapshot(user));
++                    mSwitchedOn.put(user, System.currentTimeMillis());
++                }
+                 writeHistory(user);
+             } else {
+                 historyFile(user).delete();
+                 mWrittenVersion.remove(user);
+                 mLiveDay.remove(user);
++                mBaseline.remove(user);
++                mSwitchedOn.remove(user);
+             }
+         });
+     }
+@@ -571,6 +584,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+             mStore.clearUser(user);
+             historyFile(user).delete();
+             mWrittenVersion.remove(user);
++            mBaseline.remove(user);
++            mSwitchedOn.remove(user);
+         });
+     }
+ 
+@@ -618,6 +633,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+             mSettings.remove(user);
+             mWrittenVersion.remove(user);
+             mLiveDay.remove(user);
++            mBaseline.remove(user);
++            mSwitchedOn.remove(user);
+             refreshRegistration();
+         });
+     }
+@@ -706,12 +723,14 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         if (days == null) {
+             days = new TreeMap<>();
+         }
+-        days.put(liveDay, mStore.snapshot(user));
++        days.put(liveDay, persistable(user));
+         days = HistoryCodec.prune(days, today, st.days);
+         if (writeAtomically(historyFile(user), HistoryCodec.encode(days))) {
+             mHistoryGeneration.incrementAndGet();
+             if (today != liveDay) {
+                 mStore.clearUser(user);   // yesterday is on disk; today starts empty
++                mBaseline.remove(user);
++                mSwitchedOn.remove(user);
+                 mLiveDay.put(user, today);
+                 mWrittenVersion.put(user, 0L);
+             } else {
+@@ -720,6 +739,14 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         }
+     }
+ 
++    /** The live rows that may be written: all of them, or those that came after the history was switched on. */
++    private List<DataMapStore.Row> persistable(int user) {
++        List<DataMapStore.Row> live = mStore.snapshot(user);
++        List<DataMapStore.Row> baseline = mBaseline.get(user);
++        Long since = mSwitchedOn.get(user);
++        return baseline == null || since == null ? live : HistoryCodec.since(live, baseline, since);
++    }
++
+     private boolean writeAtomically(File f, String text) {
+         File d = f.getParentFile();
+         if (!d.isDirectory() && !d.mkdirs()) {
+@@ -749,7 +776,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     protected void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+         mContext.enforceCallingPermission(android.Manifest.permission.DUMP, TAG);
+         // Counts only: no package, no service, no owner.
+-        pw.println("events: " + mEvents.get() + ", dropped: " + mDropped.get()
++        pw.println("events since boot: " + mEvents.get() + ", dropped: " + mDropped.get()
+                 + ", entries: " + mStore.size() + ", registered: " + mRegistered
+                 + ", classifier services: " + mClassifier.serviceCount());
+     }
+diff --git a/services/core/java/com/android/server/datamap/HistoryCodec.java b/services/core/java/com/android/server/datamap/HistoryCodec.java
+index c948040..3775f68 100644
+--- a/services/core/java/com/android/server/datamap/HistoryCodec.java
++++ b/services/core/java/com/android/server/datamap/HistoryCodec.java
+@@ -22,6 +22,7 @@ final class HistoryCodec {
+     static final int MAX_ROWS = 400000;
+     static final int MAX_LINE = 600;
+     static final long DAY_MS = 86_400_000L;
++    static final long HOUR_MS = 3_600_000L;
+ 
+     /** The file is damaged or not ours; the caller discards it and starts empty. */
+     static final class FormatException extends Exception {
+@@ -34,6 +35,14 @@ final class HistoryCodec {
+ 
+     private HistoryCodec() {}
+ 
++    /**
++     * A time kept to the hour. The history says on which day and in which hour a service was seen, not at
++     * which moment: for a service seen once, the first and the last time would otherwise be the event itself.
++     */
++    static long toHour(long wallMs) {
++        return Math.floorDiv(wallMs, HOUR_MS) * HOUR_MS;
++    }
++
+     /** The local day of a wall-clock time. */
+     static int dayIndex(long wallMs, long tzOffsetMs) {
+         return (int) Math.floorDiv(wallMs + tzOffsetMs, DAY_MS);
+@@ -48,8 +57,8 @@ final class HistoryCodec {
+                     throw new IllegalArgumentException("a tab or a line break in a field");
+                 }
+                 sb.append("row\t").append(r.uid).append('\t').append(r.pkg).append('\t')
+-                        .append(r.key).append('\t').append(r.firstWall).append('\t')
+-                        .append(r.lastWall).append('\t').append(r.count).append('\t')
++                        .append(r.key).append('\t').append(toHour(r.firstWall)).append('\t')
++                        .append(toHour(r.lastWall)).append('\t').append(r.count).append('\t')
+                         .append(r.fg).append('\t').append(r.bg).append('\t')
+                         .append(r.viaDns ? 1 : 0).append('\n');
+             }
+@@ -118,6 +127,38 @@ final class HistoryCodec {
+         return days;
+     }
+ 
++    /**
++     * The rows of {@code live} that came after {@code baseline}, the rows that were in memory when the history
++     * was switched on at {@code switchedOnWall}: what happened before that is not kept. A row that already existed
++     * keeps only the contacts added since, and its first time is not before the switch-on. (A row that was pushed
++     * out of the store and started again counts from zero, so its new contacts are dropped until it passes its old
++     * count: the history may lose contacts after the switch-on, never keep one from before it.)
++     */
++    static List<DataMapStore.Row> since(List<DataMapStore.Row> live, List<DataMapStore.Row> baseline,
++            long switchedOnWall) {
++        Map<String, DataMapStore.Row> before = new HashMap<>();
++        for (DataMapStore.Row b : baseline) {
++            before.put(b.uid + "\t" + b.key, b);
++        }
++        List<DataMapStore.Row> out = new ArrayList<>();
++        for (DataMapStore.Row r : live) {
++            DataMapStore.Row b = before.get(r.uid + "\t" + r.key);
++            if (b == null) {
++                out.add(r);
++                continue;
++            }
++            int count = r.count - b.count;
++            if (count <= 0) {
++                continue;
++            }
++            int fg = Math.max(0, r.fg - b.fg);
++            int bg = Math.max(0, r.bg - b.bg);
++            out.add(new DataMapStore.Row(r.uid, r.pkg, r.key, Math.max(r.firstWall, switchedOnWall), r.lastWall,
++                    count, fg, bg, r.viaDns));
++        }
++        return out;
++    }
++
+     /** Keeps the days that are newer than today minus keepDays. */
+     static TreeMap<Integer, List<DataMapStore.Row>> prune(
+             TreeMap<Integer, List<DataMapStore.Row>> days, int today, int keepDays) {
+-- 
+2.56.0
+

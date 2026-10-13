@@ -1,97 +1,152 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The wording of the design page (ADR-160), with the corrections the wording rule of ADR-157 needs. -->
 <resources>
-    <string name="app_name">Data Map</string>
+    <string name="app_name">Atlas</string>
     <string name="app_system">System</string>
-    <string name="back">Back</string>
-    <string name="sheet_handle">Switch between half and full height</string>
-    <string name="settings">Settings</string>
+    <string name="service_missing_title">The data service cannot be reached</string>
+    <string name="service_missing">The service that keeps the connections is not available to this app.</string>
+
     <string name="tab_map">Map</string>
     <string name="tab_apps">Apps</string>
     <string name="tab_companies">Companies</string>
-    <string name="tab_links">Links</string>
+    <string name="tab_settings">Settings</string>
 
-    <string name="lead_map">Which apps talk to which companies, and where those companies are based.</string>
-    <string name="empty_nothing">Nothing has been observed yet. Use some apps, then come back.</string>
-    <string name="empty_app">Nothing has been observed for this app.</string>
-    <string name="service_missing">The Data Map service is not available to this app.</string>
+    <string name="back">Back</string>
+    <string name="more">More</string>
+    <string name="close">Close</string>
+    <string name="menu_settings">Settings</string>
+    <string name="menu_back_to_map">Back to the map</string>
 
-    <string name="tracker_short">Tracker</string>
-    <string name="not_on_map">Not on the map</string>
-    <string name="not_on_map_explained">Services with no known owner, or an owner with no single place (a content network), are listed here and are given no place.</string>
-    <string name="not_contacted_directly">Not contacted directly</string>
-    <string name="unknown_service">Unknown service</string>
-    <string name="owner_unknown">Unknown owner</string>
+    <string name="your_apps">Your apps</string>
+    <string name="note">Only connections Atlas could see are listed. There may be more.</string>
+    <string name="back_to_all_apps">Back to all apps</string>
+    <string name="sheet_handle">Show more or less of the list</string>
+    <string name="zoom_in">Zoom in</string>
+    <string name="zoom_out">Zoom out</string>
+    <string name="centre_map">Centre the map</string>
+    <string name="map_only">Show only the map</string>
+    <string name="map_list">Show the list again</string>
+    <string name="globe_description">Map of the places your apps contact</string>
+    <string name="place_description">%1$s, %2$s, %3$s</string>
 
-    <string name="app_totals">%1$d contacts: %2$d in the foreground, %3$d in the background</string>
-    <string name="app_span">First seen %1$s, last seen %2$s</string>
-    <string name="app_not_on_map">Its publisher is not in the classifier file, so it has no place on the map.</string>
-    <string name="contacted">Contacted</string>
-    <string name="contact_counts">%1$d times (%2$d in the foreground, %3$d in the background)</string>
-
-    <string name="company_based">Based in %1$s, %2$s</string>
-    <string name="services">Services</string>
-    <string name="apps_that_meet_it">Apps that contact it</string>
-    <string name="connected_companies">Connected companies</string>
-    <string name="rel_owns">owns</string>
-    <string name="rel_merged_with">merged with</string>
-    <string name="rel_partner_of">partner of</string>
-    <string name="rel_buys_ad_space_from">buys advertising space from</string>
-    <string name="rel_connected">connected</string>
-    <string name="rel_reverse">%1$s this company</string>
+    <string name="and_join">%1$s and %2$s</string>
+    <string name="n_companies_n_apps">%1$s · %2$s</string>
+    <string name="details">Details</string>
     <string name="show_on_map">Show on map</string>
-    <string name="apps_reach">%1$d apps reached %2$d companies in %3$d countries since the phone started.</string>
-    <string name="most_companies_first">Most companies first</string>
-    <string name="companies_met">%1$d companies met by your apps, in %2$d countries.</string>
-    <string name="met_by_several">Met by several apps</string>
-    <string name="met_by_one">Met by one app</string>
-    <string name="standing_behind">Standing behind another</string>
-    <string name="behind">behind</string>
-    <string name="connected_explained">Documented connections between the companies behind your apps. Each has a source.</string>
-    <string name="links_explained">Apps that talk to the same company. That company could connect them. Whether it does is not visible from the phone.</string>
-    <string name="group_here">Based close together on the map.</string>
-    <string name="app_publisher_line">%1$s · %2$s</string>
-    <string name="in_background">in the background</string>
-    <string name="calls">calls</string>
-    <string name="could_be_linked_to">Could be linked to</string>
-    <string name="could_be_linked_through">Could be linked through it</string>
-    <string name="linked_through_many">%1$s all talk to %2$s, which could connect them. What it holds is not visible from the phone.</string>
-    <string name="the_two_companies">The two companies</string>
+    <string name="lines_for_only">Lines for %1$s only</string>
+    <string name="show_company_on_map">Show %1$s on the map</string>
+    <string name="app_companies_countries">%1$s · %2$s</string>
+    <string name="contacts_n_companies">Contacts %1$s</string>
+    <string name="no_company_seen">No company seen</string>
+    <string name="no_company_contacted">No company contacted</string>
+
+    <string name="connected_to">Connected to</string>
+    <string name="via_apps">via %1$s</string>
+    <string name="source_line">%1$s · Source %2$s</string>
+    <string name="documented_connections">Documented connections</string>
     <string name="source_id">Source %1$s</string>
-    <string name="relation_explained">A connection is shown only when it is documented, and each one carries a source. A connection that is not shown is not known; it is not proof that there is none.</string>
-    <string name="company_base">Company base</string>
-    <string name="company_base_law">%1$s. The laws of this country govern what the company holds. This is where the company is based, not where its servers are.</string>
-    <string name="relations_note">Connections come from the public sources named in the classifier file. A connection that is not listed is not known.</string>
-    <string name="no_relations">No documented connections between the companies seen.</string>
+    <string name="addresses_seen">Addresses seen</string>
+    <string name="contacted_by">Contacted by %1$s</string>
+    <string name="behind_only">No app contacts this company directly. It appears because of a documented connection.</string>
+    <string name="fact_country">Country</string>
+    <string name="fact_type">Type</string>
+    <string name="not_on_the_map">Not on the map</string>
+    <string name="hosted_in">Hosted in %1$s</string>
+    <string name="hosted_in_title">Hosted in</string>
+    <string name="server_uncertain">Location uncertain</string>
+    <string name="server_anycast">Anycast network</string>
+    <string name="server_behind">Behind %1$s</string>
+    <string name="server_a_network">a content network</string>
+    <string name="operators_more">%1$s, %2$s +%3$d</string>
+    <string name="unplaced_none">Every address Atlas saw has a known owner.</string>
+    <string name="owner_unknown_line">%1$s, owner unknown</string>
+    <string name="address_no_lookup">No name lookup, owner unknown</string>
+    <string name="not_in_list">Not in the list yet, owner unknown</string>
 
-    <string name="could_be_linked">Apps that could be linked</string>
-    <string name="no_links">No two apps have contacted the same company that is known to track, or companies of the same owner.</string>
-    <string name="link_same_service">Could be linked: both contacted %1$s.</string>
-    <string name="link_same_owner">Could be linked: services of the same company (%1$s).</string>
-    <string name="link_stronger">Within five minutes of each other.</string>
+    <string name="filter_and_sort">Filter and sort</string>
+    <string name="filter_reset">Reset</string>
+    <string name="filter_clear">Clear</string>
+    <string name="filter_type">Type of company</string>
+    <string name="filter_all_types">All types</string>
+    <string name="filter_sort">Sort by</string>
+    <string name="sort_apps">Most apps</string>
+    <string name="sort_name">A to Z</string>
+    <string name="sort_country">Country</string>
+    <string name="no_company_matches">No company matches</string>
+    <string name="remove_filter">Remove the filter to see all of them.</string>
 
-    <string name="collect">Collect</string>
-    <string name="collect_summary">Names and counts of the services that apps contact</string>
-    <string name="history">Keep a history on this phone</string>
-    <string name="history_summary">Daily totals, encrypted, for the days you choose</string>
-    <string name="history_days">Keep for</string>
-    <string name="history_explained">With the history off nothing is written to this phone and the lists are cleared when the phone restarts. With it on, one file of daily totals is kept for the chosen days. Events are never kept.</string>
-    <string name="clear">Delete everything collected</string>
-    <string name="clear_confirm">Delete the names and counts collected for this user, in memory and on this phone?</string>
-    <string name="cannot_see">What this screen cannot see</string>
-    <string name="data_sources">Company data: AdGuard Companies DB (CC BY-SA 4.0, built on whotracks.me, CC BY 4.0) and Wikidata (CC0), with facts from company filings. See NOTICE in the classifier.</string>
-    <string name="blind_spots">Not seen: apps that look up names themselves (DNS over HTTPS inside the app), connections to a fixed address over UDP, and traffic that needs no lookup of its own. An app that is not listed may still be talking.</string>
-    <string name="not_listed_not_proof">A connection that is not listed is not known. That is not proof that there is none.</string>
+    <string name="empty_nothing_title">Nothing collected yet</string>
+    <string name="empty_map">Companies your apps contact will appear here. This can take a few minutes after you switch it on.</string>
+    <string name="empty_apps">Apps appear here once they contact a company.</string>
+    <string name="empty_companies">Companies appear here once your apps contact them.</string>
+    <string name="off_title">Collection is off</string>
+    <string name="off_map">Which companies your apps contact is not being recorded.</string>
+    <string name="off_apps">Turn collection on in Settings to see which companies your apps contact.</string>
+    <string name="off_companies">Turn collection on in Settings.</string>
+    <string name="turn_on">Turn on</string>
 
-    <string-array name="categories">
-        <item>Unknown</item>
-        <item>Core service</item>
-        <item>Content network</item>
-        <item>Analytics</item>
+    <string name="settings_collect">Collect</string>
+    <string name="settings_collect_summary">Note which companies your apps contact</string>
+    <string name="settings_history">History</string>
+    <string name="settings_history_summary">Keep a daily summary</string>
+    <string name="settings_server_history">Keep server places</string>
+    <string name="settings_server_history_summary">Where services were hosted, in the summary</string>
+    <string name="settings_keep_for">Keep for</string>
+    <string name="settings_your_data">Your data</string>
+    <string name="settings_delete">Delete everything collected</string>
+    <string name="settings_delete_summary">History and counts, from this phone only</string>
+    <string name="settings_about">About Atlas</string>
+    <string name="settings_how">How it works</string>
+    <string name="settings_how_text">Atlas sees which names your apps look up and which addresses they connect to. It matches them against a list of companies that is part of the system. Nothing leaves the phone.</string>
+    <string name="settings_cannot_see">What Atlas cannot see</string>
+    <string name="cannot_1">How much data an app sent or received</string>
+    <string name="cannot_2">Apps that connect to a fixed address without a name lookup</string>
+    <string name="cannot_3">Apps that look up names themselves, with DNS over HTTPS inside the app</string>
+    <string name="cannot_4">Services that are not in the list yet</string>
+    <string name="cannot_5">Traffic sent over UDP</string>
+    <string name="settings_private">Everything stays on this phone. Atlas never sends what it sees anywhere.</string>
+    <string name="data_sources">Company data: AdGuard Companies DB (CC BY-SA 4.0, built on whotracks.me, CC BY 4.0) and Wikidata (CC0), with facts from company filings. See NOTICE in the classifier. Server places: country and operator from ip-location-db (PDDL), anycast prefixes from the University of Twente census (MPL-2.0), city from IP Geolocation by DB-IP (CC BY 4.0, db-ip.com).</string>
+
+    <string name="delete_title">Delete everything collected?</string>
+    <string name="delete_text">The history and the counts on this phone are removed. This cannot be undone.</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+
+    <!-- What a company is to a named one, in the order of RelationRole.typeIndex: owns, merged with, partner of,
+         buys advertising space from, anything else. -->
+    <string-array name="rel_as_subject">
+        <item>Owns %1$s</item>
+        <item>Merged with %1$s</item>
+        <item>Partner of %1$s</item>
+        <item>Buys advertising space from %1$s</item>
+        <item>Connected to %1$s</item>
+    </string-array>
+    <string-array name="rel_as_object">
+        <item>Owned by %1$s</item>
+        <item>Merged with %1$s</item>
+        <item>Partner of %1$s</item>
+        <item>Sells advertising space to %1$s</item>
+        <item>Connected to %1$s</item>
+    </string-array>
+    <!-- A documented connection as a sentence: the first company, the verb, the second. -->
+    <string-array name="rel_sentence">
+        <item>%1$s owns %2$s</item>
+        <item>%1$s merged with %2$s</item>
+        <item>%1$s is a partner of %2$s</item>
+        <item>%1$s buys advertising space from %2$s</item>
+        <item>%1$s is connected to %2$s</item>
+    </string-array>
+
+    <!-- In the order of CompanyType: advertising, attribution, social, analytics, identity, infrastructure, unknown. -->
+    <string-array name="type_names">
         <item>Advertising</item>
         <item>Attribution</item>
         <item>Social</item>
+        <item>Analytics</item>
         <item>Identity</item>
+        <item>Infrastructure</item>
+        <item>Unknown</item>
     </string-array>
 
     <plurals name="n_apps">
@@ -102,28 +157,20 @@
         <item quantity="one">%d company</item>
         <item quantity="other">%d companies</item>
     </plurals>
-    <plurals name="n_companies_label">
-        <item quantity="one">company</item>
-        <item quantity="other">companies</item>
+    <plurals name="n_services">
+        <item quantity="one">%d service</item>
+        <item quantity="other">%d services</item>
     </plurals>
-    <plurals name="n_countries_label">
-        <item quantity="one">country</item>
-        <item quantity="other">countries</item>
+    <plurals name="n_countries">
+        <item quantity="one">%d country</item>
+        <item quantity="other">%d countries</item>
     </plurals>
-    <plurals name="n_apps_label">
-        <item quantity="one">app</item>
-        <item quantity="other">apps</item>
-    </plurals>
-    <plurals name="n_services_label">
-        <item quantity="one">service</item>
-        <item quantity="other">services</item>
+    <plurals name="n_connections">
+        <item quantity="one">%d connection</item>
+        <item quantity="other">%d connections</item>
     </plurals>
     <plurals name="n_days">
         <item quantity="one">%d day</item>
         <item quantity="other">%d days</item>
-    </plurals>
-    <plurals name="n_invalid">
-        <item quantity="one">%d name was refused as not a valid host name.</item>
-        <item quantity="other">%d names were refused as not valid host names.</item>
     </plurals>
 </resources>
