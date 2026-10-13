@@ -4,191 +4,269 @@ package org.sovereignos.datamap;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.DashPathEffect;
+import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
-import android.util.TypedValue;
-import android.view.GestureDetector;
+import android.os.Bundle;
+import android.os.SystemClock;
+import android.util.Log;
+import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
-import android.view.animation.PathInterpolator;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityNodeProvider;
 
-import org.sovereignos.datamap.model.Cluster;
+import org.sovereignos.datamap.model.AtlasData;
+import org.sovereignos.datamap.model.CardPlacer;
+import org.sovereignos.datamap.model.CompanyColors;
+import org.sovereignos.datamap.model.Curves;
+import org.sovereignos.datamap.model.GlobeLayout;
 import org.sovereignos.datamap.model.GlobeMath;
-import org.sovereignos.datamap.model.Initials;
+import org.sovereignos.datamap.model.Hits;
 import org.sovereignos.datamap.model.LandData;
 import org.sovereignos.datamap.model.MapModel;
-import org.sovereignos.datamap.model.LogoPick;
-import org.sovereignos.datamap.model.MapSelection;
+import org.sovereignos.datamap.model.Motion;
+import org.sovereignos.datamap.model.PlaceLinks;
+import org.sovereignos.datamap.model.Places;
+import org.sovereignos.datamap.model.Rotation;
+import org.sovereignos.datamap.model.Seeded;
 import org.sovereignos.datamap.model.StartView;
+import org.sovereignos.datamap.model.UnitVectors;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * The globe. It is drawn only when something changes: a finger moves it, a turn to a chosen place runs, the
- * sheet over it moves, the choice changes, or a new snapshot arrives. There is no timer and no idle
- * animation (MAP-018). What is chosen and what is dimmed is decided by {@link MapSelection}.
+ * The night globe of the design page (ADR-160): a glow, the ocean, a graticule, land with a glow along its coast, a
+ * fine texture, the lights of cities, a shade and a bright rim; over it the lines from "Your apps", the lines between
+ * places, the ring points and the cards of the places. It is drawn only while something moves: a finger, a flight, a
+ * fling, the growth of the lines, or a new choice. While it moves it draws the land with fewer points (a copy made by
+ * {@link LandData#decimated}), and when it has stood still for 120 ms it draws once with all of them. No allocation
+ * happens per point of the land.
  */
 final class GlobeView extends View {
     interface Listener {
-        void onApp(String pkg);
+        void onPlace(String key);
 
-        void onCompany(String ownerId);
-
-        /** Several companies that stand close together on the map and are shown as one number. */
-        void onGroup(List<String> ownerIds);
-
-        /** The marker on the dashed line between two companies; the index is into the model's relations. */
-        void onRelation(int index);
-
+        /** A touch that chose no place. */
         void onNothing();
+
+        /** A touch on "Your apps": the map is centred. */
+        void onAnchor();
     }
 
-    /** What stands on the globe: an app at its publisher's base, or a company at its base. */
-    private static final class Marker {
-        final boolean isApp;
-        final String id;          // package name or owner id
-        final String name;
-        final double lat;
-        final double lon;
-        final boolean ghost;      // a company that no app contacts directly
-        final boolean tracker;
-        final String country;
-        final int appCount;       // for a company: how many of the user's apps contact it
-        float x;
-        float y;
-        float limb = 1f;          // 1 in the middle of the globe, 0 at the horizon (GlobeMath.limbAlpha)
-        boolean visible;
+    /** What takes a while to make and is made off the main thread: the land at two detail levels and the decoration. */
+    static final class Prepared {
+        final LandData full;
+        final LandData low;
+        final float[][][] ringsFull;
+        final float[][][] ringsLow;
+        final Seeded.Points texture;
+        final Seeded.Points lights;
 
-        Marker(boolean isApp, String id, String name, double lat, double lon, boolean ghost,
-                boolean tracker, String country, int appCount) {
-            this.isApp = isApp;
-            this.id = id;
-            this.name = name;
-            this.lat = lat;
-            this.lon = lon;
-            this.ghost = ghost;
-            this.tracker = tracker;
-            this.country = country;
-            this.appCount = appCount;
+        private Prepared(LandData full, LandData low, Seeded.Points texture, Seeded.Points lights) {
+            this.full = full;
+            this.low = low;
+            this.ringsFull = rings(full);
+            this.ringsLow = rings(low);
+            this.texture = texture;
+            this.lights = lights;
+        }
+
+        static Prepared of(LandData land) {
+            return new Prepared(land, land.decimated(LOW_TOLERANCE_DEG), Seeded.onLand(Seeded.texture(), land),
+                    Seeded.lights());
+        }
+
+        private static float[][][] rings(LandData d) {
+            float[][][] out = new float[d.shapes.length][][];
+            for (int s = 0; s < d.shapes.length; s++) {
+                out[s] = new float[d.shapes[s].length][];
+                for (int r = 0; r < d.shapes[s].length; r++) {
+                    out[s][r] = UnitVectors.ring(d.shapes[s][r]);
+                }
+            }
+            return out;
         }
     }
 
-    private static final int HIT_APP = 0;
-    private static final int HIT_COMPANY = 1;
-    private static final int HIT_GROUP = 2;
-    private static final int HIT_RELATION = 3;
+    /** The land is drawn with points no farther than this from the real outline while the globe moves. */
+    static final double LOW_TOLERANCE_DEG = 0.2;
+    private static final int SETTLE_MS = 120;
+    private static final String PERF_TAG = "AtlasPerf";
 
-    /** Where a tap counts, as drawn the last time. */
-    private static final class Hit {
-        final int kind;
-        final float x;
-        final float y;
-        final float reach;
-        final String id;
-        final List<String> ids;
-        final int index;
+    // what may be dropped if the median frame stays above 16 ms on the device (ADR-160, section 10), in this order
+    static final boolean DRAW_TEXTURE = true;
+    static final boolean DRAW_LIGHTS = true;
+    static final boolean DRAW_GLOW = true;
 
-        Hit(int kind, float x, float y, float reach, String id, List<String> ids, int index) {
-            this.kind = kind;
-            this.x = x;
-            this.y = y;
-            this.reach = reach;
-            this.id = id;
-            this.ids = ids;
-            this.index = index;
-        }
-    }
-
-    private static final PathInterpolator STANDARD = new PathInterpolator(0.2f, 0f, 0f, 1f);
-
-    private final Ui mUi;
+    private final Ds mDs;
     private final Apps mApps;
     private Listener mListener;
-    private LandData mLand;
-    private MapModel.Output mModel = new MapModel.Output();
-    private MapSelection mSel = new MapSelection();
-    private Set<String> mVisibleCompanies = new HashSet<>();
-    private final List<Marker> mMarkers = new ArrayList<>();
-    private final Map<String, Marker> mCompanyMarker = new HashMap<>();
-    private final Map<String, Marker> mAppMarker = new HashMap<>();
-    private final List<Hit> mHits = new ArrayList<>();
 
-    private double mLat0 = 20;
-    private double mLon0 = 10;
+    // ---- the data
+    private AtlasData mData = AtlasData.empty();
+    private String mApp;
+    private String mSelected;
+    private List<Places.Place> mPlaces = Collections.emptyList();
+    private List<PlaceLinks.Pair> mPairs = Collections.emptyList();
+    private float[][] mPlaceUnit = new float[0][];
+    private int[] mPlaceColor = new int[0];
+    private float[] mCardW = new float[0];   // in dp, one per place
+    private Prepared mLand;
+
+    // ---- the view
+    private double mLon = StartView.DEFAULT_LON;
+    private double mLat = StartView.DEFAULT_LAT;
     private double mZoom = 1;
-    private float mSheetPx;
-    private MapSelection.Layout mLayout = MapSelection.layout(1, 1, 0, 1f);
-    private ValueAnimator mTurn;
-
-    private final Paint mFill = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path mPath = new Path();
-    private final Path mBorderPath = new Path();
-    private final RectF mRect = new RectF();
-    private float[] mTx = new float[0];
-    private float[] mTy = new float[0];
-    private boolean[] mTv = new boolean[0];
-    private boolean mTouched;     // the user has moved the globe: the start view is never applied after that
+    private float mFs;                 // 0 the globe at its place, 1 in full screen
+    private float mGrow = 1f;          // the lines, 0 to 1 over 900 ms
+    private GlobeLayout mHome;
+    private GlobeLayout mFull;
+    private boolean mTouched;
     private boolean mStartSet;
-    private final GestureDetector mGestures;
+
+    // ---- motion
+    private ValueAnimator mFlight;
+    private ValueAnimator mGrowAnim;
+    private Motion.Fling mFling;
+    private long mFlingTime;
+    private boolean mMoving;
+    private boolean mDown;
+    private float mDownX;
+    private float mLastX;
+    private float mLastY;
+    private long mLastEvent;
+    private double mVx;
+    private double mVy;
+    private double mMoved;
     private final ScaleGestureDetector mScale;
+    private final Runnable mSettle = () -> {
+        mMoving = false;
+        invalidate();
+    };
+
+    // ---- drawing
+    private static final int MAX_PAIR_LINES = 12;
+    private final Paint mP = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mText = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mPoints = new Paint();
+    private final Path mClip = new Path();
+    private final Path mGrat = new Path();
+    private final Path mLandFull = new Path();
+    private final Path mLandLow = new Path();
+    private final Path mLine = new Path();
+    private final RectF mRect = new RectF();
+    private final float[] mTmp = new float[3];
+    private final float[] mLinePts = new float[2 * (Curves.ANCHOR_STEPS + 2)];
+    private final float[] mArc = new float[3 * (Curves.ARC_STEPS + 1)];
+    private final float[] mArcA = new float[3];
+    private final float[] mArcB = new float[3];
+    private final float[][] mGratLines;
+    private float[] mBatch = new float[0];
+    private float mShaderCx = Float.NaN;
+    private float mShaderCy;
+    private float mShaderR;
+    private Shader mGlowShader;
+    private Shader mOceanShader;
+    private Shader mShadeShader;
+    private Shader mRimShader;
+    private final Map<String, Drawable> mChipIcons = new HashMap<>();
+    private final Drawable mLogo;
+    private final Drawable mPin;
+    private final boolean mCityLights;
+    private final boolean mLight;
+
+    // ---- colours, once
+    private final int cGlow;
+    private final int cOcean0;
+    private final int cOcean1;
+    private final int cLand;
+    private final int cCoast;
+    private final int cCoastGlow;
+    private final int cGrid;
+    private final int cRim;
+    private final int cShade;
+    private final int cTex;
+    private final int cMarkerCore;
+    private final int cPri;
+
+    // ---- the cards and the touch: what was drawn last, in the order of the cards
+    private List<Places.Place> mShownPlaces = Collections.emptyList();
+    private float[] mShownX = new float[0];
+    private float[] mShownY = new float[0];
+    private float[] mShownW = new float[0];
+    private float[] mShownPx = new float[0];
+    private float[] mShownPy = new float[0];
+    private float[] mShownAlpha = new float[0];
+    private float mAnchorX;
+    private float mAnchorY;
 
     GlobeView(Context context, Apps apps) {
         super(context);
-        mUi = new Ui(context);
+        mDs = new Ds(context);
         mApps = apps;
+        mLight = mDs.light();
+        mCityLights = context.getResources().getBoolean(R.bool.at_city_lights);
+        cGlow = mDs.color(R.color.at_g_glow);
+        cOcean0 = mDs.color(R.color.at_g_o0);
+        cOcean1 = mDs.color(R.color.at_g_o1);
+        cLand = mDs.color(R.color.at_g_land);
+        cCoast = mDs.color(R.color.at_g_coast);
+        cCoastGlow = mDs.color(R.color.at_g_coastglow);
+        cGrid = mDs.color(R.color.at_g_grid);
+        cRim = mDs.color(R.color.at_g_rim);
+        cShade = mDs.color(R.color.at_g_shade);
+        cTex = mDs.color(R.color.at_g_tex);
+        cMarkerCore = mDs.color(R.color.at_marker_core);
+        cPri = mDs.color(R.color.at_g_pri);
+        mLogo = context.getDrawable(R.drawable.ic_logo);
+        mPin = context.getDrawable(R.drawable.ic_pin);
+        mPin.setTint(mDs.color(R.color.at_acc));
         mStroke.setStyle(Paint.Style.STROKE);
-        mBorder.setStyle(Paint.Style.STROKE);
-        mBorder.setStrokeWidth(mUi.dp(0.7f));
-        mBorder.setStrokeJoin(Paint.Join.ROUND);
-        mTextPaint.setTextAlign(Paint.Align.CENTER);
-        mTextPaint.setFakeBoldText(true);
-        mGestures = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public boolean onDown(MotionEvent e) {
-                return true;
-            }
-
-            @Override
-            public boolean onScroll(MotionEvent e1, MotionEvent e2, float dx, float dy) {
-                if (mScale.isInProgress()) {
-                    return false;
-                }
-                cancelTurn();
-                mTouched = true;
-                double deg = 180.0 / Math.PI / radius();
-                mLon0 = GlobeMath.wrapLon(mLon0 + dx * deg);
-                mLat0 = GlobeMath.clampTilt(mLat0 - dy * deg);
-                invalidate();
-                return true;
-            }
-
-            @Override
-            public boolean onSingleTapUp(MotionEvent e) {
-                tap(e.getX(), e.getY());
-                return true;
-            }
-        });
+        mStroke.setStrokeJoin(Paint.Join.ROUND);
+        mStroke.setStrokeCap(Paint.Cap.ROUND);
+        mPoints.setStyle(Paint.Style.STROKE);
+        mPoints.setStrokeCap(Paint.Cap.SQUARE);
+        mText.setTextAlign(Paint.Align.LEFT);
+        mGratLines = graticule();
+        setContentDescription(context.getString(R.string.globe_description));
         mScale = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
-            public boolean onScale(ScaleGestureDetector d) {
+            public boolean onScaleBegin(ScaleGestureDetector d) {
+                stopMotion();
                 mTouched = true;
+                startMoving();
+                return true;
+            }
+
+            @Override
+            public boolean onScale(ScaleGestureDetector d) {
                 mZoom = GlobeMath.clampZoom(mZoom * d.getScaleFactor());
                 invalidate();
                 return true;
+            }
+
+            @Override
+            public void onScaleEnd(ScaleGestureDetector d) {
+                settleSoon();
+            }
+        });
+        setAccessibilityDelegate(new View.AccessibilityDelegate() {
+            @Override
+            public AccessibilityNodeProvider getAccessibilityNodeProvider(View host) {
+                return mNodes;
             }
         });
     }
@@ -197,612 +275,1083 @@ final class GlobeView extends View {
         mListener = l;
     }
 
-    void setLand(LandData land) {
-        mLand = land;
+    /** The land and the decoration, made by {@link Prepared#of} off the main thread. */
+    void setPrepared(Prepared p) {
+        mLand = p;
         invalidate();
     }
 
-    /** A new snapshot: rebuilds the markers and draws once. */
-    void setModel(MapModel.Output model, Map<String, MapModel.Owner> owners) {
-        mModel = model;
-        mMarkers.clear();
-        mCompanyMarker.clear();
-        mAppMarker.clear();
-        for (MapModel.CompanyRow c : model.companies) {
-            Marker m = new Marker(false, c.owner.id, c.owner.name, c.owner.lat, c.owner.lon,
-                    !c.contacted, MapModel.isTracker(c.category), c.owner.countryCode, c.apps.size());
-            mMarkers.add(m);
-            mCompanyMarker.put(c.owner.id, m);
+    // ================================================================================== the data
+
+    /** A new snapshot: the places, the lines and the cards are made again. */
+    void setData(AtlasData data) {
+        mData = data;
+        rebuild();
+        if (!mStartSet && !mTouched && !mPlaces.isEmpty()) {
+            double[] v = StartView.of(placeLatLons(Places.build(data.out.companies, null)));
+            mLat = v[0];
+            mLon = v[1];
+            mStartSet = true;
         }
-        for (MapModel.AppRow a : model.apps) {
-            MapModel.Owner o = a.onMap ? owners.get(a.publisherId) : null;
-            if (o != null) {
-                Marker m = new Marker(true, a.pkg, mApps.label(a.pkg), o.lat, o.lon, false, false,
-                        o.countryCode, 0);
-                mMarkers.add(m);
-                mAppMarker.put(a.pkg, m);
-            }
-        }
-        if (!mStartSet && !mTouched) {
-            List<double[]> places = new ArrayList<>();
-            for (MapModel.CompanyRow c : model.companies) {
-                if (c.contacted) {
-                    places.add(new double[] {c.owner.lat, c.owner.lon});
+        invalidate();
+    }
+
+    /** The chosen app (its places and lines only), or null. */
+    void setApp(String pkg) {
+        mApp = pkg;
+        rebuild();
+        invalidate();
+    }
+
+    /** The chosen place, or null: its lines stay bright and the others dim. */
+    void setSelected(String key) {
+        mSelected = key;
+        invalidate();
+    }
+
+    String placeKeyOfCompany(String ownerId) {
+        for (Places.Place p : Places.build(mData.out.companies, null)) {
+            for (MapModel.CompanyRow m : p.members) {
+                if (m.owner.id.equals(ownerId)) {
+                    return p.key;
                 }
             }
-            if (!places.isEmpty()) {
-                double[] view = StartView.of(places);
-                mLat0 = view[0];
-                mLon0 = view[1];
-                mStartSet = true;
-            }
         }
-        refreshVisible();
-        invalidate();
+        return null;
     }
 
-    /** The choice changed (or the model did): which companies are in view is decided again. */
-    void setSelection(MapSelection selection) {
-        mSel = selection;
-        refreshVisible();
-        invalidate();
+    List<Places.Place> places() {
+        return mPlaces;
     }
 
-    private void refreshVisible() {
-        mVisibleCompanies = new HashSet<>(MapSelection.visibleCompanies(mModel, mSel.app()));
-    }
-
-    /** The height in pixels of the sheet over the map, while it moves; the globe keeps clear of it. */
-    void setSheetHeightPx(float px) {
-        mSheetPx = px;
-        relayout();
-        invalidate();
-    }
-
-    private void relayout() {
-        if (getWidth() > 0 && getHeight() > 0) {
-            mLayout = MapSelection.layout(getWidth(), getHeight(), mSheetPx,
-                    getResources().getDisplayMetrics().density);
+    private static List<double[]> placeLatLons(List<Places.Place> places) {
+        List<double[]> l = new ArrayList<>();
+        for (Places.Place p : places) {
+            l.add(new double[] {p.lat(), p.lon()});
         }
+        return l;
     }
 
-    @Override
-    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
-        relayout();
+    private void rebuild() {
+        mPlaces = Places.build(mData.out.companies, mApp);
+        mPairs = PlaceLinks.pairs(mPlaces, mData.relations(), mApp);
+        int n = mPlaces.size();
+        mPlaceUnit = new float[n][3];
+        mPlaceColor = new int[n];
+        mCardW = new float[n];
+        for (int i = 0; i < n; i++) {
+            Places.Place p = mPlaces.get(i);
+            UnitVectors.of(p.lat(), p.lon(), mPlaceUnit[i]);
+            mPlaceColor[i] = CompanyColors.of(p.key, mLight);
+            mCardW[i] = cardWidth(p);
+        }
+        mChipIcons.clear();
+        mNodes.changed();
     }
 
-    // ------------------------------------------------------------------------------- turning
+    // ============================================================================== the motion
 
-    /** Turns the globe so that a place is in the middle, and zooms in to at least {@code minZoom}. */
-    void flyTo(double lat, double lon, double minZoom) {
-        cancelTurn();
-        mTouched = true;
-        final double fromLat = mLat0;
-        final double fromLon = mLon0;
-        final double fromZoom = mZoom;
-        final double dLon = GlobeMath.wrapLon(lon - fromLon);
-        final double toLat = GlobeMath.clampTilt(lat);
-        final double toZoom = GlobeMath.clampZoom(Math.max(fromZoom, minZoom));
-        mTurn = ValueAnimator.ofFloat(0f, 1f);
-        mTurn.setDuration(450);
-        mTurn.setInterpolator(STANDARD);
-        mTurn.addUpdateListener(a -> {
-            float t = (float) a.getAnimatedValue();
-            mLat0 = fromLat + (toLat - fromLat) * t;
-            mLon0 = GlobeMath.wrapLon(fromLon + dLon * t);
-            mZoom = fromZoom + (toZoom - fromZoom) * t;
+    private void startMoving() {
+        mMoving = true;
+        removeCallbacks(mSettle);
+    }
+
+    private void settleSoon() {
+        removeCallbacks(mSettle);
+        postDelayed(mSettle, SETTLE_MS);
+        invalidate();
+    }
+
+    private void stopMotion() {
+        if (mFlight != null) {
+            mFlight.cancel();
+            mFlight = null;
+        }
+        mFling = null;
+    }
+
+    /**
+     * Turns the globe to a place and zooms and moves it to full screen, all at once over {@code ms}. A null leaves
+     * that part where it is.
+     */
+    void flyTo(Double lon, Double lat, Double zoom, Float fs, int ms) {
+        stopMotion();
+        final double fLon = mLon;
+        final double fLat = mLat;
+        final double fZoom = mZoom;
+        final float fFs = mFs;
+        final double dLon = lon == null ? 0 : GlobeMath.wrapLon(lon - mLon);
+        final double tLat = lat == null ? mLat : GlobeMath.clampTilt(lat);
+        final double tZoom = zoom == null ? mZoom : GlobeMath.clampZoom(zoom);
+        final float tFs = fs == null ? mFs : fs;
+        if (ms <= 0 || mDs.calm()) {
+            mLon = GlobeMath.wrapLon(fLon + dLon);
+            mLat = tLat;
+            mZoom = tZoom;
+            mFs = tFs;
             invalidate();
-        });
-        mTurn.start();
-    }
-
-    /** Back to the whole globe, where it is. */
-    void zoomOut() {
-        cancelTurn();
-        final double fromZoom = mZoom;
-        mTurn = ValueAnimator.ofFloat(0f, 1f);
-        mTurn.setDuration(350);
-        mTurn.setInterpolator(STANDARD);
-        mTurn.addUpdateListener(a -> {
-            mZoom = fromZoom + (1.0 - fromZoom) * (float) a.getAnimatedValue();
-            invalidate();
-        });
-        mTurn.start();
-    }
-
-    void turnToCompany(String ownerId) {
-        Marker m = mCompanyMarker.get(ownerId);
-        if (m != null) {
-            flyTo(m.lat, m.lon, 2.2);
-        }
-    }
-
-    void turnToApp(String pkg) {
-        Marker m = mAppMarker.get(pkg);
-        if (m != null) {
-            flyTo(m.lat, m.lon, 1.5);
-        }
-    }
-
-    void turnToRelation(int index) {
-        if (index < 0 || index >= mModel.relations.size()) {
             return;
         }
-        MapModel.Relation r = mModel.relations.get(index);
-        Marker a = mCompanyMarker.get(r.ownerA);
-        Marker b = mCompanyMarker.get(r.ownerB);
-        if (a != null && b != null) {
-            double[] mid = GlobeMath.arc(a.lat, a.lon, b.lat, b.lon, 2, 0)[1];
-            flyTo(mid[0], mid[1], GlobeMath.zoomForSpan(GlobeMath.angle(a.lat, a.lon, b.lat, b.lon)));
-        }
+        startMoving();
+        mFlight = ValueAnimator.ofFloat(0f, 1f);
+        mFlight.setDuration(ms);
+        mFlight.setInterpolator(u -> (float) Motion.inOut(u));
+        mFlight.addUpdateListener(a -> {
+            float t = (float) a.getAnimatedValue();
+            mLon = GlobeMath.wrapLon(fLon + dLon * t);
+            mLat = fLat + (tLat - fLat) * t;
+            mZoom = fZoom + (tZoom - fZoom) * t;
+            mFs = fFs + (tFs - fFs) * t;
+            invalidate();
+        });
+        mFlight.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                settleSoon();
+            }
+        });
+        mFlight.start();
     }
 
-    void turnToGroup(List<String> ownerIds) {
-        double sx = 0;
-        double sy = 0;
-        double lat = 0;
-        int n = 0;
-        for (String id : ownerIds) {
-            Marker m = mCompanyMarker.get(id);
-            if (m != null) {
-                sx += Math.cos(Math.toRadians(m.lon));
-                sy += Math.sin(Math.toRadians(m.lon));
-                lat += m.lat;
-                n++;
+    void flyToPlace(String key) {
+        for (Places.Place p : mPlaces) {
+            if (p.key.equals(key)) {
+                flyTo(p.lon(), Math.max(-50.0, Math.min(60.0, p.lat())), null, null, Motion.FLY_PLACE);
+                return;
             }
         }
-        if (n > 0) {
-            flyTo(lat / n, Math.toDegrees(Math.atan2(sy, sx)), 2.2);
-        }
     }
 
-    private void cancelTurn() {
-        if (mTurn != null) {
-            mTurn.cancel();
-            mTurn = null;
+    /** Centres between the two places of the app that lie farthest apart, so that both are in front. */
+    void flyToApp(String pkg) {
+        List<double[]> ll = new ArrayList<>();
+        for (Places.Place p : Places.build(mData.out.companies, pkg)) {
+            for (MapModel.CompanyRow m : p.members) {
+                if (m.apps.contains(pkg)) {
+                    ll.add(new double[] {m.owner.lat, m.owner.lon});
+                }
+            }
         }
+        if (ll.isEmpty()) {
+            return;
+        }
+        double[] v = StartView.of(ll);
+        flyTo(v[1], Math.max(-40.0, Math.min(48.0, v[0])), null, null, Motion.FLY_APP);
     }
+
+    /** The start view, where the globe first looked. */
+    void goHome(int ms) {
+        double[] v = StartView.of(placeLatLons(Places.build(mData.out.companies, null)));
+        flyTo(v[1], v[0], 1.0, null, ms);
+    }
+
+    void zoomBy(double factor) {
+        flyTo(null, null, GlobeMath.clampZoom(mZoom * factor), null, Motion.ZOOM);
+    }
+
+    /** The map alone: the globe moves to the middle of the free space and grows, over 650 ms. */
+    void setFullScreen(boolean on, boolean animate) {
+        flyTo(null, null, 1.0, on ? 1f : 0f, animate ? Motion.FLY_FULL : 0);
+    }
+
+    /** The lines grow out of "Your apps" in 900 ms. */
+    void replayLines() {
+        if (mGrowAnim != null) {
+            mGrowAnim.cancel();
+        }
+        if (mDs.calm()) {
+            mGrow = 1f;
+            invalidate();
+            return;
+        }
+        mGrow = 0f;
+        mGrowAnim = ValueAnimator.ofFloat(0f, 1f);
+        mGrowAnim.setDuration(Motion.LINES);
+        mGrowAnim.setInterpolator(null);
+        mGrowAnim.addUpdateListener(a -> {
+            mGrow = (float) a.getAnimatedValue();
+            invalidate();
+        });
+        mGrowAnim.start();
+    }
+
+    private void fling() {
+        mFlingTime = 0;
+        Choreographer.getInstance().postFrameCallback(mFlingFrame);
+    }
+
+    private final Choreographer.FrameCallback mFlingFrame = new Choreographer.FrameCallback() {
+        private final double[] mOut = new double[2];
+
+        @Override
+        public void doFrame(long nanos) {
+            if (mFling == null) {
+                return;
+            }
+            long now = nanos / 1_000_000;
+            double dt = mFlingTime == 0 ? Motion.FRAME_MS : Math.min(64, now - mFlingTime);
+            mFlingTime = now;
+            boolean alive = mFling.step(dt, mZoom, mOut);
+            mLon = GlobeMath.wrapLon(mLon + mOut[0]);
+            mLat = GlobeMath.clampTilt(mLat + mOut[1]);
+            invalidate();
+            if (alive) {
+                Choreographer.getInstance().postFrameCallback(this);
+            } else {
+                mFling = null;
+                settleSoon();
+            }
+        }
+    };
 
     @Override
     protected void onDetachedFromWindow() {
-        cancelTurn();
+        stopMotion();
+        if (mGrowAnim != null) {
+            mGrowAnim.cancel();
+        }
+        removeCallbacks(mSettle);
         super.onDetachedFromWindow();
     }
 
-    // ----------------------------------------------------------------------------- geometry
-
-    private float cx() {
-        return getWidth() / 2f;
+    @Override
+    protected void onSizeChanged(int w, int h, int ow, int oh) {
+        super.onSizeChanged(w, h, ow, oh);
+        float d = mDs.px(1);
+        mHome = GlobeLayout.of(w, h, false, d);
+        mFull = GlobeLayout.of(w, h, true, d);
+        mShaderCx = Float.NaN;
     }
 
-    private float cy() {
-        return mLayout.centerY;
-    }
-
-    private float radius() {
-        return (float) (mLayout.baseRadius * mZoom);
-    }
-
-    private void place(Marker m) {
-        GlobeMath.P p = GlobeMath.project(m.lat, m.lon, mLat0, mLon0);
-        m.visible = p.visible();
-        m.limb = (float) GlobeMath.limbAlpha(p.depth);
-        m.x = (float) (cx() + p.x * radius());
-        m.y = (float) (cy() - p.y * radius());
-    }
-
-    // ------------------------------------------------------------------------------- touch
+    // ==================================================================================== touch
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         mScale.onTouchEvent(e);
-        mGestures.onTouchEvent(e);
-        return true;
+        if (mScale.isInProgress()) {
+            mDown = false;
+            return true;
+        }
+        float density = mDs.px(1);
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                stopMotion();
+                mDown = true;
+                mDownX = e.getX();
+                mLastX = e.getX();
+                mLastY = e.getY();
+                mLastEvent = e.getEventTime();
+                mMoved = 0;
+                mVx = 0;
+                mVy = 0;
+                startMoving();
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                if (!mDown) {
+                    return true;
+                }
+                double dx = (e.getX() - mLastX) / density;
+                double dy = (e.getY() - mLastY) / density;
+                long dt = Math.max(1, e.getEventTime() - mLastEvent);
+                mMoved += Math.abs(dx) + Math.abs(dy);
+                mVx = dx * Motion.FRAME_MS / dt;
+                mVy = dy * Motion.FRAME_MS / dt;
+                mLastX = e.getX();
+                mLastY = e.getY();
+                mLastEvent = e.getEventTime();
+                if (mMoved > 6) {
+                    mTouched = true;
+                    double[] d = Motion.drag(dx, dy, mZoom);
+                    mLon = GlobeMath.wrapLon(mLon + d[0]);
+                    mLat = GlobeMath.clampTilt(mLat + d[1]);
+                    invalidate();
+                }
+                return true;
+            case MotionEvent.ACTION_UP:
+                if (mDown) {
+                    mDown = false;
+                    if (mMoved <= 6) {
+                        settleSoon();
+                        tap(e.getX(), e.getY());
+                    } else if (!mDs.calm() && Motion.Fling.starts(mMoved, mVx, mVy)
+                            && e.getEventTime() - mLastEvent < 80) {
+                        mFling = new Motion.Fling(mVx, mVy);
+                        fling();
+                    } else {
+                        settleSoon();
+                    }
+                }
+                return true;
+            case MotionEvent.ACTION_CANCEL:
+                mDown = false;
+                settleSoon();
+                return true;
+            default:
+                return true;
+        }
     }
 
     private void tap(float x, float y) {
-        Hit hit = null;
-        float best = Float.MAX_VALUE;
-        for (Hit h : mHits) {
-            float dx = h.x - x;
-            float dy = h.y - y;
-            float d2 = dx * dx + dy * dy;
-            if (d2 <= h.reach * h.reach && d2 < best) {
-                best = d2;
-                hit = h;
-            }
+        float density = mDs.px(1);
+        List<Hits.Card> cards = new ArrayList<>();
+        List<Hits.Point> points = new ArrayList<>();
+        for (int i = 0; i < mShownPlaces.size(); i++) {
+            Hits.Card c = new Hits.Card();
+            c.id = mShownPlaces.get(i).key;
+            c.left = mShownX[i];
+            c.top = mShownY[i];
+            c.right = mShownX[i] + mShownW[i];
+            c.bottom = mShownY[i] + 46 * density;
+            c.alpha = mShownAlpha[i];
+            cards.add(c);
+            Hits.Point p = new Hits.Point();
+            p.id = c.id;
+            p.x = mShownPx[i];
+            p.y = mShownPy[i];
+            p.reach = 24 * density;
+            p.alpha = mShownAlpha[i];
+            points.add(p);
         }
+        String key = Hits.pick(x, y, cards, points);
         if (mListener == null) {
             return;
         }
-        if (hit == null) {
-            mListener.onNothing();
-        } else if (hit.kind == HIT_APP) {
-            mListener.onApp(hit.id);
-        } else if (hit.kind == HIT_GROUP) {
-            mListener.onGroup(hit.ids);
-        } else if (hit.kind == HIT_RELATION) {
-            mListener.onRelation(hit.index);
+        if (key != null) {
+            mListener.onPlace(key);
+        } else if (Math.hypot(x - mAnchorX, y - mAnchorY) <= 24 * density) {
+            mListener.onAnchor();
         } else {
-            mListener.onCompany(hit.id);
+            mListener.onNothing();
         }
     }
 
-    // ------------------------------------------------------------------------------- drawing
+    // ================================================================================== drawing
+
+    private GlobeLayout layout() {
+        return mHome == null ? GlobeLayout.of(1, 1, false, 1f) : GlobeLayout.lerp(mHome, mFull, mFs);
+    }
 
     @Override
     protected void onDraw(Canvas canvas) {
-        float r = radius();
-        float cx = cx();
-        float cy = cy();
-        mHits.clear();
-        int line = withAlpha(mUi.color(R.color.dm_pri), 0.40f);   // GlobeMath.limbAlphaAtRadius: 1 at 0.94, 0.5 at 0.985, 0 at the rim
-        mBorder.setShader(new RadialGradient(cx, cy, r,
-                new int[] {line, line, withAlpha(line, 0.5f), withAlpha(line, 0f)},
-                new float[] {0f, 0.94f, 0.985f, 1f}, Shader.TileMode.CLAMP));
-
-        // the sphere
-        mFill.setShader(new RadialGradient(cx - r * 0.3f, cy - r * 0.3f, r * 1.4f,
-                mUi.color(R.color.dm_row), mUi.color(R.color.dm_hi), Shader.TileMode.CLAMP));
-        canvas.drawCircle(cx, cy, r, mFill);
-        mFill.setShader(null);
-
-        canvas.save();
-        mPath.reset();
-        mPath.addCircle(cx, cy, r, Path.Direction.CW);
-        canvas.clipPath(mPath);
-        drawLand(canvas, r, cx, cy);
-        drawRelations(canvas, r, cx, cy);
-        drawEdges(canvas, r, cx, cy);
-        canvas.restore();
-
-        mStroke.setPathEffect(null);
-        mStroke.setStrokeWidth(mUi.dp(1));
-        mStroke.setColor(mUi.color(R.color.dm_olv));
-        canvas.drawCircle(cx, cy, r, mStroke);
-
-        drawMarkers(canvas);
+        long t0 = SystemClock.elapsedRealtimeNanos();
+        float w = getWidth();
+        GlobeLayout lay = layout();
+        float cx = w / 2f;
+        float cy = lay.centerY;
+        float baseR = lay.radius;
+        float r = baseR * (float) mZoom;
+        Rotation rot = new Rotation(mLon, mLat);
+        ensureShaders(cx, cy, r);
+        drawBase(canvas, cx, cy, r, rot);
+        mAnchorX = cx;
+        mAnchorY = lay.anchorY();
+        drawOverlay(canvas, cx, cy, r, rot);
+        if (Log.isLoggable(PERF_TAG, Log.DEBUG)) {
+            Log.d(PERF_TAG, "draw " + (SystemClock.elapsedRealtimeNanos() - t0) / 1000 + " us moving=" + mMoving);
+        }
     }
 
-    private void drawLand(Canvas canvas, float r, float cx, float cy) {
-        if (mLand == null) {
+    private void ensureShaders(float cx, float cy, float r) {
+        if (cx == mShaderCx && cy == mShaderCy && r == mShaderR) {
             return;
         }
-        mFill.setColor(mUi.color(R.color.dm_sc));
-        mPath.setFillType(Path.FillType.EVEN_ODD);
-        for (int s = 0; s < mLand.shapes.length; s++) {
-            if (!mLand.mayBeVisible(s, mLat0, mLon0)) {
-                continue;   // wholly on the far side: not projected at all
-            }
-            mPath.reset();
-            mBorderPath.reset();
-            boolean any = false;
-            for (float[] ring : mLand.shapes[s]) {
-                int n = ring.length / 2;
-                if (mTx.length < n) {
-                    mTx = new float[n];
-                    mTy = new float[n];
-                    mTv = new boolean[n];
-                }
-                for (int i = 0; i < n; i++) {
-                    GlobeMath.P p = GlobeMath.project(ring[2 * i + 1], ring[2 * i], mLat0, mLon0);
-                    double[] q = GlobeMath.toRim(p);
-                    mTx[i] = (float) (cx + q[0] * r);
-                    mTy[i] = (float) (cy - q[1] * r);
-                    mTv[i] = p.visible();
-                    any |= mTv[i];
-                }
-                for (int i = 0; i < n; i++) {
-                    if (i == 0) {
-                        mPath.moveTo(mTx[i], mTy[i]);
-                    } else {
-                        mPath.lineTo(mTx[i], mTy[i]);
-                    }
-                }
-                mPath.close();
-                // the border: only the pieces whose two ends are in front, so that nothing is drawn along the rim
-                boolean pen = false;
-                for (int i = 0; i <= n; i++) {
-                    int k = i % n;
-                    if (!mTv[k]) {
-                        pen = false;
-                        continue;
-                    }
-                    if (pen) {
-                        mBorderPath.lineTo(mTx[k], mTy[k]);
-                    } else {
-                        mBorderPath.moveTo(mTx[k], mTy[k]);
-                    }
-                    pen = true;
-                }
-            }
-            if (any) {
-                canvas.drawPath(mPath, mFill);
-                canvas.drawPath(mBorderPath, mBorder);
-            }
-        }
-        mPath.setFillType(Path.FillType.WINDING);
+        mShaderCx = cx;
+        mShaderCy = cy;
+        mShaderR = r;
+        // the glow outside the rim: from the glow colour at 0.97 R through 16 percent to nothing at 1.2 R
+        int clear = Ds.withAlpha(cGlow, 0f);
+        int mid = Ds.withAlpha(cGlow, 0.16f / Math.max(0.001f, Color.alpha(cGlow) / 255f));
+        mGlowShader = new RadialGradient(cx, cy, r * 1.2f, new int[] {cGlow, mid, clear},
+                new float[] {0.97f / 1.2f, (0.97f + 0.45f * 0.23f) / 1.2f, 1f}, Shader.TileMode.CLAMP);
+        // the ocean: lit from the upper left
+        mOceanShader = new RadialGradient(cx - r * 0.25f, cy - r * 0.3f, r * 0.1f, cx, cy, r,
+                new long[] {Color.pack(cOcean0), Color.pack(cOcean1)}, null, Shader.TileMode.CLAMP);
+        mShadeShader = new RadialGradient(cx - r * 0.28f, cy - r * 0.32f, r * 0.25f, cx, cy, r,
+                new long[] {Color.pack(0x0AFFFFFF), Color.pack(0x00000000), Color.pack(cShade)},
+                new float[] {0f, 0.7f, 1f}, Shader.TileMode.CLAMP);
+        mRimShader = new RadialGradient(cx, cy, r, new int[] {Ds.withAlpha(cGlow, 0f), Ds.withAlpha(cGlow, 0f), cGlow},
+                new float[] {0f, 0.9f, 1f}, Shader.TileMode.CLAMP);
+        mClip.rewind();
+        mClip.addCircle(cx, cy, r, Path.Direction.CW);
     }
 
-    private void drawEdges(Canvas canvas, float r, float cx, float cy) {
-        mStroke.setPathEffect(null);
-        for (MapModel.Edge e : mModel.edges) {
-            float alpha = mSel.edgeAlpha(e.pkg, e.ownerId);
-            Marker from = mAppMarker.get(e.pkg);
-            Marker to = mCompanyMarker.get(e.ownerId);
-            if (alpha <= 0f || from == null || to == null || !mVisibleCompanies.contains(e.ownerId)) {
-                continue;
+    private void drawBase(Canvas c, float cx, float cy, float r, Rotation rot) {
+        mP.setStyle(Paint.Style.FILL);
+        if (DRAW_GLOW) {
+            mP.setShader(mGlowShader);
+            c.drawCircle(cx, cy, r * 1.2f, mP);
+        }
+        mP.setShader(mOceanShader);
+        c.drawCircle(cx, cy, r, mP);
+        mP.setShader(null);
+        c.save();
+        c.clipPath(mClip);
+        // the graticule
+        mStroke.setStrokeWidth(mDs.px(0.8f));
+        mStroke.setColor(cGrid);
+        mGrat.rewind();
+        for (float[] line : mGratLines) {
+            boolean on = false;
+            for (int i = 0; i < line.length; i += 3) {
+                rot.apply(line[i], line[i + 1], line[i + 2], mTmp);
+                if (mTmp[2] > 0) {
+                    float sx = cx + r * mTmp[0];
+                    float sy = cy - r * mTmp[1];
+                    if (on) {
+                        mGrat.lineTo(sx, sy);
+                    } else {
+                        mGrat.moveTo(sx, sy);
+                    }
+                    on = true;
+                } else {
+                    on = false;
+                }
             }
-            mStroke.setStrokeWidth(mUi.dp(mSel.edgeWidthDp(e.pkg, e.ownerId)));
-            mStroke.setColor(withAlpha(mUi.color(to.tracker ? R.color.dm_err : R.color.dm_pri), alpha));
-            drawArc(canvas, from, to, 0.25, r, cx, cy);
+        }
+        c.drawPath(mGrat, mStroke);
+        if (mLand != null) {
+            drawLand(c, cx, cy, r, rot);
+        }
+        // the shade, and a bright rim
+        mP.setShader(mShadeShader);
+        c.drawCircle(cx, cy, r, mP);
+        mP.setShader(mRimShader);
+        c.drawCircle(cx, cy, r, mP);
+        mP.setShader(null);
+        c.restore();
+        mStroke.setColor(cRim);
+        mStroke.setStrokeWidth(mDs.px(1.6f));
+        c.drawCircle(cx, cy, r - mDs.px(0.8f), mStroke);
+    }
+
+    private void drawLand(Canvas c, float cx, float cy, float r, Rotation rot) {
+        boolean detail = !mMoving;
+        Path coast = mLandLow;
+        trace(mLandLow, mLand.low, mLand.ringsLow, rot, cx, cy, r);
+        Path fill = coast;
+        if (detail) {
+            trace(mLandFull, mLand.full, mLand.ringsFull, rot, cx, cy, r);
+            fill = mLandFull;
+        }
+        mP.setStyle(Paint.Style.FILL);
+        mP.setColor(cLand);
+        fill.setFillType(Path.FillType.EVEN_ODD);
+        c.drawPath(fill, mP);
+        // a wide soft line and a narrower one along every coast, from the coarse outline, then the fine line
+        mStroke.setColor(cCoastGlow);
+        mStroke.setStrokeWidth(mDs.px(5));
+        mStroke.setAlpha(Math.round(alphaOf(cCoastGlow) * 0.35f));
+        c.drawPath(coast, mStroke);
+        mStroke.setStrokeWidth(mDs.px(2.4f));
+        mStroke.setColor(cCoastGlow);
+        mStroke.setAlpha(Math.round(alphaOf(cCoastGlow) * 0.7f));
+        c.drawPath(coast, mStroke);
+        mStroke.setColor(cCoast);
+        mStroke.setStrokeWidth(mDs.px(0.6f));
+        c.drawPath(fill, mStroke);
+        if (DRAW_TEXTURE) {
+            drawTexture(c, cx, cy, r, rot);
+        }
+        if (DRAW_LIGHTS && mCityLights) {
+            drawLights(c, cx, cy, r, rot);
         }
     }
 
-    /** The dashed lines between companies, each with a marker in the middle that can be tapped. */
-    private void drawRelations(Canvas canvas, float r, float cx, float cy) {
-        List<Integer> shown = MapSelection.visibleRelations(mModel, mSel.app());
-        for (int index : shown) {
-            MapModel.Relation rel = mModel.relations.get(index);
-            Marker a = mCompanyMarker.get(rel.ownerA);
-            Marker b = mCompanyMarker.get(rel.ownerB);
-            if (a == null || b == null) {
-                continue;
-            }
-            boolean chosen = mSel.relation() == index;
-            float alpha = mSel.relation() < 0 || chosen ? 0.9f : 0.3f;
-            mStroke.setPathEffect(new DashPathEffect(new float[] {mUi.dp(5), mUi.dp(4)}, 0));
-            mStroke.setStrokeWidth(mUi.dp(chosen ? 2.5f : 1.5f));
-            mStroke.setColor(withAlpha(mUi.color(chosen ? R.color.dm_pri : R.color.dm_ol), alpha));
-            float[] mid = drawArc(canvas, a, b, 0.12, r, cx, cy);
-            mStroke.setPathEffect(null);
-            if (mid != null) {
-                mFill.setColor(withAlpha(mUi.color(R.color.dm_hi), alpha));
-                canvas.drawCircle(mid[0], mid[1], mUi.dp(6), mFill);
-                mStroke.setStrokeWidth(mUi.dp(1.5f));
-                mStroke.setColor(withAlpha(mUi.color(chosen ? R.color.dm_pri : R.color.dm_ol), alpha));
-                canvas.drawCircle(mid[0], mid[1], mUi.dp(6), mStroke);
-                mHits.add(new Hit(HIT_RELATION, mid[0], mid[1], mUi.dp(20), null, null, index));
-            }
-        }
-        mStroke.setPathEffect(null);
+    private static int alphaOf(int argb) {
+        return (argb >>> 24) & 0xFF;
     }
 
     /**
-     * A great-circle arc that lifts off the globe in the middle; drawn where both ends of a piece are in
-     * front.
-     *
-     * @return the middle of the arc if it is in front, else null
+     * The outline of the land turned to the screen. A point behind the globe is put on a circle of 1.5 R at its
+     * direction, with points between neighbours so that a shape that passes the horizon is filled up to the rim and
+     * not cut off; the clip of the globe hides what lies outside it.
      */
-    private float[] drawArc(Canvas canvas, Marker a, Marker b, double lift, float r, float cx, float cy) {
-        double[][] pts = GlobeMath.arc(a.lat, a.lon, b.lat, b.lon, 24, lift);
-        float px = 0;
-        float py = 0;
-        boolean prevVisible = false;
-        float[] mid = null;
-        for (int i = 0; i < pts.length; i++) {
-            double[] p = pts[i];
-            GlobeMath.P q = GlobeMath.project(p[0], p[1], mLat0, mLon0);
-            float scale = (float) (1.0 + p[2]);
-            float x = (float) (cx + q.x * r * scale);
-            float y = (float) (cy - q.y * r * scale);
-            boolean visible = q.visible();
-            if (visible && prevVisible) {
-                canvas.drawLine(px, py, x, y, mStroke);
+    private void trace(Path path, LandData land, float[][][] rings, Rotation rot, float cx, float cy, float r) {
+        path.rewind();
+        final float far = r * 1.5f;
+        final float[] t = mTmp;
+        for (int s = 0; s < rings.length; s++) {
+            if (!land.mayBeVisible(s, mLat, mLon)) {
+                continue;
             }
-            if (i == pts.length / 2 && visible) {
-                mid = new float[] {x, y};
+            for (float[] a : rings[s]) {
+                int n = a.length / 3;
+                boolean any = false;
+                for (int i = 0; i < n && !any; i++) {
+                    any = rot.depth(a[3 * i], a[3 * i + 1], a[3 * i + 2]) >= 0;
+                }
+                if (!any) {
+                    continue;
+                }
+                boolean started = false;
+                boolean prevHidden = false;
+                boolean firstHidden = false;
+                double prevAngle = 0;
+                double firstAngle = 0;
+                for (int i = 0; i < n; i++) {
+                    rot.apply(a[3 * i], a[3 * i + 1], a[3 * i + 2], t);
+                    float px;
+                    float py;
+                    boolean hidden = false;
+                    double angle = 0;
+                    if (t[2] >= 0) {
+                        px = cx + r * t[0];
+                        py = cy - r * t[1];
+                    } else {
+                        hidden = true;
+                        angle = Math.atan2(t[1], t[0]);
+                        px = cx + far * (float) Math.cos(angle);
+                        py = cy - far * (float) Math.sin(angle);
+                    }
+                    if (!started) {
+                        path.moveTo(px, py);
+                        started = true;
+                        firstHidden = hidden;
+                        firstAngle = angle;
+                    } else {
+                        if (hidden && prevHidden) {
+                            around(path, cx, cy, far, prevAngle, angle);
+                        }
+                        path.lineTo(px, py);
+                    }
+                    prevHidden = hidden;
+                    prevAngle = angle;
+                }
+                if (firstHidden && prevHidden) {
+                    around(path, cx, cy, far, prevAngle, firstAngle);
+                }
+                path.close();
             }
-            px = x;
-            py = y;
-            prevVisible = visible;
         }
+    }
+
+    /** Points along the circle of radius {@code far}, from one angle to another the short way, 0.3 rad apart. */
+    private static void around(Path path, float cx, float cy, float far, double from, double to) {
+        double d = to - from;
+        while (d > Math.PI) {
+            d -= 2 * Math.PI;
+        }
+        while (d < -Math.PI) {
+            d += 2 * Math.PI;
+        }
+        int k = (int) Math.ceil(Math.abs(d) / 0.3);
+        for (int s = 1; s < k; s++) {
+            double aa = from + d * s / k;
+            path.lineTo(cx + far * (float) Math.cos(aa), cy - far * (float) Math.sin(aa));
+        }
+    }
+
+    /** The fine texture of the land: points in three opacities and two sizes, each batch drawn in one call. */
+    private void drawTexture(Canvas c, float cx, float cy, float r, Rotation rot) {
+        Seeded.Points p = mLand.texture;
+        float[] alphas = {0.07f, 0.12f, 0.18f};
+        float[] sizes = {0.7f, 1.2f};
+        for (int b = 0; b < 6; b++) {
+            int n = 0;
+            ensureBatch(2 * p.n);
+            for (int i = 0; i < p.n; i++) {
+                int bucket = (p.alpha[i] < 0.09f ? 0 : p.alpha[i] < 0.14f ? 1 : 2) * 2 + (p.size[i] < 0.95f ? 0 : 1);
+                if (bucket != b) {
+                    continue;
+                }
+                rot.apply(p.v[3 * i], p.v[3 * i + 1], p.v[3 * i + 2], mTmp);
+                if (mTmp[2] > 0.1f) {
+                    mBatch[n++] = cx + r * mTmp[0];
+                    mBatch[n++] = cy - r * mTmp[1];
+                }
+            }
+            if (n > 0) {
+                mPoints.setColor(Ds.withAlpha(cTex, alphas[b / 2]));
+                mPoints.setStrokeWidth(mDs.px(sizes[b % 2]));
+                c.drawPoints(mBatch, 0, n, mPoints);
+            }
+        }
+    }
+
+    /** The lights of the cities of the night globe: a faint square and a bright one, by colour and size. */
+    private void drawLights(Canvas c, float cx, float cy, float r, Rotation rot) {
+        Seeded.Points p = mLand.lights;
+        int[] colours = {0xFFFFB040, 0xFFFFE9B8, 0xFF5FE0FF};
+        float[] sizes = {0.6f, 0.95f, 1.25f};
+        for (int col = 0; col < 3; col++) {
+            for (int sz = 0; sz < 3; sz++) {
+                int n = 0;
+                ensureBatch(2 * p.n);
+                for (int i = 0; i < p.n; i++) {
+                    int cls = p.size[i] < 0.8f ? 0 : p.size[i] < 1.1f ? 1 : 2;
+                    if (p.colour[i] != col || cls != sz) {
+                        continue;
+                    }
+                    rot.apply(p.v[3 * i], p.v[3 * i + 1], p.v[3 * i + 2], mTmp);
+                    if (mTmp[2] > 0.08f) {
+                        mBatch[n++] = cx + r * mTmp[0];
+                        mBatch[n++] = cy - r * mTmp[1];
+                    }
+                }
+                if (n == 0) {
+                    continue;
+                }
+                mPoints.setColor(Ds.withAlpha(colours[col], 0.13f));
+                mPoints.setStrokeWidth(mDs.px(sizes[sz] * 3.2f));
+                c.drawPoints(mBatch, 0, n, mPoints);
+                mPoints.setColor(Ds.withAlpha(colours[col], 0.9f));
+                mPoints.setStrokeWidth(mDs.px(sizes[sz]));
+                c.drawPoints(mBatch, 0, n, mPoints);
+            }
+        }
+    }
+
+    private void ensureBatch(int floats) {
+        if (mBatch.length < floats) {
+            mBatch = new float[floats];
+        }
+    }
+
+    // ---------------------------------------------------------------------- lines, points, cards
+
+    private void drawOverlay(Canvas c, float cx, float cy, float r, Rotation rot) {
+        float density = mDs.px(1);
+        int n = mPlaces.size();
+        float ay = mAnchorY;
+        // where each place stands, and how clearly: a place behind the globe or at the horizon is not drawn
+        float[] px = new float[n];
+        float[] py = new float[n];
+        float[] alpha = new float[n];
+        for (int i = 0; i < n; i++) {
+            rot.apply(mPlaceUnit[i][0], mPlaceUnit[i][1], mPlaceUnit[i][2], mTmp);
+            px[i] = cx + r * mTmp[0];
+            py[i] = cy - r * mTmp[1];
+            alpha[i] = mTmp[2] > 0.03f ? (float) GlobeMath.limbAlpha(mTmp[2]) : 0f;
+        }
+        boolean focus = mSelected != null;
+        // the lines between places, then the lines from "Your apps"
+        List<float[]> chips = new ArrayList<>();
+        List<PlaceLinks.Pair> chipPairs = new ArrayList<>();
+        float e = (float) Motion.outCubic(mGrow);
+        for (PlaceLinks.Pair pair : mPairs) {
+            int ia = mPlaces.indexOf(pair.a);
+            int ib = mPlaces.indexOf(pair.b);
+            if (ia < 0 || ib < 0) {
+                continue;
+            }
+            boolean involved = !focus || pair.a.key.equals(mSelected) || pair.b.key.equals(mSelected);
+            // spec 11 A4: with more than MAX_PAIR_LINES pairs only the lines of a chosen place or app are drawn
+            if (mPairs.size() > MAX_PAIR_LINES && !focus && mApp == null) {
+                continue;
+            }
+            boolean strong = involved && (focus || mApp != null);
+            float al = involved ? (strong ? 1f : 0.75f) : 0.12f;
+            float width = (strong ? 2.4f : 1.7f) + (pair.rels.isEmpty() ? 0f : 0.8f)
+                    + Math.min(2, pair.apps.size() - 1) * 0.5f;
+            float[] mid = surfaceArc(c, cx, cy, r, rot, ia, ib, width, al, e);
+            if (mid != null && strong && e >= 0.55f) {
+                chips.add(mid);
+                chipPairs.add(pair);
+            }
+        }
+        for (int i = 0; i < n; i++) {
+            if (alpha[i] <= 0.02f) {
+                continue;
+            }
+            boolean strong = !focus || mPlaces.get(i).key.equals(mSelected);
+            anchorLine(c, cx, ay, px[i], py[i], mPlaceColor[i], strong, alpha[i], e);
+        }
+        // the anchor
+        drawAnchor(c, cx, ay);
+        // the ring points, top to bottom
+        Integer[] idx = new Integer[n];
+        for (int i = 0; i < n; i++) {
+            idx[i] = i;
+        }
+        final float[] pyf = py;
+        java.util.Arrays.sort(idx, (a, b) -> Float.compare(pyf[a], pyf[b]));
+        List<Integer> visible = new ArrayList<>();
+        for (int k = 0; k < n; k++) {
+            int i = idx[k];
+            if (alpha[i] <= 0.02f) {
+                continue;
+            }
+            drawRingPoint(c, px[i], py[i], mPlaceColor[i], mPlaces.get(i).key.equals(mSelected), alpha[i]);
+            visible.add(i);
+        }
+        for (int k = 0; k < chips.size(); k++) {
+            drawChip(c, chips.get(k), chipPairs.get(k));
+        }
+        // the cards avoid each other and the points
+        int m = visible.size();
+        float[] bx = new float[m];
+        float[] by = new float[m];
+        float[] bw = new float[m];
+        for (int k = 0; k < m; k++) {
+            int i = visible.get(k);
+            bx[k] = px[i] / density;
+            by[k] = py[i] / density;
+            bw[k] = mCardW[i];
+        }
+        float[] pos = CardPlacer.place(bx, by, bw, 46, getWidth() / density, getHeight() / density);
+        List<Places.Place> shownPlaces = new ArrayList<>();
+        float[] sx = new float[m];
+        float[] sy = new float[m];
+        float[] sw = new float[m];
+        float[] spx = new float[m];
+        float[] spy = new float[m];
+        float[] sa = new float[m];
+        for (int k = 0; k < m; k++) {
+            int i = visible.get(k);
+            shownPlaces.add(mPlaces.get(i));
+            sx[k] = pos[2 * k] * density;
+            sy[k] = pos[2 * k + 1] * density;
+            sw[k] = mCardW[i] * density;
+            spx[k] = px[i];
+            spy[k] = py[i];
+            sa[k] = alpha[i];
+            drawCard(c, mPlaces.get(i), sx[k], sy[k], sw[k], sa[k], mPlaceColor[i]);
+        }
+        mShownPlaces = shownPlaces;
+        mShownX = sx;
+        mShownY = sy;
+        mShownW = sw;
+        mShownPx = spx;
+        mShownPy = spy;
+        mShownAlpha = sa;
+    }
+
+    private void anchorLine(Canvas c, float ax, float ay, float px, float py, int col, boolean strong, float al, float e) {
+        int count = Curves.anchorLine(ax, ay, px, py, e, mLinePts);
+        mLine.rewind();
+        mLine.moveTo(mLinePts[0], mLinePts[1]);
+        for (int i = 1; i < count; i++) {
+            mLine.lineTo(mLinePts[2 * i], mLinePts[2 * i + 1]);
+        }
+        int mid = Ds.withAlpha(col, strong ? 0.9f : 0.25f);
+        int end = Ds.withAlpha(col, strong ? 1f : 0.3f);
+        mStroke.setShader(new LinearGradient(ax, ay, px, py, new int[] {Ds.withAlpha(col, 0.25f), mid, end},
+                new float[] {0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+        mStroke.setStrokeWidth(mDs.px(strong ? 7 : 4));
+        mStroke.setAlpha(Math.round(255 * al * (strong ? 0.16f : 0.08f)));
+        c.drawPath(mLine, mStroke);
+        mStroke.setStrokeWidth(mDs.px(strong ? 1.6f : 1.1f));
+        mStroke.setAlpha(Math.round(255 * al * (strong ? 1f : 0.55f)));
+        c.drawPath(mLine, mStroke);
+        mStroke.setShader(null);
+        mStroke.setAlpha(255);
+    }
+
+    /** The great circle between two places, lifted off the globe; returns its middle when that is in front. */
+    private float[] surfaceArc(Canvas c, float cx, float cy, float r, Rotation rot, int ia, int ib, float width,
+            float al, float e) {
+        System.arraycopy(mPlaceUnit[ia], 0, mArcA, 0, 3);
+        System.arraycopy(mPlaceUnit[ib], 0, mArcB, 0, 3);
+        Curves.surfaceArc(mArcA, mArcB, mArc);
+        rot.apply(mArcA[0], mArcA[1], mArcA[2], mTmp);
+        float ax = cx + r * mTmp[0];
+        float ay = cy - r * mTmp[1];
+        rot.apply(mArcB[0], mArcB[1], mArcB[2], mTmp);
+        float bx = cx + r * mTmp[0];
+        float by = cy - r * mTmp[1];
+        mStroke.setShader(new LinearGradient(ax, ay, bx, by, Ds.withAlpha(mPlaceColor[ia], 0.95f),
+                Ds.withAlpha(mPlaceColor[ib], 0.95f), Shader.TileMode.CLAMP));
+        int steps = Math.round(Curves.ARC_STEPS * e);
+        float[] mid = null;
+        for (int pass = 0; pass < 2; pass++) {
+            mLine.rewind();
+            boolean on = false;
+            for (int i = 0; i <= steps; i++) {
+                rot.apply(mArc[3 * i], mArc[3 * i + 1], mArc[3 * i + 2], mTmp);
+                if (mTmp[2] > -0.02f) {
+                    float sx = cx + r * mTmp[0];
+                    float sy = cy - r * mTmp[1];
+                    if (on) {
+                        mLine.lineTo(sx, sy);
+                    } else {
+                        mLine.moveTo(sx, sy);
+                    }
+                    on = true;
+                    if (pass == 1 && i == Curves.ARC_STEPS / 2) {
+                        mid = new float[] {sx, sy};
+                    }
+                } else {
+                    on = false;
+                }
+            }
+            mStroke.setAlpha(Math.round(255 * (pass == 1 ? al : al * 0.18f)));
+            mStroke.setStrokeWidth(mDs.px(pass == 1 ? width : width * 4));
+            c.drawPath(mLine, mStroke);
+        }
+        mStroke.setShader(null);
+        mStroke.setAlpha(255);
         return mid;
     }
 
-    private void drawMarkers(Canvas canvas) {
-        MapModel.Relation chosenRel = mSel.relation() >= 0 && mSel.relation() < mModel.relations.size()
-                ? mModel.relations.get(mSel.relation()) : null;
-        Set<String> appsOfCompany = null;
-        if (mSel.company() != null) {
-            for (MapModel.CompanyRow c : mModel.companies) {
-                if (c.owner.id.equals(mSel.company())) {
-                    appsOfCompany = c.apps;
-                }
-            }
-        }
-        List<Marker> shown = new ArrayList<>();
-        for (Marker m : mMarkers) {
-            if (!m.isApp && !mVisibleCompanies.contains(m.id)) {
-                continue;
-            }
-            place(m);
-            if (m.visible && m.limb > 0f) {
-                shown.add(m);
-            }
-        }
-        double[] xs = new double[shown.size()];
-        double[] ys = new double[shown.size()];
-        for (int i = 0; i < xs.length; i++) {
-            xs[i] = shown.get(i).x;
-            ys[i] = shown.get(i).y;
-        }
-        int[] leader = Cluster.group(xs, ys, mUi.dp(30));
-        int[] size = new int[xs.length];
-        for (int l : leader) {
-            size[l]++;
-        }
-        for (int i = 0; i < xs.length; i++) {
-            if (leader[i] != i) {
-                continue;
-            }
-            Marker m = shown.get(i);
-            float half = mUi.dp(m.isApp ? 16 : 18);
-            if (m.isApp) {
-                float alpha = mSel.appAlpha(m.id, appsOfCompany) * m.limb;
-                mFill.setColor(withAlpha(mUi.color(R.color.dm_icbg), alpha));
-                canvas.drawRoundRect(m.x - half, m.y - half, m.x + half, m.y + half, mUi.dp(10), mUi.dp(10), mFill);
-                Drawable icon = size[i] == 1 ? mApps.icon(m.id) : null;
-                if (icon != null) {
-                    icon.setBounds((int) (m.x - half), (int) (m.y - half), (int) (m.x + half), (int) (m.y + half));
-                    icon.setAlpha((int) (alpha * 255));
-                    icon.draw(canvas);
-                    icon.setAlpha(255);
-                } else {
-                    drawLabel(canvas, size[i] == 1 ? Initials.of(m.name) : String.valueOf(size[i]), m.x, m.y,
-                            R.color.dm_icfg, 13, alpha);
-                }
-                if (m.id.equals(mSel.app())) {
-                    ring(canvas, m.x, m.y, half + mUi.dp(3), true);
-                }
-            } else {
-                // Several markers stand together: one logo, that of the company most of the user's apps contact,
-                // and a badge with the number of the others (LogoPick).
-                int[] members = new int[size[i]];
-                int k = 0;
-                for (int j = 0; j < leader.length; j++) {
-                    if (leader[j] == i) {
-                        members[k++] = j;
-                    }
-                }
-                String[] ids = new String[members.length];
-                boolean[] isApp = new boolean[members.length];
-                int[] appCount = new int[members.length];
-                for (int j = 0; j < members.length; j++) {
-                    Marker mm = shown.get(members[j]);
-                    ids[j] = mm.id;
-                    isApp[j] = mm.isApp;
-                    appCount[j] = mm.appCount;
-                }
-                int pick = LogoPick.representative(ids, isApp, appCount);
-                Marker rep = pick < 0 ? m : shown.get(members[pick]);
-                boolean dim = mSel.companyDimmed(rep.id, chosenRel == null ? null : chosenRel.ownerA,
-                        chosenRel == null ? null : chosenRel.ownerB);
-                float alpha = (dim ? 0.45f : 1f) * m.limb;
-                drawCompany(canvas, m.x, m.y, half, rep, alpha);
-                int extra = LogoPick.extra(size[i]);
-                if (extra > 0) {
-                    drawBadge(canvas, m.x + half * 0.8f, m.y - half * 0.8f, extra, alpha);
-                }
-                Drawable flag = size[i] == 1 ? Flags.of(getContext(), m.country) : null;
-                if (flag != null) {
-                    int fx = (int) (m.x + half * 0.5f);
-                    int fy = (int) (m.y - half - mUi.dp(6));
-                    flag.setBounds(fx, fy, fx + mUi.dp(20), fy + mUi.dp(15));
-                    flag.setAlpha((int) (alpha * 255));
-                    flag.draw(canvas);
-                    flag.setAlpha(255);
-                }
-                if (size[i] == 1 && m.id.equals(mSel.company())) {
-                    ring(canvas, m.x, m.y, half + mUi.dp(4), false);
-                }
-            }
-            if (GlobeMath.tappable(m.limb)) {
-                addMarkerHit(shown, leader, i);
-            }
-        }
+    private void drawAnchor(Canvas c, float x, float y) {
+        float half = mDs.px(17);
+        mLogo.setBounds(Math.round(x - half), Math.round(y - half), Math.round(x + half), Math.round(y + half));
+        mLogo.draw(c);
+        String label = getContext().getString(R.string.your_apps);
+        mText.setTypeface(Ds.face(Ds.MEDIUM));
+        mText.setTextSize(mDs.px(14));
+        float w = mText.measureText(label) + mDs.px(36);
+        float top = y + mDs.px(19);
+        mRect.set(x - w / 2, top, x + w / 2, top + mDs.px(26));
+        mP.setStyle(Paint.Style.FILL);
+        mP.setColor(mDs.color(R.color.at_lbl));
+        c.drawRoundRect(mRect, mDs.px(13), mDs.px(13), mP);
+        mStroke.setColor(mDs.color(R.color.at_lblbd));
+        mStroke.setStrokeWidth(Math.max(1, mDs.dp(1)));
+        c.drawRoundRect(mRect, mDs.px(13), mDs.px(13), mStroke);
+        mText.setColor(mDs.color(R.color.at_on));
+        mText.setTextAlign(Paint.Align.CENTER);
+        c.drawText(label, x, top + mDs.px(13) - (mText.ascent() + mText.descent()) / 2, mText);
+        mText.setTextAlign(Paint.Align.LEFT);
     }
 
-    /**
-     * A company on the globe: its logo on a light round backing inside a ring (red for a tracker, dashed for a
-     * company that no app contacts directly), or, with no logo shipped for it, the filled circle with its initials.
-     */
-    private void drawCompany(Canvas canvas, float x, float y, float half, Marker m, float alpha) {
-        int ringColor = mUi.color(m.tracker ? R.color.dm_err : R.color.dm_pri);
-        Drawable logo = Logos.of(getContext(), m.id);
-        if (logo != null) {
-            mFill.setColor(withAlpha(mUi.color(R.color.dm_logo_bg), alpha));
-            canvas.drawCircle(x, y, half, mFill);
-            float inset = half * 0.28f;
-            logo.setBounds((int) (x - half + inset), (int) (y - half + inset), (int) (x + half - inset),
-                    (int) (y + half - inset));
-            // A vector drawable on a hardware canvas takes its alpha when the frame is synced, so setAlpha around
-            // draw() is lost and the logo would stay opaque at the rim and when dimmed: a layer fades it instead.
-            if (alpha < 0.999f) {
-                int save = canvas.saveLayerAlpha(logo.getBounds().left, logo.getBounds().top,
-                        logo.getBounds().right, logo.getBounds().bottom, (int) (alpha * 255));
-                logo.draw(canvas);
-                canvas.restoreToCount(save);
-            } else {
-                logo.draw(canvas);
-            }
-            if (m.ghost) {
-                mStroke.setPathEffect(new DashPathEffect(new float[] {mUi.dp(4), mUi.dp(3)}, 0));
-            } else {
-                mStroke.setPathEffect(null);
-            }
-            mStroke.setStrokeWidth(mUi.dp(2));
-            mStroke.setColor(withAlpha(ringColor, alpha));
-            canvas.drawCircle(x, y, half, mStroke);
-            mStroke.setPathEffect(null);
+    private void drawRingPoint(Canvas c, float x, float y, int col, boolean selected, float alpha) {
+        float rr = mDs.px(selected ? 8 : 6);
+        mP.setStyle(Paint.Style.FILL);
+        mP.setShader(new RadialGradient(x, y, rr * 3, Ds.withAlpha(col, 0.55f * alpha), Ds.withAlpha(col, 0f),
+                Shader.TileMode.CLAMP));
+        c.drawCircle(x, y, rr * 3, mP);
+        mP.setShader(null);
+        if (selected) {
+            mStroke.setColor(Ds.withAlpha(col, 0.5f * alpha));
+            mStroke.setStrokeWidth(mDs.px(1.4f));
+            c.drawCircle(x, y, rr + mDs.px(6), mStroke);
+        }
+        mP.setColor(Ds.withAlpha(cMarkerCore, alpha));
+        c.drawCircle(x, y, rr, mP);
+        mStroke.setColor(Ds.withAlpha(col, alpha));
+        mStroke.setStrokeWidth(mDs.px(2.2f));
+        c.drawCircle(x, y, rr, mStroke);
+        mP.setColor(Ds.withAlpha(mLight ? col : 0xFFFFFFFF, alpha));
+        c.drawCircle(x, y, rr * 0.38f, mP);
+    }
+
+    /** On a bright line: the icon of the app that contacts both places, or a diamond for a documented relation. */
+    private void drawChip(Canvas c, float[] mid, PlaceLinks.Pair pair) {
+        List<String> apps = new ArrayList<>(pair.apps);
+        mP.setStyle(Paint.Style.FILL);
+        if (apps.isEmpty()) {
+            c.save();
+            c.translate(mid[0], mid[1]);
+            c.rotate(45);
+            mRect.set(-mDs.px(6), -mDs.px(6), mDs.px(6), mDs.px(6));
+            mP.setColor(cMarkerCore);
+            c.drawRoundRect(mRect, mDs.px(3), mDs.px(3), mP);
+            mStroke.setColor(cPri);
+            mStroke.setStrokeWidth(mDs.px(2));
+            c.drawRoundRect(mRect, mDs.px(3), mDs.px(3), mStroke);
+            c.restore();
             return;
         }
-        if (m.ghost) {
-            mStroke.setPathEffect(new DashPathEffect(new float[] {mUi.dp(4), mUi.dp(3)}, 0));
-            mStroke.setStrokeWidth(mUi.dp(2));
-            mStroke.setColor(withAlpha(mUi.color(R.color.dm_pri), alpha));
-            canvas.drawCircle(x, y, half, mStroke);
-            mStroke.setPathEffect(null);
-            drawLabel(canvas, Initials.of(m.name), x, y, R.color.dm_pri, 14, alpha);
-        } else {
-            mFill.setColor(withAlpha(ringColor, alpha));
-            canvas.drawCircle(x, y, half, mFill);
-            drawLabel(canvas, Initials.of(m.name), x, y, R.color.dm_onpri, 14, alpha);
+        float size = mDs.px(20);
+        float x = mid[0] - size / 2;
+        float y = mid[1] - size / 2;
+        mRect.set(x - mDs.px(2), y - mDs.px(2), x + size + mDs.px(2), y + size + mDs.px(2));
+        mP.setColor(cMarkerCore);
+        mP.setShadowLayer(mDs.px(6), 0, 0, 0x80000000);
+        c.drawRoundRect(mRect, mDs.px(8), mDs.px(8), mP);
+        mP.clearShadowLayer();
+        Drawable icon = mChipIcons.get(apps.get(0));
+        if (icon == null && !mChipIcons.containsKey(apps.get(0))) {
+            icon = mApps.icon(apps.get(0));
+            mChipIcons.put(apps.get(0), icon);
+        }
+        if (icon != null) {
+            c.save();
+            mRect.set(x, y, x + size, y + size);
+            mClipChip.rewind();
+            mClipChip.addRoundRect(mRect, mDs.px(6), mDs.px(6), Path.Direction.CW);
+            c.clipPath(mClipChip);
+            icon.setBounds(Math.round(x), Math.round(y), Math.round(x + size), Math.round(y + size));
+            icon.draw(c);
+            c.restore();
+        }
+        if (apps.size() > 1) {
+            float bx = mid[0] + size / 2;
+            float by = mid[1] - size / 2;
+            mP.setColor(cPri);
+            c.drawCircle(bx, by, mDs.px(7), mP);
+            mText.setTypeface(Ds.face(Ds.MEDIUM));
+            mText.setTextSize(mDs.px(10));
+            mText.setColor(0xFFFFFFFF);
+            mText.setTextAlign(Paint.Align.CENTER);
+            c.drawText("+" + (apps.size() - 1), bx, by - (mText.ascent() + mText.descent()) / 2, mText);
+            mText.setTextAlign(Paint.Align.LEFT);
         }
     }
 
-    /** The "+N" of a group: a small dark pill at the corner of the logo. */
-    private void drawBadge(Canvas canvas, float x, float y, int extra, float alpha) {
-        String s = "+" + extra;
-        mTextPaint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 11,
-                getResources().getDisplayMetrics()));
-        float w = Math.max(mUi.dp(22), mTextPaint.measureText(s) + mUi.dp(10));
-        float h = mUi.dp(18);
-        mRect.set(x - w / 2, y - h / 2, x + w / 2, y + h / 2);
-        mFill.setColor(withAlpha(mUi.color(R.color.dm_inv), alpha));
-        canvas.drawRoundRect(mRect, h / 2, h / 2, mFill);
-        drawLabel(canvas, s, x, y, R.color.dm_oninv, 11, alpha);
+    private final Path mClipChip = new Path();
+
+    // ---- the card of a place
+
+    private String subLine(Places.Place p) {
+        String country = new java.util.Locale("", p.lead.owner.countryCode).getDisplayCountry();
+        if (country.isEmpty()) {
+            country = p.lead.owner.countryCode;
+        }
+        return country + " · " + getContext().getResources().getQuantityString(R.plurals.n_apps, p.apps.size(), p.apps.size());
     }
 
-    /** A tap on a marker; on a group it is a tap on the group of companies behind it. */
-    private void addMarkerHit(List<Marker> shown, int[] leader, int i) {
-        Marker m = shown.get(i);
-        List<String> companies = new ArrayList<>();
-        for (int j = 0; j < leader.length; j++) {
-            if (leader[j] == i && !shown.get(j).isApp) {
-                companies.add(shown.get(j).id);
+    private float cardWidth(Places.Place p) {
+        mText.setTypeface(Ds.face(Ds.MEDIUM));
+        mText.setTextSize(mDs.px(14));
+        float name = mText.measureText(p.lead.owner.name) / mDs.px(1);
+        mText.setTypeface(Ds.face(Ds.REGULAR));
+        mText.setTextSize(mDs.px(12));
+        float sub = mText.measureText(subLine(p)) / mDs.px(1);
+        int extra = p.members.size() - 1;
+        return (float) Math.ceil(Math.max(name + 16 + 7 + (extra > 0 ? 32 : 0), sub + 17) + 26);
+    }
+
+    private void drawCard(Canvas c, Places.Place p, float x, float y, float w, float limb, int col) {
+        boolean selected = p.key.equals(mSelected);
+        boolean dim = mSelected != null && !selected;
+        float alpha = limb < 0.95f ? limb : (dim ? 0.4f : 1f);
+        float h = mDs.px(46);
+        int saved = c.saveLayerAlpha(x - mDs.px(30), y - mDs.px(30), x + w + mDs.px(30), y + h + mDs.px(40),
+                Math.round(255 * alpha));
+        mRect.set(x, y, x + w, y + h);
+        mP.setStyle(Paint.Style.FILL);
+        mP.setColor(mDs.color(R.color.at_lbl));
+        mP.setShadowLayer(mDs.px(selected ? 16 : 14), 0, mDs.px(selected ? 0 : 4),
+                selected ? Ds.withAlpha(col, 0.45f) : mDs.color(R.color.at_shadow_card));
+        c.drawRoundRect(mRect, mDs.px(14), mDs.px(14), mP);
+        mP.clearShadowLayer();
+        mStroke.setColor(selected ? col : mDs.color(R.color.at_lblbd));
+        mStroke.setStrokeWidth(Math.max(1, mDs.dp(1)));
+        c.drawRoundRect(mRect, mDs.px(14), mDs.px(14), mStroke);
+        if (selected) {
+            mRect.inset(-mDs.px(1), -mDs.px(1));
+            c.drawRoundRect(mRect, mDs.px(15), mDs.px(15), mStroke);
+        }
+        float top = y + mDs.px(4.5f);
+        // line 1: the flag, the name and, when there are more companies, "+n"
+        float fx = x + mDs.px(11);
+        float fy = top + mDs.px(1);
+        Drawable flag = Flags.of(getContext(), p.lead.owner.countryCode);
+        if (flag != null) {
+            c.save();
+            mClipChip.rewind();
+            mClipChip.addCircle(fx + mDs.px(8), fy + mDs.px(8), mDs.px(8), Path.Direction.CW);
+            c.clipPath(mClipChip);
+            flag.setBounds(Math.round(fx), Math.round(fy), Math.round(fx + mDs.px(16)), Math.round(fy + mDs.px(16)));
+            flag.draw(c);
+            c.restore();
+        }
+        mText.setTypeface(Ds.face(Ds.MEDIUM));
+        mText.setTextSize(mDs.px(14));
+        mText.setColor(mDs.color(R.color.at_on));
+        float nx = x + mDs.px(11 + 16 + 7);
+        c.drawText(p.lead.owner.name, nx, top + mDs.px(9) - (mText.ascent() + mText.descent()) / 2, mText);
+        int extra = p.members.size() - 1;
+        if (extra > 0) {
+            float tx = nx + mText.measureText(p.lead.owner.name) + mDs.px(7);
+            mText.setTypeface(Ds.face(Ds.MEDIUM));
+            mText.setTextSize(mDs.px(11));
+            String more = "+" + extra;
+            float pw = mText.measureText(more) + mDs.px(12);
+            mRect.set(tx, top + mDs.px(1), tx + pw, top + mDs.px(17));
+            mP.setColor(mDs.color(R.color.at_pill));
+            c.drawRoundRect(mRect, mDs.px(8), mDs.px(8), mP);
+            mText.setColor(mDs.color(R.color.at_onv));
+            c.drawText(more, tx + mDs.px(6), top + mDs.px(9) - (mText.ascent() + mText.descent()) / 2, mText);
+        }
+        // line 2: a pin, the country and how many apps
+        float y2 = top + mDs.px(18 + 3);
+        mPin.setBounds(Math.round(x + mDs.px(11)), Math.round(y2 + mDs.px(1.5f)), Math.round(x + mDs.px(24)),
+                Math.round(y2 + mDs.px(14.5f)));
+        mPin.draw(c);
+        mText.setTypeface(Ds.face(Ds.REGULAR));
+        mText.setTextSize(mDs.px(12));
+        mText.setColor(mDs.color(R.color.at_onv));
+        c.drawText(subLine(p), x + mDs.px(11 + 13 + 4), y2 + mDs.px(8) - (mText.ascent() + mText.descent()) / 2, mText);
+        c.restoreToCount(saved);
+    }
+
+    // ====================================================================== the graticule data
+
+    private static float[][] graticule() {
+        List<float[]> lines = new ArrayList<>();
+        float[] v = new float[3];
+        for (int lon = -180; lon < 180; lon += 15) {
+            float[] l = new float[3 * 37];
+            for (int k = 0; k < 37; k++) {
+                UnitVectors.of(-90 + 5 * k, lon, v);
+                l[3 * k] = v[0];
+                l[3 * k + 1] = v[1];
+                l[3 * k + 2] = v[2];
+            }
+            lines.add(l);
+        }
+        for (int lat = -75; lat <= 75; lat += 15) {
+            float[] l = new float[3 * 73];
+            for (int k = 0; k < 73; k++) {
+                UnitVectors.of(lat, -180 + 5 * k, v);
+                l[3 * k] = v[0];
+                l[3 * k + 1] = v[1];
+                l[3 * k + 2] = v[2];
+            }
+            lines.add(l);
+        }
+        return lines.toArray(new float[0][]);
+    }
+
+    // ===================================================================== accessibility
+
+    /** The places as virtual views, so that a screen reader can reach each one and choose it. */
+    private final Nodes mNodes = new Nodes();
+
+    private final class Nodes extends AccessibilityNodeProvider {
+        void changed() {
+            if (isAttachedToWindow()) {
+                sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
             }
         }
-        float reach = mUi.dp(24);
-        if (companies.size() > 1) {
-            mHits.add(new Hit(HIT_GROUP, m.x, m.y, reach, null, companies, -1));
-        } else {
-            mHits.add(new Hit(m.isApp ? HIT_APP : HIT_COMPANY, m.x, m.y, reach, m.id, null, -1));
+
+        @Override
+        public AccessibilityNodeInfo createAccessibilityNodeInfo(int id) {
+            if (id == View.NO_ID) {
+                AccessibilityNodeInfo info = new AccessibilityNodeInfo(GlobeView.this);
+                onInitializeAccessibilityNodeInfo(info);
+                for (int i = 0; i < mShownPlaces.size(); i++) {
+                    info.addChild(GlobeView.this, i);
+                }
+                return info;
+            }
+            if (id < 0 || id >= mShownPlaces.size()) {
+                return null;
+            }
+            Places.Place p = mShownPlaces.get(id);
+            AccessibilityNodeInfo info = new AccessibilityNodeInfo(GlobeView.this, id);
+            info.setParent(GlobeView.this);
+            info.setPackageName(getContext().getPackageName());
+            info.setClassName(View.class.getName());
+            String country = new java.util.Locale("", p.lead.owner.countryCode).getDisplayCountry();
+            int apps = p.apps.size();
+            info.setContentDescription(getContext().getString(R.string.place_description, p.lead.owner.name, country,
+                    getContext().getResources().getQuantityString(R.plurals.n_apps, apps, apps)));
+            info.setClickable(true);
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
+            float d = mDs.px(1);
+            android.graphics.Rect r = new android.graphics.Rect(Math.round(mShownX[id]), Math.round(mShownY[id]),
+                    Math.round(mShownX[id] + mShownW[id]), Math.round(mShownY[id] + 46 * d));
+            info.setBoundsInParent(r);
+            int[] loc = new int[2];
+            getLocationOnScreen(loc);
+            r.offset(loc[0], loc[1]);
+            info.setBoundsInScreen(r);
+            return info;
         }
-    }
 
-    private void ring(Canvas canvas, float x, float y, float radius, boolean rounded) {
-        mStroke.setPathEffect(null);
-        mStroke.setStrokeWidth(mUi.dp(2));
-        mStroke.setColor(mUi.color(R.color.dm_on));
-        if (rounded) {
-            canvas.drawRoundRect(x - radius, y - radius, x + radius, y + radius, mUi.dp(12), mUi.dp(12), mStroke);
-        } else {
-            canvas.drawCircle(x, y, radius, mStroke);
+        @Override
+        public boolean performAction(int id, int action, Bundle arguments) {
+            if (id >= 0 && id < mShownPlaces.size() && action == AccessibilityNodeInfo.ACTION_CLICK) {
+                if (mListener != null) {
+                    mListener.onPlace(mShownPlaces.get(id).key);
+                }
+                return true;
+            }
+            return false;
         }
-    }
-
-    private void drawLabel(Canvas canvas, String s, float x, float y, int colorRes, float sp, float alpha) {
-        mTextPaint.setColor(withAlpha(mUi.color(colorRes), alpha));
-        mTextPaint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp,
-                getResources().getDisplayMetrics()));
-        canvas.drawText(s, x, y - (mTextPaint.ascent() + mTextPaint.descent()) / 2f, mTextPaint);
-    }
-
-    /** The colour with its own opacity multiplied by {@code alpha}. */
-    private static int withAlpha(int color, float alpha) {
-        int a = Math.round(((color >>> 24) & 0xFF) * Math.max(0f, Math.min(1f, alpha)));
-        return (color & 0x00FFFFFF) | (a << 24);
     }
 }
