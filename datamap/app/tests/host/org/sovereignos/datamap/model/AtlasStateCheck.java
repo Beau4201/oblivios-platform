@@ -81,6 +81,8 @@ public final class AtlasStateCheck {
                 && t.fullScreen() == s.fullScreen(), "state survives a round trip");
         check(AtlasState.fromBundleData(null).tab() == AtlasState.MAP, "no saved state");
         check(AtlasState.fromBundleData(new String[] {"9", "x"}).tab() == AtlasState.MAP, "a damaged state is a new one");
+        check(AtlasState.fromBundleData(new String[] {"2", "x"}).tab() == AtlasState.MAP,
+                "a short state with a valid tab is a new one, not an out-of-range read");
         check(AtlasState.fromBundleData(new String[] {"9", "", "", "0", "0"}).tab() == AtlasState.MAP,
                 "a tab that does not exist is the map");
     }

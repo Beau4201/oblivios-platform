@@ -100,8 +100,21 @@ final class SheetView extends FrameLayout {
         mHeight.start();
     }
 
+    /** True while the sheet is slid away; the offset follows a height that is not known yet or changes later. */
+    private boolean mAway;
+
+    @Override
+    protected void onSizeChanged(int w, int h, int ow, int oh) {
+        super.onSizeChanged(w, h, ow, oh);
+        if (mAway && h != oh) {
+            animate().cancel();
+            setTranslationY(h * 1.04f);
+        }
+    }
+
     /** Slides the sheet away (the map alone) or back, in 500 ms. */
     void slideAway(boolean away, boolean animate) {
+        mAway = away;
         float to = away ? getHeight() * 1.04f : 0f;
         animate().cancel();
         if (!animate || mDs.calm()) {

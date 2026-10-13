@@ -70,6 +70,8 @@ final class MapTab extends FrameLayout implements SheetView.Host, GlobeView.List
         mFullControl = control(new int[] {R.drawable.ic_full}, new int[] {R.string.map_only},
                 new Runnable[] {this::toggleFullScreen}, GlobeLayout.CONTROL_FULL, true);
         mFullIcon = (ImageView) ((LinearLayout) mFullControl).getChildAt(0);
+        // the page draws the sheet (z 4) above the controls (z 3): a tall sheet must not leave buttons over its rows
+        mSheet.bringToFront();
     }
 
     /** {@code .ctl}: one to two round-cornered buttons 36 by 34 dp, a line between them. */
