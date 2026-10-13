@@ -43,6 +43,61 @@ public final class ServerPlaceCheck {
         Check.eq(ANY, only(s, "y.com").place, "an anycast place is kept as it is");
         Check.eq(4, only(s, "x.com").count, "the counts are unchanged by places");
 
+        // a place that can be drawn takes the place of one that cannot, and is then kept (one service, one answer)
+        ServerPlace uncertain = new ServerPlace(ServerPlace.UNCERTAIN, "DE", "", 0f, 0f, 24940, "Hetzner Online GmbH");
+        ServerPlace steered = new ServerPlace(ServerPlace.STEERED, "US", "", 0f, 0f, 16509, "AMAZON-02");
+        ServerPlace asnOnly = new ServerPlace(ServerPlace.NONE, "", "", 0f, 0f, 24940, "Hetzner Online GmbH");
+        ServerPlace country = new ServerPlace(ServerPlace.COUNTRY, "DE", "", 51f, 10f, 24940, "Hetzner Online GmbH");
+        for (ServerPlace first : new ServerPlace[] {ANY, uncertain, steered, asnOnly}) {
+            DataMapStore t = new DataMapStore(10, 100);
+            t.record(0, 10100, "com.a", "p.com", false, true, 1000, first);
+            Check.eq(first, only(t, "p.com").place, "the first place that says something is kept: kind " + first.kind);
+            t.record(0, 10100, "com.a", "p.com", false, true, 2000, BERLIN);
+            Check.eq(BERLIN, only(t, "p.com").place, "a place that can be drawn replaces kind " + first.kind);
+            t.record(0, 10100, "com.a", "p.com", false, true, 3000, ANY);
+            Check.eq(BERLIN, only(t, "p.com").place, "and an anycast answer does not take it back");
+        }
+        DataMapStore u = new DataMapStore(10, 100);
+        u.record(0, 10100, "com.a", "p.com", false, true, 1000, country);
+        u.record(0, 10100, "com.a", "p.com", false, true, 2000, BERLIN);
+        Check.eq(country, only(u, "p.com").place, "a place that is drawn is not replaced by another that is drawn");
+
+        // needsPlace: the service looks an address up only for a row that has no place to draw yet
+        DataMapStore n = new DataMapStore(10, 100);
+        Check.isTrue(n.needsPlace(0, 10100, "q.com"), "a service not seen yet needs one");
+        n.record(0, 10100, "com.a", "q.com", false, true, 1000, null);
+        Check.isTrue(n.needsPlace(0, 10100, "q.com"), "a row with no place needs one");
+        n.record(0, 10100, "com.a", "q.com", false, true, 1000, ANY);
+        Check.isTrue(n.needsPlace(0, 10100, "q.com"), "a row whose place cannot be drawn needs one");
+        n.record(0, 10100, "com.a", "q.com", false, true, 1000, BERLIN);
+        Check.isTrue(!n.needsPlace(0, 10100, "q.com"), "a row with a place to draw does not");
+        Check.isTrue(n.needsPlace(0, 10101, "q.com") && n.needsPlace(1, 10100, "q.com"), "another app or user is another row");
+        Check.eq(1, n.snapshot(0).size(), "asking creates no row");
+
+        // the reply is bounded by bytes, not only by rows: a row is counted as the parcel will hold it
+        DataMapStore.Row small = new DataMapStore.Row(10100, "com.a", "x.com", 1000, 2000, 3, 1, 2, true);
+        int smallBytes = DataMapStore.parcelBytes(small);
+        // 8 for the parcelable, 52 for the numbers; a string is 4 + its UTF-16 length plus a terminator, to 4 bytes; the owner
+        // id (not in a row) is counted at its longest, 64 characters: 136
+        Check.eq(8 + 52 + 136 + 16 + 16 + 8 + 8 + 8, smallBytes, "a row without a place");
+        DataMapStore.Row big = new DataMapStore.Row(10100, "p".repeat(255), "k".repeat(253), 1000, 2000, 3, 1, 2, true,
+                new ServerPlace(ServerPlace.CITY, "DE", "c".repeat(255), 1f, 2f, 3, "o".repeat(255)));
+        Check.eq(8 + 52 + 136 + 516 + 512 + 12 + 516 + 516, DataMapStore.parcelBytes(big), "a row with the longest names");
+        List<DataMapStore.Row> many = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            many.add(new DataMapStore.Row(10100, "com.a", "h" + i + ".com", i, i, 1, 1, 0, true));
+        }
+        Check.eq(100, DataMapStore.within(many, 1 << 20).size(), "all rows fit a large budget");
+        int each = DataMapStore.parcelBytes(many.get(0));
+        List<DataMapStore.Row> cut = DataMapStore.within(many, each * 10 + each / 2);
+        Check.eq(10, cut.size(), "the rows that fit the budget are kept");
+        Check.eq(many.get(90), cut.get(0), "the rows seen last are the ones kept");
+        Check.eq(many.get(99), cut.get(9), "in their order");
+        Check.eq(10, DataMapStore.within(many.subList(0, 15), each * 10 + each / 2).size(), "15 rows over a budget of 10 and a half");
+        Check.eq(15, DataMapStore.within(many.subList(0, 15), each * 15).size(), "15 rows in a budget of exactly 15");
+        Check.eq(0, DataMapStore.within(many, 1).size(), "a budget that fits no row keeps none");
+        Check.eq(0, DataMapStore.within(new ArrayList<DataMapStore.Row>(), 100).size(), "no rows, no rows");
+
         // ---- rows restored from the history keep their place, and do not override one in memory
         DataMapStore r = new DataMapStore(10, 100);
         List<DataMapStore.Row> rows = new ArrayList<>();
@@ -67,6 +122,18 @@ public final class ServerPlaceCheck {
         other.add(new DataMapStore.Row(10100, "com.a", "x.com", 500, 900, 1, 1, 0, true, FRANKFURT));
         m.restore(0, other);
         Check.eq(BERLIN, only(m, "x.com").place, "a restored place does not replace the one in memory");
+
+        // a restored place that can be drawn replaces one in memory that cannot; one that cannot be drawn replaces nothing
+        DataMapStore up = new DataMapStore(10, 100);
+        up.record(0, 10100, "com.a", "x.com", false, true, 1000, ANY);
+        List<DataMapStore.Row> better = new ArrayList<>();
+        better.add(new DataMapStore.Row(10100, "com.a", "x.com", 500, 900, 1, 1, 0, true, BERLIN));
+        up.restore(0, better);
+        Check.eq(BERLIN, only(up, "x.com").place, "a restored place that is drawn replaces one that is not");
+        List<DataMapStore.Row> worse = new ArrayList<>();
+        worse.add(new DataMapStore.Row(10100, "com.a", "x.com", 500, 900, 1, 1, 0, true, ANY));
+        up.restore(0, worse);
+        Check.eq(BERLIN, only(up, "x.com").place, "a restored place that is not drawn replaces nothing");
 
         // ---- the history file
         TreeMap<Integer, List<DataMapStore.Row>> days = new TreeMap<>();
@@ -100,10 +167,57 @@ public final class ServerPlaceCheck {
         evil.put(1, evilDay);
         String evilText = HistoryCodec.encode(evil, true);
         Check.eq(null, HistoryCodec.decode(evilText).get(1).get(0).place, "a place with a tab is dropped, not written");
+        // a field with a line break or a carriage return is not written either, in any of the three texts
+        for (ServerPlace bad : new ServerPlace[] {new ServerPlace(ServerPlace.CITY, "DE", "Ber\nlin", 1f, 2f, 3, "op"),
+                new ServerPlace(ServerPlace.CITY, "DE", "Berlin", 1f, 2f, 3, "o\rp"),
+                new ServerPlace(ServerPlace.CITY, "DE", "Berlin", 1f, 2f, 3, "o\tp"),
+                new ServerPlace(ServerPlace.CITY, "D\tE", "Berlin", 1f, 2f, 3, "op")}) {
+            TreeMap<Integer, List<DataMapStore.Row>> bd = new TreeMap<>();
+            List<DataMapStore.Row> bl = new ArrayList<>();
+            bl.add(new DataMapStore.Row(10100, "com.a", "x.com", 3_600_000L, 3_600_000L, 1, 1, 0, true, bad));
+            bd.put(1, bl);
+            Check.eq(null, HistoryCodec.decode(HistoryCodec.encode(bd, true)).get(1).get(0).place, "an unwritable place is dropped");
+        }
+        // a place that says nothing is not written, even when places are chosen: the row keeps its ten fields
+        TreeMap<Integer, List<DataMapStore.Row>> nothing = new TreeMap<>();
+        List<DataMapStore.Row> nl = new ArrayList<>();
+        nl.add(new DataMapStore.Row(10100, "com.a", "x.com", 3_600_000L, 3_600_000L, 1, 1, 0, true, ServerPlace.NOTHING));
+        nothing.put(1, nl);
+        Check.eq(10, HistoryCodec.encode(nothing, true).split("\n")[2].split("\t", -1).length, "nothing known is not written");
+        // an AS number of 2**31 or more is written as the number it is and read back
+        ServerPlace bigPlace = new ServerPlace(ServerPlace.CITY, "NL", "Amsterdam", 52.37f, 4.9f, (int) 4200000001L, "Example Transit");
+        TreeMap<Integer, List<DataMapStore.Row>> bigAsn = new TreeMap<>();
+        List<DataMapStore.Row> ba = new ArrayList<>();
+        ba.add(new DataMapStore.Row(10100, "com.a", "x.com", 3_600_000L, 3_600_000L, 1, 1, 0, true, bigPlace));
+        bigAsn.put(1, ba);
+        String bigText = HistoryCodec.encode(bigAsn, true);
+        Check.isTrue(bigText.contains("\t4200000001\t") && !bigText.contains("\t-"), "the AS number is written unsigned");
+        Check.eq(bigPlace, HistoryCodec.decode(bigText).get(1).get(0).place, "and read back as the same 32 bits");
+        // a row that is as long as the data allows is read back, whatever the names are: one long row never loses the history
+        TreeMap<Integer, List<DataMapStore.Row>> longDays = new TreeMap<>();
+        List<DataMapStore.Row> longRows = new ArrayList<>();
+        longRows.add(new DataMapStore.Row(10100, "p".repeat(100), "h".repeat(249), 3_600_000L, 7_200_000L, 5, 3, 2, true,
+                new ServerPlace(ServerPlace.CITY, "DE", "c".repeat(100), 50.11f, 8.68f, 24940, "o".repeat(100))));
+        longRows.add(new DataMapStore.Row(10100, "q".repeat(255), "k".repeat(253), 3_600_000L, 7_200_000L, 5, 3, 2, true,
+                new ServerPlace(ServerPlace.CITY, "DE", "c".repeat(255), 50.11f, 8.68f, 24940, "o".repeat(255))));
+        longRows.add(new DataMapStore.Row(10100, "com.a", "z.com", 3_600_000L, 7_200_000L, 1, 1, 0, true, BERLIN));
+        // a row that is too long for the decoder even without a place cannot be written: it is left out, the file stays whole
+        longRows.add(new DataMapStore.Row(10100, "r".repeat(1100), "m.com", 3_600_000L, 7_200_000L, 1, 1, 0, true, BERLIN));
+        longDays.put(1, longRows);
+        List<DataMapStore.Row> longBack = HistoryCodec.decode(HistoryCodec.encode(longDays, true)).get(1);
+        Check.eq(3, longBack.size(), "no row is lost but the one that cannot be read back");
+        Check.eq(longRows.get(0).place, longBack.get(0).place, "a row of 634 characters keeps its place");
+        Check.eq(null, longBack.get(1).place, "a row that is too long for the decoder is written without its place");
+        Check.eq(longRows.get(1).key, longBack.get(1).key, "and is still there");
+        Check.eq(BERLIN, longBack.get(2).place, "the rows after it keep theirs");
+        for (String line : HistoryCodec.encode(longDays, true).split("\n")) {
+            Check.isTrue(line.length() <= HistoryCodec.MAX_LINE, "no line is longer than the decoder reads");
+        }
         // damaged places are refused
         String row = with.split("\n")[2];
         for (String bad : new String[] {row.replace("\t1\tDE\t", "\t9\tDE\t"), row.replace("\t1\tDE\t", "\t1\tDEU\t"),
-                row.replace("\t52.52\t", "\tNaN\t"), row.replace("\t24940\t", "\tx\t")}) {
+                row.replace("\t52.52\t", "\tNaN\t"), row.replace("\t52.52\t", "\tInfinity\t"), row.replace("\t13.4\t", "\tNaN\t"),
+                row.replace("\t13.4\t", "\t-Infinity\t"), row.replace("\t24940\t", "\tx\t")}) {
             final String text = "datamap-history\t1\nday\t5\n" + bad + "\n";
             Check.throwsA(HistoryCodec.FormatException.class, () -> HistoryCodec.decode(text), "a damaged place: " + bad);
         }
@@ -130,16 +244,17 @@ public final class ServerPlaceCheck {
         Check.isTrue(!d.serverHistory, "server places are not kept by default");
         Check.isTrue(d.isDefault(), "the defaults are the defaults");
         UserSettings on = d.withHistory(true, 7).withServerHistory(true);
-        Check.isTrue(!on.isDefault(), "keeping server places is not the default");
-        Check.isTrue(!d.withServerHistory(true).isDefault(), "the choice alone, with the history off, is not the default");
-        Check.isTrue(UserSettings.decode(d.withServerHistory(true).encode()).serverHistory, "the choice alone round trips");
-        Check.isTrue(UserSettings.decode(on.encode()).serverHistory, "the choice round trips");
-        Check.eq(7, UserSettings.decode(on.encode()).days, "the days round trip with it");
-        Check.isTrue(!UserSettings.decode(d.withHistory(true, 7).encode()).serverHistory, "a file without the line is off");
+        Check.isTrue(!on.isDefault(), "the history on is not the default");
+        // the choice is kept in a file of its own, so that a build without it reads the settings file as it always did
+        Check.eq(d.withHistory(true, 7).encode(), on.encode(), "the settings text does not hold the choice");
+        Check.isTrue(!on.encode().contains("serverHistory"), "no key of it in the settings file");
+        Check.isTrue(d.withServerHistory(true).isDefault(), "the choice alone leaves the settings file at the defaults");
+        Check.isTrue(!UserSettings.decode(on.encode()).serverHistory, "reading the settings file never turns it on");
+        Check.eq(7, UserSettings.decode(on.encode()).days, "the days round trip");
         Check.isTrue(on.withCollecting(false).serverHistory && on.withHistory(true, 9).serverHistory, "other changes keep it");
         Check.isTrue(!on.withServerHistory(false).serverHistory, "it can be switched off");
-        Check.isTrue(d.withServerHistory(true).withServerHistory(false).isDefault(), "off again is the default again");
-        Check.isTrue(UserSettings.decode("datamap-settings\t1\nserverHistory\t2\n").isDefault(), "a bad flag gives the defaults");
+        Check.isTrue(UserSettings.decode("datamap-settings\t1\nhistory\t1\nserverHistory\t1\n").isDefault(),
+                "the key of the choice is unknown to the settings file: the file is refused, as for any unknown key");
         System.out.println("PASS ServerPlaceCheck");
     }
 }

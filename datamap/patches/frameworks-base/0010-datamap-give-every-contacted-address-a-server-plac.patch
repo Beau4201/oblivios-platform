@@ -1,23 +1,23 @@
-From 5b16f7e93c289d94c513c546276647268cf9a510 Mon Sep 17 00:00:00 2001
+From 30ce831eac6b7e396032be025797a6e808ea4b17 Mon Sep 17 00:00:00 2001
 From: SovereignOS Build <build@sovereignos.local>
-Date: Tue, 13 Oct 2026 17:26:41 +0200
+Date: Tue, 13 Oct 2026 19:56:50 +0200
 Subject: [PATCH] datamap: give every contacted address a server place
  (ADR-161)
 
-The collector hands the first address of a lookup or connect to the service, which looks it up in the mapped ipmap.bin on the service thread and keeps only the country, the city, the ASN and the operator of the server, never the address. The place says where the server lies in the data, not where the company is based. The history keeps it only when the user chose so (HistoryCodec rows of seventeen fields, UserSettings.serverHistory, IDataMapService.setServerHistory at the end of the transaction order). The Binder entry gains seven fields and the snapshot one.
+The collector hands the first address of a lookup or connect to the service, which looks it up in the mapped ipmap.bin on the service thread, only for a service that has no place to draw yet, and keeps the kind, the country, the city with its coordinates, the AS number and the operator of the server, never the address. The place says where the server lies in the data, not where the company is based. The history keeps it only when the user chose so (HistoryCodec rows of seventeen fields that stay within the line limit of the decoder, the choice in a file of its own, IDataMapService.setServerHistory at the end of the transaction order). The Binder entry gains seven fields and the snapshot one; the entries of a reply are bounded in bytes as well as in number.
 ---
  .../internal/datamap/DataMapEntry.aidl        |  11 +
  .../internal/datamap/DataMapSnapshot.aidl     |   2 +
  .../internal/datamap/IDataMapService.aidl     |   3 +
  .../server/datamap/DataMapCollector.java      |   8 +-
- .../server/datamap/DataMapService.java        |  67 +++-
- .../android/server/datamap/DataMapStore.java  |  23 +-
- .../android/server/datamap/HistoryCodec.java  |  44 ++-
- .../com/android/server/datamap/IpMap.java     | 369 ++++++++++++++++++
+ .../server/datamap/DataMapService.java        | 114 +++++-
+ .../android/server/datamap/DataMapStore.java  |  95 ++++-
+ .../android/server/datamap/HistoryCodec.java  |  61 ++-
+ .../com/android/server/datamap/IpMap.java     | 379 ++++++++++++++++++
  .../android/server/datamap/ServerPlace.java   |  68 ++++
  .../android/server/datamap/ServiceKeys.java   |  25 ++
- .../android/server/datamap/UserSettings.java  |  25 +-
- 11 files changed, 625 insertions(+), 20 deletions(-)
+ .../android/server/datamap/UserSettings.java  |  22 +-
+ 11 files changed, 759 insertions(+), 29 deletions(-)
  create mode 100644 services/core/java/com/android/server/datamap/IpMap.java
  create mode 100644 services/core/java/com/android/server/datamap/ServerPlace.java
 
@@ -98,7 +98,7 @@ index a7261a6..bba830b 100644
              mRecorder.dropped();
          }
 diff --git a/services/core/java/com/android/server/datamap/DataMapService.java b/services/core/java/com/android/server/datamap/DataMapService.java
-index 2adad94..c1e95ce 100644
+index 2adad94..95847f1 100644
 --- a/services/core/java/com/android/server/datamap/DataMapService.java
 +++ b/services/core/java/com/android/server/datamap/DataMapService.java
 @@ -67,6 +67,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
@@ -110,7 +110,29 @@ index 2adad94..c1e95ce 100644
      private static final long MAX_HISTORY_BYTES = 64L * 1024 * 1024;
      private static final long WRITE_INTERVAL_MS = 60_000L;
      private static final long NOTIFY_INTERVAL_MS = 500L;
-@@ -123,6 +125,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -74,8 +76,11 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     private static final int MAX_PACKAGES = 2000;
+     private static final int MAX_UID_CACHE = 2048;
+     private static final int MAX_PENDING_EVENTS = 4096;
+-    // The reply is one Binder transaction of about 1 MB at most: an entry is a few hundred bytes.
++    // The reply is one Binder transaction of about 1 MB at most: an entry is a few hundred bytes, up to 2 KB with the
++    // longest names of a server place. The entries get 600 KB (DataMapStore.within); the owners, the publishers (at most
++    // MAX_PACKAGES) and the links take well under the rest.
+     private static final int MAX_ENTRIES = 2000;
++    private static final int MAX_ENTRY_BYTES = 600 * 1024;
+     private static final int MAX_LINKS = 300;
+     // Rows of the earlier days of the history that are kept in memory while the app is open.
+     private static final int MAX_PAST_ROWS = 4000;
+@@ -87,6 +92,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     private final RecentAnswers mAnswers = new RecentAnswers(MAX_ANSWERS_PER_UID);
+     private final DataMapCollector mCollector = new DataMapCollector(this, mAnswers);
+     private final ConcurrentHashMap<Integer, UserSettings> mSettings = new ConcurrentHashMap<>();
++    /** Users whose history file may still hold places that the user no longer wants kept: it is written again. */
++    private final java.util.Set<Integer> mPurgePlaces = ConcurrentHashMap.newKeySet();
+     private final ConcurrentHashMap<Integer, String> mPackageOfUid = new ConcurrentHashMap<>();
+     private final RemoteCallbackList<IDataMapObserver> mObservers = new RemoteCallbackList<>();
+     private final PendingLimit mPending = new PendingLimit(MAX_PENDING_EVENTS);
+@@ -123,6 +130,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
      private final ConcurrentHashMap<Integer, Integer> mLiveDay = new ConcurrentHashMap<>();
  
      private volatile Classifier mClassifier = Classifier.empty();
@@ -119,7 +141,7 @@ index 2adad94..c1e95ce 100644
      private volatile ActivityManagerInternal mAm;
      private IIpConnectivityMetrics mMetrics;
      private boolean mRegistered;
-@@ -200,6 +204,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -200,6 +209,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
          }, new IntentFilter(Intent.ACTION_SHUTDOWN), null, mHandler);
          mHandler.post(() -> {
              mClassifier = loadClassifier();
@@ -127,7 +149,7 @@ index 2adad94..c1e95ce 100644
              refreshRegistration();
              scheduleWrite();
          });
-@@ -223,6 +228,22 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -223,6 +233,22 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
          }
      }
  
@@ -150,7 +172,7 @@ index 2adad94..c1e95ce 100644
      // ------------------------------------------------ the callback in netd's list
  
      /** Puts the collector on, or takes it off, according to what the users chose. */
-@@ -270,14 +291,14 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -270,14 +296,14 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
       * no place is dropped and counted.
       */
      @Override
@@ -167,7 +189,7 @@ index 2adad94..c1e95ce 100644
              } catch (RuntimeException e) {
                  mDropped.incrementAndGet();   // never take the system server down for one event
              } finally {
-@@ -286,18 +307,29 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -286,18 +312,30 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
          });
      }
  
@@ -178,10 +200,12 @@ index 2adad94..c1e95ce 100644
              return;   // the user turned it off while the event waited
          }
          int storeUid = uid < Process.FIRST_APPLICATION_UID ? Process.SYSTEM_UID : uid;
-         mStore.record(userId, storeUid, packageOf(uid),
+-        mStore.record(userId, storeUid, packageOf(uid),
 -                ServiceKeys.storageKey(key, viaDns, mClassifier), isForeground(uid), viaDns, wallMs);
-+                ServiceKeys.storageKey(key, viaDns, mClassifier), isForeground(uid), viaDns, wallMs,
-+                placeOf(address));
++        String storageKey = ServiceKeys.storageKey(key, viaDns, mClassifier);
++        // a service that already has a place to draw is not looked up again
++        ServerPlace place = mStore.needsPlace(userId, storeUid, storageKey) ? placeOf(address) : null;
++        mStore.record(userId, storeUid, packageOf(uid), storageKey, isForeground(uid), viaDns, wallMs, place);
          mEvents.incrementAndGet();
          notifyObservers(userId);
      }
@@ -199,7 +223,16 @@ index 2adad94..c1e95ce 100644
      @Override
      public void invalid(int uid) {
          mStore.countInvalid(UserHandle.getUserId(uid));
-@@ -403,6 +435,14 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -382,7 +420,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         }
+         long wall = System.currentTimeMillis();
+         UserSettings st = settingsOf(user);
+-        List<DataMapStore.Row> rows = DataMapStore.newest(rowsFor(user, st), MAX_ENTRIES);
++        List<DataMapStore.Row> rows = DataMapStore.within(DataMapStore.newest(rowsFor(user, st), MAX_ENTRIES), MAX_ENTRY_BYTES);
+         Classifier c = mClassifier;
+ 
+         DataMapSnapshot out = new DataMapSnapshot();
+@@ -403,6 +441,14 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
              e.foregroundCount = r.fg;
              e.backgroundCount = r.bg;
              e.viaDns = r.viaDns;
@@ -214,7 +247,7 @@ index 2adad94..c1e95ce 100644
              entries.add(e);
              if (!e.ownerId.isEmpty()) {
                  ownerIds.add(e.ownerId);
-@@ -474,6 +514,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -474,6 +520,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
          out.collecting = st.collecting;
          out.historyOn = st.history;
          out.historyDays = st.days;
@@ -222,7 +255,15 @@ index 2adad94..c1e95ce 100644
          out.invalidCount = mStore.invalidCount(user);
          out.nowWallMs = wall;
          return out;
-@@ -571,6 +612,20 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -563,6 +610,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+                 writeHistory(user);
+             } else {
+                 historyFile(user).delete();
++                mPurgePlaces.remove(user);
+                 mWrittenVersion.remove(user);
+                 mLiveDay.remove(user);
+                 mBaseline.remove(user);
+@@ -571,6 +619,27 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
          });
      }
  
@@ -232,10 +273,17 @@ index 2adad94..c1e95ce 100644
 +        UserSettings next = mSettings.compute(user, (k, cur) ->
 +                (cur == null ? UserSettings.defaults() : cur).withServerHistory(enabled));
 +        mHistoryGeneration.incrementAndGet();
++        if (enabled) {
++            mPurgePlaces.remove(user);
++        } else {
++            mPurgePlaces.add(user);   // until a write has taken the places out of the file
++        }
 +        mHandler.post(() -> {
-+            saveSettings(user, next);
++            saveServerHistory(user, enabled);
 +            if (next.history) {
 +                writeHistory(user);   // writes the file again, with the places or without them
++            } else {
++                mPurgePlaces.remove(user);   // no history, no file
 +            }
 +        });
 +    }
@@ -243,16 +291,83 @@ index 2adad94..c1e95ce 100644
      @Override
      public void clear() {
          int user = enforceCaller();
-@@ -725,7 +780,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -583,6 +652,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+             // recorded before this runs (one queue, in order), so they are cleared as well.
+             mStore.clearUser(user);
+             historyFile(user).delete();
++            mPurgePlaces.remove(user);
+             mWrittenVersion.remove(user);
+             mBaseline.remove(user);
+             mSwitchedOn.remove(user);
+@@ -631,6 +701,7 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+             mPast.remove(user);
+             mStore.clearUser(user);
+             mSettings.remove(user);
++            mPurgePlaces.remove(user);
+             mWrittenVersion.remove(user);
+             mLiveDay.remove(user);
+             mBaseline.remove(user);
+@@ -651,11 +722,20 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         return new File(dir(user), "settings.v1");
+     }
+ 
++    /** The choice to keep server places in the history is a file of its own: its presence is the choice. */
++    private File serverHistoryFile(int user) {
++        return new File(dir(user), "server-history.v1");
++    }
++
+     private static long tzOffset() {
+         return TimeZone.getDefault().getOffset(System.currentTimeMillis());
+     }
+ 
+     private UserSettings readSettings(int user) {
++        return readSettingsFile(user).withServerHistory(serverHistoryFile(user).isFile());
++    }
++
++    private UserSettings readSettingsFile(int user) {
+         File f = settingsFile(user);
+         try {
+             if (f.isFile() && f.length() < 4096) {
+@@ -668,6 +748,15 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+         return UserSettings.defaults();
+     }
+ 
++    private void saveServerHistory(int user, boolean enabled) {
++        File f = serverHistoryFile(user);
++        if (!enabled) {
++            f.delete();
++            return;
++        }
++        writeAtomically(f, "1\n");
++    }
++
+     /** The defaults leave no file; a choice that differs from them leaves one small file. */
+     private void saveSettings(int user, UserSettings s) {
+         File f = settingsFile(user);
+@@ -698,8 +787,8 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+     private void scheduleWrite() {
+         mHandler.postDelayed(() -> {
+             for (int user : new ArrayList<>(mSettings.keySet())) {
+-                if (settingsOf(user).history && mStore.version(user)
+-                        != mWrittenVersion.getOrDefault(user, -1L)) {
++                if (settingsOf(user).history && (mStore.version(user) != mWrittenVersion.getOrDefault(user, -1L)
++                        || mPurgePlaces.contains(user))) {
+                     writeHistory(user);
+                 }
+             }
+@@ -725,7 +814,10 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
          }
          days.put(liveDay, persistable(user));
          days = HistoryCodec.prune(days, today, st.days);
 -        if (writeAtomically(historyFile(user), HistoryCodec.encode(days))) {
 +        if (writeAtomically(historyFile(user), HistoryCodec.encode(days, st.serverHistory))) {
++            if (!st.serverHistory) {
++                mPurgePlaces.remove(user);
++            }
              mHistoryGeneration.incrementAndGet();
              if (today != liveDay) {
                  mStore.clearUser(user);   // yesterday is on disk; today starts empty
-@@ -778,6 +833,6 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
+@@ -778,6 +870,6 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
          // Counts only: no package, no service, no owner.
          pw.println("events since boot: " + mEvents.get() + ", dropped: " + mDropped.get()
                  + ", entries: " + mStore.size() + ", registered: " + mRegistered
@@ -261,7 +376,7 @@ index 2adad94..c1e95ce 100644
      }
  }
 diff --git a/services/core/java/com/android/server/datamap/DataMapStore.java b/services/core/java/com/android/server/datamap/DataMapStore.java
-index c1a2d0c..d22573e 100644
+index c1a2d0c..1623b1a 100644
 --- a/services/core/java/com/android/server/datamap/DataMapStore.java
 +++ b/services/core/java/com/android/server/datamap/DataMapStore.java
 @@ -31,9 +31,16 @@ final class DataMapStore {
@@ -297,34 +412,120 @@ index c1a2d0c..d22573e 100644
      }
  
      private static final class UserData {
-@@ -77,7 +86,16 @@ final class DataMapStore {
+@@ -77,7 +86,20 @@ final class DataMapStore {
      /** Records one contact of an app with a service. */
      synchronized void record(int userId, int uid, String pkg, String key, boolean foreground,
              boolean viaDns, long wallMs) {
 +        record(userId, uid, pkg, key, foreground, viaDns, wallMs, null);
 +    }
 +
-+    /** @param place what the first address said, or null; the first one that says something stays */
++    /**
++     * @param place what an address said, or null. The first one that says something stays, unless it cannot be drawn
++     *     (anycast, steered, uncertain, a bare AS number) and a later one can: a service has one answer, and the one that
++     *     names a place is the more useful. A place that is drawn is never replaced.
++     */
 +    synchronized void record(int userId, int uid, String pkg, String key, boolean foreground,
 +            boolean viaDns, long wallMs, ServerPlace place) {
          Entry e = entryFor(userId, uid, pkg, key, wallMs);
-+        if (e.place == null && place != null && place.known()) {
-+            e.place = place;   // the first address that said something stays
++        if (place != null && place.known() && (e.place == null || !e.place.placed() && place.placed())) {
++            e.place = place;
 +        }
          e.count++;
          if (foreground) {
              e.fg++;
-@@ -99,6 +117,9 @@ final class DataMapStore {
+@@ -89,6 +111,18 @@ final class DataMapStore {
+         users.get(userId).version++;
+     }
+ 
++    /**
++     * Whether a contact with this service still needs a place looked up: the row is new, or it has none that can be
++     * drawn. A row that has one is not looked up again, so that a busy service costs no lookup and no allocation.
++     * This changes nothing but the recency of the row, which the contact that follows sets anyway.
++     */
++    synchronized boolean needsPlace(int userId, int uid, String key) {
++        UserData u = users.get(userId);
++        LinkedHashMap<String, Entry> m = u == null ? null : u.byUid.get(uid);
++        Entry e = m == null ? null : m.get(key);
++        return e == null || e.place == null || !e.place.placed();
++    }
++
+     /** Adds rows read back from the history file; a row already present is merged. */
+     synchronized void restore(int userId, List<Row> rows) {
+         for (Row r : rows) {
+@@ -99,6 +133,9 @@ final class DataMapStore {
              e.first = Math.min(e.first, r.firstWall);
              e.last = Math.max(e.last, r.lastWall);
              e.dns |= r.viaDns;
-+            if (e.place == null) {
++            if (r.place != null && (e.place == null || !e.place.placed() && r.place.placed())) {
 +                e.place = r.place;
 +            }
          }
          UserData u = users.get(userId);
          if (u == null) {   // no rows: a cleared history leaves an empty day
-@@ -192,7 +213,7 @@ final class DataMapStore {
+@@ -185,6 +222,62 @@ final class DataMapStore {
+         return out;
+     }
+ 
++    /** What the parcel of a {@code DataMapEntry} holds besides its strings: the parcelable (8) and the numbers (52). */
++    private static final int PARCEL_FIXED = 8 + 52;
++    /** The owner id is not in a row; it is counted at 64 characters, more than any owner id of the classifier. */
++    private static final int PARCEL_OWNER_ID = 4 + ((2 * 64 + 2 + 3) & ~3);
++
++    /** What a string takes in a parcel: its length, then its UTF-16 characters and a terminator, to four bytes. */
++    private static int parcelString(String s) {
++        return 4 + ((2 * s.length() + 2 + 3) & ~3);
++    }
++
++    /** The size of the {@code DataMapEntry} that a row becomes, at most: the reply is one Binder transaction. */
++    static int parcelBytes(Row r) {
++        ServerPlace p = r.place;
++        return PARCEL_FIXED + PARCEL_OWNER_ID + parcelString(r.pkg) + parcelString(r.key)
++                + parcelString(p == null ? "" : p.country) + parcelString(p == null ? "" : p.city)
++                + parcelString(p == null ? "" : p.operator);
++    }
++
++    /**
++     * The reply to the app is bounded in bytes as well (a Binder transaction is about 1 MB, and the names of a place
++     * can be long): when the rows would take more than {@code budget} bytes, the ones seen most recently that fit are
++     * kept, in their order.
++     */
++    static List<Row> within(List<Row> rows, int budget) {
++        long total = 0;
++        for (Row r : rows) {
++            total += parcelBytes(r);
++        }
++        if (total <= budget) {
++            return rows;
++        }
++        List<Row> byLast = new ArrayList<>(rows);
++        Collections.sort(byLast, new Comparator<Row>() {
++            @Override
++            public int compare(Row a, Row b) {
++                return Long.compare(b.lastWall, a.lastWall);
++            }
++        });
++        java.util.Set<Row> keep = Collections.newSetFromMap(new java.util.IdentityHashMap<Row, Boolean>());
++        long used = 0;
++        for (Row r : byLast) {
++            used += parcelBytes(r);
++            if (used > budget) {
++                break;
++            }
++            keep.add(r);
++        }
++        List<Row> out = new ArrayList<>(keep.size());
++        for (Row r : rows) {
++            if (keep.contains(r)) {
++                out.add(r);
++            }
++        }
++        return out;
++    }
++
+     /** The aggregates of one user, in a fixed order (uid, then key). */
+     synchronized List<Row> snapshot(int userId) {
+         List<Row> out = new ArrayList<>();
+@@ -192,7 +285,7 @@ final class DataMapStore {
          if (u != null) {
              for (LinkedHashMap<String, Entry> m : u.byUid.values()) {
                  for (Entry e : m.values()) {
@@ -334,19 +535,32 @@ index c1a2d0c..d22573e 100644
              }
          }
 diff --git a/services/core/java/com/android/server/datamap/HistoryCodec.java b/services/core/java/com/android/server/datamap/HistoryCodec.java
-index 3775f68..78d9091 100644
+index 3775f68..daf614e 100644
 --- a/services/core/java/com/android/server/datamap/HistoryCodec.java
 +++ b/services/core/java/com/android/server/datamap/HistoryCodec.java
-@@ -15,6 +15,8 @@ import java.util.TreeMap;
+@@ -15,12 +15,19 @@ import java.util.TreeMap;
   * day  index
   * row  uid  package  key  first  last  count  foreground  background  viaDns(0|1)
   * </pre>
 + * A row has seven more fields, kind country city latitude longitude asn operator, when the user chose to keep
 + * server places (ADR-161). The decoder reads both forms.
   * A day index is the number of local days since 1970-01-01. The decoder is bounded: it refuses a file
-  * with more than {@link #MAX_ROWS} rows or a line longer than {@link #MAX_LINE}.
+- * with more than {@link #MAX_ROWS} rows or a line longer than {@link #MAX_LINE}.
++ * with more than {@link #MAX_ROWS} rows or a line longer than {@link #MAX_LINE}. The encoder keeps to the same bounds:
++ * a row of ten fields is at most about 610 characters (a package of 255, a service key of 253), and a place adds up to
++ * 700 with names of 255 characters, so that a row whose place would pass {@link #MAX_LINE} is written without it, and
++ * a row that is too long without a place is not written. One long row must never make the whole file unreadable.
++ * The file is bounded too (DataMapService.MAX_HISTORY_BYTES, 64 MB): at most 4000 rows a day for 90 days is 360 000
++ * rows, and a row with a place is about 140 characters on average, which is 50 MB.
   */
-@@ -49,6 +51,11 @@ final class HistoryCodec {
+ final class HistoryCodec {
+     static final int MAX_ROWS = 400000;
+-    static final int MAX_LINE = 600;
++    static final int MAX_LINE = 1024;
+     static final long DAY_MS = 86_400_000L;
+     static final long HOUR_MS = 3_600_000L;
+ 
+@@ -49,6 +56,11 @@ final class HistoryCodec {
      }
  
      static String encode(TreeMap<Integer, List<DataMapStore.Row>> days) {
@@ -358,20 +572,28 @@ index 3775f68..78d9091 100644
          StringBuilder sb = new StringBuilder("datamap-history\t1\n");
          for (Map.Entry<Integer, List<DataMapStore.Row>> d : days.entrySet()) {
              sb.append("day\t").append(d.getKey()).append('\n');
-@@ -60,12 +67,25 @@ final class HistoryCodec {
-                         .append(r.key).append('\t').append(toHour(r.firstWall)).append('\t')
-                         .append(toHour(r.lastWall)).append('\t').append(r.count).append('\t')
-                         .append(r.fg).append('\t').append(r.bg).append('\t')
+@@ -56,16 +68,29 @@ final class HistoryCodec {
+                 if (bad(r.pkg) || bad(r.key)) {
+                     throw new IllegalArgumentException("a tab or a line break in a field");
+                 }
+-                sb.append("row\t").append(r.uid).append('\t').append(r.pkg).append('\t')
+-                        .append(r.key).append('\t').append(toHour(r.firstWall)).append('\t')
+-                        .append(toHour(r.lastWall)).append('\t').append(r.count).append('\t')
+-                        .append(r.fg).append('\t').append(r.bg).append('\t')
 -                        .append(r.viaDns ? 1 : 0).append('\n');
-+                        .append(r.viaDns ? 1 : 0);
++                String line = "row\t" + r.uid + '\t' + r.pkg + '\t' + r.key + '\t' + toHour(r.firstWall) + '\t'
++                        + toHour(r.lastWall) + '\t' + r.count + '\t' + r.fg + '\t' + r.bg + '\t' + (r.viaDns ? 1 : 0);
 +                ServerPlace p = r.place;
-+                if (withPlaces && p != null && p.known() && clean(p.country) && clean(p.city)
-+                        && clean(p.operator)) {
-+                    sb.append('\t').append(p.kind).append('\t').append(p.country).append('\t').append(p.city)
-+                            .append('\t').append(p.lat).append('\t').append(p.lon).append('\t').append(p.asn)
-+                            .append('\t').append(p.operator);
++                if (withPlaces && p != null && p.known() && clean(p.country) && clean(p.city) && clean(p.operator)) {
++                    String placed = line + '\t' + p.kind + '\t' + p.country + '\t' + p.city + '\t' + p.lat + '\t' + p.lon
++                            + '\t' + Integer.toUnsignedString(p.asn) + '\t' + p.operator;
++                    if (placed.length() <= MAX_LINE) {
++                        line = placed;
++                    }
 +                }
-+                sb.append('\n');
++                if (line.length() <= MAX_LINE) {
++                    sb.append(line).append('\n');
++                }
              }
          }
          return sb.toString();
@@ -385,7 +607,7 @@ index 3775f68..78d9091 100644
      private static boolean bad(String s) {
          return s == null || s.isEmpty() || s.indexOf('\t') >= 0 || s.indexOf('\n') >= 0
                  || s.indexOf('\r') >= 0;
-@@ -100,7 +120,7 @@ final class HistoryCodec {
+@@ -100,7 +125,7 @@ final class HistoryCodec {
                          current = new ArrayList<>();
                          days.put(day, current);
                      }
@@ -394,7 +616,7 @@ index 3775f68..78d9091 100644
                      if (++rows > MAX_ROWS) {
                          throw new FormatException("too many rows");
                      }
-@@ -111,9 +131,22 @@ final class HistoryCodec {
+@@ -111,9 +136,22 @@ final class HistoryCodec {
                              || !(f[9].equals("0") || f[9].equals("1"))) {
                          throw new FormatException("bad row");
                      }
@@ -409,7 +631,7 @@ index 3775f68..78d9091 100644
 +                        if (Float.isNaN(lat) || Float.isInfinite(lat) || Float.isNaN(lon) || Float.isInfinite(lon)) {
 +                            throw new FormatException("bad coordinates");
 +                        }
-+                        place = new ServerPlace(kind, f[11], f[12], lat, lon, Integer.parseInt(f[15]), f[16]);
++                        place = new ServerPlace(kind, f[11], f[12], lat, lon, Integer.parseUnsignedInt(f[15]), f[16]);
 +                    }
                      current.add(new DataMapStore.Row(Integer.parseInt(f[1]), f[2], f[3],
                              Long.parseLong(f[4]), Long.parseLong(f[5]), count, fg, bg,
@@ -418,7 +640,7 @@ index 3775f68..78d9091 100644
                  } else {
                      throw new FormatException("unexpected record");
                  }
-@@ -154,7 +187,7 @@ final class HistoryCodec {
+@@ -154,7 +192,7 @@ final class HistoryCodec {
              int fg = Math.max(0, r.fg - b.fg);
              int bg = Math.max(0, r.bg - b.bg);
              out.add(new DataMapStore.Row(r.uid, r.pkg, r.key, Math.max(r.firstWall, switchedOnWall), r.lastWall,
@@ -427,7 +649,7 @@ index 3775f68..78d9091 100644
          }
          return out;
      }
-@@ -186,7 +219,8 @@ final class HistoryCodec {
+@@ -186,7 +224,8 @@ final class HistoryCodec {
                  } else {
                      merged.put(k, new DataMapStore.Row(r.uid, r.pkg, r.key,
                              Math.min(m.firstWall, r.firstWall), Math.max(m.lastWall, r.lastWall),
@@ -439,10 +661,10 @@ index 3775f68..78d9091 100644
          }
 diff --git a/services/core/java/com/android/server/datamap/IpMap.java b/services/core/java/com/android/server/datamap/IpMap.java
 new file mode 100644
-index 0000000..c93cc8f
+index 0000000..fc24894
 --- /dev/null
 +++ b/services/core/java/com/android/server/datamap/IpMap.java
-@@ -0,0 +1,369 @@
+@@ -0,0 +1,379 @@
 +// SPDX-License-Identifier: Apache-2.0
 +package com.android.server.datamap;
 +
@@ -505,7 +727,7 @@ index 0000000..c93cc8f
 +        mBuf.order(java.nio.ByteOrder.BIG_ENDIAN);
 +        int size = mBuf.limit();
 +        if (size < HEADER || mBuf.get(0) != 'D' || mBuf.get(1) != 'M' || mBuf.get(2) != 'I' || mBuf.get(3) != 'P'
-+                || mBuf.getShort(4) != 1) {
++                || mBuf.getShort(4) != 1 || mBuf.getShort(6) != 0) {
 +            throw new FormatException("not an ipmap file");
 +        }
 +        long end = HEADER;
@@ -701,7 +923,7 @@ index 0000000..c93cc8f
 +
 +    /**
 +     * @return {4, address} or {6, first 64 bits}, or null for anything that is not an IP address literal. An IPv4-mapped
-+     *         IPv6 address is an IPv4 address. No name is ever resolved.
++     *         IPv6 address and an address of the NAT64 prefix 64:ff9b::/96 are IPv4 addresses. No name is ever resolved.
 +     */
 +    static long[] parse(String text) {
 +        if (text == null || text.isEmpty() || text.length() > 64) {
@@ -710,7 +932,12 @@ index 0000000..c93cc8f
 +        String s = text;
 +        int zone = s.indexOf('%');
 +        if (zone >= 0) {
++            // A zone id (RFC 4007) belongs to an IPv6 address, is not empty, and is dropped: it names an interface,
++            // never a host. Anything else with a '%' is not an address.
 +            s = s.substring(0, zone);
++            if (zone == text.length() - 1 || text.indexOf('%', zone + 1) >= 0 || s.indexOf(':') < 0) {
++                return null;
++            }
 +        }
 +        if (s.indexOf(':') < 0) {
 +            long v4 = parse4(s);
@@ -721,6 +948,10 @@ index 0000000..c93cc8f
 +            return null;
 +        }
 +        if (g[0] == 0 && g[1] == 0 && g[2] == 0 && g[3] == 0 && g[4] == 0 && g[5] == 0xFFFF) {
++            return new long[] {4, ((long) g[6] << 16) | g[7]};
++        }
++        if (g[0] == 0x64 && g[1] == 0xFF9B && g[2] == 0 && g[3] == 0 && g[4] == 0 && g[5] == 0) {
++            // 64:ff9b::/96 (RFC 6052) is how a NAT64 network shows an IPv4 server to an IPv6-only phone
 +            return new long[] {4, ((long) g[6] << 16) | g[7]};
 +        }
 +        long hi = ((long) g[0] << 48) | ((long) g[1] << 32) | ((long) g[2] << 16) | g[3];
@@ -799,7 +1030,8 @@ index 0000000..c93cc8f
 +            }
 +            int v = 0;
 +            for (int k = 0; k < part.length(); k++) {
-+                int d = Character.digit(part.charAt(k), 16);
++                char c = part.charAt(k);   // ASCII only: Character.digit also takes the digits of other scripts
++                int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
 +                if (d < 0) {
 +                    return null;
 +                }
@@ -921,14 +1153,18 @@ index b90ec5c..1a8ef65 100644
 +    }
  }
 diff --git a/services/core/java/com/android/server/datamap/UserSettings.java b/services/core/java/com/android/server/datamap/UserSettings.java
-index f28f6a6..e082aee 100644
+index f28f6a6..071775d 100644
 --- a/services/core/java/com/android/server/datamap/UserSettings.java
 +++ b/services/core/java/com/android/server/datamap/UserSettings.java
-@@ -13,14 +13,21 @@ final class UserSettings {
+@@ -13,14 +13,25 @@ final class UserSettings {
      final boolean collecting;
      final boolean history;
      final int days;
-+    /** The history also keeps the hosting country, city and operator of a service (never an address). */
++    /**
++     * The history also keeps the hosting country, city and operator of a service (never an address). Not part of the
++     * settings text: the service keeps this choice in a file of its own, so that a build that does not know it reads
++     * the settings file exactly as before.
++     */
 +    final boolean serverHistory;
  
      UserSettings(boolean collecting, boolean history, int days) {
@@ -946,12 +1182,13 @@ index f28f6a6..e082aee 100644
      }
  
      static UserSettings defaults() {
-@@ -37,20 +44,24 @@ final class UserSettings {
+@@ -36,16 +47,21 @@ final class UserSettings {
+         return s != null && s.collecting;
      }
  
++    /** Whether the settings text would hold nothing but the defaults: then there is no file. */
      boolean isDefault() {
--        return collecting && !history && days == DEFAULT_DAYS;
-+        return collecting && !history && days == DEFAULT_DAYS && !serverHistory;
+         return collecting && !history && days == DEFAULT_DAYS;
      }
  
      UserSettings withCollecting(boolean value) {
@@ -969,36 +1206,12 @@ index f28f6a6..e082aee 100644
      }
  
      String encode() {
-         return "datamap-settings\t1\ncollecting\t" + (collecting ? 1 : 0) + "\nhistory\t"
--                + (history ? 1 : 0) + "\ndays\t" + days + "\n";
-+                + (history ? 1 : 0) + "\ndays\t" + days + (serverHistory ? "\nserverHistory\t1" : "") + "\n";
-     }
- 
-     /** An unreadable or unknown file gives the defaults: it never stops the service. */
-@@ -58,6 +69,7 @@ final class UserSettings {
-         boolean collecting = true;
-         boolean history = false;
-         int days = DEFAULT_DAYS;
-+        boolean serverHistory = false;
-         boolean header = false;
-         for (String line : text.split("\n", -1)) {
-             if (line.isEmpty()) {
-@@ -85,6 +97,9 @@ final class UserSettings {
-                     case "days":
-                         days = Integer.parseInt(f[1]);
-                         break;
-+                    case "serverHistory":
-+                        serverHistory = flag(f[1]);
-+                        break;
-                     default:
-                         return defaults();
-                 }
-@@ -95,7 +110,7 @@ final class UserSettings {
+@@ -95,7 +111,7 @@ final class UserSettings {
          if (!header || days < MIN_DAYS || days > MAX_DAYS) {
              return defaults();
          }
 -        return new UserSettings(collecting, history, days);
-+        return new UserSettings(collecting, history, days, serverHistory);
++        return new UserSettings(collecting, history, days, false);
      }
  
      private static boolean flag(String s) {
