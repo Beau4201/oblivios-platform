@@ -64,10 +64,12 @@ final class SettingsPage {
         // Recording
         Widgets.Card rec = w.card();
         final Controls.Switch collect = new Controls.Switch(ds, data.collecting);
+        collect.setContentDescription(ctx.getString(R.string.settings_collect));
         collect.setOnCheckedChangeListener((b, on) -> actions.setCollecting(on));
         rec.add(w.row(tile(R.drawable.ic_eye, false), ctx.getString(R.string.settings_collect),
                 new Object[] {ctx.getString(R.string.settings_collect_summary)}, collect, true, null));
         final Controls.Switch history = new Controls.Switch(ds, data.historyOn);
+        history.setContentDescription(ctx.getString(R.string.settings_history));
         rec.add(w.row(tile(R.drawable.ic_hist, false), ctx.getString(R.string.settings_history),
                 new Object[] {ctx.getString(R.string.settings_history_summary)}, history, true, null));
         final int stored = data.historyDays;

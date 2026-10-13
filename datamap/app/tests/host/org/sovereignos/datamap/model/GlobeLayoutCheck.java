@@ -41,7 +41,15 @@ public final class GlobeLayoutCheck {
         // the sheet: 422 dp, or the height less 60 when it is taller; never taller than the screen
         near(422, GlobeLayout.sheetHeightDp(828, false), "sheet");
         near(768, GlobeLayout.sheetHeightDp(828, true), "tall sheet");
-        near(422, GlobeLayout.sheetHeightDp(450, true), "tall never shrinks the sheet");
+        near(390, GlobeLayout.sheetHeightDp(450, true), "tall never goes above the screen, even below 482 dp");
+        near(0, GlobeLayout.sheetHeightDp(40, true), "no negative height");
+        // full screen: the globe also fits the height (a landscape phone, split screen)
+        near(104, GlobeLayout.of(900, 300, true, 1f).radius, "full screen in a low window: (300 - 76) / 2 - 8");
+        near(198, GlobeLayout.of(412, 828, true, 1f).radius, "a tall window keeps 198");
+        // between two layouts both numbers move
+        GlobeLayout lo = GlobeLayout.lerp(GlobeLayout.of(412, 828, false, 1f), GlobeLayout.of(412, 828, true, 1f), 0.5f);
+        near(284, lo.centerY, "lerp centre");
+        near(179, lo.radius, "lerp radius");
         near(340, GlobeLayout.sheetHeightDp(400, false), "a short screen: the sheet leaves 60 at the top");
         System.out.println("PASS GlobeLayoutCheck");
     }

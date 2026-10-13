@@ -30,7 +30,9 @@ public final class Hits {
 
     /** @return the id of the place, or null */
     public static String pick(float x, float y, List<Card> cards, List<Point> points) {
-        for (Card c : cards) {
+        // the cards are listed in the order they are drawn; the last one is on top
+        for (int i = cards.size() - 1; i >= 0; i--) {
+            Card c = cards.get(i);
             if (GlobeMath.tappable(c.alpha) && x >= c.left && x <= c.right && y >= c.top && y <= c.bottom) {
                 return c.id;
             }

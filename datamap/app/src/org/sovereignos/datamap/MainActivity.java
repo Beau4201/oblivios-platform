@@ -22,6 +22,7 @@ import com.android.internal.datamap.IDataMapService;
 
 import org.sovereignos.datamap.model.AtlasData;
 import org.sovereignos.datamap.model.AtlasState;
+import org.sovereignos.datamap.model.CompanyList;
 import org.sovereignos.datamap.model.LandData;
 import org.sovereignos.datamap.model.MapModel;
 
@@ -73,6 +74,9 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     private MapTab mMap;
     private final ScrollView[] mScrolls = new ScrollView[4];
     private FrameLayout mDetail;
+    private ScrollView mDetailBody;
+    /** The menu or the question that stands over the screen, or null. */
+    private View mOverlay;
     private TabBar mTabBar;
     private int mDetailKind = DETAIL_NONE;
     private String mDetailId = "";
@@ -96,8 +100,8 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
             }
             int[] f = saved.getIntArray(STATE_FILTER);
             if (f != null && f.length == 2) {
-                mFilter.type = f[0];
-                mFilter.sort = f[1];
+                mFilter.type = CompanyList.validType(f[0]);
+                mFilter.sort = f[1] >= CompanyList.APPS && f[1] <= CompanyList.COUNTRY ? f[1] : CompanyList.APPS;
             }
             boolean[] o = saved.getBooleanArray(STATE_OPEN);
             if (o != null && o.length == 2) {
@@ -144,10 +148,12 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         mContent.addView(mTabBar, TabBar.params(mDs));
 
         mRoot.setOnApplyWindowInsetsListener((v, insets) -> {
-            Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+            Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContent.getLayoutParams();
             lp.topMargin = bars.top;
             lp.bottomMargin = bars.bottom;
+            lp.leftMargin = bars.left;
+            lp.rightMargin = bars.right;
             mContent.setLayoutParams(lp);
             return insets;
         });
@@ -246,6 +252,11 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
                 final MapModel.Output out = MapModel.build(SnapshotMapper.toInput(snap));
                 final AtlasData data = new AtlasData(out, snap.collecting, snap.historyOn, snap.historyDays,
                         snap.nowWallMs);
+                java.util.List<String> pkgs = new java.util.ArrayList<>();
+                for (MapModel.AppRow a : out.apps) {
+                    pkgs.add(a.pkg);
+                }
+                mApps.warm(pkgs);
                 runOnUiThread(() -> apply(data));
             } catch (RemoteException | RuntimeException e) {
                 // the screen keeps what it has
@@ -304,6 +315,9 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     // ================================================================================ detail
 
     private void showDetail(int kind, String id, boolean animate) {
+        // a live refresh of the same page keeps where the reader was
+        final int keepY = !animate && mDetailBody != null && mDetailBody.isAttachedToWindow()
+                && kind == mDetailKind && id.equals(mDetailId) ? mDetailBody.getScrollY() : 0;
         mDetailKind = kind;
         mDetailId = id;
         mDetail.removeAllViews();
@@ -315,15 +329,16 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
         head.setPadding(mDs.dp(8), 0, mDs.dp(16), 0);
-        ImageViewHolder back = new ImageViewHolder(mW.iconButton(R.drawable.ic_back, getString(R.string.back), v -> closeDetail()));
-        back.view.setId(R.id.at_back);
-        head.addView(back.view, new LinearLayout.LayoutParams(mDs.dp(40), mDs.dp(40)));
+        View back = mW.iconButton(R.drawable.ic_back, getString(R.string.back), v -> closeDetail());
+        back.setId(R.id.at_back);
+        head.addView(back, new LinearLayout.LayoutParams(mDs.dp(40), mDs.dp(40)));
         head.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
         View more = mW.iconButton(R.drawable.ic_more, getString(R.string.more), v -> openMenu());
         more.setId(R.id.at_more);
         head.addView(more, new LinearLayout.LayoutParams(mDs.dp(40), mDs.dp(40)));
         column.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, mDs.dp(56)));
-        ScrollView body = new ScrollView(this);
+        final ScrollView body = new ScrollView(this);
+        mDetailBody = body;
         body.setVerticalScrollBarEnabled(false);
         body.setClipToPadding(false);
         body.setPadding(mDs.dp(16), mDs.dp(4), mDs.dp(16), mDs.dp(108));
@@ -332,19 +347,13 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         column.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         mDetail.addView(column, new FrameLayout.LayoutParams(-1, -1));
         mDetail.setVisibility(View.VISIBLE);
+        if (keepY > 0) {
+            body.post(() -> body.scrollTo(0, keepY));
+        }
         if (animate) {
             Anim.detailIn(mDs, mDetail);
         }
         updateBack();
-    }
-
-    /** A thin holder, so that the header can name the view it made. */
-    private static final class ImageViewHolder {
-        final View view;
-
-        ImageViewHolder(View v) {
-            view = v;
-        }
     }
 
     private void closeDetail() {
@@ -355,19 +364,40 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     }
 
     private void openMenu() {
-        mContent.addView(Overlays.menu(mW, mContent, 0, () -> {
+        showOverlay(Overlays.menu(mW, mContent, () -> {
             closeDetail();
             showTab(AtlasState.SETTINGS, true);
         }, () -> {
             closeDetail();
             showTab(AtlasState.MAP, true);
-        }), new FrameLayout.LayoutParams(-1, -1));
+        }));
+    }
+
+    private void showOverlay(View layer) {
+        if (mOverlay != null) {
+            mContent.removeView(mOverlay);
+        }
+        mOverlay = layer;
+        layer.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            @Override
+            public void onViewAttachedToWindow(View v) {}
+
+            @Override
+            public void onViewDetachedFromWindow(View v) {
+                if (mOverlay == v) {
+                    mOverlay = null;
+                    updateBack();
+                }
+            }
+        });
+        mContent.addView(layer, new FrameLayout.LayoutParams(-1, -1));
+        updateBack();
     }
 
     // ================================================================================== back
 
     private boolean needsBack() {
-        return mDetailKind != DETAIL_NONE || mFilterSheet != null
+        return mDetailKind != DETAIL_NONE || mFilterSheet != null || mOverlay != null
                 || (mState.tab() == AtlasState.MAP && mMap.canGoBack());
     }
 
@@ -383,7 +413,9 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     }
 
     private void onBack() {
-        if (mFilterSheet != null) {
+        if (mOverlay != null) {
+            mContent.removeView(mOverlay);
+        } else if (mFilterSheet != null) {
             mFilterSheet.dismiss();
         } else if (mDetailKind != DETAIL_NONE) {
             closeDetail();
@@ -473,9 +505,8 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
 
     @Override
     public void askDelete() {
-        mContent.addView(Overlays.dialog(mW, mContent, getString(R.string.delete_title), getString(R.string.delete_text),
-                getString(R.string.cancel), getString(R.string.delete), () -> call(IDataMapService::clear)),
-                new FrameLayout.LayoutParams(-1, -1));
+        showOverlay(Overlays.dialog(mW, mContent, getString(R.string.delete_title), getString(R.string.delete_text),
+                getString(R.string.cancel), getString(R.string.delete), () -> call(IDataMapService::clear)));
     }
 
     private interface Call {

@@ -48,6 +48,11 @@ public final class AtlasData {
         return collecting && out.apps.isEmpty();
     }
 
+    /** Whether the globe has places: with Collection off or no service it is drawn without (spec 6). */
+    public boolean showsPlaces() {
+        return available && collecting;
+    }
+
     public List<MapModel.Relation> relations() {
         return out.relations;
     }

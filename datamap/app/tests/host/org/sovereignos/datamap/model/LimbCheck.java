@@ -13,12 +13,12 @@ public final class LimbCheck {
     }
 
     public static void main(String[] args) {
-        // the rule of the design page: full to 72 degrees from the middle, then straight down to 0 at 90
+        // the rule of the design page: full to 70 degrees (spec 3, ADR-159 (8)) from the middle, then straight down to 0 at 90
         near(1.0, GlobeMath.limbAlpha(1.0), 1e-9, "the middle of the globe");
         near(1.0, at(60), 1e-9, "60 degrees is full");
-        near(1.0, at(71.9), 1e-9, "just under 72 degrees is full");
-        near(1.0, at(72), 1e-9, "72 degrees is the first angle of the fade");
-        near(0.5, at(81), 1e-9, "81 degrees is half");
+        near(1.0, at(69.9), 1e-9, "just under 70 degrees is full");
+        near(1.0, at(70), 1e-9, "70 degrees is the first angle of the fade");
+        near(0.5, at(80), 1e-9, "80 degrees is half");
         near(0.0, at(90), 1e-9, "the horizon");
         near(0.0, GlobeMath.limbAlpha(-0.3), 1e-9, "behind the globe");
         near(0.0, GlobeMath.limbAlpha(-5), 1e-9, "a depth that cannot exist");

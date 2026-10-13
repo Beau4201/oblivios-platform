@@ -61,18 +61,18 @@ final class SheetView extends FrameLayout {
         addView(column, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
-    /** The bottom inset: the body ends this far above the foot so that the tab bar can float over its last row. */
-    void setBottomPadding(int px) {
-        mScroll.setPadding(mDs.dp(16), 0, mDs.dp(16), px);
-    }
-
     /** Replaces what the sheet shows; the children rise in one after the other. */
     void setContent(View[] parts, boolean animate) {
+        // a refresh (no animation) keeps where the reader was; a new choice starts at the top
+        final int y = animate ? 0 : mScroll.getScrollY();
         mBody.removeAllViews();
         for (View v : parts) {
             mBody.addView(v);
         }
         mScroll.scrollTo(0, 0);
+        if (y > 0) {
+            mScroll.post(() -> mScroll.scrollTo(0, y));
+        }
         if (animate) {
             Anim.fadeUp(mDs, mBody);
         }

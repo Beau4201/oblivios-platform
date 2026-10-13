@@ -115,7 +115,6 @@ def build(page):
         c["sheet_top"], c["sheet_bottom"] = top, bottom
         for k in GLOBE:
             c["g_" + k] = triple(g[k]) if k == "tex" else g[k]
-        k = 1 if not light else 0   # a ternary is l ? light : dark
         pick = (lambda pair: pair[0]) if light else (lambda pair: pair[1])
         for key, pair in zip(MINI, mini):
             c["mini_" + key] = pick(pair)

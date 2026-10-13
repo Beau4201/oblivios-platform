@@ -10,6 +10,8 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityNodeProvider;
 import android.widget.CompoundButton;
 import android.widget.FrameLayout;
 
@@ -34,7 +36,8 @@ final class Controls {
             mPos = on ? 1 : 0;
             mThumb.setColor(ds.color(R.color.at_thumb));
             mThumb.setShadowLayer(ds.px(3), 0, ds.px(1), ds.color(R.color.at_shadow_thumb));
-            setLayoutParams(new android.widget.LinearLayout.LayoutParams(ds.dp(50), ds.dp(30)));
+            // 30 dp of track in a touch target of 48
+            setLayoutParams(new android.widget.LinearLayout.LayoutParams(ds.dp(50), ds.dp(48)));
             setClickable(true);
         }
 
@@ -69,15 +72,21 @@ final class Controls {
         }
 
         @Override
+        public CharSequence getAccessibilityClassName() {
+            return android.widget.Switch.class.getName();
+        }
+
+        @Override
         protected void onDraw(Canvas canvas) {
             float w = getWidth();
-            float h = getHeight();
+            float th = mDs.px(30);
+            float top = (getHeight() - th) / 2;
             mTrack.setColor(blend(mDs.color(R.color.at_swoff), mDs.color(R.color.at_sw), mPos));
-            mRect.set(0, 0, w, h);
-            canvas.drawRoundRect(mRect, h / 2, h / 2, mTrack);
+            mRect.set(0, top, w, top + th);
+            canvas.drawRoundRect(mRect, th / 2, th / 2, mTrack);
             float r = mDs.px(11);
             float x = mDs.px(4) + r + (mDs.px(24) - mDs.px(4)) * mPos;
-            canvas.drawCircle(x, h / 2, r, mThumb);
+            canvas.drawCircle(x, top + th / 2, r, mThumb);
         }
 
         private static int blend(int a, int b, float t) {
@@ -126,10 +135,65 @@ final class Controls {
                 mThumb.setShadowLayer(ds.px(3), 0, ds.px(1), 0x38142850);   // 0 1px 3px rgba(20,40,80,.22)
             }
             mText.setTypeface(Ds.face(Ds.MEDIUM));
-            mText.setTextSize(ds.px(14));
+            mText.setTextSize(ds.sp(14));
             mText.setTextAlign(Paint.Align.CENTER);
             setClickable(true);
+            setAccessibilityDelegate(new View.AccessibilityDelegate() {
+                @Override
+                public AccessibilityNodeProvider getAccessibilityNodeProvider(View host) {
+                    return mNodes;
+                }
+            });
         }
+
+        /** Each choice is a node, so that a screen reader can reach it and choose it. */
+        private final AccessibilityNodeProvider mNodes = new AccessibilityNodeProvider() {
+            @Override
+            public AccessibilityNodeInfo createAccessibilityNodeInfo(int id) {
+                if (id == View.NO_ID) {
+                    AccessibilityNodeInfo info = new AccessibilityNodeInfo(Segmented.this);
+                    onInitializeAccessibilityNodeInfo(info);
+                    for (int i = 0; i < mLabels.length; i++) {
+                        info.addChild(Segmented.this, i);
+                    }
+                    return info;
+                }
+                if (id < 0 || id >= mLabels.length) {
+                    return null;
+                }
+                AccessibilityNodeInfo info = new AccessibilityNodeInfo(Segmented.this, id);
+                info.setParent(Segmented.this);
+                info.setPackageName(getContext().getPackageName());
+                info.setClassName(android.widget.RadioButton.class.getName());
+                info.setText(mLabels[id]);
+                info.setSelected(id == mSelected);
+                info.setEnabled(true);
+                info.setFocusable(true);
+                info.setClickable(true);
+                info.setVisibleToUser(true);
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
+                float cell = (getWidth() - 2 * mDs.px(3)) / mLabels.length;
+                android.graphics.Rect r = new android.graphics.Rect(Math.round(mDs.px(3) + id * cell), 0,
+                        Math.round(mDs.px(3) + (id + 1) * cell), getHeight());
+                int[] loc = new int[2];
+                getLocationOnScreen(loc);
+                r.offset(loc[0], loc[1]);
+                info.setBoundsInScreen(r);
+                return info;
+            }
+
+            @Override
+            public boolean performAction(int id, int action, android.os.Bundle arguments) {
+                if (id >= 0 && id < mLabels.length && action == AccessibilityNodeInfo.ACTION_CLICK) {
+                    if (id != mSelected) {
+                        select(id, true);
+                        mListener.chosen(id);
+                    }
+                    return true;
+                }
+                return false;
+            }
+        };
 
         void select(int index, boolean animate) {
             if (index == mSelected) {
@@ -156,7 +220,7 @@ final class Controls {
 
         @Override
         protected void onMeasure(int widthSpec, int heightSpec) {
-            setMeasuredDimension(MeasureSpec.getSize(widthSpec), mDs.dp(42));
+            setMeasuredDimension(MeasureSpec.getSize(widthSpec), Math.round(mDs.px(42) * mDs.grow()));
         }
 
         @Override

@@ -16,7 +16,23 @@ import java.util.Set;
  * and who is joined; it never says that two companies exchange data.
  */
 public final class PlaceLinks {
+    /** Above this many lines between places only the lines of the chosen place or app are drawn (spec A4). */
+    public static final int MAX_PAIR_LINES = 12;
+
     private PlaceLinks() {}
+
+    /**
+     * Whether a line between two places is drawn.
+     *
+     * @param count how many lines the map holds
+     * @param involved whether the line has the chosen place at one end
+     */
+    public static boolean drawn(int count, boolean involved, boolean placeChosen, boolean appChosen) {
+        if (count <= MAX_PAIR_LINES) {
+            return true;
+        }
+        return placeChosen ? involved : appChosen;
+    }
 
     public static final class Pair {
         public final Places.Place a;
@@ -32,7 +48,7 @@ public final class PlaceLinks {
         }
     }
 
-    /** The other company of a relation, or null if {@code id} is neither end. */
+    /** Whether the relation joins the two companies, in either direction. */
     private static boolean joins(MapModel.Relation r, String x, String y) {
         return (r.ownerA.equals(x) && r.ownerB.equals(y)) || (r.ownerA.equals(y) && r.ownerB.equals(x));
     }
@@ -134,7 +150,7 @@ public final class PlaceLinks {
         Collections.sort(out, new Comparator<Joined>() {
             @Override
             public int compare(Joined x, Joined y) {
-                int byApps = y.apps.size() - x.apps.size();
+                int byApps = Integer.compare(y.apps.size(), x.apps.size());
                 return byApps != 0 ? byApps : x.other.owner.name.compareToIgnoreCase(y.other.owner.name);
             }
         });

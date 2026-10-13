@@ -17,7 +17,6 @@ import org.sovereignos.datamap.model.PlaceLinks;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -214,9 +213,13 @@ final class Pages {
             e.setGravity(Gravity.CENTER_VERTICAL);
             e.addView(w.stack(pkgs));
             e.addView(w.chevron(), new LinearLayout.LayoutParams(ds.dp(22), ds.dp(22)));
-            card.add(w.row(w.companyTile(co, 38), co.owner.name,
-                    new Object[] {Texts.mainType(ctx, co) + " ·", w.flag(co.owner.countryCode, 14),
-                        Texts.country(co.owner.countryCode)}, e, true, v -> nav.openCompany(co.owner.id)));
+            // a company with no known country has the type alone, not "Analytics ·"
+            Object[] second = Texts.country(co.owner.countryCode).isEmpty()
+                    ? new Object[] {Texts.mainType(ctx, co)}
+                    : new Object[] {Texts.mainType(ctx, co) + " ·", w.flag(co.owner.countryCode, 14),
+                        Texts.country(co.owner.countryCode)};
+            card.add(w.row(w.companyTile(co, 38), co.owner.name, second, e, true,
+                    v -> nav.openCompany(co.owner.id)));
         }
         if (rows.isEmpty()) {
             card.add(w.row(null, ctx.getString(R.string.no_company_matches),
@@ -237,7 +240,7 @@ final class Pages {
             off2.add(w.row(null, u.address(), new Object[] {sub}, w.stack(new ArrayList<>(u.apps)), false, null));
         }
         if (data.atlas.unplaced.isEmpty()) {
-            off2.add(w.row(null, ctx.getString(R.string.not_on_the_map), null, null, false, null));
+            off2.add(w.row(null, ctx.getString(R.string.unplaced_none), null, null, false, null));
         }
         col.addView(off2);
         col.addView(limitsNote());
@@ -417,19 +420,16 @@ final class Pages {
         for (String id : a.perCompany.keySet()) {
             rows.add(data.byOwner.get(id));
         }
-        final AtlasModel.App app = a;
-        Collections.sort(rows, new Comparator<MapModel.CompanyRow>() {
-            @Override
-            public int compare(MapModel.CompanyRow x, MapModel.CompanyRow y) {
-                return app.perCompany.get(y.owner.id) - app.perCompany.get(x.owner.id);
+        // spec 4: the companies of the app grouped by type, the most connections first in each group
+        for (List<MapModel.CompanyRow> group : CompanyList.groupByType(rows, a.perCompany)) {
+            col.addView(w.h3(Texts.typeName(ctx, CompanyType.main(group.get(0).categories))));
+            Widgets.Card card = w.card();
+            for (final MapModel.CompanyRow co : group) {
+                card.add(w.companyRow(co, Texts.connections(ctx, a.perCompany.get(co.owner.id)),
+                        v -> nav.openCompany(co.owner.id)));
             }
-        });
-        Widgets.Card card = w.card();
-        for (final MapModel.CompanyRow co : rows) {
-            card.add(w.companyRow(co, Texts.connections(ctx, a.perCompany.get(co.owner.id)),
-                    v -> nav.openCompany(co.owner.id)));
+            col.addView(card);
         }
-        col.addView(card);
         col.addView(limitsNote());
         return col;
     }

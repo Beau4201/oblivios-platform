@@ -37,6 +37,9 @@ public final class GlobeLayout {
         float hd = heightPx / density;
         float cy = fullScreen ? (hd - FS_FREE_BELOW_DP) / 2 : TOP_DP;
         float r = Math.min(fullScreen ? FS_RADIUS_DP : RADIUS_DP, wd / 2 - 8);
+        if (fullScreen) {
+            r = Math.min(r, (hd - FS_FREE_BELOW_DP) / 2 - 8);
+        }
         return new GlobeLayout(cy * density, Math.max(r * density, 1f));
     }
 
@@ -54,9 +57,9 @@ public final class GlobeLayout {
         return CONTROL_TOP_DP[control] + (fullScreen ? FS_CONTROL_SHIFT_DP : 0);
     }
 
-    /** The height of the sheet over the map in dp: 422, or the screen less 60 when tall, never above the screen. */
+    /** The height of the sheet over the map in dp: 422, or the screen less 60 when tall; never above the screen. */
     public static float sheetHeightDp(float screenHeightDp, boolean tall) {
-        float cap = screenHeightDp - SHEET_TOP_MARGIN_DP;
-        return tall ? Math.max(SHEET_DP, cap) : Math.min(SHEET_DP, cap);
+        float cap = Math.max(0f, screenHeightDp - SHEET_TOP_MARGIN_DP);
+        return tall ? cap : Math.min(SHEET_DP, cap);
     }
 }

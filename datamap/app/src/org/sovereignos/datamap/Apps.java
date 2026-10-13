@@ -9,7 +9,6 @@ import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,8 +19,12 @@ import java.util.Map;
 final class Apps {
     private final Context mContext;
     private final PackageManager mPm;
-    private final Map<String, String> mLabels = new HashMap<>();
-    private final Map<String, Boolean> mInstalled = new HashMap<>();
+    // read on the main thread and warmed on the reader thread, so the maps are concurrent
+    private final Map<String, String> mLabels = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Boolean> mInstalled = new java.util.concurrent.ConcurrentHashMap<>();
+    /** The themed icon of each package once loaded; a package with no icon is in {@code mNoIcon}. */
+    private final Map<String, Drawable> mIcons = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Set<String> mNoIcon = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     Apps(Context context) {
         mContext = context;
@@ -80,15 +83,34 @@ final class Apps {
      * no icon at all gives null, so that the caller draws the initials and not the platform's default robot.
      */
     Drawable icon(String pkg) {
-        if ("android".equals(pkg) || !isInstalled(pkg)) {
-            return null;
+        Drawable themed = mIcons.get(pkg);
+        if (themed == null) {
+            if (mNoIcon.contains(pkg) || "android".equals(pkg) || !isInstalled(pkg)) {
+                return null;
+            }
+            try {
+                ApplicationInfo info = mPm.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0));
+                Drawable raw = info.icon != 0 ? mPm.getApplicationIcon(pkg) : launcherIcon(pkg);
+                // C13 (MAP-014): the launcher's themed icon where the app has a monochrome layer
+                themed = raw == null ? null : ThemedIcons.of(mContext, raw);
+            } catch (PackageManager.NameNotFoundException e) {
+                themed = null;
+            }
+            if (themed == null) {
+                mNoIcon.add(pkg);
+                return null;
+            }
+            mIcons.put(pkg, themed);
         }
-        try {
-            ApplicationInfo info = mPm.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0));
-            Drawable raw = info.icon != 0 ? mPm.getApplicationIcon(pkg) : launcherIcon(pkg);
-            return raw == null ? null : AppIcons.fullBleed(raw);
-        } catch (PackageManager.NameNotFoundException e) {
-            return null;
+        // a copy for each caller: bounds and alpha are the caller's own
+        return AppIcons.fullBleed(themed);
+    }
+
+    /** Loads the labels and icons of these packages now, so that the screens do not do it while they are built. */
+    void warm(java.util.Collection<String> packages) {
+        for (String pkg : packages) {
+            label(pkg);
+            icon(pkg);
         }
     }
 

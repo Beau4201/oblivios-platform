@@ -18,7 +18,7 @@ final class Overlays {
     private Overlays() {}
 
     /** {@code #menu}: two entries, 190 dp wide or more, that scale in from the top right corner in 160 ms. */
-    static View menu(final Widgets w, final FrameLayout host, int topInsetDp, final Runnable onSettings,
+    static View menu(final Widgets w, final FrameLayout host, final Runnable onSettings,
             final Runnable onMap) {
         final Ds ds = w.ds;
         final FrameLayout layer = new FrameLayout(ds.ctx);

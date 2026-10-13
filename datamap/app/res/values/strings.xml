@@ -4,8 +4,8 @@
 <resources>
     <string name="app_name">Atlas</string>
     <string name="app_system">System</string>
-    <string name="service_missing_title">Atlas cannot reach its service</string>
-    <string name="service_missing">The Atlas service is not available to this app.</string>
+    <string name="service_missing_title">The data service cannot be reached</string>
+    <string name="service_missing">The service that keeps the connections is not available to this app.</string>
 
     <string name="tab_map">Map</string>
     <string name="tab_apps">Apps</string>
@@ -52,6 +52,7 @@
     <string name="fact_country">Country</string>
     <string name="fact_type">Type</string>
     <string name="not_on_the_map">Not on the map</string>
+    <string name="unplaced_none">Every address Atlas saw has a known owner.</string>
     <string name="owner_unknown_line">%1$s, owner unknown</string>
     <string name="address_no_lookup">No name lookup, owner unknown</string>
     <string name="not_in_list">Not in the list yet, owner unknown</string>
@@ -99,7 +100,7 @@
     <string name="data_sources">Company data: AdGuard Companies DB (CC BY-SA 4.0, built on whotracks.me, CC BY 4.0) and Wikidata (CC0), with facts from company filings. See NOTICE in the classifier.</string>
 
     <string name="delete_title">Delete everything collected?</string>
-    <string name="delete_text">The history on this phone is removed. This cannot be undone.</string>
+    <string name="delete_text">The history and the counts on this phone are removed. This cannot be undone.</string>
     <string name="cancel">Cancel</string>
     <string name="delete">Delete</string>
 
@@ -158,9 +159,5 @@
     <plurals name="n_days">
         <item quantity="one">%d day</item>
         <item quantity="other">%d days</item>
-    </plurals>
-    <plurals name="n_invalid">
-        <item quantity="one">%d name was refused as not a valid host name.</item>
-        <item quantity="other">%d names were refused as not valid host names.</item>
     </plurals>
 </resources>

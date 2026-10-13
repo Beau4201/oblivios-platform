@@ -97,7 +97,7 @@ public final class AtlasModel {
         Collections.sort(m.withCompanies, new Comparator<App>() {
             @Override
             public int compare(App x, App y) {
-                int byConnections = y.connections - x.connections;
+                int byConnections = Integer.compare(y.connections, x.connections);
                 return byConnections != 0 ? byConnections : x.pkg.compareTo(y.pkg);
             }
         });

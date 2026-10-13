@@ -16,7 +16,7 @@ public final class GlobeMath {
     public static final double MAX_ZOOM = 2.4;
 
     /** A place is fully visible up to this angle from the view centre and fades to nothing at the horizon (90). */
-    public static final double LIMB_FULL_DEG = 72.0;
+    public static final double LIMB_FULL_DEG = 70.0;
 
     /** x to the right and y up, in units of the globe radius; depth toward the viewer. */
     public static final class P {

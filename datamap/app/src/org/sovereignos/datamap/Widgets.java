@@ -35,8 +35,6 @@ final class Widgets {
         this.apps = apps;
     }
 
-    static final LinearLayout.LayoutParams MATCH_WRAP =
-            new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 
     LinearLayout.LayoutParams wrap() {
         return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -58,7 +56,9 @@ final class Widgets {
             lp.setMarginStart(ds.dp(10));
             t.addView(end, lp);
         }
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ds.dp(52));
+        t.setMinimumHeight(ds.dp(52));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.bottomMargin = ds.dp(18);
         t.setLayoutParams(lp);
         return t;
@@ -421,9 +421,10 @@ final class Widgets {
             }
             mRing.setColor(ds.color(R.color.at_card));
             mText.setTypeface(Ds.face(Ds.MEDIUM));
-            mText.setTextSize(ds.px(12));
+            mText.setTextSize(ds.sp(12));
             mText.setColor(ds.color(R.color.at_onv));
             setId(R.id.at_tile);
+            setContentDescription(Texts.apps(ds.ctx, pkgs.size()));
         }
 
         @Override
@@ -571,7 +572,9 @@ final class Widgets {
             LinearLayout.LayoutParams tp = wrap();
             tp.setMarginStart(ds.dp(6));
             c.addView(ds.text(chip, 13, Ds.MEDIUM, R.color.at_on, 18), tp);
-            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ds.dp(28));
+            c.setMinimumHeight(ds.dp(28));
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
             cp.topMargin = ds.dp(8);
             t.addView(c, cp);
         }
@@ -642,7 +645,9 @@ final class Widgets {
             b.setBackground(ds.box(R.color.at_acc, 20, 0));
             b.setClickable(true);
             b.setOnClickListener(click);
-            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ds.dp(40));
+            b.setMinimumHeight(ds.dp(40));
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
             bp.topMargin = ds.dp(14);
             e.addView(b, bp);
         }

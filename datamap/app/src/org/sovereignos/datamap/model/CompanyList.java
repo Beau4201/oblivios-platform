@@ -35,7 +35,7 @@ public final class CompanyList {
             @Override
             public int compare(MapModel.CompanyRow x, MapModel.CompanyRow y) {
                 if (sort == APPS) {
-                    int byApps = y.apps.size() - x.apps.size();
+                    int byApps = Integer.compare(y.apps.size(), x.apps.size());
                     if (byApps != 0) {
                         return byApps;
                     }
@@ -61,6 +61,42 @@ public final class CompanyList {
             }
         }
         return n;
+    }
+
+    /** A type kept in a saved filter: one of the types or all types; anything else is all types. */
+    public static int validType(int type) {
+        return type >= ALL_TYPES && type < CompanyType.COUNT ? type : ALL_TYPES;
+    }
+
+    /**
+     * The companies grouped by their main type in display order (unknown last), only the groups that are not empty;
+     * inside a group the most connections first, then by name.
+     */
+    public static List<List<MapModel.CompanyRow>> groupByType(List<MapModel.CompanyRow> rows,
+            final java.util.Map<String, Integer> weight) {
+        List<List<MapModel.CompanyRow>> groups = new ArrayList<>();
+        for (int t = 0; t < CompanyType.COUNT; t++) {
+            List<MapModel.CompanyRow> g = new ArrayList<>();
+            for (MapModel.CompanyRow r : rows) {
+                if (CompanyType.main(r.categories) == t) {
+                    g.add(r);
+                }
+            }
+            if (g.isEmpty()) {
+                continue;
+            }
+            Collections.sort(g, new Comparator<MapModel.CompanyRow>() {
+                @Override
+                public int compare(MapModel.CompanyRow x, MapModel.CompanyRow y) {
+                    Integer wx = weight.get(x.owner.id);
+                    Integer wy = weight.get(y.owner.id);
+                    int byWeight = Integer.compare(wy == null ? 0 : wy, wx == null ? 0 : wx);
+                    return byWeight != 0 ? byWeight : x.owner.name.compareToIgnoreCase(y.owner.name);
+                }
+            });
+            groups.add(g);
+        }
+        return groups;
     }
 
     /** Whether the list is not in its default state (all types, most apps first). */

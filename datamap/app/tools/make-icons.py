@@ -25,10 +25,14 @@ def symbols(src):
             for m in re.finditer(r'<symbol id="([^"]+)" viewBox="([^"]+)">(.*?)</symbol>', src, re.S)}
 
 
-def vector(size, viewport, body):
+# icons that point along the reading direction are mirrored in a right-to-left language
+MIRRORED = ("back", "chev")
+
+
+def vector(size, viewport, body, mirror=False):
     return (HEADER + '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:aapt="http://schemas.android.com/aapt"\n'
-            '    android:width="%sdp"\n    android:height="%sdp"\n    android:viewportWidth="%s"\n    android:viewportHeight="%s">\n%s</vector>\n'
-            % (size, size, viewport, viewport, body))
+            '    android:width="%sdp"\n    android:height="%sdp"\n    android:viewportWidth="%s"\n    android:viewportHeight="%s"%s>\n%s</vector>\n'
+            % (size, size, viewport, viewport, '\n    android:autoMirrored="true"' if mirror else "", body))
 
 
 def path(d, fill="#FFFFFFFF"):
@@ -59,7 +63,7 @@ def main():
         viewbox, inner = sym[key]
         if viewbox != "0 0 24 24":
             fail("%s: viewBox %s" % (key, viewbox))
-        (out / ("ic_%s.xml" % name)).write_text(vector(24, 24, path(one_path(inner, key))), encoding="utf-8")
+        (out / ("ic_%s.xml" % name)).write_text(vector(24, 24, path(one_path(inner, key)), name in MIRRORED), encoding="utf-8")
     # the outlined company icon is drawn at 95 percent: the page moves it by scale(.95) translate(.6 .6)
     viewbox, inner = sym["i-bizo"]
     m = re.search(r'<path d="([^"]+)" transform="scale\(\.95\) translate\(\.6 \.6\)"\s*/>', inner)

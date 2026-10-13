@@ -41,6 +41,24 @@ final class Ds {
         return dp * mDensity;
     }
 
+    /**
+     * The font scale for text drawn on a canvas, which the system does not scale: the user's setting, held between
+     * 0.85 and 1.3 so that a card of fixed layout still holds its two lines.
+     */
+    float textScale() {
+        return Math.max(0.85f, Math.min(1.3f, ctx.getResources().getConfiguration().fontScale));
+    }
+
+    /** {@code size} sp as pixels for a {@link android.graphics.Paint} (see {@link #textScale}). */
+    float sp(float size) {
+        return size * mDensity * textScale();
+    }
+
+    /** The height factor of things that hold text drawn on a canvas: never below 1. */
+    float grow() {
+        return Math.max(1f, textScale());
+    }
+
     int color(int res) {
         return ctx.getColor(res);
     }

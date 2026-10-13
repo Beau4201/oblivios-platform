@@ -20,6 +20,7 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
+import android.widget.Button;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeProvider;
 
@@ -39,6 +40,7 @@ import org.sovereignos.datamap.model.Rotation;
 import org.sovereignos.datamap.model.Seeded;
 import org.sovereignos.datamap.model.StartView;
 import org.sovereignos.datamap.model.UnitVectors;
+import org.sovereignos.datamap.model.Words;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -120,6 +122,12 @@ final class GlobeView extends View {
     private String mSelected;
     private List<Places.Place> mPlaces = Collections.emptyList();
     private List<PlaceLinks.Pair> mPairs = Collections.emptyList();
+    private int[] mPairA = new int[0];
+    private int[] mPairB = new int[0];
+    /** Per place, made when the data changes and not in every frame: the second line of the card, the flag, the country. */
+    private String[] mSub = new String[0];
+    private Drawable[] mFlag = new Drawable[0];
+    private String[] mCountryName = new String[0];
     private float[][] mPlaceUnit = new float[0][];
     private int[] mPlaceColor = new int[0];
     private float[] mCardW = new float[0];   // in dp, one per place
@@ -143,7 +151,6 @@ final class GlobeView extends View {
     private long mFlingTime;
     private boolean mMoving;
     private boolean mDown;
-    private float mDownX;
     private float mLastX;
     private float mLastY;
     private long mLastEvent;
@@ -157,7 +164,6 @@ final class GlobeView extends View {
     };
 
     // ---- drawing
-    private static final int MAX_PAIR_LINES = 12;
     private final Paint mP = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mText = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -201,6 +207,12 @@ final class GlobeView extends View {
     private final int cTex;
     private final int cMarkerCore;
     private final int cPri;
+    private final int cLbl;
+    private final int cLblbd;
+    private final int cShadowCard;
+    private final int cOn;
+    private final int cOnv;
+    private final int cPill;
 
     // ---- the cards and the touch: what was drawn last, in the order of the cards
     private List<Places.Place> mShownPlaces = Collections.emptyList();
@@ -231,8 +243,14 @@ final class GlobeView extends View {
         cTex = mDs.color(R.color.at_g_tex);
         cMarkerCore = mDs.color(R.color.at_marker_core);
         cPri = mDs.color(R.color.at_g_pri);
+        cLbl = mDs.color(R.color.at_lbl);
+        cLblbd = mDs.color(R.color.at_lblbd);
+        cShadowCard = mDs.color(R.color.at_shadow_card);
+        cOn = mDs.color(R.color.at_on);
+        cOnv = mDs.color(R.color.at_onv);
+        cPill = mDs.color(R.color.at_pill);
         mLogo = context.getDrawable(R.drawable.ic_logo);
-        mPin = context.getDrawable(R.drawable.ic_pin);
+        mPin = context.getDrawable(R.drawable.ic_pin).mutate();
         mPin.setTint(mDs.color(R.color.at_acc));
         mStroke.setStyle(Paint.Style.STROKE);
         mStroke.setStrokeJoin(Paint.Join.ROUND);
@@ -333,17 +351,31 @@ final class GlobeView extends View {
     }
 
     private void rebuild() {
-        mPlaces = Places.build(mData.out.companies, mApp);
+        // spec 6: with Collection off, or no service, the globe is drawn without places
+        mPlaces = mData.showsPlaces() ? Places.build(mData.out.companies, mApp) : Collections.<Places.Place>emptyList();
         mPairs = PlaceLinks.pairs(mPlaces, mData.relations(), mApp);
         int n = mPlaces.size();
         mPlaceUnit = new float[n][3];
         mPlaceColor = new int[n];
         mCardW = new float[n];
+        mSub = new String[n];
+        mFlag = new Drawable[n];
+        mCountryName = new String[n];
         for (int i = 0; i < n; i++) {
             Places.Place p = mPlaces.get(i);
             UnitVectors.of(p.lat(), p.lon(), mPlaceUnit[i]);
             mPlaceColor[i] = CompanyColors.of(p.key, mLight);
-            mCardW[i] = cardWidth(p);
+            mCountryName[i] = Texts.country(p.lead.owner.countryCode);
+            mSub[i] = Words.join(" · ", mCountryName[i], Texts.apps(getContext(), p.apps.size()));
+            mFlag[i] = Flags.of(getContext(), p.lead.owner.countryCode);
+            mCardW[i] = cardWidth(i, p);
+        }
+        // the ends of each line as indices, so that a frame does not search the list
+        mPairA = new int[mPairs.size()];
+        mPairB = new int[mPairs.size()];
+        for (int k = 0; k < mPairs.size(); k++) {
+            mPairA[k] = mPlaces.indexOf(mPairs.get(k).a);
+            mPairB[k] = mPlaces.indexOf(mPairs.get(k).b);
         }
         mChipIcons.clear();
         mNodes.changed();
@@ -488,6 +520,12 @@ final class GlobeView extends View {
             if (mFling == null) {
                 return;
             }
+            if (mDs.calm()) {
+                // the animation setting was switched off during the fling: it stops where it is
+                mFling = null;
+                settleSoon();
+                return;
+            }
             long now = nanos / 1_000_000;
             double dt = mFlingTime == 0 ? Motion.FRAME_MS : Math.min(64, now - mFlingTime);
             mFlingTime = now;
@@ -537,7 +575,6 @@ final class GlobeView extends View {
             case MotionEvent.ACTION_DOWN:
                 stopMotion();
                 mDown = true;
-                mDownX = e.getX();
                 mLastX = e.getX();
                 mLastY = e.getY();
                 mLastEvent = e.getEventTime();
@@ -601,7 +638,7 @@ final class GlobeView extends View {
             c.left = mShownX[i];
             c.top = mShownY[i];
             c.right = mShownX[i] + mShownW[i];
-            c.bottom = mShownY[i] + 46 * density;
+            c.bottom = mShownY[i] + 46 * mDs.grow() * density;
             c.alpha = mShownAlpha[i];
             cards.add(c);
             Hits.Point p = new Hits.Point();
@@ -928,15 +965,16 @@ final class GlobeView extends View {
         List<float[]> chips = new ArrayList<>();
         List<PlaceLinks.Pair> chipPairs = new ArrayList<>();
         float e = (float) Motion.outCubic(mGrow);
-        for (PlaceLinks.Pair pair : mPairs) {
-            int ia = mPlaces.indexOf(pair.a);
-            int ib = mPlaces.indexOf(pair.b);
+        for (int k = 0; k < mPairs.size(); k++) {
+            PlaceLinks.Pair pair = mPairs.get(k);
+            int ia = mPairA[k];
+            int ib = mPairB[k];
             if (ia < 0 || ib < 0) {
                 continue;
             }
             boolean involved = !focus || pair.a.key.equals(mSelected) || pair.b.key.equals(mSelected);
-            // spec 11 A4: with more than MAX_PAIR_LINES pairs only the lines of a chosen place or app are drawn
-            if (mPairs.size() > MAX_PAIR_LINES && !focus && mApp == null) {
+            // spec 11 A4: with more than 12 pairs only the lines of a chosen place or app are drawn
+            if (!PlaceLinks.drawn(mPairs.size(), involved, focus, mApp != null)) {
                 continue;
             }
             boolean strong = involved && (focus || mApp != null);
@@ -959,36 +997,40 @@ final class GlobeView extends View {
         // the anchor
         drawAnchor(c, cx, ay);
         // the ring points, top to bottom
-        Integer[] idx = new Integer[n];
+        int[] idx = new int[n];
         for (int i = 0; i < n; i++) {
-            idx[i] = i;
+            // an insertion sort by the y of the point: n is small and nothing is allocated
+            int j = i;
+            while (j > 0 && py[idx[j - 1]] > py[i]) {
+                idx[j] = idx[j - 1];
+                j--;
+            }
+            idx[j] = i;
         }
-        final float[] pyf = py;
-        java.util.Arrays.sort(idx, (a, b) -> Float.compare(pyf[a], pyf[b]));
-        List<Integer> visible = new ArrayList<>();
+        int[] visible = new int[n];
+        int m = 0;
         for (int k = 0; k < n; k++) {
             int i = idx[k];
             if (alpha[i] <= 0.02f) {
                 continue;
             }
             drawRingPoint(c, px[i], py[i], mPlaceColor[i], mPlaces.get(i).key.equals(mSelected), alpha[i]);
-            visible.add(i);
+            visible[m++] = i;
         }
         for (int k = 0; k < chips.size(); k++) {
             drawChip(c, chips.get(k), chipPairs.get(k));
         }
         // the cards avoid each other and the points
-        int m = visible.size();
         float[] bx = new float[m];
         float[] by = new float[m];
         float[] bw = new float[m];
         for (int k = 0; k < m; k++) {
-            int i = visible.get(k);
+            int i = visible[k];
             bx[k] = px[i] / density;
             by[k] = py[i] / density;
             bw[k] = mCardW[i];
         }
-        float[] pos = CardPlacer.place(bx, by, bw, 46, getWidth() / density, getHeight() / density);
+        float[] pos = CardPlacer.place(bx, by, bw, 46 * mDs.grow(), getWidth() / density, getHeight() / density);
         List<Places.Place> shownPlaces = new ArrayList<>();
         float[] sx = new float[m];
         float[] sy = new float[m];
@@ -997,7 +1039,7 @@ final class GlobeView extends View {
         float[] spy = new float[m];
         float[] sa = new float[m];
         for (int k = 0; k < m; k++) {
-            int i = visible.get(k);
+            int i = visible[k];
             shownPlaces.add(mPlaces.get(i));
             sx[k] = pos[2 * k] * density;
             sy[k] = pos[2 * k + 1] * density;
@@ -1005,7 +1047,7 @@ final class GlobeView extends View {
             spx[k] = px[i];
             spy[k] = py[i];
             sa[k] = alpha[i];
-            drawCard(c, mPlaces.get(i), sx[k], sy[k], sw[k], sa[k], mPlaceColor[i]);
+            drawCard(c, i, sx[k], sy[k], sw[k], sa[k]);
         }
         mShownPlaces = shownPlaces;
         mShownX = sx;
@@ -1089,19 +1131,20 @@ final class GlobeView extends View {
         mLogo.draw(c);
         String label = getContext().getString(R.string.your_apps);
         mText.setTypeface(Ds.face(Ds.MEDIUM));
-        mText.setTextSize(mDs.px(14));
+        mText.setTextSize(mDs.sp(14));
         float w = mText.measureText(label) + mDs.px(36);
         float top = y + mDs.px(19);
-        mRect.set(x - w / 2, top, x + w / 2, top + mDs.px(26));
+        float ah = mDs.px(26) * mDs.grow();
+        mRect.set(x - w / 2, top, x + w / 2, top + ah);
         mP.setStyle(Paint.Style.FILL);
-        mP.setColor(mDs.color(R.color.at_lbl));
+        mP.setColor(cLbl);
         c.drawRoundRect(mRect, mDs.px(13), mDs.px(13), mP);
-        mStroke.setColor(mDs.color(R.color.at_lblbd));
+        mStroke.setColor(cLblbd);
         mStroke.setStrokeWidth(Math.max(1, mDs.dp(1)));
         c.drawRoundRect(mRect, mDs.px(13), mDs.px(13), mStroke);
-        mText.setColor(mDs.color(R.color.at_on));
+        mText.setColor(cOn);
         mText.setTextAlign(Paint.Align.CENTER);
-        c.drawText(label, x, top + mDs.px(13) - (mText.ascent() + mText.descent()) / 2, mText);
+        c.drawText(label, x, top + ah / 2 - (mText.ascent() + mText.descent()) / 2, mText);
         mText.setTextAlign(Paint.Align.LEFT);
     }
 
@@ -1128,9 +1171,10 @@ final class GlobeView extends View {
 
     /** On a bright line: the icon of the app that contacts both places, or a diamond for a documented relation. */
     private void drawChip(Canvas c, float[] mid, PlaceLinks.Pair pair) {
-        List<String> apps = new ArrayList<>(pair.apps);
+        String first = pair.apps.isEmpty() ? null : pair.apps.iterator().next();
+        int appCount = pair.apps.size();
         mP.setStyle(Paint.Style.FILL);
-        if (apps.isEmpty()) {
+        if (first == null) {
             c.save();
             c.translate(mid[0], mid[1]);
             c.rotate(45);
@@ -1151,10 +1195,10 @@ final class GlobeView extends View {
         mP.setShadowLayer(mDs.px(6), 0, 0, 0x80000000);
         c.drawRoundRect(mRect, mDs.px(8), mDs.px(8), mP);
         mP.clearShadowLayer();
-        Drawable icon = mChipIcons.get(apps.get(0));
-        if (icon == null && !mChipIcons.containsKey(apps.get(0))) {
-            icon = mApps.icon(apps.get(0));
-            mChipIcons.put(apps.get(0), icon);
+        Drawable icon = mChipIcons.get(first);
+        if (icon == null && !mChipIcons.containsKey(first)) {
+            icon = mApps.icon(first);
+            mChipIcons.put(first, icon);
         }
         if (icon != null) {
             c.save();
@@ -1166,16 +1210,16 @@ final class GlobeView extends View {
             icon.draw(c);
             c.restore();
         }
-        if (apps.size() > 1) {
+        if (appCount > 1) {
             float bx = mid[0] + size / 2;
             float by = mid[1] - size / 2;
             mP.setColor(cPri);
             c.drawCircle(bx, by, mDs.px(7), mP);
             mText.setTypeface(Ds.face(Ds.MEDIUM));
-            mText.setTextSize(mDs.px(10));
+            mText.setTextSize(mDs.sp(10));
             mText.setColor(0xFFFFFFFF);
             mText.setTextAlign(Paint.Align.CENTER);
-            c.drawText("+" + (apps.size() - 1), bx, by - (mText.ascent() + mText.descent()) / 2, mText);
+            c.drawText("+" + (appCount - 1), bx, by - (mText.ascent() + mText.descent()) / 2, mText);
             mText.setTextAlign(Paint.Align.LEFT);
         }
     }
@@ -1184,51 +1228,84 @@ final class GlobeView extends View {
 
     // ---- the card of a place
 
-    private String subLine(Places.Place p) {
-        String country = new java.util.Locale("", p.lead.owner.countryCode).getDisplayCountry();
-        if (country.isEmpty()) {
-            country = p.lead.owner.countryCode;
+    /** The widest a card gets, in dp; a longer name or line is cut with an ellipsis. */
+    private static final float MAX_CARD_DP = 260;
+
+    /** The name of each place as the card shows it (cut to the width of the card). */
+    private String[] mNameShown = new String[0];
+
+    /** The text cut to {@code maxPx} with an ellipsis, measured with {@code mText} as it is set. */
+    private String cut(String text, float maxPx) {
+        if (mText.measureText(text) <= maxPx) {
+            return text;
         }
-        return country + " · " + getContext().getResources().getQuantityString(R.plurals.n_apps, p.apps.size(), p.apps.size());
+        int n = mText.breakText(text, true, Math.max(0f, maxPx - mText.measureText("\u2026")), null);
+        return text.substring(0, n) + "\u2026";
     }
 
-    private float cardWidth(Places.Place p) {
+    private float cardWidth(int i, Places.Place p) {
+        if (mNameShown.length != mPlaces.size()) {
+            mNameShown = new String[mPlaces.size()];
+        }
+        float unit = mDs.px(1);
+        float plus = p.members.size() > 1 ? 32 : 0;
         mText.setTypeface(Ds.face(Ds.MEDIUM));
-        mText.setTextSize(mDs.px(14));
-        float name = mText.measureText(p.lead.owner.name) / mDs.px(1);
+        mText.setTextSize(mDs.sp(14));
+        float name = mText.measureText(p.lead.owner.name) / unit;
         mText.setTypeface(Ds.face(Ds.REGULAR));
-        mText.setTextSize(mDs.px(12));
-        float sub = mText.measureText(subLine(p)) / mDs.px(1);
-        int extra = p.members.size() - 1;
-        return (float) Math.ceil(Math.max(name + 16 + 7 + (extra > 0 ? 32 : 0), sub + 17) + 26);
+        mText.setTextSize(mDs.sp(12));
+        float sub = mText.measureText(mSub[i]) / unit;
+        // the room: 11 dp, the flag 16, a gap of 7 and 11 dp at the end; the second line has a pin of 13 and a gap of 4
+        float width = (float) Math.ceil(Math.max(name + 16 + 7 + plus, sub + 17) + 26);
+        float screen = getWidth() > 0 ? getWidth() / unit - 12 : MAX_CARD_DP;
+        float most = Math.min(MAX_CARD_DP, Math.max(120, screen));
+        mNameShown[i] = p.lead.owner.name;
+        if (width > most) {
+            width = most;
+            mText.setTypeface(Ds.face(Ds.MEDIUM));
+            mText.setTextSize(mDs.sp(14));
+            mNameShown[i] = cut(p.lead.owner.name, (width - 26 - 16 - 7 - plus) * unit);
+            mText.setTypeface(Ds.face(Ds.REGULAR));
+            mText.setTextSize(mDs.sp(12));
+            mSub[i] = cut(mSub[i], (width - 26 - 17) * unit);
+        }
+        return width;
     }
 
-    private void drawCard(Canvas c, Places.Place p, float x, float y, float w, float limb, int col) {
+    private void drawCard(Canvas c, int index, float x, float y, float w, float limb) {
+        Places.Place p = mPlaces.get(index);
+        int col = mPlaceColor[index];
         boolean selected = p.key.equals(mSelected);
         boolean dim = mSelected != null && !selected;
         float alpha = limb < 0.95f ? limb : (dim ? 0.4f : 1f);
-        float h = mDs.px(46);
-        int saved = c.saveLayerAlpha(x - mDs.px(30), y - mDs.px(30), x + w + mDs.px(30), y + h + mDs.px(40),
-                Math.round(255 * alpha));
+        float s = mDs.grow();
+        float h = mDs.px(46) * s;
+        // a layer is needed only for a card that is faded: the shadow and the text are then faded as one
+        int saved = -1;
+        if (alpha < 0.999f) {
+            saved = c.saveLayerAlpha(x - mDs.px(30), y - mDs.px(30), x + w + mDs.px(30), y + h + mDs.px(40),
+                    Math.round(255 * alpha));
+        }
         mRect.set(x, y, x + w, y + h);
         mP.setStyle(Paint.Style.FILL);
-        mP.setColor(mDs.color(R.color.at_lbl));
+        mP.setColor(cLbl);
         mP.setShadowLayer(mDs.px(selected ? 16 : 14), 0, mDs.px(selected ? 0 : 4),
-                selected ? Ds.withAlpha(col, 0.45f) : mDs.color(R.color.at_shadow_card));
+                selected ? Ds.withAlpha(col, 0.45f) : cShadowCard);
         c.drawRoundRect(mRect, mDs.px(14), mDs.px(14), mP);
         mP.clearShadowLayer();
-        mStroke.setColor(selected ? col : mDs.color(R.color.at_lblbd));
+        mStroke.setColor(selected ? col : cLblbd);
         mStroke.setStrokeWidth(Math.max(1, mDs.dp(1)));
         c.drawRoundRect(mRect, mDs.px(14), mDs.px(14), mStroke);
         if (selected) {
             mRect.inset(-mDs.px(1), -mDs.px(1));
             c.drawRoundRect(mRect, mDs.px(15), mDs.px(15), mStroke);
         }
-        float top = y + mDs.px(4.5f);
+        float top = y + mDs.px(4.5f) * s;
+        float line1 = top + mDs.px(9) * s;
         // line 1: the flag, the name and, when there are more companies, "+n"
         float fx = x + mDs.px(11);
-        float fy = top + mDs.px(1);
-        Drawable flag = Flags.of(getContext(), p.lead.owner.countryCode);
+        float fy = line1 - mDs.px(8);
+        Drawable flag = mFlag[index];
         if (flag != null) {
             c.save();
             mClipChip.rewind();
@@ -1239,33 +1316,36 @@ final class GlobeView extends View {
             c.restore();
         }
         mText.setTypeface(Ds.face(Ds.MEDIUM));
-        mText.setTextSize(mDs.px(14));
-        mText.setColor(mDs.color(R.color.at_on));
+        mText.setTextSize(mDs.sp(14));
+        mText.setColor(cOn);
         float nx = x + mDs.px(11 + 16 + 7);
-        c.drawText(p.lead.owner.name, nx, top + mDs.px(9) - (mText.ascent() + mText.descent()) / 2, mText);
+        String name = mNameShown[index];
+        c.drawText(name, nx, line1 - (mText.ascent() + mText.descent()) / 2, mText);
         int extra = p.members.size() - 1;
         if (extra > 0) {
-            float tx = nx + mText.measureText(p.lead.owner.name) + mDs.px(7);
+            float tx = nx + mText.measureText(name) + mDs.px(7);
             mText.setTypeface(Ds.face(Ds.MEDIUM));
-            mText.setTextSize(mDs.px(11));
+            mText.setTextSize(mDs.sp(11));
             String more = "+" + extra;
             float pw = mText.measureText(more) + mDs.px(12);
-            mRect.set(tx, top + mDs.px(1), tx + pw, top + mDs.px(17));
-            mP.setColor(mDs.color(R.color.at_pill));
-            c.drawRoundRect(mRect, mDs.px(8), mDs.px(8), mP);
-            mText.setColor(mDs.color(R.color.at_onv));
-            c.drawText(more, tx + mDs.px(6), top + mDs.px(9) - (mText.ascent() + mText.descent()) / 2, mText);
+            mRect.set(tx, line1 - mDs.px(8) * s, tx + pw, line1 + mDs.px(8) * s);
+            mP.setColor(cPill);
+            c.drawRoundRect(mRect, mDs.px(8) * s, mDs.px(8) * s, mP);
+            mText.setColor(cOnv);
+            c.drawText(more, tx + mDs.px(6), line1 - (mText.ascent() + mText.descent()) / 2, mText);
         }
         // line 2: a pin, the country and how many apps
-        float y2 = top + mDs.px(18 + 3);
-        mPin.setBounds(Math.round(x + mDs.px(11)), Math.round(y2 + mDs.px(1.5f)), Math.round(x + mDs.px(24)),
-                Math.round(y2 + mDs.px(14.5f)));
+        float line2 = top + mDs.px(21 + 8) * s;
+        mPin.setBounds(Math.round(x + mDs.px(11)), Math.round(line2 - mDs.px(6.5f)), Math.round(x + mDs.px(24)),
+                Math.round(line2 + mDs.px(6.5f)));
         mPin.draw(c);
         mText.setTypeface(Ds.face(Ds.REGULAR));
-        mText.setTextSize(mDs.px(12));
-        mText.setColor(mDs.color(R.color.at_onv));
-        c.drawText(subLine(p), x + mDs.px(11 + 13 + 4), y2 + mDs.px(8) - (mText.ascent() + mText.descent()) / 2, mText);
-        c.restoreToCount(saved);
+        mText.setTextSize(mDs.sp(12));
+        mText.setColor(cOnv);
+        c.drawText(mSub[index], x + mDs.px(11 + 13 + 4), line2 - (mText.ascent() + mText.descent()) / 2, mText);
+        if (saved >= 0) {
+            c.restoreToCount(saved);
+        }
     }
 
     // ====================================================================== the graticule data
@@ -1302,10 +1382,21 @@ final class GlobeView extends View {
     private final Nodes mNodes = new Nodes();
 
     private final class Nodes extends AccessibilityNodeProvider {
+        /** The virtual view that has the accessibility focus, or {@link View#NO_ID}. */
+        private int mFocus = View.NO_ID;
+
         void changed() {
             if (isAttachedToWindow()) {
                 sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
             }
+        }
+
+        /** A node is the index of the place in {@code mPlaces}, which does not change while a frame is drawn. */
+        private int shownOf(int id) {
+            if (id < 0 || id >= mPlaces.size()) {
+                return -1;
+            }
+            return mShownPlaces.indexOf(mPlaces.get(id));
         }
 
         @Override
@@ -1313,28 +1404,35 @@ final class GlobeView extends View {
             if (id == View.NO_ID) {
                 AccessibilityNodeInfo info = new AccessibilityNodeInfo(GlobeView.this);
                 onInitializeAccessibilityNodeInfo(info);
-                for (int i = 0; i < mShownPlaces.size(); i++) {
-                    info.addChild(GlobeView.this, i);
+                for (Places.Place p : mShownPlaces) {
+                    info.addChild(GlobeView.this, mPlaces.indexOf(p));
                 }
                 return info;
             }
-            if (id < 0 || id >= mShownPlaces.size()) {
+            int k = shownOf(id);
+            if (k < 0) {
                 return null;
             }
-            Places.Place p = mShownPlaces.get(id);
+            Places.Place p = mShownPlaces.get(k);
             AccessibilityNodeInfo info = new AccessibilityNodeInfo(GlobeView.this, id);
             info.setParent(GlobeView.this);
             info.setPackageName(getContext().getPackageName());
-            info.setClassName(View.class.getName());
-            String country = new java.util.Locale("", p.lead.owner.countryCode).getDisplayCountry();
+            info.setClassName(Button.class.getName());
             int apps = p.apps.size();
-            info.setContentDescription(getContext().getString(R.string.place_description, p.lead.owner.name, country,
-                    getContext().getResources().getQuantityString(R.plurals.n_apps, apps, apps)));
+            info.setContentDescription(getContext().getString(R.string.place_description, p.lead.owner.name,
+                    mCountryName[id], getContext().getResources().getQuantityString(R.plurals.n_apps, apps, apps)));
+            info.setVisibleToUser(true);
+            info.setEnabled(true);
+            info.setFocusable(true);
             info.setClickable(true);
+            info.setSelected(p.key.equals(mSelected));
+            info.setAccessibilityFocused(mFocus == id);
             info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
+            info.addAction(mFocus == id ? AccessibilityNodeInfo.AccessibilityAction.ACTION_CLEAR_ACCESSIBILITY_FOCUS
+                    : AccessibilityNodeInfo.AccessibilityAction.ACTION_ACCESSIBILITY_FOCUS);
             float d = mDs.px(1);
-            android.graphics.Rect r = new android.graphics.Rect(Math.round(mShownX[id]), Math.round(mShownY[id]),
-                    Math.round(mShownX[id] + mShownW[id]), Math.round(mShownY[id] + 46 * d));
+            android.graphics.Rect r = new android.graphics.Rect(Math.round(mShownX[k]), Math.round(mShownY[k]),
+                    Math.round(mShownX[k] + mShownW[k]), Math.round(mShownY[k] + 46 * mDs.grow() * d));
             info.setBoundsInParent(r);
             int[] loc = new int[2];
             getLocationOnScreen(loc);
@@ -1345,13 +1443,44 @@ final class GlobeView extends View {
 
         @Override
         public boolean performAction(int id, int action, Bundle arguments) {
-            if (id >= 0 && id < mShownPlaces.size() && action == AccessibilityNodeInfo.ACTION_CLICK) {
-                if (mListener != null) {
-                    mListener.onPlace(mShownPlaces.get(id).key);
-                }
-                return true;
+            int k = shownOf(id);
+            if (k < 0) {
+                return false;
             }
-            return false;
+            switch (action) {
+                case AccessibilityNodeInfo.ACTION_CLICK:
+                    if (mListener != null) {
+                        mListener.onPlace(mShownPlaces.get(k).key);
+                    }
+                    return true;
+                case AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS:
+                    if (mFocus == id) {
+                        return false;
+                    }
+                    mFocus = id;
+                    send(id, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED);
+                    return true;
+                case AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS:
+                    if (mFocus != id) {
+                        return false;
+                    }
+                    mFocus = View.NO_ID;
+                    send(id, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUS_CLEARED);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private void send(int id, int type) {
+            if (getParent() == null) {
+                return;
+            }
+            AccessibilityEvent e = new AccessibilityEvent(type);
+            e.setPackageName(getContext().getPackageName());
+            e.setClassName(Button.class.getName());
+            e.setSource(GlobeView.this, id);
+            getParent().requestSendAccessibilityEvent(GlobeView.this, e);
         }
     }
 }

@@ -38,7 +38,7 @@ final class Anim {
             return;
         }
         v.setAlpha(0f);
-        v.setTranslationX(ds.px(30));
+        v.setTranslationX(v.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? -ds.px(30) : ds.px(30));
         v.animate().alpha(1f).translationX(0f).setDuration(320).setInterpolator(Ds.STANDARD).start();
     }
 

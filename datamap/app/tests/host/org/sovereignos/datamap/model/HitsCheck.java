@@ -50,6 +50,15 @@ public final class HitsCheck {
         points.add(point("c", 150, 120, 24, 1f));
         check("a".equals(Hits.pick(150, 120, cards, points)), "the card wins over a point under it");
 
+        // cards drawn later stand on top: where two overlap, the touch chooses the one drawn last
+        List<Hits.Card> over = new ArrayList<>();
+        over.add(card("under", 0, 0, 100, 46, 1f));
+        over.add(card("top", 50, 0, 150, 46, 1f));
+        check("top".equals(Hits.pick(75, 20, over, new ArrayList<Hits.Point>())), "the card drawn last wins");
+        check("under".equals(Hits.pick(20, 20, over, new ArrayList<Hits.Point>())), "outside the overlap");
+        // a faded top card lets the touch through to the one below
+        over.get(1).alpha = 0.3f;
+        check("under".equals(Hits.pick(75, 20, over, new ArrayList<Hits.Point>())), "a faded card is skipped");
         // the nearest point wins when two reach a touch
         List<Hits.Point> two = new ArrayList<>();
         two.add(point("p", 100, 100, 24, 1f));

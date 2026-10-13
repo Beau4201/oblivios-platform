@@ -68,7 +68,7 @@ public final class Places {
         Collections.sort(sorted, new Comparator<MapModel.CompanyRow>() {
             @Override
             public int compare(MapModel.CompanyRow x, MapModel.CompanyRow y) {
-                int byApps = y.apps.size() - x.apps.size();
+                int byApps = Integer.compare(y.apps.size(), x.apps.size());
                 return byApps != 0 ? byApps : x.owner.id.compareTo(y.owner.id);
             }
         });

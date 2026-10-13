@@ -182,7 +182,7 @@ final class TabBar extends LinearLayout {
             mIcon = context.getDrawable(off[index]).mutate();
             mIconOn = context.getDrawable(on[index]).mutate();
             mText.setTypeface(Ds.face(Ds.MEDIUM));
-            mText.setTextSize(mDs.px(14));
+            mText.setTextSize(mDs.sp(14));
             mPill.setColor(mDs.color(R.color.at_pill));
             mPillRing.setStyle(Paint.Style.STROKE);
             mPillRing.setStrokeWidth(Math.max(1, mDs.dp(1)));
@@ -190,6 +190,7 @@ final class TabBar extends LinearLayout {
             setClickable(true);
             setContentDescription(mName);
             setId(R.id.at_tab);
+            setMinimumWidth(mDs.dp(52));
         }
 
         void setSelected(boolean on, boolean animate) {
@@ -197,6 +198,8 @@ final class TabBar extends LinearLayout {
                 return;
             }
             mOn = on;
+            // the state a screen reader announces ("selected"), as well as the id
+            super.setSelected(on);
             setId(on ? R.id.at_tab_selected : R.id.at_tab);
             if (mAnim != null) {
                 mAnim.cancel();
@@ -225,12 +228,6 @@ final class TabBar extends LinearLayout {
                 lp.weight = 1f + 1.1f * mP;
                 requestLayout();
             }
-        }
-
-        @Override
-        protected void onMeasure(int widthSpec, int heightSpec) {
-            super.onMeasure(widthSpec, heightSpec);
-            setMinimumWidth(mDs.dp(52));
         }
 
         @Override

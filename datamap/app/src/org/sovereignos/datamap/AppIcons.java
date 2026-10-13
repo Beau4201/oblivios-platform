@@ -20,7 +20,9 @@ final class AppIcons {
         if (icon instanceof AdaptiveIconDrawable && icon.getConstantState() != null) {
             return new Bleed((AdaptiveIconDrawable) icon.getConstantState().newDrawable().mutate());
         }
-        return icon;
+        // a copy for each caller: two views must not set the bounds of one drawable
+        Drawable.ConstantState state = icon.getConstantState();
+        return state == null ? icon : state.newDrawable().mutate();
     }
 
     private static final class Bleed extends Drawable {
