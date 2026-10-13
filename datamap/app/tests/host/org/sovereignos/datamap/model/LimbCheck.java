@@ -8,24 +8,25 @@ public final class LimbCheck {
         }
     }
 
+    private static double at(double degrees) {
+        return GlobeMath.limbAlpha(Math.cos(Math.toRadians(degrees)));
+    }
+
     public static void main(String[] args) {
+        // the rule of the design page: full to 72 degrees from the middle, then straight down to 0 at 90
         near(1.0, GlobeMath.limbAlpha(1.0), 1e-9, "the middle of the globe");
-        near(1.0, GlobeMath.limbAlpha(Math.cos(Math.toRadians(70))), 1e-9, "70 degrees is still full");
-        near(1.0, GlobeMath.limbAlpha(Math.cos(Math.toRadians(60))), 1e-9, "60 degrees is full");
-        near(0.5077, GlobeMath.limbAlpha(Math.cos(Math.toRadians(80))), 0.001, "80 degrees is about half");
-        near(0.0, GlobeMath.limbAlpha(0.0), 1e-9, "the horizon");
+        near(1.0, at(60), 1e-9, "60 degrees is full");
+        near(1.0, at(71.9), 1e-9, "just under 72 degrees is full");
+        near(1.0, at(72), 1e-9, "72 degrees is the first angle of the fade");
+        near(0.5, at(81), 1e-9, "81 degrees is half");
+        near(0.0, at(90), 1e-9, "the horizon");
         near(0.0, GlobeMath.limbAlpha(-0.3), 1e-9, "behind the globe");
-        // the gradient of the border lines uses these three radii
-        near(1.0, GlobeMath.limbAlphaAtRadius(0.94), 0.01, "radius 0.94");
-        near(0.5, GlobeMath.limbAlphaAtRadius(0.985), 0.01, "radius 0.985");
-        near(0.0, GlobeMath.limbAlphaAtRadius(1.0), 1e-9, "the rim");
-        near(0.0, GlobeMath.limbAlphaAtRadius(1.5), 1e-9, "outside the rim");
-        near(1.0, GlobeMath.limbAlphaAtRadius(0.0), 1e-9, "the middle by radius");
+        near(0.0, GlobeMath.limbAlpha(-5), 1e-9, "a depth that cannot exist");
         double prev = 2;
-        for (double rho = 0; rho <= 1.0001; rho += 0.01) {
-            double a = GlobeMath.limbAlphaAtRadius(rho);
+        for (double deg = 0; deg <= 90.001; deg += 0.5) {
+            double a = at(deg);
             if (a > prev + 1e-12) {
-                throw new AssertionError("the opacity grows toward the rim at " + rho);
+                throw new AssertionError("the opacity grows toward the horizon at " + deg);
             }
             prev = a;
         }

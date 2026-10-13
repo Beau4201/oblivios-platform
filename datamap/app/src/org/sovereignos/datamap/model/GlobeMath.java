@@ -2,16 +2,21 @@
 package org.sovereignos.datamap.model;
 
 /**
- * Orthographic projection of the globe. Pure arithmetic, no Android class, so it is checked on the host.
+ * Orthographic projection of the globe, and the limits of the view. Pure arithmetic, no Android class, so it is
+ * checked on the host.
  *
  * <p>The view direction is the +z axis. The globe is turned by a longitude {@code lon0} (about the
  * polar axis) and a latitude {@code lat0} (tilt), both in degrees. A point is visible when its
  * {@code depth} is positive.
  */
 public final class GlobeMath {
-    public static final double MAX_TILT = 80.0;
-    public static final double MIN_ZOOM = 1.0;
-    public static final double MAX_ZOOM = 6.0;
+    /** The limits of the design page: the view is tilted at most 70 degrees and zoomed from 0.8 to 2.4. */
+    public static final double MAX_TILT = 70.0;
+    public static final double MIN_ZOOM = 0.8;
+    public static final double MAX_ZOOM = 2.4;
+
+    /** A place is fully visible up to this angle from the view centre and fades to nothing at the horizon (90). */
+    public static final double LIMB_FULL_DEG = 72.0;
 
     /** x to the right and y up, in units of the globe radius; depth toward the viewer. */
     public static final class P {
@@ -43,42 +48,6 @@ public final class GlobeMath {
         return new P(x, y, depth);
     }
 
-    /**
-     * The point of the globe under a screen position, or null if the position is off the globe.
-     * Inverse of {@link #project}: {@code (x, y)} are in globe radii, y up.
-     *
-     * @return {latitude, longitude} in degrees
-     */
-    public static double[] unproject(double x, double y, double lat0Deg, double lon0Deg) {
-        double r2 = x * x + y * y;
-        if (r2 > 1.0) {
-            return null;
-        }
-        double z = Math.sqrt(1.0 - r2);
-        double lat0 = Math.toRadians(lat0Deg);
-        double sinLat = y * Math.cos(lat0) + z * Math.sin(lat0);
-        double lat = Math.asin(Math.max(-1.0, Math.min(1.0, sinLat)));
-        double dLon = Math.atan2(x, z * Math.cos(lat0) - y * Math.sin(lat0));
-        double lon = Math.toDegrees(dLon) + lon0Deg;
-        return new double[] {Math.toDegrees(lat), wrapLon(lon)};
-    }
-
-    /**
-     * A point behind the globe, moved to the rim along the line from the centre, so that an outline
-     * that passes over the horizon is filled up to the rim instead of being cut off or turned inside
-     * out. Points in front are returned unchanged. Returns {x, y}.
-     */
-    public static double[] toRim(P p) {
-        if (p.depth > 0) {
-            return new double[] {p.x, p.y};
-        }
-        double len = Math.hypot(p.x, p.y);
-        if (len < 1e-9) {
-            return new double[] {1.0, 0.0};   // straight behind the centre: any rim point will do
-        }
-        return new double[] {p.x / len, p.y / len};
-    }
-
     public static double wrapLon(double lon) {
         double w = (lon + 180.0) % 360.0;
         if (w < 0) {
@@ -95,41 +64,6 @@ public final class GlobeMath {
         return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
     }
 
-    /**
-     * Points along the great circle between two places, lifted off the surface in the middle so that a
-     * line between two far places arches over the globe instead of cutting through it. The lift is
-     * zero at both ends. Each result is {latitude, longitude, lift} with lift in globe radii.
-     */
-    public static double[][] arc(double lat1, double lon1, double lat2, double lon2, int steps,
-            double maxLift) {
-        double[] a = unit(lat1, lon1);
-        double[] b = unit(lat2, lon2);
-        double dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-        double cx = a[1] * b[2] - a[2] * b[1];
-        double cy = a[2] * b[0] - a[0] * b[2];
-        double cz = a[0] * b[1] - a[1] * b[0];
-        // atan2 of the cross product keeps the angle exact for places that are close together
-        double omega = Math.atan2(Math.sqrt(cx * cx + cy * cy + cz * cz), dot);
-        double[][] out = new double[steps + 1][];
-        for (int i = 0; i <= steps; i++) {
-            double t = (double) i / steps;
-            double[] p;
-            if (omega < 1e-9) {
-                p = a;
-            } else {
-                double s = Math.sin(omega);
-                double ka = Math.sin((1 - t) * omega) / s;
-                double kb = Math.sin(t * omega) / s;
-                p = new double[] {ka * a[0] + kb * b[0], ka * a[1] + kb * b[1], ka * a[2] + kb * b[2]};
-            }
-            double lat = Math.toDegrees(Math.asin(Math.max(-1.0, Math.min(1.0, p[2]))));
-            double lon = Math.toDegrees(Math.atan2(p[1], p[0]));
-            double lift = maxLift * Math.sin(Math.PI * t) * (omega / Math.PI);
-            out[i] = new double[] {lat, lon, lift};
-        }
-        return out;
-    }
-
     /** The angle in radians between two places as seen from the middle of the globe. */
     public static double angle(double lat1, double lon1, double lat2, double lon2) {
         double[] a = unit(lat1, lon1);
@@ -140,27 +74,19 @@ public final class GlobeMath {
         return Math.atan2(Math.sqrt(cx * cx + cy * cy + cz * cz), a[0] * b[0] + a[1] * b[1] + a[2] * b[2]);
     }
 
-    /** The zoom that shows both ends of a relation that lie {@code angle} radians apart: 1.5 to 2.6. */
-    public static double zoomForSpan(double angle) {
-        return Math.max(1.5, Math.min(2.6, 1.7 / Math.max(angle, 0.5)));
-    }
-
-    /** A marker is fully visible up to this angle from the view centre and fades to nothing at the horizon. */
-    public static final double LIMB_FULL_DEG = 70.0;
-    private static final double LIMB_FULL_DEPTH = Math.cos(Math.toRadians(LIMB_FULL_DEG));
-
-    /** The opacity of a marker from its depth: 1 up to {@link #LIMB_FULL_DEG}, 0 at the horizon. */
+    /**
+     * The opacity of a place from its depth: 1 up to {@link #LIMB_FULL_DEG} from the view centre, then falling in a
+     * straight line of the angle to 0 at the horizon.
+     */
     public static double limbAlpha(double depth) {
-        return Math.max(0.0, Math.min(1.0, depth / LIMB_FULL_DEPTH));
+        double deg = Math.toDegrees(Math.acos(Math.max(-1.0, Math.min(1.0, depth))));
+        if (deg < LIMB_FULL_DEG) {
+            return 1.0;
+        }
+        return Math.max(0.0, 1.0 - (deg - LIMB_FULL_DEG) / (90.0 - LIMB_FULL_DEG));
     }
 
-    /** The same rule by the distance from the middle of the disk in globe radii (0 centre, 1 rim). */
-    public static double limbAlphaAtRadius(double rho) {
-        double r = Math.max(0.0, Math.min(1.0, rho));
-        return limbAlpha(Math.sqrt(1.0 - r * r));
-    }
-
-    /** A faded marker is not a target: a tap only counts from this opacity. */
+    /** A faded place is not a target: a touch only counts from this opacity. */
     public static boolean tappable(double alpha) {
         return alpha >= 0.5;
     }
