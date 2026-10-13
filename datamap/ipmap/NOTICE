@@ -1,0 +1,18 @@
+ipmap.bin (the Data Map address data) contains data from these sources.
+
+- ip-location-db, https://github.com/sapics/ip-location-db: `server-country` (country of an address range) and
+  `origin-asn` (autonomous system and operator name of an address range), both published under the Public Domain
+  Dedication and License v1.0 (PDDL-1.0, https://opendatacommons.org/licenses/pddl/1-0/). The project compiles them from
+  Regional Internet Registry delegation statistics, Route Views and RIPE RIS routing archives and operators' geofeeds
+  (RFC 8805).
+- IP Geolocation by DB-IP, https://db-ip.com, "DB-IP Lite" city data, licensed under CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/), taken through ip-location-db. The file keeps the city, its coordinates
+  rounded to 0.01 degree and the country of IPv4 ranges.
+- Anycast-Census, https://github.com/UT-DACS/Anycast-Census (University of Twente), MPL-2.0
+  (https://www.mozilla.org/MPL/2.0/): the /24 and /48 prefixes that its daily census lists as anycast. Only the
+  `prefix` column is kept, as a sorted list of prefixes inside ipmap.bin; the source of that part is the file
+  `IPv4-latest.csv` and `IPv6-latest.csv` of that repository, named by SHA-256 in PINS.sha256 of the datamap package.
+- Wikidata, https://www.wikidata.org/, CC0 1.0: the coordinates of the capital of a country (or of the country's own
+  item), kept as the point where a server place that has no city is drawn.
+
+The file says where an address lies in this data. It does not say where a company is based.

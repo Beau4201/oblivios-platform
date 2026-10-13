@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// ADR-161. The read-only address data of the Data Map: country, city, ASN, operator and anycast flag of an address.
+// DataMapService reads exactly this path; a build in which the file is missing still boots, and no service then has a
+// server place.
+prebuilt_etc {
+    name: "datamap-ipmap.bin",
+    src: "ipmap.bin",
+    filename: "ipmap.bin",
+    sub_dir: "datamap",
+}
