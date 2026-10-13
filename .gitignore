@@ -1,3 +1,4 @@
 .worktrees/
 .superpowers/
 .serena/
+__pycache__/
