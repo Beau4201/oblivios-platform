@@ -124,6 +124,8 @@ public final class MapModel {
         /** False for a company that no app contacts but that a relation joins to one that is. */
         public boolean contacted;
         public final Set<String> apps = new LinkedHashSet<>();
+        /** Every category of the services of this company that were contacted, once each (the types of the company). */
+        public final Set<Integer> categories = new LinkedHashSet<>();
         public final Set<String> services = new LinkedHashSet<>();
         public final Set<String> connectedTo = new LinkedHashSet<>();
     }
@@ -144,6 +146,10 @@ public final class MapModel {
         public String serviceKey;
         public final Set<String> apps = new LinkedHashSet<>();
         public int count;
+        /** The strongest category among the contacts of this service. */
+        public int category;
+        /** Whether any app found it by a name lookup; false for an address that was connected to directly. */
+        public boolean viaDns;
     }
 
     public static final class Output {
@@ -217,6 +223,10 @@ public final class MapModel {
                 }
                 u.apps.add(e.pkg);
                 u.count += e.count;
+                if (rank(e.category) > rank(u.category)) {
+                    u.category = e.category;
+                }
+                u.viaDns |= e.viaDns;
                 continue;
             }
             CompanyRow co = companies.get(o.id);
@@ -230,6 +240,7 @@ public final class MapModel {
                 co.category = e.category;
             }
             co.apps.add(e.pkg);
+            co.categories.add(e.category);
             co.services.add(e.serviceKey);
             // A company that is also the app's publisher is not drawn as a line from the app to
             // itself; the contact stays in the app's list.

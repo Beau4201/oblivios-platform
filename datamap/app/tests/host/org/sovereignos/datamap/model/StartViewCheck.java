@@ -39,6 +39,20 @@ public final class StartViewCheck {
         double[] same = StartView.of(places(10, 20, 10, 20, 10, 20));
         near(10, same[0], "the same place three times: latitude");
         near(20, same[1], "the same place three times: longitude");
+        // the two places that lie farthest apart decide, not the average of all of them
+        double[] far = StartView.of(places(0, 0, 0, 10, 0, 60));
+        near(0, far[0], "farthest pair: latitude");
+        near(30, far[1], "farthest pair: longitude");
+        // 170 degrees apart: the middle is 85 degrees from both, so both are in front
+        double[] wide = StartView.of(places(0, -85, 0, 85, 0, 0));
+        near(0, wide[1], "170 degrees apart: longitude");
+        if (GlobeMath.angle(0, -85, wide[0], wide[1]) > Math.PI / 2 || GlobeMath.angle(0, 85, wide[0], wide[1]) > Math.PI / 2) {
+            throw new AssertionError("both places are in front");
+        }
+        // the farthest two are opposite: the average of all of them, here a third place at 90 degrees
+        double[] odd = StartView.of(places(0, 0, 0, 90, 0, 180));
+        near(0, odd[0], "opposite pair and a third: latitude");
+        near(90, odd[1], "opposite pair and a third: longitude");
         System.out.println("PASS StartViewCheck");
     }
 }
