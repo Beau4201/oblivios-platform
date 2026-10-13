@@ -315,7 +315,7 @@ final class GlobeView extends View {
         mData = data;
         rebuild();
         if (!mStartSet && !mTouched && !mPlaces.isEmpty()) {
-            double[] v = StartView.of(placeLatLons(Places.build(data.out.companies, null)));
+            double[] v = StartView.of(placeLatLons(data.out.places(null)));
             mLat = v[0];
             mLon = v[1];
             mStartSet = true;
@@ -337,7 +337,7 @@ final class GlobeView extends View {
     }
 
     String placeKeyOfCompany(String ownerId) {
-        for (Places.Place p : Places.build(mData.out.companies, null)) {
+        for (Places.Place p : mData.out.places(null)) {
             for (MapModel.CompanyRow m : p.members) {
                 if (m.owner.id.equals(ownerId)) {
                     return p.key;
@@ -361,7 +361,7 @@ final class GlobeView extends View {
 
     private void rebuild() {
         // spec 6: with Collection off, or no service, the globe is drawn without places
-        mPlaces = mData.showsPlaces() ? Places.build(mData.out.companies, mApp) : Collections.<Places.Place>emptyList();
+        mPlaces = mData.showsPlaces() ? mData.out.places(mApp) : Collections.<Places.Place>emptyList();
         mPairs = PlaceLinks.pairs(mPlaces, mData.relations(), mApp);
         int n = mPlaces.size();
         mPlaceUnit = new float[n][3];
@@ -466,7 +466,7 @@ final class GlobeView extends View {
     /** Centres between the two places of the app that lie farthest apart, so that both are in front. */
     void flyToApp(String pkg) {
         List<double[]> ll = new ArrayList<>();
-        for (Places.Place p : Places.build(mData.out.companies, pkg)) {
+        for (Places.Place p : mData.out.places(pkg)) {
             for (MapModel.CompanyRow m : p.members) {
                 if (m.apps.contains(pkg)) {
                     ll.add(new double[] {m.owner.lat, m.owner.lon});
@@ -482,7 +482,7 @@ final class GlobeView extends View {
 
     /** The start view, where the globe first looked. */
     void goHome(int ms) {
-        double[] v = StartView.of(placeLatLons(Places.build(mData.out.companies, null)));
+        double[] v = StartView.of(placeLatLons(mData.out.places(null)));
         flyTo(v[1], v[0], 1.0, null, ms);
     }
 
@@ -1072,7 +1072,8 @@ final class GlobeView extends View {
             if (alpha[i] <= 0.02f) {
                 continue;
             }
-            drawRingPoint(c, px[i], py[i], mPlaceColor[i], mPlaces.get(i).key.equals(mSelected), alpha[i]);
+            drawRingPoint(c, px[i], py[i], mPlaceColor[i], mPlaces.get(i).key.equals(mSelected), alpha[i],
+                    mPlaces.get(i).lead.server);
             visible[m++] = i;
         }
         for (int k = 0; k < chips.size(); k++) {
@@ -1206,7 +1207,8 @@ final class GlobeView extends View {
         mText.setTextAlign(Paint.Align.LEFT);
     }
 
-    private void drawRingPoint(Canvas c, float x, float y, int col, boolean selected, float alpha) {
+    /** @param hollow a server place (ADR-161): the ring alone, with nothing in it, where a company's point is filled */
+    private void drawRingPoint(Canvas c, float x, float y, int col, boolean selected, float alpha, boolean hollow) {
         float rr = mDs.px(selected ? 8 : 6);
         mP.setStyle(Paint.Style.FILL);
         mP.setShader(new RadialGradient(x, y, rr * 3, Ds.withAlpha(col, 0.55f * alpha), Ds.withAlpha(col, 0f),
@@ -1218,13 +1220,17 @@ final class GlobeView extends View {
             mStroke.setStrokeWidth(mDs.px(1.4f));
             c.drawCircle(x, y, rr + mDs.px(6), mStroke);
         }
-        mP.setColor(Ds.withAlpha(cMarkerCore, alpha));
-        c.drawCircle(x, y, rr, mP);
+        if (!hollow) {
+            mP.setColor(Ds.withAlpha(cMarkerCore, alpha));
+            c.drawCircle(x, y, rr, mP);
+        }
         mStroke.setColor(Ds.withAlpha(col, alpha));
         mStroke.setStrokeWidth(mDs.px(2.2f));
         c.drawCircle(x, y, rr, mStroke);
-        mP.setColor(Ds.withAlpha(mLight ? col : 0xFFFFFFFF, alpha));
-        c.drawCircle(x, y, rr * 0.38f, mP);
+        if (!hollow) {
+            mP.setColor(Ds.withAlpha(mLight ? col : 0xFFFFFFFF, alpha));
+            c.drawCircle(x, y, rr * 0.38f, mP);
+        }
     }
 
     /** On a bright line: the icon of the app that contacts both places, or a diamond for a documented relation. */
@@ -1295,6 +1301,11 @@ final class GlobeView extends View {
         return text.substring(0, n) + "\u2026";
     }
 
+    /** The name on a card: a company's name, or "Hosted in" and the city or country of a server place (ADR-161). */
+    private String placeName(Places.Place p) {
+        return p.lead.server ? getContext().getString(R.string.hosted_in, Texts.serverName(p.lead)) : p.lead.owner.name;
+    }
+
     private float cardWidth(int i, Places.Place p) {
         if (mNameShown.length != mPlaces.size()) {
             mNameShown = new String[mPlaces.size()];
@@ -1303,7 +1314,7 @@ final class GlobeView extends View {
         float plus = p.members.size() > 1 ? 32 : 0;
         mText.setTypeface(Ds.face(Ds.MEDIUM));
         mText.setTextSize(mDs.sp(14));
-        float name = mText.measureText(p.lead.owner.name) / unit;
+        float name = mText.measureText(placeName(p)) / unit;
         mText.setTypeface(Ds.face(Ds.REGULAR));
         mText.setTextSize(mDs.sp(12));
         float sub = mText.measureText(mSub[i]) / unit;
@@ -1311,12 +1322,12 @@ final class GlobeView extends View {
         float width = (float) Math.ceil(Math.max(name + 16 + 7 + plus, sub + 17) + 26);
         float screen = getWidth() > 0 ? getWidth() / unit - 12 : MAX_CARD_DP;
         float most = Math.min(MAX_CARD_DP, Math.max(120, screen));
-        mNameShown[i] = p.lead.owner.name;
+        mNameShown[i] = placeName(p);
         if (width > most) {
             width = most;
             mText.setTypeface(Ds.face(Ds.MEDIUM));
             mText.setTextSize(mDs.sp(14));
-            mNameShown[i] = cut(p.lead.owner.name, (width - 26 - 16 - 7 - plus) * unit);
+            mNameShown[i] = cut(placeName(p), (width - 26 - 16 - 7 - plus) * unit);
             mText.setTypeface(Ds.face(Ds.REGULAR));
             mText.setTextSize(mDs.sp(12));
             mSub[i] = cut(mSub[i], (width - 26 - 17) * unit);
@@ -1471,7 +1482,7 @@ final class GlobeView extends View {
             info.setPackageName(getContext().getPackageName());
             info.setClassName(Button.class.getName());
             int apps = p.apps.size();
-            info.setContentDescription(getContext().getString(R.string.place_description, p.lead.owner.name,
+            info.setContentDescription(getContext().getString(R.string.place_description, placeName(p),
                     mCountryName[id], getContext().getResources().getQuantityString(R.plurals.n_apps, apps, apps)));
             info.setVisibleToUser(true);
             info.setEnabled(true);

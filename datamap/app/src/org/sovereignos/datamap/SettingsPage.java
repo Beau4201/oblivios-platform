@@ -23,6 +23,8 @@ final class SettingsPage {
 
         void setHistory(boolean enabled, int days);
 
+        void setServerHistory(boolean enabled);
+
         void askDelete();
     }
 
@@ -102,6 +104,12 @@ final class SettingsPage {
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         sp.setMargins(ds.dp(12), 0, ds.dp(12), 0);
         keep.addView(seg, sp);
+        final Controls.Switch serverHistory = new Controls.Switch(ds, data.serverHistory);
+        serverHistory.setContentDescription(ctx.getString(R.string.settings_server_history));
+        serverHistory.setOnCheckedChangeListener((b, on) -> actions.setServerHistory(on));
+        keep.addView(w.row(tile(R.drawable.ic_pin, false), ctx.getString(R.string.settings_server_history),
+                new Object[] {ctx.getString(R.string.settings_server_history_summary)}, serverHistory, true, null),
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         final Controls.Collapse keepFor = new Controls.Collapse(ds, keep, data.historyOn);
         rec.add(keepFor);
         history.setOnCheckedChangeListener((b, on) -> {

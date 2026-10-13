@@ -45,6 +45,15 @@ public final class Places {
             return lead.owner.lon;
         }
 
+        /** The services of every member: for a server place, what is hosted there. */
+        public int services() {
+            Set<String> all = new LinkedHashSet<>();
+            for (MapModel.CompanyRow m : members) {
+                all.addAll(m.services);
+            }
+            return all.size();
+        }
+
         void add(MapModel.CompanyRow row) {
             members.add(row);
             apps.addAll(row.apps);

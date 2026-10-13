@@ -13,22 +13,30 @@ public final class AtlasData {
     public final boolean collecting;
     public final boolean historyOn;
     public final int historyDays;
+    /** The history also keeps the places of servers (ADR-161). */
+    public final boolean serverHistory;
     public final long nowWallMs;
     /** False when the service cannot be reached: the lists then say so instead of saying nothing was collected. */
     public final boolean available;
 
     public AtlasData(MapModel.Output out, boolean collecting, boolean historyOn, int historyDays, long nowWallMs) {
-        this(out, collecting, historyOn, historyDays, nowWallMs, true);
+        this(out, collecting, historyOn, historyDays, false, nowWallMs, true);
     }
 
-    private AtlasData(MapModel.Output out, boolean collecting, boolean historyOn, int historyDays, long nowWallMs,
-            boolean available) {
+    public AtlasData(MapModel.Output out, boolean collecting, boolean historyOn, int historyDays,
+            boolean serverHistory, long nowWallMs) {
+        this(out, collecting, historyOn, historyDays, serverHistory, nowWallMs, true);
+    }
+
+    private AtlasData(MapModel.Output out, boolean collecting, boolean historyOn, int historyDays,
+            boolean serverHistory, long nowWallMs, boolean available) {
         this.available = available;
         this.out = out;
         this.atlas = AtlasModel.of(out);
         this.collecting = collecting;
         this.historyOn = historyOn;
         this.historyDays = historyDays;
+        this.serverHistory = serverHistory;
         this.nowWallMs = nowWallMs;
         for (MapModel.CompanyRow c : out.companies) {
             byOwner.put(c.owner.id, c);
@@ -40,7 +48,7 @@ public final class AtlasData {
     }
 
     public static AtlasData unavailable() {
-        return new AtlasData(new MapModel.Output(), true, false, KeepFor.DEFAULT, 0, false);
+        return new AtlasData(new MapModel.Output(), true, false, KeepFor.DEFAULT, false, 0, false);
     }
 
     /** No app has contacted a company and nothing is waiting in the lists. */

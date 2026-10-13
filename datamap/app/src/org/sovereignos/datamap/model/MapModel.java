@@ -29,6 +29,13 @@ public final class MapModel {
     public static final int CAT_ATTRIBUTION = 5;
     public static final int CAT_SOCIAL = 6;
     public static final int CAT_IDENTITY = 7;
+    // The kinds of a server place (ADR-161); part of the Binder contract (DataMapEntry#serverKind).
+    public static final int SRV_NONE = 0;
+    public static final int SRV_CITY = 1;
+    public static final int SRV_COUNTRY = 2;
+    public static final int SRV_UNCERTAIN = 3;
+    public static final int SRV_ANYCAST = 4;
+    public static final int SRV_STEERED = 5;
 
     private MapModel() {}
 
@@ -49,6 +56,13 @@ public final class MapModel {
         public int foreground;
         public int background;
         public boolean viaDns;
+        /** What the first address of the service said (ADR-161): where the server lies, not where the company is. */
+        public int serverKind;
+        public String serverCountry = "";
+        public String serverCity = "";
+        public double serverLat;
+        public double serverLon;
+        public String serverOperator = "";
     }
 
     public static final class Owner {
@@ -128,6 +142,11 @@ public final class MapModel {
         public final Set<Integer> categories = new LinkedHashSet<>();
         public final Set<String> services = new LinkedHashSet<>();
         public final Set<String> connectedTo = new LinkedHashSet<>();
+        /** A server place (ADR-161), not a company: its owner is made up and has no relations. */
+        public boolean server;
+        /** Server places only: the apps that contacted each service, and its operator when the data names one. */
+        public final Map<String, Set<String>> appsOfService = new LinkedHashMap<>();
+        public final Map<String, String> operatorOfService = new LinkedHashMap<>();
     }
 
     /** A line from an app to a company it contacted. */
@@ -150,6 +169,11 @@ public final class MapModel {
         public int category;
         /** Whether any app found it by a name lookup; false for an address that was connected to directly. */
         public boolean viaDns;
+        /** The first thing the data said about the server of this service, or SRV_NONE. */
+        public int serverKind;
+        public String serverCountry = "";
+        public String serverCity = "";
+        public String serverOperator = "";
     }
 
     public static final class Output {
@@ -161,6 +185,15 @@ public final class MapModel {
         public final List<UnplacedService> unplacedServices = new ArrayList<>();
         public final List<String> unplacedApps = new ArrayList<>();
         public final List<Link> links = new ArrayList<>();
+        /** Where services with no known company are hosted, one row for each city or, with no city, each country. */
+        public final List<CompanyRow> serverRows = new ArrayList<>();
+
+        /** The places of the map: those of the companies, and apart from them those of the servers. */
+        public List<Places.Place> places(String onlyApp) {
+            List<Places.Place> all = Places.build(companies, onlyApp);
+            all.addAll(Places.build(serverRows, onlyApp));
+            return all;
+        }
     }
 
     // ------------------------------------------------------------------------------------ build
@@ -176,12 +209,54 @@ public final class MapModel {
         return category == CAT_CORE ? 1 : 0;
     }
 
+    /** The address of a service key that is one ({@code ip:93.184.216.34}), else the key. */
+    public static String address(String serviceKey) {
+        return serviceKey.startsWith("ip:") ? serviceKey.substring(3) : serviceKey;
+    }
+
+    /** Adds a service with no known company to the server place that its address was found in. */
+    private static void addServer(Map<String, CompanyRow> servers, Entry e) {
+        String key = e.serverKind == SRV_CITY
+                ? e.serverCountry + "|" + e.serverCity + "|" + e.serverLat + "|" + e.serverLon : e.serverCountry;
+        CompanyRow r = servers.get(key);
+        if (r == null) {
+            Owner o = new Owner();
+            o.id = "srv:" + key;
+            o.name = e.serverKind == SRV_CITY ? e.serverCity : "";
+            o.countryCode = e.serverCountry;
+            o.city = e.serverKind == SRV_CITY ? e.serverCity : "";
+            o.lat = e.serverLat;
+            o.lon = e.serverLon;
+            r = new CompanyRow();
+            r.owner = o;
+            r.contacted = true;
+            r.server = true;
+            servers.put(key, r);
+        }
+        if (rank(e.category) > rank(r.category)) {
+            r.category = e.category;
+        }
+        r.apps.add(e.pkg);
+        r.categories.add(e.category);
+        r.services.add(e.serviceKey);
+        Set<String> apps = r.appsOfService.get(e.serviceKey);
+        if (apps == null) {
+            apps = new LinkedHashSet<>();
+            r.appsOfService.put(e.serviceKey, apps);
+        }
+        apps.add(e.pkg);
+        if (!e.serverOperator.isEmpty() && !r.operatorOfService.containsKey(e.serviceKey)) {
+            r.operatorOfService.put(e.serviceKey, e.serverOperator);
+        }
+    }
+
     public static Output build(Input in) {
         Output out = new Output();
         Map<String, AppRow> apps = new LinkedHashMap<>();
         Map<String, CompanyRow> companies = new LinkedHashMap<>();
         Map<String, UnplacedService> unplaced = new LinkedHashMap<>();
         Set<String> edgeKeys = new HashSet<>();
+        Map<String, CompanyRow> servers = new LinkedHashMap<>();
 
         for (Entry e : in.entries) {
             if (HostFilter.isLocal(e.serviceKey)) {
@@ -227,6 +302,15 @@ public final class MapModel {
                     u.category = e.category;
                 }
                 u.viaDns |= e.viaDns;
+                if (u.serverKind == SRV_NONE && e.serverKind != SRV_NONE) {
+                    u.serverKind = e.serverKind;
+                    u.serverCountry = e.serverCountry;
+                    u.serverCity = e.serverCity;
+                    u.serverOperator = e.serverOperator;
+                }
+                if (e.serverKind == SRV_CITY || e.serverKind == SRV_COUNTRY) {
+                    addServer(servers, e);
+                }
                 continue;
             }
             CompanyRow co = companies.get(o.id);
@@ -313,6 +397,14 @@ public final class MapModel {
             }
         });
         out.unplacedServices.addAll(unplaced.values());
+        out.serverRows.addAll(servers.values());
+        Collections.sort(out.serverRows, new Comparator<CompanyRow>() {
+            @Override
+            public int compare(CompanyRow x, CompanyRow y) {
+                int byApps = y.apps.size() - x.apps.size();
+                return byApps != 0 ? byApps : x.owner.id.compareTo(y.owner.id);
+            }
+        });
         out.links.addAll(in.links);
         return out;
     }

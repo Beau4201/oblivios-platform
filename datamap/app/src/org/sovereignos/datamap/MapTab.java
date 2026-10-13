@@ -462,11 +462,26 @@ final class MapTab extends FrameLayout implements SheetView.Host, GlobeView.List
         }
         flags.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         View close = mW.iconButton(R.drawable.ic_close, c.getString(R.string.close), v -> deselectPlace());
-        parts.add(header(flags, Texts.join(c, names), c.getString(R.string.n_companies_n_apps,
-                Texts.companies(c, place.members.size()), Texts.apps(c, place.apps.size())), close, true));
+        if (place.lead.server) {
+            parts.add(header(flags, c.getString(R.string.hosted_in, Texts.serverName(place.lead)
+                    + (place.lead.owner.city.isEmpty() ? "" : ", " + Texts.country(place.lead.owner.countryCode))),
+                    c.getString(R.string.n_companies_n_apps, c.getResources().getQuantityString(R.plurals.n_services,
+                            place.services(), place.services()), Texts.apps(c, place.apps.size())), close, true));
+        } else {
+            parts.add(header(flags, Texts.join(c, names), c.getString(R.string.n_companies_n_apps,
+                    Texts.companies(c, place.members.size()), Texts.apps(c, place.apps.size())), close, true));
+        }
         Widgets.Card card = mW.card();
         for (final MapModel.CompanyRow co : place.members) {
-            card.add(mW.companyRow(co, Texts.apps(c, co.apps.size()), v -> mNav.openCompany(co.owner.id)));
+            if (co.server) {
+                for (String service : co.services) {
+                    String operator = co.operatorOfService.get(service);
+                    card.add(mW.row(null, MapModel.address(service), operator == null ? null : new Object[] {operator},
+                            mW.stack(new ArrayList<>(co.appsOfService.get(service))), false, null));
+                }
+            } else {
+                card.add(mW.companyRow(co, Texts.apps(c, co.apps.size()), v -> mNav.openCompany(co.owner.id)));
+            }
         }
         parts.add(card);
         List<PlaceLinks.Joined> joined = PlaceLinks.joined(place.members, mData.atlas.contacted, mData.relations());

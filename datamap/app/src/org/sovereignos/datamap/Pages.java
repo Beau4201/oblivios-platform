@@ -226,11 +226,24 @@ final class Pages {
                     new Object[] {ctx.getString(R.string.remove_filter)}, null, false, null));
         }
         col.addView(card);
+        if (!data.out.serverRows.isEmpty()) {
+            col.addView(w.h3(ctx.getString(R.string.hosted_in_title)));
+            Widgets.Card hosted = w.card();
+            for (MapModel.CompanyRow r : data.out.serverRows) {
+                hosted.add(w.row(null, ctx.getString(R.string.hosted_in, Texts.serverName(r) + (r.owner.city.isEmpty() ? ""
+                        : ", " + Texts.country(r.owner.countryCode))), new Object[] {Texts.serverSub(ctx, r)},
+                        w.stack(new ArrayList<>(r.apps)), false, null));
+            }
+            col.addView(hosted);
+        }
         col.addView(w.h3(ctx.getString(R.string.not_on_the_map)));
         Widgets.Card off2 = w.card();
         for (AtlasModel.Unplaced u : data.atlas.unplaced) {
             String sub;
-            if (u.key.startsWith("ip:") || !u.viaDns) {
+            String server = Texts.serverLine(ctx, u);
+            if (server != null) {
+                sub = server;
+            } else if (u.key.startsWith("ip:") || !u.viaDns) {
                 sub = ctx.getString(R.string.address_no_lookup);
             } else if (u.category == MapModel.CAT_UNKNOWN) {
                 sub = ctx.getString(R.string.not_in_list);

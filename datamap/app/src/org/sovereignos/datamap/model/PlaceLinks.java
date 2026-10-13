@@ -59,6 +59,9 @@ public final class PlaceLinks {
         List<Places.Place> of = new ArrayList<>();
         for (Places.Place p : places) {
             for (MapModel.CompanyRow m : p.members) {
+                if (m.server) {
+                    continue;   // a server place is joined to nothing: it is where a server lies, not a company
+                }
                 cos.add(m);
                 of.add(p);
             }

@@ -39,6 +39,11 @@ public final class AtlasModel {
         public final String key;
         public int category;
         public boolean viaDns;
+        /** What the data said about the server, for a service with no place of its own (ADR-161). */
+        public int serverKind;
+        public String serverCountry = "";
+        public String serverCity = "";
+        public String serverOperator = "";
         public final Set<String> apps = new LinkedHashSet<>();
 
         Unplaced(String key) {
@@ -47,7 +52,7 @@ public final class AtlasModel {
 
         /** The address of a service key that is one ({@code ip:93.184.216.34}), else the key. */
         public String address() {
-            return key.startsWith("ip:") ? key.substring(3) : key;
+            return MapModel.address(key);
         }
     }
 
@@ -102,9 +107,16 @@ public final class AtlasModel {
             }
         });
         for (MapModel.UnplacedService s : out.unplacedServices) {
+            if (s.serverKind == MapModel.SRV_CITY || s.serverKind == MapModel.SRV_COUNTRY) {
+                continue;   // it is on the map, as a server place
+            }
             Unplaced u = new Unplaced(s.serviceKey);
             u.category = s.category;
             u.viaDns = s.viaDns;
+            u.serverKind = s.serverKind;
+            u.serverCountry = s.serverCountry;
+            u.serverCity = s.serverCity;
+            u.serverOperator = s.serverOperator;
             u.apps.addAll(s.apps);
             m.unplaced.add(u);
         }

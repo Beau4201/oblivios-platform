@@ -37,4 +37,7 @@ interface IDataMapService {
 
     /** Deletes everything collected for the calling user, in memory and on disk. */
     void clear();
+
+    /** The history keeps the hosting country, city and operator of a service, or not (ADR-161). */
+    void setServerHistory(boolean enabled);
 }

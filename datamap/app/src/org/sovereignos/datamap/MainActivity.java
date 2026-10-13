@@ -254,7 +254,7 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
                 final DataMapSnapshot snap = s.getSnapshot(mApps.installedPackages());
                 final MapModel.Output out = MapModel.build(SnapshotMapper.toInput(snap));
                 final AtlasData data = new AtlasData(out, snap.collecting, snap.historyOn, snap.historyDays,
-                        snap.nowWallMs);
+                        snap.serverHistory, snap.nowWallMs);
                 java.util.List<String> pkgs = new java.util.ArrayList<>();
                 for (MapModel.AppRow a : out.apps) {
                     pkgs.add(a.pkg);
@@ -504,6 +504,11 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     @Override
     public void setHistory(boolean enabled, int days) {
         call(s -> s.setHistory(enabled, days));
+    }
+
+    @Override
+    public void setServerHistory(boolean enabled) {
+        call(s -> s.setServerHistory(enabled));
     }
 
     @Override

@@ -50,5 +50,11 @@ grep -q '(ImageView) ((FrameLayout) ((LinearLayout) mFullControl).getChildAt(0))
 if grep -rnE 'ThemedIcons|AppIcons|getMonochrome' "$APP/src" --include='*.java'; then
   fail "app icons must be the system's own icons (no themed or bled icons)"
 fi
+# ADR-161: a server place says where a server lies, never where a company is based, and the app has no way to open a link.
+if grep -niE '<string name="(hosted_in|hosted_in_title|server_[a-z_]+|settings_server_history[a-z_]*)">[^<]*(based|headquarter|located|home country)' "$APP/res/values/strings.xml"; then
+  fail "a server text says where a company is based or located"
+fi
+grep -q 'name="hosted_in">Hosted in ' "$APP/res/values/strings.xml" || fail "the server place text must read 'Hosted in'"
+grep -q 'IP Geolocation by DB-IP' "$APP/res/values/strings.xml" || fail "the attribution to DB-IP is gone (CC BY 4.0)"
 [ "$bad" -eq 0 ] && echo "static checks passed"
 exit "$bad"

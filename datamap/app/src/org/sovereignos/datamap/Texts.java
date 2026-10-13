@@ -24,6 +24,42 @@ final class Texts {
         return name.isEmpty() ? countryCode : name;
     }
 
+    /** "Frankfurt", or the name of the country when the place has no city. */
+    static String serverName(MapModel.CompanyRow row) {
+        return row.owner.city.isEmpty() ? country(row.owner.countryCode) : row.owner.city;
+    }
+
+    /** The line of a server place in a list: the services, and the operators the data names. */
+    static String serverSub(Context c, MapModel.CompanyRow row) {
+        List<String> operators = new ArrayList<>();
+        for (String op : row.operatorOfService.values()) {
+            if (!operators.contains(op)) {
+                operators.add(op);
+            }
+        }
+        String services = c.getResources().getQuantityString(R.plurals.n_services, row.services.size(), row.services.size());
+        return operators.isEmpty() ? services : services + " · " + (operators.size() > 2
+                ? operators.get(0) + ", " + operators.get(1) + " +" + (operators.size() - 2)
+                : join(c, operators));
+    }
+
+    /** What the data says about the server of a service that is on no place; null when it says nothing. */
+    static String serverLine(Context c, org.sovereignos.datamap.model.AtlasModel.Unplaced u) {
+        switch (u.serverKind) {
+            case MapModel.SRV_UNCERTAIN:
+                return u.serverOperator.isEmpty() ? c.getString(R.string.server_uncertain)
+                        : c.getString(R.string.server_uncertain) + " · " + u.serverOperator;
+            case MapModel.SRV_ANYCAST:
+                return u.serverOperator.isEmpty() ? c.getString(R.string.server_anycast)
+                        : c.getString(R.string.server_anycast) + " · " + u.serverOperator;
+            case MapModel.SRV_STEERED:
+                return c.getString(R.string.server_behind,
+                        u.serverOperator.isEmpty() ? c.getString(R.string.server_a_network) : u.serverOperator);
+            default:
+                return null;
+        }
+    }
+
     static String apps(Context c, int n) {
         return c.getResources().getQuantityString(R.plurals.n_apps, n, n);
     }

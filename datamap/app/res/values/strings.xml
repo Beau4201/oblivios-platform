@@ -52,6 +52,12 @@
     <string name="fact_country">Country</string>
     <string name="fact_type">Type</string>
     <string name="not_on_the_map">Not on the map</string>
+    <string name="hosted_in">Hosted in %1$s</string>
+    <string name="hosted_in_title">Hosted in</string>
+    <string name="server_uncertain">Location uncertain</string>
+    <string name="server_anycast">Anycast network</string>
+    <string name="server_behind">Behind %1$s</string>
+    <string name="server_a_network">a content network</string>
     <string name="unplaced_none">Every address Atlas saw has a known owner.</string>
     <string name="owner_unknown_line">%1$s, owner unknown</string>
     <string name="address_no_lookup">No name lookup, owner unknown</string>
@@ -83,6 +89,8 @@
     <string name="settings_collect_summary">Note which companies your apps contact</string>
     <string name="settings_history">History</string>
     <string name="settings_history_summary">Keep a daily summary</string>
+    <string name="settings_server_history">Keep server places</string>
+    <string name="settings_server_history_summary">Where services were hosted, in the summary</string>
     <string name="settings_keep_for">Keep for</string>
     <string name="settings_your_data">Your data</string>
     <string name="settings_delete">Delete everything collected</string>
@@ -97,7 +105,7 @@
     <string name="cannot_4">Services that are not in the list yet</string>
     <string name="cannot_5">Traffic sent over UDP</string>
     <string name="settings_private">Everything stays on this phone. Atlas never sends what it sees anywhere.</string>
-    <string name="data_sources">Company data: AdGuard Companies DB (CC BY-SA 4.0, built on whotracks.me, CC BY 4.0) and Wikidata (CC0), with facts from company filings. See NOTICE in the classifier.</string>
+    <string name="data_sources">Company data: AdGuard Companies DB (CC BY-SA 4.0, built on whotracks.me, CC BY 4.0) and Wikidata (CC0), with facts from company filings. See NOTICE in the classifier. Server places: country and operator from ip-location-db (PDDL), anycast prefixes from the University of Twente census (MPL-2.0), city from IP Geolocation by DB-IP (CC BY 4.0, db-ip.com).</string>
 
     <string name="delete_title">Delete everything collected?</string>
     <string name="delete_text">The history and the counts on this phone are removed. This cannot be undone.</string>
@@ -147,6 +155,10 @@
     <plurals name="n_companies">
         <item quantity="one">%d company</item>
         <item quantity="other">%d companies</item>
+    </plurals>
+    <plurals name="n_services">
+        <item quantity="one">%d service</item>
+        <item quantity="other">%d services</item>
     </plurals>
     <plurals name="n_countries">
         <item quantity="one">%d country</item>
