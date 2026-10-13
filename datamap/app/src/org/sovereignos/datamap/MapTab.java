@@ -263,6 +263,14 @@ final class MapTab extends FrameLayout implements SheetView.Host, GlobeView.List
     }
 
     @Override
+    public void onDragEnd(boolean tall) {
+        if (mState.sheetTall() != tall) {
+            mState.toggleSheet();
+        }
+        sheetHeight(true);
+    }
+
+    @Override
     public void onPlace(String key) {
         selectPlace(key);
     }
@@ -292,6 +300,7 @@ final class MapTab extends FrameLayout implements SheetView.Host, GlobeView.List
             return;
         }
         float hDp = getHeight() / mDs.px(1);
+        mSheet.setRange(mDs.dp(GlobeLayout.sheetHeightDp(hDp, false)), mDs.dp(GlobeLayout.sheetHeightDp(hDp, true)));
         mSheet.setHeightPx(mDs.dp(GlobeLayout.sheetHeightDp(hDp, mState.sheetTall())), animate);
     }
 

@@ -4,7 +4,10 @@ package org.sovereignos.datamap;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -18,16 +21,31 @@ import android.widget.ScrollView;
 final class SheetView extends FrameLayout {
     interface Host {
         void onHandle();
+
+        /** The finger lifted after a drag: the sheet is to rest tall or at its ordinary height. */
+        void onDragEnd(boolean tall);
     }
 
     private final Ds mDs;
     private final ScrollView mScroll;
     private final LinearLayout mBody;
     private ValueAnimator mHeight;
+    private final Host mHost;
+    private final int mSlop;
+    /** The two heights the sheet rests at, in pixels; a drag moves between them. */
+    private int mMinPx;
+    private int mMaxPx;
+    private boolean mDragging;
+    private boolean mFromTop;
+    private float mDownY;
+    private int mStartPx;
+    private VelocityTracker mVelocity;
 
     SheetView(Context context, Ds ds, final Host host) {
         super(context);
         mDs = ds;
+        mHost = host;
+        mSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setId(R.id.at_sheet);
         setBackground(ds.sheetBox(28));
         setClipToOutline(true);
@@ -83,6 +101,112 @@ final class SheetView extends FrameLayout {
         if (animate) {
             Anim.fadeUp(mDs, mBody);
         }
+    }
+
+    /** The ordinary and the tall height in pixels: what a drag moves between. */
+    void setRange(int minPx, int maxPx) {
+        mMinPx = minPx;
+        mMaxPx = maxPx;
+    }
+
+    private int currentPx() {
+        ViewGroup.LayoutParams lp = getLayoutParams();
+        return lp.height > 0 ? lp.height : getHeight();
+    }
+
+    /**
+     * A drag moves the sheet from its handle and top (any direction), and from its list when the list is at the top and
+     * the finger goes down, or when the sheet is not tall and the finger goes up: the list scrolls in every other case.
+     */
+    private boolean canDrag(float dy) {
+        if (mAway || mMaxPx <= mMinPx) {
+            return false;
+        }
+        if (mFromTop) {
+            return true;
+        }
+        int h = currentPx();
+        return dy > 0 ? mScroll.getScrollY() == 0 && h > mMinPx : h < mMaxPx;
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent e) {
+        track(e);
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                mDragging = false;
+                mDownY = e.getRawY();
+                mFromTop = e.getY() < mDs.dp(48);
+                break;
+            case MotionEvent.ACTION_MOVE:
+                float dy = e.getRawY() - mDownY;
+                if (!mDragging && Math.abs(dy) > mSlop && canDrag(dy)) {
+                    startDrag(e);
+                }
+                break;
+            default:
+                break;
+        }
+        return mDragging;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent e) {
+        track(e);
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                mDownY = e.getRawY();
+                mFromTop = e.getY() < mDs.dp(48);
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                if (!mDragging && Math.abs(e.getRawY() - mDownY) > mSlop && canDrag(e.getRawY() - mDownY)) {
+                    startDrag(e);
+                }
+                if (mDragging) {
+                    ViewGroup.LayoutParams lp = getLayoutParams();
+                    lp.height = Math.max(mMinPx, Math.min(mMaxPx, mStartPx - Math.round(e.getRawY() - mDownY)));
+                    setLayoutParams(lp);
+                }
+                return true;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (mDragging) {
+                    mDragging = false;
+                    mVelocity.computeCurrentVelocity(1000);
+                    float v = mVelocity.getYVelocity();
+                    boolean tall = v < -mDs.dp(500) ? true : v > mDs.dp(500) ? false
+                            : currentPx() > (mMinPx + mMaxPx) / 2;
+                    mHost.onDragEnd(tall);
+                }
+                if (mVelocity != null) {
+                    mVelocity.recycle();
+                    mVelocity = null;
+                }
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    private void startDrag(MotionEvent e) {
+        mDragging = true;
+        if (mHeight != null) {
+            mHeight.cancel();
+        }
+        mDownY = e.getRawY();   // no jump by the distance of the slop
+        mStartPx = currentPx();
+        getParent().requestDisallowInterceptTouchEvent(true);
+    }
+
+    private void track(MotionEvent e) {
+        if (e.getActionMasked() == MotionEvent.ACTION_DOWN && mVelocity != null) {
+            mVelocity.recycle();
+            mVelocity = null;
+        }
+        if (mVelocity == null) {
+            mVelocity = VelocityTracker.obtain();
+        }
+        mVelocity.addMovement(e);
     }
 
     /** The height of the sheet in pixels: 300 ms to the new one, or at once. */
