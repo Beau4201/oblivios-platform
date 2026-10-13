@@ -33,9 +33,9 @@ public final class GlobeLayoutCheck {
         }
         // "Your apps" stands at 0.93 of the base radius below the centre, whatever the zoom
         near(192 + 160 * 0.93, n.anchorY(), "anchor");
-        // the controls of the page: top 262 (zoom), 334 (centre), 316 (full screen); 104 lower in full screen
+        // the controls of the page: top 262 (zoom), 346 (centre, 15 dp under the zoom pair), 316 (full screen); 104 lower in full screen
         near(262, GlobeLayout.controlTopDp(GlobeLayout.CONTROL_ZOOM, false), "zoom control");
-        near(334, GlobeLayout.controlTopDp(GlobeLayout.CONTROL_CENTRE, false), "centre control");
+        near(346, GlobeLayout.controlTopDp(GlobeLayout.CONTROL_CENTRE, false), "centre control");
         near(316, GlobeLayout.controlTopDp(GlobeLayout.CONTROL_FULL, false), "full screen control");
         near(366, GlobeLayout.controlTopDp(GlobeLayout.CONTROL_ZOOM, true), "zoom control in full screen");
         // the sheet: 422 dp, or the height less 60 when it is taller; never taller than the screen

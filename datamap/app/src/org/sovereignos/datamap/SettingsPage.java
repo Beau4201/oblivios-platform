@@ -136,7 +136,7 @@ final class SettingsPage {
                 new CharSequence[] {bullet(R.string.cannot_1), bullet(R.string.cannot_2), bullet(R.string.cannot_3),
                     bullet(R.string.cannot_4), bullet(R.string.cannot_5)}));
         col.addView(about);
-        col.addView(w.info(ctx.getString(R.string.settings_private), R.drawable.ic_shield, 0, null));
+        col.addView(w.footnote(ctx.getString(R.string.settings_private), R.drawable.ic_shield));
         return col;
     }
 

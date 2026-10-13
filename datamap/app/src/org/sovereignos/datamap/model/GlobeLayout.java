@@ -16,7 +16,7 @@ public final class GlobeLayout {
     private static final float FS_RADIUS_DP = 198;
     /** In full screen the globe is centred in the height less this: the tab bar and its margin. */
     private static final float FS_FREE_BELOW_DP = 76;
-    private static final float[] CONTROL_TOP_DP = {262, 334, 316};
+    private static final float[] CONTROL_TOP_DP = {262, 346, 316};
     private static final float FS_CONTROL_SHIFT_DP = 104;
     private static final float SHEET_DP = 422;
     private static final float SHEET_TOP_MARGIN_DP = 60;

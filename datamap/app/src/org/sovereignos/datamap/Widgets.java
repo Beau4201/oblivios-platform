@@ -59,16 +59,16 @@ final class Widgets {
         t.setMinimumHeight(ds.dp(52));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = ds.dp(18);
+        lp.bottomMargin = ds.dp(24);
         t.setLayoutParams(lp);
         return t;
     }
 
-    /** {@code .h3}: a 19 sp heading, 22 dp above and 10 below. */
+    /** {@code .h3}: a 19 sp heading, 32 dp above and 12 below (the rhythm: 12, 16, 24, 32). */
     TextView h3(CharSequence text) {
         TextView t = ds.text(text, 19, Ds.SEMIBOLD, R.color.at_on, 26);
         t.setId(R.id.at_h3);
-        t.setPadding(0, ds.dp(22), 0, ds.dp(10));
+        t.setPadding(0, ds.dp(32), 0, ds.dp(12));
         return t;
     }
 
@@ -141,7 +141,27 @@ final class Widgets {
         }
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = ds.dp(12);
+        lp.topMargin = ds.dp(16);
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    /** A closing line of the page, not a control: an icon over two centred lines in the muted colour, no box. */
+    View footnote(CharSequence text, int iconRes) {
+        LinearLayout b = new LinearLayout(ds.ctx);
+        b.setOrientation(LinearLayout.VERTICAL);
+        b.setGravity(Gravity.CENTER_HORIZONTAL);
+        b.setPadding(ds.dp(32), 0, ds.dp(32), 0);
+        b.addView(icon(iconRes, 20, R.color.at_onv), new LinearLayout.LayoutParams(ds.dp(20), ds.dp(20)));
+        TextView t = ds.text(text, 13, Ds.REGULAR, R.color.at_onv, 18);
+        t.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        tp.topMargin = ds.dp(8);
+        b.addView(t, tp);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = ds.dp(32);
         b.setLayoutParams(lp);
         return b;
     }

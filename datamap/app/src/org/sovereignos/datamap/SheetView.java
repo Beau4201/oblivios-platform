@@ -66,8 +66,15 @@ final class SheetView extends FrameLayout {
         // a refresh (no animation) keeps where the reader was; a new choice starts at the top
         final int y = animate ? 0 : mScroll.getScrollY();
         mBody.removeAllViews();
+        // one rhythm: every part stands 16 dp under the one before it, whatever margin the part brought
+        boolean first = true;
         for (View v : parts) {
-            mBody.addView(v);
+            LinearLayout.LayoutParams lp = v.getLayoutParams() instanceof LinearLayout.LayoutParams
+                    ? (LinearLayout.LayoutParams) v.getLayoutParams()
+                    : new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = first ? 0 : mDs.dp(16);
+            first = false;
+            mBody.addView(v, lp);
         }
         mScroll.scrollTo(0, 0);
         if (y > 0) {
