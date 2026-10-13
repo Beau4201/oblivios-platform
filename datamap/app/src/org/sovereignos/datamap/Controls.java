@@ -66,12 +66,6 @@ final class Controls {
         }
 
         @Override
-        public boolean performClick() {
-            toggle();
-            return super.performClick();
-        }
-
-        @Override
         public CharSequence getAccessibilityClassName() {
             return android.widget.Switch.class.getName();
         }
