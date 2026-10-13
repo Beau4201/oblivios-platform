@@ -348,4 +348,30 @@ EDITS = [
     (APP, "res/values/strings.xml",
      "    <plurals name=\"n_countries\">",
      "    <plurals name=\"n_services\">\n        <item quantity=\"one\">%d service</item>\n        <item quantity=\"other\">%d services</item>\n    </plurals>\n    <plurals name=\"n_countries\">"),
+    # ---- the app page: where the services of the app that have no known company were hosted
+    (APP, S + "Pages.java",
+     "        if (a == null || companies == 0) {\n            col.addView(w.info(ctx.getString(R.string.no_company_seen), R.drawable.ic_info, R.color.at_onv, null));\n            col.addView(limitsNote());\n            return col;\n        }\n",
+     "        if (a == null || companies == 0) {\n            col.addView(w.info(ctx.getString(R.string.no_company_seen), R.drawable.ic_info, R.color.at_onv, null));\n            hostedRows(col, pkg);\n            col.addView(limitsNote());\n            return col;\n        }\n"),
+    (APP, S + "Pages.java",
+     "            col.addView(card);\n        }\n        col.addView(limitsNote());\n        return col;\n    }\n",
+     "            col.addView(card);\n        }\n        hostedRows(col, pkg);\n        col.addView(limitsNote());\n        return col;\n    }\n"),
+    (APP, S + "Pages.java",
+     "    // ==================================================================================== an app\n",
+     "    /** \"Hosted in\": the server places that this app's services with no known company were found in (ADR-161). */\n"
+     "    private void hostedRows(LinearLayout col, String pkg) {\n"
+     "        Widgets.Card card = null;\n"
+     "        for (MapModel.CompanyRow r : data.out.serverRows) {\n"
+     "            if (!r.apps.contains(pkg)) {\n"
+     "                continue;\n"
+     "            }\n"
+     "            if (card == null) {\n"
+     "                col.addView(w.h3(ctx.getString(R.string.hosted_in_title)));\n"
+     "                card = w.card();\n"
+     "                col.addView(card);\n"
+     "            }\n"
+     "            card.add(w.row(null, ctx.getString(R.string.hosted_in, Texts.serverName(r) + (r.owner.city.isEmpty() ? \"\"\n"
+     "                    : \", \" + Texts.country(r.owner.countryCode))), new Object[] {Texts.serverSub(ctx, r)}, null, false, null));\n"
+     "        }\n"
+     "    }\n\n"
+     "    // ==================================================================================== an app\n"),
 ]

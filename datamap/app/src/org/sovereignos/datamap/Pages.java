@@ -411,6 +411,23 @@ final class Pages {
         return col;
     }
 
+    /** "Hosted in": the server places that this app's services with no known company were found in (ADR-161). */
+    private void hostedRows(LinearLayout col, String pkg) {
+        Widgets.Card card = null;
+        for (MapModel.CompanyRow r : data.out.serverRows) {
+            if (!r.apps.contains(pkg)) {
+                continue;
+            }
+            if (card == null) {
+                col.addView(w.h3(ctx.getString(R.string.hosted_in_title)));
+                card = w.card();
+                col.addView(card);
+            }
+            card.add(w.row(null, ctx.getString(R.string.hosted_in, Texts.serverName(r) + (r.owner.city.isEmpty() ? ""
+                    : ", " + Texts.country(r.owner.countryCode))), new Object[] {Texts.serverSub(ctx, r)}, null, false, null));
+        }
+    }
+
     // ==================================================================================== an app
 
     View app(final String pkg) {
@@ -423,6 +440,7 @@ final class Pages {
                         Texts.countries(ctx, countries))}, null));
         if (a == null || companies == 0) {
             col.addView(w.info(ctx.getString(R.string.no_company_seen), R.drawable.ic_info, R.color.at_onv, null));
+            hostedRows(col, pkg);
             col.addView(limitsNote());
             return col;
         }
@@ -443,6 +461,7 @@ final class Pages {
             }
             col.addView(card);
         }
+        hostedRows(col, pkg);
         col.addView(limitsNote());
         return col;
     }
