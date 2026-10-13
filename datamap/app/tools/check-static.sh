@@ -26,6 +26,7 @@ if grep -rniE '(are|is|were|was) (linked|connected to each other|the same (perso
      "$APP/res/values" "$APP/src" --include='*.xml' --include='*.java'; then
   fail "the wording rule is broken: nothing may say that two apps are linked"
 fi
-grep -q 'Could be linked' "$APP/res/values/strings.xml" || fail "the 'Could be linked' strings are gone"
+grep -q 'Only connections Atlas could see are listed. There may be more.' "$APP/res/values/strings.xml" \
+  || fail "the note that a connection which is not listed is not proof of none is gone"
 [ "$bad" -eq 0 ] && echo "static checks passed"
 exit "$bad"

@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- The backing of a company logo: light in both themes, because the marks are drawn for a light ground. Not in
-     colors.xml, which tools/extract-tokens.py writes from the design reference page. -->
-<resources>
-    <color name="dm_logo_bg">#FFFFFFFF</color>
-</resources>
