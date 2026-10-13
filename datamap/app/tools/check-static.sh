@@ -42,5 +42,9 @@ grep -E 'flyTo\(.*Motion\.FLY_(PLACE|APP)\)' "$APP/src/org/sovereignos/datamap/G
   && fail "a flight to a place or an app must pass 0f as full screen (I1)"
 # The land is prepared on its own thread; behind the snapshot read it kept the empty state on screen (I3).
 grep -q 'mLand.execute' "$APP/src/org/sovereignos/datamap/MainActivity.java" || fail "the land needs its own executor (I3)"
+# Device round 2026-10-13: the full-screen button is a FrameLayout around its icon; casting the button itself to an
+# ImageView killed the activity in onCreate. The icon is the child of the button.
+grep -q '(ImageView) ((FrameLayout) ((LinearLayout) mFullControl).getChildAt(0)).getChildAt(0)' "$APP/src/org/sovereignos/datamap/MapTab.java" \
+  || fail "mFullIcon must be taken from inside the button FrameLayout (device crash in MapTab.<init>)"
 [ "$bad" -eq 0 ] && echo "static checks passed"
 exit "$bad"
