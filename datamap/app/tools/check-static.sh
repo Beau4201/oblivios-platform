@@ -33,5 +33,14 @@ if grep -rniE 'exchang|(shar(e|es|ed|ing)|send(s|ing)?|sold|sell(s|ing)?) (your 
 fi
 grep -q 'Only connections Atlas could see are listed. There may be more.' "$APP/res/values/strings.xml" \
   || fail "the note that a connection which is not listed is not proof of none is gone"
+# Review of 2026-10-13: a Switch restores its checked state by id, so two with one id swap their values on a theme change
+# and the listeners then change Collect and Keep for without a touch. A Switch keeps no saved state and has no shared id.
+grep -q 'setSaveEnabled(false)' "$APP/src/org/sovereignos/datamap/Controls.java" || fail "the Switch must not save its state (C1)"
+grep -q 'R.id.at_switch' "$APP/src/org/sovereignos/datamap/Controls.java" && fail "the Switches share one id (C1)"
+# Choosing a place or an app leaves full screen (spec 3): the flights must take the globe back to its normal size.
+grep -E 'flyTo\(.*Motion\.FLY_(PLACE|APP)\)' "$APP/src/org/sovereignos/datamap/GlobeView.java" | grep -qv '0f, Motion' \
+  && fail "a flight to a place or an app must pass 0f as full screen (I1)"
+# The land is prepared on its own thread; behind the snapshot read it kept the empty state on screen (I3).
+grep -q 'mLand.execute' "$APP/src/org/sovereignos/datamap/MainActivity.java" || fail "the land needs its own executor (I3)"
 [ "$bad" -eq 0 ] && echo "static checks passed"
 exit "$bad"

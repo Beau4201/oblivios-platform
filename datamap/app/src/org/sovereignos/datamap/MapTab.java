@@ -208,6 +208,7 @@ final class MapTab extends FrameLayout implements SheetView.Host, GlobeView.List
         }
         mGlobe.setFullScreen(mState.fullScreen(), true);
         applyFullScreen(true);
+        sheetHeight(false); // the state drops the tall sheet when full screen starts
         render(false);
         mNav.stateChanged();
     }

@@ -48,6 +48,8 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     private static final int DETAIL_APP = 2;
 
     private final ExecutorService mIo = Executors.newSingleThreadExecutor();
+    /** The land is prepared apart, so that the first snapshot is not read behind 3400 point-in-polygon tests. */
+    private final ExecutorService mLand = Executors.newSingleThreadExecutor();
     private final AtomicBoolean mRefreshQueued = new AtomicBoolean();
     private final IDataMapObserver mObserver = new IDataMapObserver.Stub() {
         @Override
@@ -163,7 +165,7 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         if (mDetailKind != DETAIL_NONE) {
             showDetail(mDetailKind, mDetailId, false);
         }
-        mIo.execute(() -> {
+        mLand.execute(() -> {
             try (InputStream in = getResources().openRawResource(R.raw.land)) {
                 final GlobeView.Prepared p = GlobeView.Prepared.of(LandData.read(in));
                 runOnUiThread(() -> {
@@ -231,6 +233,7 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     @Override
     protected void onDestroy() {
         mIo.shutdownNow();
+        mLand.shutdownNow();
         super.onDestroy();
     }
 

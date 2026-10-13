@@ -159,7 +159,8 @@ final class GlobeView extends View {
     private double mMoved;
     private final ScaleGestureDetector mScale;
     private final Runnable mSettle = () -> {
-        mMoving = false;
+        // the lines still growing keep the coarse land; their own end settles it
+        mMoving = mGrowAnim != null && mGrowAnim.isRunning();
         invalidate();
     };
 
@@ -448,7 +449,7 @@ final class GlobeView extends View {
     void flyToPlace(String key) {
         for (Places.Place p : mPlaces) {
             if (p.key.equals(key)) {
-                flyTo(p.lon(), Math.max(-50.0, Math.min(60.0, p.lat())), null, null, Motion.FLY_PLACE);
+                flyTo(p.lon(), Math.max(-50.0, Math.min(60.0, p.lat())), null, 0f, Motion.FLY_PLACE);
                 return;
             }
         }
@@ -468,7 +469,7 @@ final class GlobeView extends View {
             return;
         }
         double[] v = StartView.of(ll);
-        flyTo(v[1], Math.max(-40.0, Math.min(48.0, v[0])), null, null, Motion.FLY_APP);
+        flyTo(v[1], Math.max(-40.0, Math.min(48.0, v[0])), null, 0f, Motion.FLY_APP);
     }
 
     /** The start view, where the globe first looked. */
@@ -497,12 +498,21 @@ final class GlobeView extends View {
             return;
         }
         mGrow = 0f;
+        startMoving();
         mGrowAnim = ValueAnimator.ofFloat(0f, 1f);
         mGrowAnim.setDuration(Motion.LINES);
         mGrowAnim.setInterpolator(null);
         mGrowAnim.addUpdateListener(a -> {
             mGrow = (float) a.getAnimatedValue();
             invalidate();
+        });
+        mGrowAnim.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator a) {
+                if (mFlight == null || !mFlight.isRunning()) {
+                    settleSoon();
+                }
+            }
         });
         mGrowAnim.start();
     }

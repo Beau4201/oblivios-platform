@@ -31,7 +31,7 @@ final class Controls {
         Switch(Ds ds, boolean on) {
             super(ds.ctx);
             mDs = ds;
-            setId(R.id.at_switch);
+            setSaveEnabled(false); // two Switches would swap their restored values
             setChecked(on);
             mPos = on ? 1 : 0;
             mThumb.setColor(ds.color(R.color.at_thumb));

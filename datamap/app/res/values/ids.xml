@@ -24,7 +24,6 @@
     <item name="at_dialog" type="id" />
     <item name="at_filter_sheet" type="id" />
     <item name="at_filter_button" type="id" />
-    <item name="at_switch" type="id" />
     <item name="at_segmented" type="id" />
     <item name="at_action_row" type="id" />
     <item name="at_facts" type="id" />
