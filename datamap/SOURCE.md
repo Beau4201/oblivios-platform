@@ -179,3 +179,11 @@ Checked in the output, not from the exit code:
 - Trees at the build: `frameworks/base` `056f7900`, `vendor/sovereignos/datamap` `685eead`, `system/sepolicy` `fd1b880f`, `vendor/adevtool` `0d91ffbe`, all clean.
 
 Not yet seen: any behaviour on a device (plan, "After the image").
+
+## Atlas interface (ADR-160)
+
+Branch `datamap-atlas-run`, 2026-10-13, from `51af713` (the code of image `2026101202`). The tree equals the reference branch `datamap-atlas` (`git diff` over `datamap` is empty). Nothing is built, signed, flashed or landed on the build server.
+
+The branch holds the model classes of the globe and the lists (`Curves`, `Rotation`, `Motion`, `GlobeLayout`, `Hits`, `CardPlacer`, `Places`, `PlaceLinks`, `CompanyType`, `CompanyColors`, `CompanyList`, `AtlasModel`, `AtlasState`, `Seeded`, `Cities`), the design system and widgets, the night globe, the map tab, the pages and the shell. Colours and icons are generated from `docs/design/data-map-2026-10-13.html` by `extract-tokens.py` and `make-icons.py`; regeneration gives the same bytes. The clusters, the logo choice, the selection layout, the Links tab and the gear of the first design are removed.
+
+Results of the run (2026-10-13): `all app host checks passed`; `129 of 129 mutations killed`; `static checks passed`; resource check without output; `logo checks passed: 42 logos`; the fixture `atlas-seeded.txt` is identical to its regeneration; `app type-check passed: 56 files` on the build server (deprecation warnings only: `Locale(String,String)`, `Drawable.getOpacity`, `setBoundsInParent`, `setDecorFitsSystemWindows`, `setStatusBarColor`, `setNavigationBarColor`).
