@@ -32,8 +32,8 @@ final class Controls {
             super(ds.ctx);
             mDs = ds;
             setSaveEnabled(false); // two Switches would swap their restored values
+            mPos = on ? 1 : 0;   // before setChecked: a switch that is built "on" stands there, it does not slide
             setChecked(on);
-            mPos = on ? 1 : 0;
             mThumb.setColor(ds.color(R.color.at_thumb));
             mThumb.setShadowLayer(ds.px(3), 0, ds.px(1), ds.color(R.color.at_shadow_thumb));
             // 30 dp of track in a touch target of 48

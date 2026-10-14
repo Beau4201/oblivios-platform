@@ -7,6 +7,7 @@ import android.graphics.Insets;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -270,11 +271,48 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         });
     }
 
+    /** A finger is down: the pages are not built again until it is up. */
+    private boolean mTouching;
+    private boolean mRebuildPending;
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent e) {
+        int action = e.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            mTouching = true;
+        }
+        boolean handled = super.dispatchTouchEvent(e);
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            mTouching = false;
+            if (mRebuildPending) {
+                mRebuildPending = false;
+                buildPage(mState.tab(), true);
+                rebuildOverlays();
+            }
+        }
+        return handled;
+    }
+
     private void apply(AtlasData data) {
+        final AtlasData old = mData;
         mData = data;
         mPages.setData(data, mPrepared);
         mMap.setData(data);
-        buildPage(mState.tab(), true);
+        if (mTouching) {
+            mRebuildPending = true;   // a page built again under a finger takes the touch away from it
+            return;
+        }
+        // the Settings page shows nothing but the four settings: while they are as they were it is left alone
+        boolean same = old != null && mState.tab() == AtlasState.SETTINGS && old.collecting == data.collecting
+                && old.historyOn == data.historyOn && old.historyDays == data.historyDays
+                && old.serverHistory == data.serverHistory;
+        if (!same) {
+            buildPage(mState.tab(), true);
+        }
+        rebuildOverlays();
+    }
+
+    private void rebuildOverlays() {
         if (mDetailKind != DETAIL_NONE) {
             showDetail(mDetailKind, mDetailId, false);
         }
