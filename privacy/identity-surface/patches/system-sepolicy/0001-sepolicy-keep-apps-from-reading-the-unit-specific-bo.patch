@@ -1,29 +1,31 @@
-From 27c497cb16ba5efe72a88d00cead0e4c1ab08958 Mon Sep 17 00:00:00 2001
+From 544c1f8be865822c059f7b19f3cfdcb640e66820 Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
-Date: Wed, 14 Oct 2026 16:13:32 +0200
+Date: Wed, 14 Oct 2026 16:28:56 +0200
 Subject: [PATCH] sepolicy: keep apps from reading the unit-specific boot
  properties
 
 private/domain.te lets every domain read every ro.boot.* property. Five of
 them identify a unit or a production batch and no app needs them. They get
-their own type, readable by every domain except appdomain, so the system,
-the HALs and init keep their access and an app reads an empty value.
+their own type, readable by every domain except the apps and the app
+zygotes (which run app code and are not appdomain), so the system, the HALs
+and init keep their access and an app reads an empty value.
 ---
- private/domain.te         | 2 ++
+ private/domain.te         | 3 +++
  private/property.te       | 2 ++
  private/property_contexts | 6 ++++++
- 3 files changed, 10 insertions(+)
+ 3 files changed, 11 insertions(+)
 
 diff --git a/private/domain.te b/private/domain.te
-index 4c49bef..a3b628a 100644
+index 4c49bef..9a3d9a5 100644
 --- a/private/domain.te
 +++ b/private/domain.te
-@@ -517,6 +517,8 @@ get_prop(domain, apexd_select_prop)
+@@ -517,6 +517,9 @@ get_prop(domain, apexd_select_prop)
  get_prop(domain, arm64_memtag_prop)
  get_prop(domain, bluetooth_config_prop)
  get_prop(domain, bootloader_prop)
-+# SovereignOS (ADR-167): every domain except the apps; an app can tell devices apart by these.
-+get_prop({ domain -appdomain }, unit_boot_prop)
++# SovereignOS (ADR-167): every domain except the apps and the app zygotes, which run app code
++# and are not appdomain; an app can tell devices apart by these.
++get_prop({ domain -appdomain -app_zygote -native_app_zygote }, unit_boot_prop)
  get_prop(domain, build_odm_prop)
  get_prop(domain, build_prop)
  get_prop(domain, build_vendor_prop)

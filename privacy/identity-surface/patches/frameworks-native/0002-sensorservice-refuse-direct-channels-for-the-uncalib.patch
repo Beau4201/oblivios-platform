@@ -1,20 +1,20 @@
-From 4b3ce708e3144c4504132d5916fe34bbd9f7605c Mon Sep 17 00:00:00 2001
+From 9b03f90e065d5f387b376795e2b8852af76576c8 Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
-Date: Wed, 14 Oct 2026 16:13:11 +0200
+Date: Wed, 14 Oct 2026 16:28:33 +0200
 Subject: [PATCH] sensorservice: refuse direct channels for the uncalibrated
  sensors to apps
 
 A direct channel makes the HAL write events into shared memory and does not
 pass SensorEventConnection::sendEvents, so the bias estimate that is folded
-there would still reach the app. For every uid but AID_SYSTEM a direct
-channel for the uncalibrated accelerometer, gyroscope and magnetometer is
-refused. Stopping a channel stays allowed.
+there would still reach the app. An app gets no direct channel for the
+uncalibrated accelerometer, gyroscope and magnetometer. Stopping a channel
+stays allowed.
 ---
  services/sensorservice/SensorDirectConnection.cpp | 9 +++++++++
  1 file changed, 9 insertions(+)
 
 diff --git a/services/sensorservice/SensorDirectConnection.cpp b/services/sensorservice/SensorDirectConnection.cpp
-index 00daa9b..4cbc814 100644
+index 00daa9b..5e1fc1a 100644
 --- a/services/sensorservice/SensorDirectConnection.cpp
 +++ b/services/sensorservice/SensorDirectConnection.cpp
 @@ -19,6 +19,7 @@
@@ -31,8 +31,8 @@ index 00daa9b..4cbc814 100644
  
 +    // SovereignOS (ADR-167): the HAL writes direct events into shared memory without passing
 +    // SensorEventConnection::sendEvents, so the bias of the uncalibrated sensors cannot be
-+    // folded there. An app other than the system gets no direct channel for them.
-+    if (mUid != AID_SYSTEM && eventCarriesBias(s.getType()) &&
++    // folded there. An app gets no direct channel for them.
++    if (shouldFoldFor(mUid) && eventCarriesBias(s.getType()) &&
 +            rateLevel != SENSOR_DIRECT_RATE_STOP) {
 +        return INVALID_OPERATION;
 +    }

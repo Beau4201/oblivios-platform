@@ -75,6 +75,20 @@ int main() {
     CHECK(out[2].data[0] == 9.f && out[2].data[1] == 18.f && out[2].data[2] == 27.f);
     CHECK(out[2].data[3] == 0.f);
 
+    // only apps get the fold: native daemons, the system and platform uids keep the event
+    CHECK(!shouldFoldFor(AID_ROOT));
+    CHECK(!shouldFoldFor(AID_SYSTEM));
+    CHECK(!shouldFoldFor(AID_RADIO));
+    CHECK(!shouldFoldFor(AID_CAMERASERVER));
+    CHECK(!shouldFoldFor(AID_SHELL));
+    CHECK(!shouldFoldFor(AID_APP_START - 1));
+    CHECK(!shouldFoldFor(AID_USER_OFFSET * 10 + AID_SYSTEM));  // system uid of a secondary user
+    CHECK(shouldFoldFor(AID_APP_START));
+    CHECK(shouldFoldFor(AID_APP_START + 234));
+    CHECK(shouldFoldFor(AID_USER_OFFSET * 10 + AID_APP_START + 234));  // app of a secondary user
+    CHECK(shouldFoldFor(AID_ISOLATED_START));
+    CHECK(shouldFoldFor(AID_USER_OFFSET * 10 + AID_ISOLATED_START + 5));
+
     printf(failures ? "FAILED %d\n" : "ok\n", failures);
     return failures ? 1 : 0;
 }

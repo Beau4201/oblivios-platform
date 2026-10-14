@@ -1,26 +1,26 @@
-From c06499d29e40af9616ff153e019eff006079947e Mon Sep 17 00:00:00 2001
+From 3f2f317440ff9ba58980a470ca119eaf8287c9a7 Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
-Date: Wed, 14 Oct 2026 16:12:56 +0200
+Date: Wed, 14 Oct 2026 16:28:33 +0200
 Subject: [PATCH] sensorservice: do not deliver the bias of uncalibrated
  sensors to apps
 
 The accelerometer, gyroscope and magnetometer have an uncalibrated variant
 that reports a bias estimate, stable per device. An app that reads it without
-any permission can recognise the device. For every uid but AID_SYSTEM the
-bias is folded into the readings (calibrated = uncalibrated - bias) and
-reported as zero. The system uid keeps the unchanged event.
+any permission can recognise the device. For every app uid the bias is folded
+into the readings (calibrated = uncalibrated - bias) and reported as zero.
+Native daemons and platform uids keep the unchanged event.
 ---
- services/sensorservice/SensorBiasFold.h       | 49 +++++++++++++++++++
- .../sensorservice/SensorEventConnection.cpp   | 25 ++++++++--
- 2 files changed, 71 insertions(+), 3 deletions(-)
+ services/sensorservice/SensorBiasFold.h       | 60 +++++++++++++++++++
+ .../sensorservice/SensorEventConnection.cpp   | 25 +++++++-
+ 2 files changed, 82 insertions(+), 3 deletions(-)
  create mode 100644 services/sensorservice/SensorBiasFold.h
 
 diff --git a/services/sensorservice/SensorBiasFold.h b/services/sensorservice/SensorBiasFold.h
 new file mode 100644
-index 0000000..623ad47
+index 0000000..b0474df
 --- /dev/null
 +++ b/services/sensorservice/SensorBiasFold.h
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,60 @@
 +/*
 + * SovereignOS: do not deliver the bias estimate of the uncalibrated sensors to apps.
 + *
@@ -34,12 +34,23 @@ index 0000000..623ad47
 +#define ANDROID_SENSOR_BIAS_FOLD_H
 +
 +#include <hardware/sensors.h>
++#include <private/android_filesystem_config.h>
++
++#include <sys/types.h>
 +
 +#include <cmath>
 +#include <cstddef>
 +#include <cstdint>
 +
 +namespace android {
++
++// Only apps get the fold: every app uid, isolated process and SDK sandbox of every user. Native
++// daemons, the system uid and the platform uids below AID_APP_START (also those of a secondary
++// user) keep the unchanged event, so a platform consumer such as camera stabilisation is not
++// affected.
++inline bool shouldFoldFor(uid_t uid) {
++    return (uid % AID_USER_OFFSET) >= AID_APP_START;
++}
 +
 +inline bool eventCarriesBias(int32_t type) {
 +    return type == SENSOR_TYPE_ACCELEROMETER_UNCALIBRATED ||
@@ -71,7 +82,7 @@ index 0000000..623ad47
 +
 +#endif  // ANDROID_SENSOR_BIAS_FOLD_H
 diff --git a/services/sensorservice/SensorEventConnection.cpp b/services/sensorservice/SensorEventConnection.cpp
-index 05790a0..bdc2468 100644
+index 05790a0..451ac60 100644
 --- a/services/sensorservice/SensorEventConnection.cpp
 +++ b/services/sensorservice/SensorEventConnection.cpp
 @@ -14,6 +14,8 @@
@@ -95,9 +106,9 @@ index 05790a0..bdc2468 100644
  
      int count = 0;
      Mutex::Autolock _l(mConnectionLock);
-+    // SovereignOS (ADR-167): every app but the system gets the uncalibrated sensors without the
-+    // bias estimate, which identifies the device. The system keeps the unchanged event.
-+    const bool foldBias = mUid != AID_SYSTEM;
++    // SovereignOS (ADR-167): every app gets the uncalibrated sensors without the bias estimate,
++    // which identifies the device. Native daemons and platform uids keep the unchanged event.
++    const bool foldBias = shouldFoldFor(mUid);
      if (scratch) {
          size_t i=0;
          while (i<numEvents) {

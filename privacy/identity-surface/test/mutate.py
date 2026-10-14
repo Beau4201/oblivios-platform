@@ -16,6 +16,13 @@ MUTANTS = [
     ("the copy writes the shared input", FOLD,
      "if (eventCarriesBias(out[i].type)) foldBiasIntoReadings(const_cast<sensors_event_t*>(&in[i]));"),
     ("the copy folds events without a bias", FOLD, "foldBiasIntoReadings(&out[i]);"),
+    ("the app id threshold is off by one", "return (uid % AID_USER_OFFSET) >= AID_APP_START;",
+     "return (uid % AID_USER_OFFSET) > AID_APP_START;"),
+    ("the user offset is ignored", "return (uid % AID_USER_OFFSET) >= AID_APP_START;",
+     "return uid >= AID_APP_START;"),
+    ("only the system uid is exempt", "return (uid % AID_USER_OFFSET) >= AID_APP_START;",
+     "return uid != AID_SYSTEM;"),
+    ("nobody is folded", "return (uid % AID_USER_OFFSET) >= AID_APP_START;", "return false;"),
 ]
 survived = 0
 for name, old, new in MUTANTS:
