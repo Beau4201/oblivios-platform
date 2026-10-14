@@ -85,6 +85,9 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     /** Counts the openings and closings of the detail page, so that a late end of an exit does nothing. */
     private int mDetailToken;
     private int mTabToken;
+    private SettingsPage mSettingsPage;
+
+    }
     private String mDetailId = "";
     private Overlays.FilterSheet mFilterSheet;
 
@@ -294,21 +297,19 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     }
 
     private void apply(AtlasData data) {
-        final AtlasData old = mData;
         mData = data;
         mPages.setData(data, mPrepared);
         mMap.setData(data);
+        // the Settings page moves its own controls: it is never built again for a new snapshot
+        if (mState.tab() == AtlasState.SETTINGS && mSettingsPage != null && mSettingsPage.update(data)) {
+            rebuildOverlays();
+            return;
+        }
         if (mTouching) {
             mRebuildPending = true;   // a page built again under a finger takes the touch away from it
             return;
         }
-        // the Settings page shows nothing but the four settings: while they are as they were it is left alone
-        boolean same = old != null && mState.tab() == AtlasState.SETTINGS && old.collecting == data.collecting
-                && old.historyOn == data.historyOn && old.historyDays == data.historyDays
-                && old.serverHistory == data.serverHistory;
-        if (!same) {
-            buildPage(mState.tab(), true);
-        }
+        buildPage(mState.tab(), true);
         rebuildOverlays();
     }
 
@@ -365,11 +366,16 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         }
         ScrollView s = mScrolls[tab];
         int y = keepScroll ? s.getScrollY() : 0;
-        View page = tab == AtlasState.APPS ? mPages.apps()
-                : tab == AtlasState.COMPANIES ? mPages.companies()
-                : new SettingsPage(mW, this, mOpen).build(mData);
+        View page;
+        if (tab == AtlasState.SETTINGS) {
+            mSettingsPage = new SettingsPage(mW, this, mOpen);
+            page = mSettingsPage.build(mData);
+        } else {
+            page = tab == AtlasState.APPS ? mPages.apps() : mPages.companies();
+        }
         s.removeAllViews();
         s.addView(page, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        Ds.layoutNow(s);
         final int to = y;
         s.post(() -> s.scrollTo(0, to));
     }
@@ -413,6 +419,7 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
         column.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         mDetail.addView(column, new FrameLayout.LayoutParams(-1, -1));
         mDetail.setVisibility(View.VISIBLE);
+        Ds.layoutNow(mDetail);
         if (keepY > 0) {
             body.post(() -> body.scrollTo(0, keepY));
         }

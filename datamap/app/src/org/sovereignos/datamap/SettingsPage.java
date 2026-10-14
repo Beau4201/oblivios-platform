@@ -2,6 +2,7 @@
 package org.sovereignos.datamap;
 
 import android.content.Context;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -40,6 +41,23 @@ final class SettingsPage {
     private final Actions actions;
     private final Open open;
 
+    // the controls, kept so that a new snapshot moves them in place: a page built again takes the touch from a finger
+    // that lands before its layout, and cuts every animation short
+    private Controls.Switch mCollect;
+    private Controls.Switch mServer;
+    private Controls.Switch mHistory;
+    private Controls.Segmented mSeg;
+    private Controls.Collapse mKeepFor;
+    private int[] mChoices;
+    private int mDays;
+    /** True while the page sets its own controls: their listeners then say nothing to the service. */
+    private boolean mSync;
+    /** When the owner last changed a control: a snapshot that is older than that change must not undo it. */
+    private long mChangedAt;
+    private AtlasData mLatest;
+    private final android.os.Handler mHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private static final long SETTLE_MS = 700;
+
     SettingsPage(Widgets widgets, Actions actions, Open open) {
         this.w = widgets;
         this.ds = widgets.ds;
@@ -67,12 +85,24 @@ final class SettingsPage {
         Widgets.Card rec = w.card();
         final Controls.Switch collect = new Controls.Switch(ds, data.collecting);
         collect.setContentDescription(ctx.getString(R.string.settings_collect));
-        collect.setOnCheckedChangeListener((b, on) -> actions.setCollecting(on));
+        collect.setOnCheckedChangeListener((b, on) -> {
+            if (!mSync) {
+                mChangedAt = SystemClock.uptimeMillis();
+                actions.setCollecting(on);
+            }
+        });
+        mCollect = collect;
         rec.add(w.row(tile(R.drawable.ic_eye, false), ctx.getString(R.string.settings_collect),
                 new Object[] {ctx.getString(R.string.settings_collect_summary)}, collect, true, null));
         final Controls.Switch serverHistory = new Controls.Switch(ds, data.serverHistory);
         serverHistory.setContentDescription(ctx.getString(R.string.settings_server_history));
-        serverHistory.setOnCheckedChangeListener((b, on) -> actions.setServerHistory(on));
+        serverHistory.setOnCheckedChangeListener((b, on) -> {
+            if (!mSync) {
+                mChangedAt = SystemClock.uptimeMillis();
+                actions.setServerHistory(on);
+            }
+        });
+        mServer = serverHistory;
         rec.add(w.row(tile(R.drawable.ic_pin, false), ctx.getString(R.string.settings_server_history),
                 new Object[] {ctx.getString(R.string.settings_server_history_summary)}, serverHistory, true, null));
         final Controls.Switch history = new Controls.Switch(ds, data.historyOn);
@@ -80,14 +110,20 @@ final class SettingsPage {
         rec.add(w.row(tile(R.drawable.ic_hist, false), ctx.getString(R.string.settings_history),
                 new Object[] {ctx.getString(R.string.settings_history_summary)}, history, true, null));
         final int stored = data.historyDays;
+        mDays = stored;
         int[] choices = KeepFor.choices(stored);
         String[] labels = new String[choices.length];
         for (int i = 0; i < choices.length; i++) {
             labels[i] = ctx.getResources().getQuantityString(R.plurals.n_days, choices[i], choices[i]);
         }
         final int[] days = choices;
-        Controls.Segmented seg = new Controls.Segmented(ds, labels, KeepFor.selected(stored),
-                i -> actions.setHistory(true, days[i]));
+        mChoices = choices;
+        Controls.Segmented seg = new Controls.Segmented(ds, labels, KeepFor.selected(stored), i -> {
+            mChangedAt = SystemClock.uptimeMillis();
+            mDays = days[i];
+            actions.setHistory(true, days[i]);
+        });
+        mSeg = seg;
         LinearLayout keep = new LinearLayout(ctx);
         keep.setOrientation(LinearLayout.VERTICAL);
         keep.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -111,9 +147,15 @@ final class SettingsPage {
         keep.addView(seg, sp);
         final Controls.Collapse keepFor = new Controls.Collapse(ds, keep, data.historyOn);
         rec.add(keepFor);
+        mKeepFor = keepFor;
+        mHistory = history;
         history.setOnCheckedChangeListener((b, on) -> {
+            if (mSync) {
+                return;
+            }
+            mChangedAt = SystemClock.uptimeMillis();
             keepFor.setOpen(on, true);
-            actions.setHistory(on, stored);
+            actions.setHistory(on, mDays);
         });
         col.addView(rec);
 
@@ -138,6 +180,41 @@ final class SettingsPage {
         col.addView(about);
         col.addView(w.footnote(ctx.getString(R.string.settings_private), R.drawable.ic_shield));
         return col;
+    }
+
+    /**
+     * Moves the controls to what the service reports, each with its own animation. A snapshot that arrives within
+     * 700 ms of a change of the owner is held back and read again after that: it may not have seen the change yet.
+     *
+     * @return false when the page cannot show the data in place (no page yet, or choices of days it has not got)
+     */
+    boolean update(final AtlasData data) {
+        if (mCollect == null || !java.util.Arrays.equals(mChoices, KeepFor.choices(data.historyDays))) {
+            return false;
+        }
+        mLatest = data;
+        long wait = mChangedAt + SETTLE_MS - SystemClock.uptimeMillis();
+        if (wait > 0) {
+            mHandler.removeCallbacksAndMessages(null);
+            mHandler.postDelayed(() -> {
+                if (mLatest != null) {
+                    update(mLatest);
+                }
+            }, wait + 50);
+            return true;
+        }
+        mSync = true;
+        try {
+            mCollect.setChecked(data.collecting);
+            mServer.setChecked(data.serverHistory);
+            mHistory.setChecked(data.historyOn);
+            mKeepFor.setOpen(data.historyOn, true);
+            mDays = data.historyDays;
+            mSeg.select(KeepFor.selected(data.historyDays), true);
+        } finally {
+            mSync = false;
+        }
+        return true;
     }
 
     private CharSequence bullet(int res) {

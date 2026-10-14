@@ -94,6 +94,7 @@ final class SheetView extends FrameLayout {
             first = false;
             mBody.addView(v, lp);
         }
+        Ds.layoutNow(mScroll);
         mScroll.scrollTo(0, 0);
         if (y > 0) {
             mScroll.post(() -> mScroll.scrollTo(0, y));

@@ -8,6 +8,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.util.TypedValue;
+import android.view.View;
 import android.view.animation.PathInterpolator;
 import android.widget.TextView;
 
@@ -66,6 +67,20 @@ final class Ds {
     boolean light() {
         return (ctx.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 != Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    /**
+     * Lays out a view at once, with the size it has. Views that are added are laid out at the next frame, and a touch
+     * that comes before that lands on views that have no size yet: the tap is lost.
+     */
+    static void layoutNow(View v) {
+        int w = v.getWidth();
+        int h = v.getHeight();
+        if (w > 0 && h > 0) {
+            v.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY));
+            v.layout(v.getLeft(), v.getTop(), v.getRight(), v.getBottom());
+        }
     }
 
     /** Whether the user asked for no animation (the system setting): then nothing moves, it jumps. */
