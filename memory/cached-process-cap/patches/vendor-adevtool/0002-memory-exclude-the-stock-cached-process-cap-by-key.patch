@@ -1,0 +1,30 @@
+From 0eefd6d04a3a16f21755eab93bc5b9f93fb2ff9f Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 14 Oct 2026 05:26:09 +0200
+Subject: [PATCH] memory: exclude the stock cached process cap by key
+
+Dropping the value from overlay-inclusion.yml left it an unknown entry, and
+adevtool includes unknown entries: generate-all on tag 2026100600 put
+config_customizedMaxCachedProcesses=1024 back into the vendor overlay, where it
+overrides the framework value. Put it on the exclusion list.
+---
+ config/device/common/overlay-removal.yml | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/config/device/common/overlay-removal.yml b/config/device/common/overlay-removal.yml
+index 9855c545a..b41186fbd 100644
+--- a/config/device/common/overlay-removal.yml
++++ b/config/device/common/overlay-removal.yml
+@@ -52,6 +52,9 @@ filters:
+       - "android:array/config_notificationMsgPkgsAllowedAsConvos =\ " # already empty in fw/base
+       - "android:string/config_satellite_service_package =\ " # already empty in fw/base
+       - "android:string/config_secondaryLocationTimeZoneProviderPackageName =\ "
++      # SovereignOS (ADR-151): the vendor overlay would override the cached process cap set in frameworks/base.
++      # Leaving the value out of overlay-inclusion.yml is not enough: an unknown entry is included.
++      - android:integer/config_customizedMaxCachedProcesses = 1024
+       - android:array/config_accessComputerControlKnownSigners = 1975B2F17177BC89A5DFF31F9E64A6CAE281A53DC1D1D59B1D147FE1C82AFA00;7075F275C3B82619A37B1FA393B8F9D793F0B3F55148C6251AA959C340BB74B4;103938EE4537E59E8EE792F654504FB8346FC6B346D0BBC4415FC339FCFC8EC1
+       - android:array/config_accessComputerControlKnownSigners = 1975B2F17177BC89A5DFF31F9E64A6CAE281A53DC1D1D59B1D147FE1C82AFA00;7075F275C3B82619A37B1FA393B8F9D793F0B3F55148C6251AA959C340BB74B4;B8EAA018CA7394FD47A3FA7F1FEB7A6C570CD55D9FE968BC3829062B6656AE32;103938EE4537E59E8EE792F654504FB8346FC6B346D0BBC4415FC339FCFC8EC1
+       - android:array/config_allowedSecureInstantAppSettings = advertising_id;limit_ad_tracking
+-- 
+2.56.0
+

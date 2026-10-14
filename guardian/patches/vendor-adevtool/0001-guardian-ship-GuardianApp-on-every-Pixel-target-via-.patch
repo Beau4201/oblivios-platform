@@ -1,4 +1,4 @@
-From 1bc76c58dea56b120fb44847c1af328176e532f1 Mon Sep 17 00:00:00 2001
+From 3b165003e439ae22dcb765f1fc3de2220a90b50e Mon Sep 17 00:00:00 2001
 From: SovereignOS Build <build@sovereignos.local>
 Date: Thu, 6 Aug 2026 19:35:26 +0200
 Subject: [PATCH] guardian: ship GuardianApp on every Pixel target via
@@ -16,13 +16,13 @@ rest through device-common-gs201-plus.mk), so one entry covers them all.
  1 file changed, 7 insertions(+)
 
 diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
-index 675ba86..21d2fd6 100644
+index 4302cb5a6..645425224 100644
 --- a/config/mk/google_devices/common/device-common.mk
 +++ b/config/mk/google_devices/common/device-common.mk
-@@ -70,3 +70,10 @@ ifeq ($(filter lynx tangorpro,$(TARGET_PRODUCT)),)
- endif
- 
+@@ -67,3 +67,10 @@ endif
  PRODUCT_PACKAGES += restrict-pixel-health-association
+ 
+ PRODUCT_PRODUCT_PROPERTIES += persist.vendor.intelligence=off
 +
 +# SovereignOS: Guardian REVOKE_BACKGROUND_LOCATION ships on every Pixel target
 +# (real hardware, no test fixture). Kept here, not per device: the per-device

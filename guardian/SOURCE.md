@@ -343,6 +343,13 @@ base above, the squashed patch gives the same tree as the landed commits applied
 in a disposable repository seeded from the build server. The commit hashes in the table are the
 landed commits.
 
+On tag 2026100600 (2026-10-14) upstream's `vendor/adevtool` appends
+`PRODUCT_PRODUCT_PROPERTIES += persist.vendor.intelligence=off` at the end of `common/device-common.mk`,
+the place where this patch adds its block, so `vendor-adevtool/0001` was regenerated with that line
+as context (upstream's line first, then the block). The other `vendor/adevtool` packages apply
+unchanged after it. All `vendor/adevtool` packages together give the tree `f2cef3527ae1`, equal to
+the build-server branch.
+
 Apply from the tree's own repository root:
 
 ```sh

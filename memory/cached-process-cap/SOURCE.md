@@ -23,6 +23,7 @@ at the expected `HEAD`.
 | --- | --- | --- | --- |
 | `vendor-adevtool/0001` | do not carry the Pixel overlay value of the cached process cap | `config/device/common/overlay-inclusion.yml` (one entry replaced by a comment) | The Pixel vendor overlay sets `config_customizedMaxCachedProcesses` to 1024 on `lynx` and `stallion`, and a vendor overlay overrides the framework default. |
 | `frameworks-base/0001` | lower the maximum number of cached processes from 1024 to 48 | `core/res/res/values/config.xml` (the value and a comment) | Secure app spawning makes every app process about 43 MB larger and not shareable with the zygote; nothing removes a cached process until lmkd must. See ADR-151. |
+| `vendor-adevtool/0002` | exclude the stock cached process cap by key | `config/device/common/overlay-removal.yml` (one `overlay_keys` entry added) | Dropping the entry from the inclusion list (`0001`) is not enough: adevtool includes an entry that is on neither list. `generate-all` on tag 2026100600 with `0001` alone put `config_customizedMaxCachedProcesses` 1024 back into the vendor overlay. |
 
 The two belong together: `frameworks-base/0001` alone has no effect while the generated vendor
 overlay carries 1024.
@@ -32,14 +33,16 @@ overlay carries 1024.
 On the build server, with no build running:
 
 ```sh
-cd vendor/adevtool && git am <path>/memory/cached-process-cap/patches/vendor-adevtool/0001-*.patch
+cd vendor/adevtool && git am <path>/memory/cached-process-cap/patches/vendor-adevtool/000*-*.patch
 cd frameworks/base && git am <path>/memory/cached-process-cap/patches/frameworks-base/0001-*.patch
 ```
 
 The adevtool output under `vendor/google_devices/<device>/overlays/framework-res__<device>__auto_generated_rro_vendor/res/values/values.xml`
-is generated and untracked, so it still carries the stock entry. Remove it from every device that is
-built; this is what a fresh `adevtool generate-all` would produce with the changed inclusion list
-(not run here: it needs tens of GB of factory images):
+is generated and untracked. With `0002`, `adevtool generate-all` no longer writes the stock entry
+(checked on 2026-10-14 for `lynx` and `stallion` on tag 2026100600: the vendor overlay has no
+`config_customizedMaxCachedProcesses`; the only differences from the unmodified regeneration are this
+entry and `mmd.zram.size`). A module generated before `0002`, or with `0001` alone, still carries it;
+remove it from every device that is built:
 
 ```sh
 mkdir -p "$BACKUP_DIR"   # a scratch directory outside the tree
@@ -100,10 +103,12 @@ and that the Pixel vendor overlay still sets it (`grep -rn config_customizedMaxC
 vendor/google_devices/*/overlays`). If the entry returns to the inclusion list, the vendor value wins
 again and the build shows 1024.
 
-The inclusion list is an allow-list passed to the prebuilt `arsclib` (`src/blobs/overlays2.ts`),
-whose source is not in the tree. A plain `adevtool generate-all` with this change was never run
-(it needs the factory images), so it is not verified that the entry stays out of the generated
-overlay, nor how a later factory image with another value of this resource (`= 512`, say) is
-treated (silently dropped or an error). After a new `generate-all`, repeat the `grep -c` above.
+The inclusion list is not a deny list: an entry on neither the inclusion nor the exclusion list is
+included. `generate-all` on tag 2026100600 (2026-10-14) put 1024 back with `0001` alone; `0002` adds
+the entry to `overlay_keys` in `overlay-removal.yml`, and the regenerated overlays of `lynx` and
+`stallion` have no such resource. How a later factory image with another value of this resource
+(`= 512`, say) is treated is not verified. After a new `generate-all`, repeat the `grep -c` above.
+Run with `--noVerify`, adevtool writes `$(warning` instead of `$(error` into the pin file; change it
+back by hand (`provenance/2026100600.md` in `sovereignos-manifest`).
 The no-kill window of 600 s restarts at every user unlock, not only the first
 (`UserController` calls `setLastUserUnlockingUptime`).

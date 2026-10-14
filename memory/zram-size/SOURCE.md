@@ -24,6 +24,7 @@ pin of `lynx` and `stallion` was updated to `c0fa4e99` (copies kept as
 | Patch | Subject | Files | Why it diverges from upstream |
 | --- | --- | --- | --- |
 | `0001` | raise the zram swap capacity to 100% of RAM | `config/device/common/sysprop-inclusion.yml` (two lines removed), `config/mk/google_devices/common/device-common.mk` (one property and a comment) | The stock value is `mmd.zram.size=50%`. Secure app spawning makes every app process about 43 MB larger and not shareable, so the swap fills about 30 s after unlock and lmkd kills apps. lmkd counts free swap below 10% of the total as low, so only 90% of the capacity is usable. With the same load 80% was below that line 55% of the time and 100% never, at the same physical zram (see Verification). |
+| `0002` | exclude the stock zram size by key | `config/device/common/sysprop-exclusion.yml` (two entries added) | Dropping the value from the inclusion list (`0001`) is not enough: adevtool includes an entry that is on neither list. `generate-all` on tag 2026100600 with `0001` alone put `mmd.zram.size=50%` back into `product.prop`, a second value that fails `post_process_props.py`. |
 
 The exported `0001` is the squash of two landed commits: the 80% commit `ccc1d8db` and the 100%
 commit `c0fa4e99` that rewrote its value. Applied to the same base, the two give the same tree
@@ -36,14 +37,16 @@ the 80% state and `0002` the move to 100%.
 On the build server, with no build running:
 
 ```sh
-cd vendor/adevtool && git am <path>/memory/zram-size/patches/vendor-adevtool/0001-*.patch
+cd vendor/adevtool && git am <path>/memory/zram-size/patches/vendor-adevtool/000*-*.patch
 ```
 
-The adevtool output under `vendor/google_devices/<device>/sysprop/product.prop` is generated and
-untracked, so it still carries the stock line. A second assignment with a different value fails
+With `0002`, `adevtool generate-all` no longer writes the stock line (checked on 2026-10-14 for `lynx`
+and `stallion` on tag 2026100600: `grep -c mmd.zram.size` in `product.prop` is 0; against the
+unmodified regeneration the only differences are this line and the cached process cap). A module
+generated before `0002`, or with `0001` alone, still carries it: the adevtool output under
+`vendor/google_devices/<device>/sysprop/product.prop` is generated and untracked. A second assignment with a different value fails
 the build (`post_process_props.py`, see Verification). Remove the stock line from every device
-that is built; this is what a fresh `adevtool generate-all` produces with the changed
-`sysprop-inclusion.yml`, which is not run because it needs tens of GB of factory images:
+that is built (needed only for a module generated without `0002`):
 
 ```sh
 for d in lynx stallion; do
@@ -80,6 +83,15 @@ Two lines of the inclusion list and one appended block. On a new base, check tha
 `mmd.zram.size` through `PerDeviceStringProp::ZramSize` (`system/memory/mmd/src/mmd_setup.rs`).
 The two entries removed from the inclusion list also cover `bluejay` and `oriole`
 (`3221225472`); those devices are not built here and would get 100% too.
+
+On tag 2026100600 (2026-10-14) the package applies with plain `git am` in package order and gives
+the tree of the build-server branch (`f2cef3527ae1`, all `vendor/adevtool` packages together). The
+`generate-all` run that exposed the missing exclusion is described in `sovereignos-manifest`,
+`provenance/2026100600.md`. Run with `--noVerify` (the module then differs from upstream's
+FileTreeSpec), adevtool writes `$(warning` instead of `$(error` into the pin file; change it back by
+hand. Upstream now sets `mmd.zram.writeback.limit.enabled=true` with
+`mmd.zram.writeback.max_bytes_per_day=25769803776`, where the paragraph below on flash writeback
+read `false` before.
 
 ## Verification
 
