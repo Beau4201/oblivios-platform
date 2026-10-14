@@ -21,6 +21,10 @@ Authored in the disposable repositories `.worktrees/identity-surface-native` and
 
 Conflict surface on a new upstream release: the end of the `ro.boot.` block of `property_contexts`, the `bootloader_prop` line of `domain.te`, the two copies in `sendEvents`, and the check before the rate adjustment in `configureChannel`.
 
+## Landing
+
+Landed with `git am` on 2026-10-14 on the build server with no build running and clean trees: `system/sepolicy` as `c7988b4c4` on `sovereignos-2026100600`, `frameworks/native` as `21fa95f288` and `bb680da774` on a new branch `sovereignos-2026100600` from `1c83ac6ae5`. The patch files here are the ones that were applied (SHA-256 equal on both sides). Blob ids on the server equal those of the authoring repositories: `SensorEventConnection.cpp` `451ac60261b2`, `SensorDirectConnection.cpp` `5e1fc1ae38d0`, `SensorBiasFold.h` `b0474dfce7a6`, `property.te` `c0617ab35a22`, `property_contexts` `74df868c85c4`, `domain.te` `9a3d9a52ceef`.
+
 ## Apply
 
 On the build server, with no build running and the trees clean:
@@ -32,4 +36,5 @@ On the build server, with no build running and the trees clean:
 
 - Host: the test and the mutation check of `test/` (11 of 11 mutants killed, 2026-10-14) and `test/check_sepolicy_patch.py` (the read rule excludes `appdomain`, `app_zygote` and `native_app_zygote`; the five names carry the type; the type is declared once).
 - Reader search (source level only): `repo forall -c 'git grep -F'` over every project of the tree on 2026-10-14 for the five names and the prefix `ro.boot.hw.`. The only reader of an exact name is `PersistentDataBlockService` in `system_server` (not an app); the other hits are `ro.boot.vbmeta.device_state`, a different property that stays under the `ro.boot.` prefix. Prebuilt APKs, vendor binaries and names built by concatenation are not covered, so the device check `IDS-005` carries the rest.
-- Not run: a module build of `libsensorservice` and `sepolicy`, a device check (`IDS-002` to `IDS-007` in the validation matrix of `sovereignos-foundation`).
+- Module build, 2026-10-14: `m -j6 -k libsensorservice sensorservice selinux_policy` for `lynx-cur-userdebug` on `out-lynx` completed successfully (11:02), no `FAILED` or `error:` line; `SensorEventConnection.o` and `SensorDirectConnection.o` were recompiled and `libsensorservice.so` relinked. The compiled `plat_sepolicy.cil` declares `unit_boot_prop`, has exactly one allow rule for it, `(allow base_typeattr_432 unit_boot_prop (file (read getattr map open)))` with `base_typeattr_432` = `domain` minus `appdomain`, `app_zygote` and `native_app_zygote`, and the macro's `neverallow ... property_service set`; `plat_property_contexts` has the five labels. The `selinux_policy` neverallow and property checks passed. Script: `tools/build-vm/build-identity-surface-modules.sh` in `sovereignos-foundation`.
+- Not run: an image, a device check (`IDS-002` to `IDS-007` in the validation matrix of `sovereignos-foundation`).
