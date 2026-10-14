@@ -86,8 +86,6 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     private int mDetailToken;
     private int mTabToken;
     private SettingsPage mSettingsPage;
-
-    }
     private String mDetailId = "";
     private Overlays.FilterSheet mFilterSheet;
 
