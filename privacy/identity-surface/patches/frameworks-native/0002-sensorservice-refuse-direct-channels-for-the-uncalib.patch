@@ -1,0 +1,45 @@
+From 4b3ce708e3144c4504132d5916fe34bbd9f7605c Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 14 Oct 2026 16:13:11 +0200
+Subject: [PATCH] sensorservice: refuse direct channels for the uncalibrated
+ sensors to apps
+
+A direct channel makes the HAL write events into shared memory and does not
+pass SensorEventConnection::sendEvents, so the bias estimate that is folded
+there would still reach the app. For every uid but AID_SYSTEM a direct
+channel for the uncalibrated accelerometer, gyroscope and magnetometer is
+refused. Stopping a channel stays allowed.
+---
+ services/sensorservice/SensorDirectConnection.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/services/sensorservice/SensorDirectConnection.cpp b/services/sensorservice/SensorDirectConnection.cpp
+index 00daa9b..4cbc814 100644
+--- a/services/sensorservice/SensorDirectConnection.cpp
++++ b/services/sensorservice/SensorDirectConnection.cpp
+@@ -19,6 +19,7 @@
+ #include <frameworks/base/core/proto/android/service/sensor_service.proto.h>
+ #include <hardware/sensors.h>
+ #include "SensorDevice.h"
++#include "SensorBiasFold.h"
+ 
+ #define UNUSED(x) (void)(x)
+ 
+@@ -188,6 +189,14 @@ int32_t SensorService::SensorDirectConnection::configureChannel(int handle, int
+         return INVALID_OPERATION;
+     }
+ 
++    // SovereignOS (ADR-167): the HAL writes direct events into shared memory without passing
++    // SensorEventConnection::sendEvents, so the bias of the uncalibrated sensors cannot be
++    // folded there. An app other than the system gets no direct channel for them.
++    if (mUid != AID_SYSTEM && eventCarriesBias(s.getType()) &&
++            rateLevel != SENSOR_DIRECT_RATE_STOP) {
++        return INVALID_OPERATION;
++    }
++
+     int requestedRateLevel = rateLevel;
+     // TODO(b/398253250): Create a more robust way to allow VNDK and system clients to be exempted
+     if (mService->isSensorInCappedSet(s.getType()) && rateLevel != SENSOR_DIRECT_RATE_STOP &&
+-- 
+2.56.0
+

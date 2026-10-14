@@ -1,0 +1,139 @@
+From c06499d29e40af9616ff153e019eff006079947e Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 14 Oct 2026 16:12:56 +0200
+Subject: [PATCH] sensorservice: do not deliver the bias of uncalibrated
+ sensors to apps
+
+The accelerometer, gyroscope and magnetometer have an uncalibrated variant
+that reports a bias estimate, stable per device. An app that reads it without
+any permission can recognise the device. For every uid but AID_SYSTEM the
+bias is folded into the readings (calibrated = uncalibrated - bias) and
+reported as zero. The system uid keeps the unchanged event.
+---
+ services/sensorservice/SensorBiasFold.h       | 49 +++++++++++++++++++
+ .../sensorservice/SensorEventConnection.cpp   | 25 ++++++++--
+ 2 files changed, 71 insertions(+), 3 deletions(-)
+ create mode 100644 services/sensorservice/SensorBiasFold.h
+
+diff --git a/services/sensorservice/SensorBiasFold.h b/services/sensorservice/SensorBiasFold.h
+new file mode 100644
+index 0000000..623ad47
+--- /dev/null
++++ b/services/sensorservice/SensorBiasFold.h
+@@ -0,0 +1,49 @@
++/*
++ * SovereignOS: do not deliver the bias estimate of the uncalibrated sensors to apps.
++ *
++ * Why this diverges from upstream: the accelerometer, gyroscope and magnetometer each have an
++ * uncalibrated variant that reports {x, y, z, bias x, bias y, bias z}. The bias estimate is
++ * stable per device, so an app that reads it without any permission can recognise the device
++ * (ADR-167). The same reading without the bias is already available from the calibrated sensor,
++ * so folding the bias in loses nothing an app could not compute.
++ */
++#ifndef ANDROID_SENSOR_BIAS_FOLD_H
++#define ANDROID_SENSOR_BIAS_FOLD_H
++
++#include <hardware/sensors.h>
++
++#include <cmath>
++#include <cstddef>
++#include <cstdint>
++
++namespace android {
++
++inline bool eventCarriesBias(int32_t type) {
++    return type == SENSOR_TYPE_ACCELEROMETER_UNCALIBRATED ||
++           type == SENSOR_TYPE_GYROSCOPE_UNCALIBRATED ||
++           type == SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED;
++}
++
++// calibrated = uncalibrated - bias (sensors HAL definition); the bias is then reported as zero.
++// A bias that is not finite is dropped instead of being subtracted, so the readings stay usable.
++inline void foldBiasIntoReadings(sensors_event_t* e) {
++    for (int i = 0; i < 3; i++) {
++        const float bias = e->data[i + 3];
++        if (std::isfinite(bias)) e->data[i] -= bias;
++        e->data[i + 3] = 0.0f;
++    }
++}
++
++// Copies n events from in to out and folds the bias in the copies that carry one.
++// in is never written: it is shared with the other connections.
++inline size_t copyEventsFoldingBias(const sensors_event_t* in, size_t n, sensors_event_t* out) {
++    for (size_t i = 0; i < n; i++) {
++        out[i] = in[i];
++        if (eventCarriesBias(out[i].type)) foldBiasIntoReadings(&out[i]);
++    }
++    return n;
++}
++
++}  // namespace android
++
++#endif  // ANDROID_SENSOR_BIAS_FOLD_H
+diff --git a/services/sensorservice/SensorEventConnection.cpp b/services/sensorservice/SensorEventConnection.cpp
+index 05790a0..bdc2468 100644
+--- a/services/sensorservice/SensorEventConnection.cpp
++++ b/services/sensorservice/SensorEventConnection.cpp
+@@ -14,6 +14,8 @@
+  * limitations under the License.
+  */
+ 
++#include <algorithm>
++
+ #include <log/log.h>
+ #include <sys/socket.h>
+ #include <utils/threads.h>
+@@ -26,6 +28,7 @@
+ #include "BatteryService.h"
+ #include "SensorEventConnection.h"
+ #include "SensorDevice.h"
++#include "SensorBiasFold.h"
+ 
+ #define UNUSED(x) (void)(x)
+ 
+@@ -323,6 +326,9 @@ status_t SensorService::SensorEventConnection::sendEvents(
+ 
+     int count = 0;
+     Mutex::Autolock _l(mConnectionLock);
++    // SovereignOS (ADR-167): every app but the system gets the uncalibrated sensors without the
++    // bias estimate, which identifies the device. The system keeps the unchanged event.
++    const bool foldBias = mUid != AID_SYSTEM;
+     if (scratch) {
+         size_t i=0;
+         while (i<numEvents) {
+@@ -374,7 +380,11 @@ status_t SensorService::SensorEventConnection::sendEvents(
+                     // Regular sensor event, just copy it to the scratch buffer after checking
+                     // the AppOp.
+                     if (hasSensorAccess() && noteOpIfRequired(buffer[i])) {
+-                        scratch[count++] = buffer[i];
++                        scratch[count] = buffer[i];
++                        if (foldBias && eventCarriesBias(scratch[count].type)) {
++                            foldBiasIntoReadings(&scratch[count]);
++                        }
++                        count++;
+                     }
+                 }
+                 i++;
+@@ -385,8 +395,17 @@ status_t SensorService::SensorEventConnection::sendEvents(
+         }
+     } else {
+         if (hasSensorAccess()) {
+-            scratch = const_cast<sensors_event_t *>(buffer);
+-            count = numEvents;
++            const bool anyBias = foldBias && std::any_of(buffer, buffer + numEvents,
++                    [](const sensors_event_t& e) { return eventCarriesBias(e.type); });
++            if (anyBias) {
++                // scratch would alias the buffer that the other connections read: fold in a copy.
++                sanitizedBuffer.reset(new sensors_event_t[numEvents]);
++                scratch = sanitizedBuffer.get();
++                count = copyEventsFoldingBias(buffer, numEvents, scratch);
++            } else {
++                scratch = const_cast<sensors_event_t *>(buffer);
++                count = numEvents;
++            }
+         } else {
+             sanitizedBuffer.reset(new sensors_event_t[numEvents]);
+             scratch = sanitizedBuffer.get();
+-- 
+2.56.0
+

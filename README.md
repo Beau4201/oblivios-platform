@@ -26,6 +26,8 @@ and device logs do not belong in this repository.
   and `lynx` product builds (ADR-033/ADR-035/ADR-051).
 - [`privacy/screenshot-detection`](privacy/screenshot-detection/README.md) — apps are not
   told when the user takes a screenshot (one `frameworks/base` patch).
+- [`privacy/identity-surface`](privacy/identity-surface/README.md) — apps cannot read the
+  unit-specific boot properties or the bias estimates of the uncalibrated sensors (ADR-167).
 - [`release/ota-server-url`](release/ota-server-url/README.md) — points
   the Updater app at SovereignOS's private lynx OTA server (ADR-052, amending
   ADR-045).
