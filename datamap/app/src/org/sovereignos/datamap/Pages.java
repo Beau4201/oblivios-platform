@@ -452,8 +452,11 @@ final class Pages {
             rows.add(data.byOwner.get(id));
         }
         // spec 4: the companies of the app grouped by type, the most connections first in each group
+        boolean firstGroup = true;
         for (List<MapModel.CompanyRow> group : CompanyList.groupByType(rows, a.perCompany)) {
-            col.addView(w.h3(Texts.typeName(ctx, CompanyType.main(group.get(0).categories))));
+            CharSequence type = Texts.typeName(ctx, CompanyType.main(group.get(0).categories));
+            col.addView(firstGroup ? w.h3Under(type) : w.h3(type));   // the first one follows "Contacts n companies"
+            firstGroup = false;
             Widgets.Card card = w.card();
             for (final MapModel.CompanyRow co : group) {
                 card.add(w.companyRow(co, Texts.connections(ctx, a.perCompany.get(co.owner.id)),

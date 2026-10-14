@@ -72,6 +72,13 @@ final class Widgets {
         return t;
     }
 
+    /** A heading that stands right under another heading: 4 dp above, so that the two are 16 dp apart. */
+    TextView h3Under(CharSequence text) {
+        TextView t = h3(text);
+        t.setPadding(0, ds.dp(4), 0, ds.dp(12));
+        return t;
+    }
+
     /** A text button of the accent colour ({@code .tbtn}): Details, Clear, Reset. */
     TextView textButton(CharSequence text, boolean chevron, View.OnClickListener click) {
         TextView t = ds.text(text, 14, Ds.MEDIUM, R.color.at_acc, 20);
@@ -161,7 +168,7 @@ final class Widgets {
         b.addView(t, tp);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = ds.dp(32);
+        lp.topMargin = ds.dp(24);
         b.setLayoutParams(lp);
         return b;
     }
