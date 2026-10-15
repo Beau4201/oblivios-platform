@@ -1,0 +1,33 @@
+From 013876453c6fb60f589173896b1062963c86305c Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Thu, 15 Oct 2026 19:43:13 +0200
+Subject: [PATCH] grab: pass the settings to BouncerMessageInteractor in the
+ SystemUI test fixture
+
+---
+ .../bouncer/domain/interactor/BouncerMessageInteractorKosmos.kt | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/packages/SystemUI/tests/utils/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorKosmos.kt b/packages/SystemUI/tests/utils/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorKosmos.kt
+index 6429aac..ba7fa81 100644
+--- a/packages/SystemUI/tests/utils/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorKosmos.kt
++++ b/packages/SystemUI/tests/utils/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorKosmos.kt
+@@ -31,6 +31,7 @@ import com.android.systemui.kosmos.backgroundScope
+ import com.android.systemui.kosmos.testScope
+ import com.android.systemui.securelockdevice.domain.interactor.secureLockDeviceInteractor
+ import com.android.systemui.user.data.repository.fakeUserRepository
++import com.android.systemui.util.settings.fakeGlobalSettings
+ import org.mockito.kotlin.mock
+ 
+ val Kosmos.bouncerMessageInteractor by Fixture {
+@@ -50,6 +51,7 @@ val Kosmos.bouncerMessageInteractor by Fixture {
+         deviceEntryBiometricsAllowedInteractor = deviceEntryBiometricsAllowedInteractor,
+         secureLockDeviceInteractor = { secureLockDeviceInteractor },
+         resources = mainResources,
++        globalSettings = fakeGlobalSettings,
+     )
+ }
+ val Kosmos.countDownTimerUtil by Fixture { mock<CountDownTimerUtil>() }
+-- 
+2.56.0
+

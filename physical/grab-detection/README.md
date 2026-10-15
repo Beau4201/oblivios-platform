@@ -1,6 +1,6 @@
 # grab-detection
 
-Eight patches that lock the phone when it is pulled out of a hand in use and restart it after
+Nine patches that lock the phone when it is pulled out of a hand in use and restart it after
 60 seconds without a PIN (ADR-169). The design is
 `docs/superpowers/specs/2026-10-15-grab-detection-design.md` in `freeholdos-foundation`.
 
@@ -13,6 +13,7 @@ Eight patches that lock the phone when it is pulled out of a hand in use and res
 | `patches/frameworks-base/0005` | `frameworks/base` | `GrabDetector`: a new touch voids the release before it; a peak without touch is reported (marked untouched) for the shadow log. |
 | `patches/frameworks-base/0006` | `frameworks/base` | `GrabDetectionService`: no exception leaves the handler thread, the shadow log line for an untouched peak, the timer is cancelled when the keyguard does not show after the lock. |
 | `patches/frameworks-base/0007` | `frameworks/base` | The `@hide` tags of the keys on their own line; one message text for every credential type. |
+| `patches/frameworks-base/0008` | `frameworks/base` | SystemUI test fixture: `globalSettings` for `BouncerMessageInteractor`. |
 | `patches/packages-apps-Settings/0001` | `packages/apps/Settings` | The on/off switch on the exploit protection page. |
 
 `test/` holds the host test of the decision class and a mutation check:
