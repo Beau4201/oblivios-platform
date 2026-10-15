@@ -9,8 +9,8 @@ SRC_DIR = pathlib.Path(sys.argv[1])
 REL = pathlib.Path("com/android/server/grab/GrabDetector.java")
 SRC = (SRC_DIR / REL).read_text()
 MUTANTS = [
-    ("peak comparison is strict", "dev >= mParams.peak &&", "dev > mParams.peak &&"),
-    ("touch is not required", "dev >= mParams.peak && touchedRecently(tMs)", "dev >= mParams.peak"),
+    ("peak comparison is strict", "if (dev < mParams.peak) {", "if (dev <= mParams.peak) {"),
+    ("touch is not required", "if (touchedRecently(tMs)) {", "if (true) {"),
     ("held contact is not touching", "return mInContact\n                ||", "return false\n                ||"),
     ("touch window is exclusive", "tMs - mLastContactMs <= mParams.touchWindowMs",
      "tMs - mLastContactMs < mParams.touchWindowMs"),
@@ -36,6 +36,14 @@ MUTANTS = [
     ("deviation is signed", "Math.abs(\n                Math.sqrt", "(\n                Math.sqrt"),
     ("one axis only", "Math.sqrt((double) x * x + (double) y * y + (double) z * z)", "Math.abs((double) z)"),
     ("peak is the last sample", "mPeakDev = Math.max(mPeakDev, dev);", "mPeakDev = dev;"),
+    ("a new touch does not void the release before it",
+     "if (!mInContact) {\n                // a new touch voids the release before it: the finger is on the screen again\n"
+     "                mLastReleaseMs = NEVER;\n            }\n            mInContact = true;",
+     "mInContact = true;"),
+    ("a peak without touch is not reported", "if (tMs >= mNoTouchReportUntilMs) {", "if (false) {"),
+    ("a peak without touch is reported for every sample", "mNoTouchReportUntilMs = tMs + mParams.cooldownMs;",
+     "mNoTouchReportUntilMs = NEVER;"),
+    ("a candidate says it was untouched", "return new Decision(trigger, true,", "return new Decision(trigger, false,"),
     ("reset keeps the touch history", "mLastContactMs = NEVER;\n        mLastReleaseMs = NEVER;\n        mPending",
      "mLastReleaseMs = NEVER;\n        mPending"),
 ]

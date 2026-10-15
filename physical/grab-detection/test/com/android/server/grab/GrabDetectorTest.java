@@ -98,23 +98,39 @@ public final class GrabDetectorTest {
         check("snatch is decided at the end of the window", s.decidedAtMs == 2000);
         check("snatch decides", d != null);
         check("snatch triggers", d != null && d.trigger);
+        check("snatch is marked touched", d != null && d.touched);
         check("snatch reports the peak", d != null && Math.abs(d.peak - 25f) < 0.01f);
         check("snatch reports the release", d != null && d.released && d.releaseDeltaMs == 20);
         check("snatch reports the energy", d != null && Math.abs(d.energy - 4f) < 0.01f);
 
         // a drop: the finger leaves with the peak, but the phone comes to rest
         d = snatch().dev(t -> t == 1000 ? 25 : 0.1).run(new GrabDetector(P), 4000);
-        check("drop is a candidate", d != null);
+        check("drop is a candidate", d != null && d.touched);
         check("drop does not trigger", d != null && !d.trigger && d.released);
 
-        // the same pull with no finger on the screen is not a candidate at all
-        d = new Scenario().dev(t -> t == 1000 ? 25 : 4).run(new GrabDetector(P), 4000);
-        check("pull without touch is ignored", d == null);
+        // the same pull with no finger on the screen is not a candidate: it is reported at the
+        // peak, marked untouched, so that the shadow log can measure it
+        s = new Scenario().dev(t -> t == 1000 ? 25 : 4);
+        d = s.run(new GrabDetector(P), 4000);
+        check("pull without touch is reported at the peak", d != null && s.decidedAtMs == 1000);
+        check("pull without touch is not a trigger", d != null && !d.trigger && !d.touched);
+        check("pull without touch reports the peak", d != null && Math.abs(d.peak - 25f) < 0.01f);
+
+        // an untouched peak is reported once per cool-down, not for each sample of the same pull
+        GrabDetector quiet = new GrabDetector(P);
+        int reports = 0;
+        for (long t = 0; t <= 5000; t += STEP_MS) {
+            boolean peak = (t >= 1000 && t <= 1040) || t == 3100;
+            if (quiet.onAccel(t, 0f, 0f, G + (peak ? 25f : 0.2f)) != null) {
+                reports++;
+            }
+        }
+        check("an untouched peak is reported once per cool-down", reports == 2);
 
         // the finger left long after the peak: a candidate, but not released in time
         d = new Scenario().touch(900, true).touch(1000, true).touch(1400, false)
                 .dev(t -> t == 1000 ? 25 : 4).run(new GrabDetector(P), 4000);
-        check("late release is a candidate", d != null);
+        check("late release is a candidate", d != null && d.touched);
         check("late release does not trigger", d != null && !d.trigger && !d.released);
 
         // the finger left 100 ms before the sensor saw the peak: still released
@@ -175,15 +191,15 @@ public final class GrabDetectorTest {
         check("a second pull inside the cool-down is ignored", decisions == 1);
 
         // a first sample at time 0 with no touch history must not overflow or throw
-        check("first sample without touch history",
-                new GrabDetector(P).onAccel(0, 0f, 0f, G + 30f) == null);
+        d = new GrabDetector(P).onAccel(0, 0f, 0f, G + 30f);
+        check("first sample without touch history", d != null && !d.touched && !d.trigger);
 
         // reset forgets the touch history: the pull after it has no touch in its window
         det = new GrabDetector(P);
         det.onTouch(900, true);
         det.reset();
-        check("reset forgets the touch history",
-                new Scenario().dev(t -> t == 1000 ? 25 : 4).run(det, 4000) == null);
+        d = new Scenario().dev(t -> t == 1000 ? 25 : 4).run(det, 4000);
+        check("reset forgets the touch history", d != null && !d.touched);
 
         // rotation alone does not move the magnitude, so it is not a peak
         Params low = new Params(5f, 400, 150, 200, 800, 1.5f, 2000);
@@ -197,10 +213,11 @@ public final class GrabDetectorTest {
         // the touch window: exactly at its edge counts, 20 ms outside it does not
         d = new Scenario().touch(600, true).touch(620, false)
                 .dev(t -> t == 1000 ? 25 : 4).run(new GrabDetector(P), 4000);
-        check("contact at the edge of the touch window is a candidate", d != null);
+        check("contact at the edge of the touch window is a candidate", d != null && d.touched);
         d = new Scenario().touch(580, true).touch(600, false)
                 .dev(t -> t == 1000 ? 25 : 4).run(new GrabDetector(P), 4000);
-        check("contact outside the touch window is ignored", d == null);
+        check("contact outside the touch window is not a candidate",
+                d != null && !d.touched && !d.trigger);
 
         // the touch-loss interval: exactly at its edge counts, 20 ms outside it does not
         d = new Scenario().touch(900, true).touch(1000, true).touch(1150, false)
@@ -232,6 +249,13 @@ public final class GrabDetectorTest {
         Params small = new Params(5f, 400, 150, 200, 800, 1.5f, 2000);
         d = snatch().dev(t -> t == 1000 ? -9 : t < 1000 ? 0.2 : 4).run(new GrabDetector(small), 4000);
         check("a drop in magnitude counts as a peak", d != null && d.trigger);
+
+        // a new touch voids the release before it: a finger that is down again at the peak has
+        // not been pulled out of the fingers (typing on a bus that takes a bump)
+        d = new Scenario().touch(900, true).touch(940, false).touch(990, true).touch(1000, true)
+                .dev(t -> t == 1000 ? 25 : t < 1000 ? 0.2 : 4).run(new GrabDetector(P), 4000);
+        check("a release followed by a new touch does not count",
+                d != null && !d.trigger && !d.released);
 
         System.out.println(failures == 0 ? "all passed" : failures + " FAILED");
         System.exit(failures == 0 ? 0 : 1);

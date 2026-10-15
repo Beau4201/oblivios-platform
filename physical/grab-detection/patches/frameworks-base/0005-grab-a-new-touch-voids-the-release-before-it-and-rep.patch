@@ -1,0 +1,109 @@
+From 8c486ad089d152cef98a5a1a48544b66c6eeb167 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Thu, 15 Oct 2026 04:53:16 +0200
+Subject: [PATCH 5/7] grab: a new touch voids the release before it, and report
+ a peak without touch
+
+---
+ .../com/android/server/grab/GrabDetector.java | 36 +++++++++++++++----
+ 1 file changed, 29 insertions(+), 7 deletions(-)
+
+diff --git a/services/core/java/com/android/server/grab/GrabDetector.java b/services/core/java/com/android/server/grab/GrabDetector.java
+index 5fd733c..1495c25 100644
+--- a/services/core/java/com/android/server/grab/GrabDetector.java
++++ b/services/core/java/com/android/server/grab/GrabDetector.java
+@@ -53,17 +53,23 @@ public final class GrabDetector {
+         }
+     }
+ 
+-    /** The outcome for one candidate pull. {@code trigger} is the verdict, the rest explains it. */
++    /**
++     * The outcome for one candidate pull, or the report of a peak that was no candidate because
++     * the screen was not being touched ({@code touched} false, {@code trigger} false). {@code
++     * trigger} is the verdict, the rest explains it.
++     */
+     public static final class Decision {
+         public final boolean trigger;
++        public final boolean touched;
+         public final float peak;
+         public final boolean released;
+         public final long releaseDeltaMs;
+         public final float energy;
+ 
+-        Decision(boolean trigger, float peak, boolean released, long releaseDeltaMs,
+-                float energy) {
++        Decision(boolean trigger, boolean touched, float peak, boolean released,
++                long releaseDeltaMs, float energy) {
+             this.trigger = trigger;
++            this.touched = touched;
+             this.peak = peak;
+             this.released = released;
+             this.releaseDeltaMs = releaseDeltaMs;
+@@ -85,6 +91,7 @@ public final class GrabDetector {
+     private double mSumDev;
+     private int mCount;
+     private long mIgnoreUntilMs = NEVER;
++    private long mNoTouchReportUntilMs = NEVER;
+ 
+     public GrabDetector(Params params) {
+         mParams = params;
+@@ -97,11 +104,16 @@ public final class GrabDetector {
+         mLastReleaseMs = NEVER;
+         mPending = false;
+         mIgnoreUntilMs = NEVER;
++        mNoTouchReportUntilMs = NEVER;
+     }
+ 
+     /** {@code contact} is true while a finger is on the screen, false when none is left. */
+     public void onTouch(long tMs, boolean contact) {
+         if (contact) {
++            if (!mInContact) {
++                // a new touch voids the release before it: the finger is on the screen again
++                mLastReleaseMs = NEVER;
++            }
+             mInContact = true;
+             mLastContactMs = tMs;
+             return;
+@@ -120,8 +132,8 @@ public final class GrabDetector {
+     /**
+      * Feeds one accelerometer sample (m/s^2, including gravity).
+      *
+-     * @return null while nothing was decided, otherwise the decision for the candidate that
+-     *         just finished
++     * @return null while nothing was decided; the decision for the candidate that just
++     *         finished; or, at most once per cool-down, the report of a peak with no recent touch
+      */
+     public Decision onAccel(long tMs, float x, float y, float z) {
+         if (mIgnoreUntilMs != NEVER && tMs < mIgnoreUntilMs) {
+@@ -131,8 +143,17 @@ public final class GrabDetector {
+                 Math.sqrt((double) x * x + (double) y * y + (double) z * z) - (double) GRAVITY);
+ 
+         if (!mPending) {
+-            if (dev >= mParams.peak && touchedRecently(tMs)) {
++            if (dev < mParams.peak) {
++                return null;
++            }
++            if (touchedRecently(tMs)) {
+                 startCandidate(tMs, dev);
++                return null;
++            }
++            // no candidate, but the shadow log must be able to measure a pull without touch
++            if (tMs >= mNoTouchReportUntilMs) {
++                mNoTouchReportUntilMs = tMs + mParams.cooldownMs;
++                return new Decision(false, false, (float) dev, false, 0, 0f);
+             }
+             return null;
+         }
+@@ -152,7 +173,8 @@ public final class GrabDetector {
+         mIgnoreUntilMs = tMs + mParams.cooldownMs;
+         final double energy = mCount > 0 ? mSumDev / mCount : 0;
+         final boolean trigger = mReleased && energy >= mParams.sustainEnergy;
+-        return new Decision(trigger, (float) mPeakDev, mReleased, mReleaseDeltaMs, (float) energy);
++        return new Decision(trigger, true, (float) mPeakDev, mReleased, mReleaseDeltaMs,
++                (float) energy);
+     }
+ 
+     private boolean touchedRecently(long tMs) {
+-- 
+2.56.0
+

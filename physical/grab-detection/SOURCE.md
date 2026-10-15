@@ -19,6 +19,9 @@ Authored in the disposable repositories `.worktrees/grab-detection-fwb` and `.wo
 | `frameworks-base/0002` | settings keys of the grab detection | The keys are not `@Protected` so that adb can tune the shadow mode on a user build. |
 | `frameworks-base/0003` | lock the phone and arm the restart timer when it is pulled out of a hand in use | The restart is the existing auto-reboot timer; `init` is unchanged. |
 | `frameworks-base/0004` | tell the owner above the PIN entry why the phone locked | The stock lockdown message does not say that a restart follows. |
+| `frameworks-base/0005` | a new touch voids the release before it, and report a peak without touch | Follows the whole-branch review: a finger that is down again at the peak was counted as pulled out; the shadow phase must be able to measure a pull without touch (design 4.2, 7). |
+| `frameworks-base/0006` | keep exceptions off the handler thread, log untouched peaks, cancel the timer if the keyguard does not show | Follows the review: `lockNow()` only posts the lock, and an exception on the service thread would take `system_server` down. |
+| `frameworks-base/0007` | `@hide` tags on their own line, one message text for every credential type | Matches the neighbouring keys; the stock lockdown text names the PIN only. |
 | `packages-apps-Settings/0001` | switch for grab detection | The mode needs an owner-visible control. |
 
 Conflict surface on a new upstream release: the `Settings.Global` block after `AUTO_REBOOT_TIMEOUT`, `ExtSettings` after `AUTO_REBOOT_TIMEOUT`, the `StartSensorNotification` block of `SystemServer`, `KeyguardServiceDelegate.onShowingStateChanged`, the user-lockdown branch of `BouncerMessageInteractor`, and the first `Preference` after `auto_reboot` in `exploit_protection_settings.xml`.
@@ -32,7 +35,10 @@ On the build server, with no build running and the trees clean:
 
 ## Verification
 
-- Host: `test/run.sh` and `test/mutate.py`, 22 of 22 mutants killed (2026-10-15).
-- Replay: both patch sets applied to the baseline reproduce the worktree trees (2026-10-15).
+- Host: `test/run.sh` and `test/mutate.py`, 26 of 26 mutants killed (2026-10-15).
+- Replay: the seven `frameworks-base` patches and the `Settings` patch applied to the baseline reproduce the worktree trees (2026-10-15).
 - Not run: a build (`GRB-002`), a device check (`GRB-003` to `GRB-014`).
-- Not updated and not compiled: the SystemUI test fixtures that construct `BouncerMessageInteractor`; they gain the `globalSettings` argument when the SystemUI tests are built.
+- Not compiled: none of the Java or Kotlin has been built (`GRB-002`). The service was read against the build server tree; the host test covers `GrabDetector` only.
+- Known break: `tests/utils/.../BouncerMessageInteractorKosmos.kt` builds `BouncerMessageInteractor` with named arguments and lacks `globalSettings` (`Kosmos.fakeGlobalSettings` exists). The SystemUI tests do not build until that line is added; the product build does not compile `tests/utils`.
+- Depends on the flag `revamped_bouncer_messages` being on in the release configuration of the build; with the legacy bouncer messages the grab text does not show.
+- The review dispositions and the rulings taken during execution are in the plan's execution record (not committed), summarised in the session report.

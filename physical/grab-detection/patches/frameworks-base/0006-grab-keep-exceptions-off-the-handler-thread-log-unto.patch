@@ -1,0 +1,210 @@
+From b1ec05dde4bb93c9ecdb14d4ecd4e00a819e90ec Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Thu, 15 Oct 2026 04:54:37 +0200
+Subject: [PATCH 6/7] grab: keep exceptions off the handler thread, log
+ untouched peaks, cancel the timer if the keyguard does not show
+
+---
+ .../server/grab/GrabDetectionService.java     | 96 +++++++++++++++----
+ 1 file changed, 77 insertions(+), 19 deletions(-)
+
+diff --git a/services/core/java/com/android/server/grab/GrabDetectionService.java b/services/core/java/com/android/server/grab/GrabDetectionService.java
+index d932179..fa53392 100644
+--- a/services/core/java/com/android/server/grab/GrabDetectionService.java
++++ b/services/core/java/com/android/server/grab/GrabDetectionService.java
+@@ -64,6 +64,8 @@ public class GrabDetectionService extends SystemService {
+ 
+     private static final long COOLDOWN_MS = 2000;
+     private static final long VIBRATION_MS = 400;
++    // lockNow() only posts the lock; if the keyguard has not shown by then, the timer is cancelled
++    private static final long KEYGUARD_CHECK_MS = 5000;
+ 
+     private final WindowManagerService mWm;
+     private final HandlerThread mThread = new HandlerThread(TAG);
+@@ -97,6 +99,15 @@ public class GrabDetectionService extends SystemService {
+         if (phase != PHASE_BOOT_COMPLETED) {
+             return;
+         }
++        try {
++            start();
++        } catch (RuntimeException e) {
++            // an exception here would fail the boot; without the feature the phone still works
++            Slog.e(TAG, "could not start grab detection", e);
++        }
++    }
++
++    private void start() {
+         final Context ctx = getContext();
+         mThread.start();
+         final Handler handler = new Handler(mThread.getLooper());
+@@ -115,14 +126,14 @@ public class GrabDetectionService extends SystemService {
+             @Override
+             public void onReceive(Context c, Intent intent) {
+                 mInteractive = Intent.ACTION_SCREEN_ON.equals(intent.getAction());
+-                updateArmed();
++                refresh(false);
+             }
+         }, screen, null, handler);
+ 
+         final ContentObserver observer = new ContentObserver(handler) {
+             @Override
+             public void onChange(boolean selfChange) {
+-                updateArmed();
++                refresh(false);
+             }
+         };
+         for (String key : new String[] {
+@@ -136,10 +147,7 @@ public class GrabDetectionService extends SystemService {
+ 
+         mHandler = handler;
+         // a flag left over from before a restart must not outlive it
+-        handler.post(() -> {
+-            clearTriggered();
+-            updateArmed();
+-        });
++        handler.post(() -> refresh(true));
+     }
+ 
+     /** Called by KeyguardServiceDelegate when the keyguard starts or stops showing. */
+@@ -149,12 +157,20 @@ public class GrabDetectionService extends SystemService {
+         if (handler == null) {
+             return;
+         }
+-        handler.post(() -> {
+-            if (!showing) {
++        handler.post(() -> refresh(!showing));
++    }
++
++    // Every entry on the handler thread comes through here: an exception that leaves that thread
++    // would take system_server down.
++    private void refresh(boolean clearFlag) {
++        try {
++            if (clearFlag) {
+                 clearTriggered();
+             }
+             updateArmed();
+-        });
++        } catch (RuntimeException e) {
++            Slog.e(TAG, "refresh failed", e);
++        }
+     }
+ 
+     private void updateArmed() {
+@@ -181,18 +197,27 @@ public class GrabDetectionService extends SystemService {
+                 ExtSettings.GRAB_SUSTAIN_MS.get(c),
+                 ExtSettings.GRAB_SUSTAIN_ENERGY.get(c) / 10f,
+                 COOLDOWN_MS));
+-        mSensorManager.registerListener(mSensorListener, mAccelerometer,
+-                SensorManager.SENSOR_DELAY_GAME, mHandler);
++        if (!mSensorManager.registerListener(mSensorListener, mAccelerometer,
++                SensorManager.SENSOR_DELAY_GAME, mHandler)) {
++            Slog.w(TAG, "accelerometer not registered, not armed");
++            mDetector = null;
++            return;
++        }
+         mWm.registerPointerEventListener(mPointerListener, Display.DEFAULT_DISPLAY);
+         mArmed = true;
+         Slog.i(TAG, "armed, mode=" + mode);
+     }
+ 
+     private void disarm() {
+-        mSensorManager.unregisterListener(mSensorListener);
+-        mWm.unregisterPointerEventListener(mPointerListener, Display.DEFAULT_DISPLAY);
+         mDetector = null;
+         mArmed = false;
++        mSensorManager.unregisterListener(mSensorListener);
++        try {
++            mWm.unregisterPointerEventListener(mPointerListener, Display.DEFAULT_DISPLAY);
++        } catch (RuntimeException e) {
++            // thrown when the register did nothing (no such display)
++            Slog.w(TAG, "pointer listener was not registered", e);
++        }
+         Slog.i(TAG, "disarmed");
+     }
+ 
+@@ -225,10 +250,14 @@ public class GrabDetectionService extends SystemService {
+                 return;
+             }
+             // both clocks of the detector are uptimeMillis: the touch event time and this one
+-            final GrabDetector.Decision x = d.onAccel(SystemClock.uptimeMillis(),
+-                    event.values[0], event.values[1], event.values[2]);
+-            if (x != null) {
+-                onDecision(x);
++            try {
++                final GrabDetector.Decision x = d.onAccel(SystemClock.uptimeMillis(),
++                        event.values[0], event.values[1], event.values[2]);
++                if (x != null) {
++                    onDecision(x);
++                }
++            } catch (RuntimeException e) {
++                Slog.e(TAG, "sensor callback failed", e);
+             }
+         }
+ 
+@@ -239,7 +268,13 @@ public class GrabDetectionService extends SystemService {
+ 
+     private void onDecision(GrabDetector.Decision x) {
+         final int mode = ExtSettings.GRAB_DETECTION_MODE.get(getContext());
+-        // the shadow log: sensor magnitudes and intervals only, no touch data, no location
++        // the shadow log: sensor magnitudes and intervals only, no coordinates, no location;
++        // values in m/s^2, the settings keys take tenths of them
++        if (!x.touched) {
++            Slog.i(TAG, String.format(Locale.ROOT, "peak without touch peak=%.1f mode=%d",
++                    x.peak, mode));
++            return;
++        }
+         Slog.i(TAG, String.format(Locale.ROOT,
+                 "candidate trigger=%b peak=%.1f released=%b releaseDeltaMs=%d energy=%.2f mode=%d",
+                 x.trigger, x.peak, x.released, x.releaseDeltaMs, x.energy, mode));
+@@ -269,10 +304,16 @@ public class GrabDetectionService extends SystemService {
+             // a lock without a restart timer is better than no lock
+             Slog.e(TAG, "could not arm the restart timer", e);
+         }
+-        boolean locked = false;
+         try {
++            // before the strong-auth requirement, so the message is ready when the bouncer shows;
++            // it is only the text above the PIN entry and must not stop the lock
+             Settings.Global.putInt(ctx.getContentResolver(),
+                     Settings.Global.GRAB_DETECTION_TRIGGERED, 1);
++        } catch (RuntimeException e) {
++            Slog.e(TAG, "could not set the triggered flag", e);
++        }
++        boolean locked = false;
++        try {
+             mLockPatternUtils.requireStrongAuth(STRONG_AUTH_REQUIRED_AFTER_USER_LOCKDOWN,
+                     UserHandle.USER_ALL);
+             mWindowManagerInternal.lockNow();
+@@ -289,6 +330,11 @@ public class GrabDetectionService extends SystemService {
+                 }
+             }
+         }
++        if (locked) {
++            // lockNow() only posts the lock. If the keyguard never shows (for example in lock task
++            // mode) the timer would restart a phone that is still in use.
++            mHandler.postDelayed(this::cancelIfKeyguardDidNotShow, KEYGUARD_CHECK_MS);
++        }
+         if (locked && mVibrator != null) {
+             mVibrator.vibrate(
+                     VibrationEffect.createOneShot(VIBRATION_MS, VibrationEffect.DEFAULT_AMPLITUDE),
+@@ -296,6 +342,18 @@ public class GrabDetectionService extends SystemService {
+         }
+     }
+ 
++    private void cancelIfKeyguardDidNotShow() {
++        try {
++            if (!mKeyguardShowing) {
++                Slog.e(TAG, "keyguard did not show after the lock, cancelling the restart timer");
++                SystemProperties.set(AUTO_REBOOT_CTL, AUTO_REBOOT_CANCEL);
++                clearTriggered();
++            }
++        } catch (RuntimeException e) {
++            Slog.e(TAG, "could not cancel the restart timer", e);
++        }
++    }
++
+     private void clearTriggered() {
+         final ContentResolver cr = getContext().getContentResolver();
+         if (Settings.Global.getInt(cr, Settings.Global.GRAB_DETECTION_TRIGGERED, 0) != 0) {
+-- 
+2.56.0
+
