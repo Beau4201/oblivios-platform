@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.freeholdos.airpods.app
 
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioManager
 import android.os.SystemClock
 import android.util.Log
@@ -42,8 +47,25 @@ internal class EarDetectionController(
     // Worker thread only.
     private var lastPlayKeyMs = -PLAY_SETTLE_MS
 
+    // The pods became the active audio device (see EarDetectionPolicy.onAudioActive). The sender is the Bluetooth process.
+    private val appContext = context.applicationContext
+    private val activeDeviceReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val changed = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
+            if (changed.address == device.address) submit { execute(policy.onAudioActive()) }
+        }
+    }
+
     init {
         AirPodsStateStore.addListener(this)
+        appContext.registerReceiver(
+            activeDeviceReceiver,
+            IntentFilter().apply {
+                addAction(BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED)
+                addAction(BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED)
+            },
+            Context.RECEIVER_EXPORTED,
+        )
     }
 
     /** The number of pods in the ears (0 to 2), from the session thread. */
@@ -89,6 +111,7 @@ internal class EarDetectionController(
         if (ended) return
         ended = true
         AirPodsStateStore.removeListener(this)
+        appContext.unregisterReceiver(activeDeviceReceiver)
         worker.execute { execute(policy.end()) }
         worker.shutdown()
     }

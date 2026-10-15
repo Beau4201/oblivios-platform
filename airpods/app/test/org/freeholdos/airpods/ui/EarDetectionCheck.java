@@ -61,6 +61,28 @@ public final class EarDetectionCheck {
         is(p.onEars(0), "repeat does nothing");
         is(p.onEars(2), "both in", Action.ROUTE_BACK);
 
+        // The pods become the active audio device after the first report (the session opens before the audio
+        // profiles connect, so the route-away of the baseline removed nothing): route away again, every time.
+        p = new EarDetectionPolicy(true);
+        is(p.onEars(0), "baseline both out", Action.ROUTE_AWAY);
+        is(p.onAudioActive(), "active again while both out", Action.ROUTE_AWAY);
+        is(p.onAudioActive(), "and again after another reconnect", Action.ROUTE_AWAY);
+        is(p.onEars(1), "one back routes back", Action.ROUTE_BACK);
+        is(p.onAudioActive(), "active with a pod in the ear does nothing");
+        p = new EarDetectionPolicy(true);
+        is(p.onAudioActive(), "active before the first report does nothing");
+        p.onEars(2);
+        is(p.onAudioActive(), "active with both in does nothing");
+        p = new EarDetectionPolicy(false);
+        p.onEars(0);
+        is(p.onAudioActive(), "active with the switch off does nothing");
+        p = new EarDetectionPolicy(true);
+        p.onEars(0);
+        p.startFind();
+        is(p.onAudioActive(), "active during Play sound does nothing");
+        p.endFind();
+        is(p.end(), "a route away that went through onAudioActive is restored at the end", Action.ROUTE_BACK_IF_LINKED);
+
         // A baseline with a pod in the ear does nothing.
         p = new EarDetectionPolicy(true);
         is(p.onEars(1), "baseline one in");

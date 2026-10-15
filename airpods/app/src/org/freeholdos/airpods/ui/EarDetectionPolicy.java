@@ -85,6 +85,19 @@ public final class EarDetectionPolicy {
         return List.of();
     }
 
+    /**
+     * The AirPods became the active A2DP or hands-free device. The session opens before the audio profiles
+     * connect, so a {@link Action#ROUTE_AWAY} of the first report can find nothing active to remove and the
+     * stack then makes the pods active anyway (measured 2026-10-16: pods taken out of the case and left out
+     * of the ears played the music). With no pod in an ear the route goes away again, whatever {@code
+     * routedAway} says: the stack removes only what is active, so a repeat is harmless.
+     */
+    public synchronized List<Action> onAudioActive() {
+        if (!enabled || finding || inEar != 0) return List.of();
+        routedAway = true;
+        return List.of(Action.ROUTE_AWAY);
+    }
+
     /** A {@link Action#PAUSE_RESUMABLE} really paused something. */
     public synchronized void notePaused() {
         pausedByUs = true;
