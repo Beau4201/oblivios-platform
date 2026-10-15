@@ -1,0 +1,92 @@
+From f577bdb2ec9e23a95ccbbc69bca1ced1aff00dba Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Thu, 15 Oct 2026 04:25:55 +0200
+Subject: [PATCH 2/4] grab: settings keys of the grab detection (mode,
+ thresholds, triggered flag)
+
+---
+ .../android/ext/settings/ExtSettings.java     | 29 +++++++++++++++++++
+ core/java/android/provider/Settings.java      | 27 +++++++++++++++++
+ 2 files changed, 56 insertions(+)
+
+diff --git a/core/java/android/ext/settings/ExtSettings.java b/core/java/android/ext/settings/ExtSettings.java
+index b0eb63a..1af4f3c 100644
+--- a/core/java/android/ext/settings/ExtSettings.java
++++ b/core/java/android/ext/settings/ExtSettings.java
+@@ -35,6 +35,35 @@ public class ExtSettings {
+             // default value: 18 hours
+             (int) TimeUnit.HOURS.toMillis(18));
+ 
++    // SovereignOS grab detection (ADR-169)
++    public static final int GRAB_DETECTION_OFF = 0;
++    public static final int GRAB_DETECTION_SHADOW = 1;
++    public static final int GRAB_DETECTION_ACTIVE = 2;
++
++    public static final IntSetting GRAB_DETECTION_MODE = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_DETECTION_MODE,
++            // the first build only logs; the default becomes active when the shadow phase ends
++            GRAB_DETECTION_SHADOW,
++            GRAB_DETECTION_OFF, GRAB_DETECTION_SHADOW, GRAB_DETECTION_ACTIVE);
++
++    public static final IntSetting GRAB_PEAK = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_PEAK_DMS2, 150);
++
++    public static final IntSetting GRAB_TOUCH_WINDOW_MS = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_TOUCH_WINDOW_MS, 400);
++
++    public static final IntSetting GRAB_TOUCH_LOSS_MS = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_TOUCH_LOSS_MS, 150);
++
++    public static final IntSetting GRAB_SETTLE_MS = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_SETTLE_MS, 200);
++
++    public static final IntSetting GRAB_SUSTAIN_MS = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_SUSTAIN_MS, 800);
++
++    public static final IntSetting GRAB_SUSTAIN_ENERGY = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2, 15);
++
+     public static final BoolSetting SCREENSHOT_TIMESTAMP_EXIF = new BoolSetting(
+             Setting.Scope.PER_USER, Settings.Secure.SCREENSHOT_TIMESTAMP_EXIF, false);
+ 
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 4c940ca..1f8b701 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -14457,6 +14457,33 @@ public final class Settings {
+         @Protected(readWrite = KnownSystemPackage.SETTINGS)
+         public static final String AUTO_REBOOT_TIMEOUT = "settings_reboot_after_timeout";
+ 
++        // SovereignOS grab detection (ADR-169). Not @Protected on purpose: `adb shell settings
++        // put global` must work on a user build to tune the shadow mode and to switch back to it.
++
++        /** 0 off, 1 shadow (log only), 2 active @hide */
++        public static final String GRAB_DETECTION_MODE = "grab_detection_mode";
++
++        /** Deviation of the acceleration from gravity that counts as a pull, in 0.1 m/s^2 @hide */
++        public static final String GRAB_PEAK_DMS2 = "grab_peak_dms2";
++
++        /** The screen must have been touched at most this long before the pull @hide */
++        public static final String GRAB_TOUCH_WINDOW_MS = "grab_touch_window_ms";
++
++        /** The touch must end within this long before or after the pull @hide */
++        public static final String GRAB_TOUCH_LOSS_MS = "grab_touch_loss_ms";
++
++        /** Time after the pull that is not measured @hide */
++        public static final String GRAB_SETTLE_MS = "grab_settle_ms";
++
++        /** Length of the window in which the movement after the pull is measured @hide */
++        public static final String GRAB_SUSTAIN_MS = "grab_sustain_ms";
++
++        /** Mean deviation in that window that counts as continued movement, in 0.1 m/s^2 @hide */
++        public static final String GRAB_SUSTAIN_ENERGY_DMS2 = "grab_sustain_energy_dms2";
++
++        /** 1 from a grab lock until the next unlock; read by the message above the PIN entry @hide */
++        public static final String GRAB_DETECTION_TRIGGERED = "grab_detection_triggered";
++
+         /** @hide */
+         @Protected(restrictReads = false, readWrite = KnownSystemPackage.SETTINGS)
+         public static final String GNSS_SUPL = "force_disable_supl"; // historical name
+-- 
+2.56.0
+

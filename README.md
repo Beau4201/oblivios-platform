@@ -28,6 +28,8 @@ and device logs do not belong in this repository.
   told when the user takes a screenshot (one `frameworks/base` patch).
 - [`privacy/identity-surface`](privacy/identity-surface/README.md) — apps cannot read the
   unit-specific boot properties or the bias estimates of the uncalibrated sensors (ADR-167).
+- [`physical/grab-detection`](physical/grab-detection/README.md) — the phone locks when it is pulled out
+  of a hand in use and restarts after 60 seconds without a PIN (ADR-169).
 - [`release/ota-server-url`](release/ota-server-url/README.md) — points
   the Updater app at SovereignOS's private lynx OTA server (ADR-052, amending
   ADR-045).

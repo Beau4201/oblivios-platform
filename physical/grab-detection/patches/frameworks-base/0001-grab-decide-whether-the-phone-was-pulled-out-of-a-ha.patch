@@ -1,0 +1,193 @@
+From 4ca86371ccad574ebe730a1a0fc300aa409d3646 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Thu, 15 Oct 2026 04:25:34 +0200
+Subject: [PATCH 1/4] grab: decide whether the phone was pulled out of a hand
+ in use
+
+---
+ .../com/android/server/grab/GrabDetector.java | 173 ++++++++++++++++++
+ 1 file changed, 173 insertions(+)
+ create mode 100644 services/core/java/com/android/server/grab/GrabDetector.java
+
+diff --git a/services/core/java/com/android/server/grab/GrabDetector.java b/services/core/java/com/android/server/grab/GrabDetector.java
+new file mode 100644
+index 0000000..5fd733c
+--- /dev/null
++++ b/services/core/java/com/android/server/grab/GrabDetector.java
+@@ -0,0 +1,173 @@
++/*
++ * Copyright (C) 2026 SovereignOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.server.grab;
++
++/**
++ * Decides whether the phone was pulled out of the owner's hand while in use.
++ *
++ * A pull is: a sharp acceleration peak while the screen was being touched, the touch contact
++ * ending within a short interval of the peak, and movement that continues afterwards. A phone
++ * that is dropped comes to rest, so its movement afterwards is small.
++ *
++ * No Android dependency. All times are milliseconds from one monotonic clock. Not thread-safe:
++ * the caller serialises every call on one thread. Touch input is reduced to "contact or no
++ * contact"; no coordinate, pressure or touch pattern is accepted, kept or reported.
++ *
++ * @hide
++ */
++public final class GrabDetector {
++    /** Standard gravity in m/s^2. */
++    public static final float GRAVITY = 9.80665f;
++
++    private static final long NEVER = Long.MIN_VALUE;
++
++    /** Tunable thresholds. Accelerations are in m/s^2, times in milliseconds. */
++    public static final class Params {
++        /** Deviation of the acceleration magnitude from gravity that counts as a pull. */
++        public final float peak;
++        /** The screen must have been touched at most this long before the peak. */
++        public final long touchWindowMs;
++        /** The touch contact must end within this long before or after the peak. */
++        public final long touchLossMs;
++        /** Time after the peak that is not measured (the pull itself). */
++        public final long settleMs;
++        /** Length of the window after the settle time in which movement is measured. */
++        public final long sustainMs;
++        /** Mean deviation from gravity in that window that counts as continued movement. */
++        public final float sustainEnergy;
++        /** After a decision, new peaks are ignored for this long. */
++        public final long cooldownMs;
++
++        public Params(float peak, long touchWindowMs, long touchLossMs, long settleMs,
++                long sustainMs, float sustainEnergy, long cooldownMs) {
++            this.peak = peak;
++            this.touchWindowMs = touchWindowMs;
++            this.touchLossMs = touchLossMs;
++            this.settleMs = settleMs;
++            this.sustainMs = sustainMs;
++            this.sustainEnergy = sustainEnergy;
++            this.cooldownMs = cooldownMs;
++        }
++    }
++
++    /** The outcome for one candidate pull. {@code trigger} is the verdict, the rest explains it. */
++    public static final class Decision {
++        public final boolean trigger;
++        public final float peak;
++        public final boolean released;
++        public final long releaseDeltaMs;
++        public final float energy;
++
++        Decision(boolean trigger, float peak, boolean released, long releaseDeltaMs,
++                float energy) {
++            this.trigger = trigger;
++            this.peak = peak;
++            this.released = released;
++            this.releaseDeltaMs = releaseDeltaMs;
++            this.energy = energy;
++        }
++    }
++
++    private final Params mParams;
++
++    private boolean mInContact;
++    private long mLastContactMs = NEVER;
++    private long mLastReleaseMs = NEVER;
++
++    private boolean mPending;
++    private long mPeakMs;
++    private double mPeakDev;
++    private boolean mReleased;
++    private long mReleaseDeltaMs;
++    private double mSumDev;
++    private int mCount;
++    private long mIgnoreUntilMs = NEVER;
++
++    public GrabDetector(Params params) {
++        mParams = params;
++    }
++
++    /** Forgets all state. Call when the detector is armed. */
++    public void reset() {
++        mInContact = false;
++        mLastContactMs = NEVER;
++        mLastReleaseMs = NEVER;
++        mPending = false;
++        mIgnoreUntilMs = NEVER;
++    }
++
++    /** {@code contact} is true while a finger is on the screen, false when none is left. */
++    public void onTouch(long tMs, boolean contact) {
++        if (contact) {
++            mInContact = true;
++            mLastContactMs = tMs;
++            return;
++        }
++        if (!mInContact) {
++            return;
++        }
++        mInContact = false;
++        mLastReleaseMs = tMs;
++        if (mPending && Math.abs(tMs - mPeakMs) <= mParams.touchLossMs) {
++            mReleased = true;
++            mReleaseDeltaMs = tMs - mPeakMs;
++        }
++    }
++
++    /**
++     * Feeds one accelerometer sample (m/s^2, including gravity).
++     *
++     * @return null while nothing was decided, otherwise the decision for the candidate that
++     *         just finished
++     */
++    public Decision onAccel(long tMs, float x, float y, float z) {
++        if (mIgnoreUntilMs != NEVER && tMs < mIgnoreUntilMs) {
++            return null;
++        }
++        final double dev = Math.abs(
++                Math.sqrt((double) x * x + (double) y * y + (double) z * z) - (double) GRAVITY);
++
++        if (!mPending) {
++            if (dev >= mParams.peak && touchedRecently(tMs)) {
++                startCandidate(tMs, dev);
++            }
++            return null;
++        }
++
++        final long since = tMs - mPeakMs;
++        if (since < mParams.settleMs) {
++            mPeakDev = Math.max(mPeakDev, dev);
++        } else if (since < mParams.settleMs + mParams.sustainMs) {
++            mSumDev += dev;
++            mCount++;
++        }
++        if (since < mParams.settleMs + mParams.sustainMs) {
++            return null;
++        }
++
++        mPending = false;
++        mIgnoreUntilMs = tMs + mParams.cooldownMs;
++        final double energy = mCount > 0 ? mSumDev / mCount : 0;
++        final boolean trigger = mReleased && energy >= mParams.sustainEnergy;
++        return new Decision(trigger, (float) mPeakDev, mReleased, mReleaseDeltaMs, (float) energy);
++    }
++
++    private boolean touchedRecently(long tMs) {
++        return mInContact
++                || (mLastContactMs != NEVER && tMs - mLastContactMs <= mParams.touchWindowMs);
++    }
++
++    private void startCandidate(long tMs, double dev) {
++        mPending = true;
++        mPeakMs = tMs;
++        mPeakDev = dev;
++        mSumDev = 0;
++        mCount = 0;
++        // a release just before the peak counts: the fingers can leave before the sensor sees it
++        mReleased = mLastReleaseMs != NEVER && tMs - mLastReleaseMs <= mParams.touchLossMs;
++        mReleaseDeltaMs = mReleased ? mLastReleaseMs - tMs : 0;
++    }
++}
+-- 
+2.56.0
+
