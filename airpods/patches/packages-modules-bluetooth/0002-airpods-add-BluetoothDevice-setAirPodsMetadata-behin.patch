@@ -38,7 +38,7 @@ index 0e21c4d..4716910 100644
      boolean setAirPodsIdentity(in BluetoothDevice device, in boolean recognized, in AttributionSource attributionSource);
  
 +    // For AirPods metadata (ADR-117). Also requires
-+    // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime
++    // org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY at runtime
 +    // (enforced in AdapterServiceBinder, see setAirPodsIdentity above for why the
 +    // annotation cannot carry it). The device must be bonded and registered.
 +    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
@@ -85,7 +85,7 @@ index 15151c2..909a7db 100644
 +    /**
 +     * Writes one metadata value on a bonded device that the AirPods app has registered (ADR-117).
 +     * The caller (AdapterServiceBinder) has already enforced
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY.
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY.
 +     *
 +     * @return true when the stored value now equals {@code value} (including when it already did);
 +     *     false when the key or value is outside {@link AirPodsMetadataPolicy}, the device is not
@@ -130,7 +130,7 @@ index f250486..4e85f53 100644
  
 +    /**
 +     * Writes one AirPods-related metadata value on a bonded, registered AirPods device (ADR-117).
-+     * Scoped to the caller holding org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY, never a
++     * Scoped to the caller holding org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY, never a
 +     * general BLUETOOTH_PRIVILEGED holder; the key allow-list and the bond and registration
 +     * checks are in {@link AdapterService#setAirPodsMetadata}.
 +     */
@@ -144,7 +144,7 @@ index f250486..4e85f53 100644
 +        }
 +
 +        service.enforceCallingOrSelfPermission(
-+                "org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY", null);
++                "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY", null);
 +
 +        return service.setAirPodsMetadata(device, key, value);
 +    }
@@ -363,7 +363,7 @@ index b8627d0..c3fbbd3 100644
 +
 +        // FreeholdOS ADR-117
 +        private const val MANAGE_AIRPODS_IDENTITY =
-+            "org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY"
++            "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY"
 +        private const val AIRPODS_KEY = BluetoothDevice.METADATA_UNTETHERED_LEFT_BATTERY
 +        private val AIRPODS_VALUE = "82".toByteArray()
      }
@@ -761,7 +761,7 @@ index f88ce3d..956b231 100644
 +     * clears the key. The metadata is removed by the platform when the bond is removed.
 +     *
 +     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
 +     * not require {@code BLUETOOTH_PRIVILEGED}.
 +     *
 +     * @param key one of the accepted keys above

@@ -18,7 +18,7 @@ index 2e94e04..067c7d1 100644
  PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%
 +
 +# FreeholdOS Data Map (ADR-157): the read-only classifier file that the Data Map service reads from
-+# /system/etc/datamap. The module is defined in vendor/sovereignos/datamap. Kept in the common file like
++# /system/etc/datamap. The module is defined in vendor/freeholdos/datamap. Kept in the common file like
 +# Guardian and AirPods, so every Pixel target carries it.
 +PRODUCT_PACKAGES += \
 +    datamap-classifier.tsv

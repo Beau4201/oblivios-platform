@@ -12,9 +12,9 @@ PART="${PAIR_NAME_PART:-AirPods}"
 session() { # seconds [cmds]: one probe session, prints its log
   local args=(--es name "$PART" --ei seconds "$1" --es order hcn)
   [ -n "${2:-}" ] && args+=(--es cmds "$2")
-  adb shell am force-stop org.sovereignos.airpods
+  adb shell am force-stop org.freeholdos.airpods
   adb logcat -c
-  adb shell am start -n org.sovereignos.airpods.probe/.ProbeActivity "${args[@]}" > /dev/null
+  adb shell am start -n org.freeholdos.airpods.probe/.ProbeActivity "${args[@]}" > /dev/null
   sleep $(($1 + 3))
   adb logcat -d -s AirPodsProbe
 }

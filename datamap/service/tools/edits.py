@@ -37,7 +37,7 @@ EDITS = [
      '\n'
      '    <!-- Allows the FreeholdOS Data Map app to read which services each app contacts, for its own\n'
      '         user. Only that app holds it (ADR-157). -->\n'
-     '    <permission android:name="org.sovereignos.permission.READ_DATA_MAP"\n'
+     '    <permission android:name="org.freeholdos.permission.READ_DATA_MAP"\n'
      '        android:label="@string/permlab_freeholdosReadDataMap"\n'
      '        android:description="@string/permdesc_freeholdosReadDataMap"\n'
      '        android:protectionLevel="signature|privileged" />\n'),
@@ -87,14 +87,14 @@ EDITS = [
     ("system/sepolicy", "private/seapp_contexts",
      "user=_app isPrivApp=true name=app.grapheneos.logviewer domain=logviewer_app type=app_data_file levelFrom=all\n",
      "user=_app isPrivApp=true name=app.grapheneos.logviewer domain=logviewer_app type=app_data_file levelFrom=all\n"
-     "user=_app isPrivApp=true name=org.sovereignos.datamap domain=datamap_app type=app_data_file levelFrom=all\n"),
+     "user=_app isPrivApp=true name=org.freeholdos.datamap domain=datamap_app type=app_data_file levelFrom=all\n"),
     # ---- the product ships the classifier file ----
     ("vendor/adevtool", "config/mk/google_devices/common/device-common.mk",
      "PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%\n",
      "PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%\n"
      "\n"
      "# FreeholdOS Data Map (ADR-157): the read-only classifier file that the Data Map service reads from\n"
-     "# /system/etc/datamap. The module is defined in vendor/sovereignos/datamap. Kept in the common file like\n"
+     "# /system/etc/datamap. The module is defined in vendor/freeholdos/datamap. Kept in the common file like\n"
      "# Guardian and AirPods, so every Pixel target carries it.\n"
      "PRODUCT_PACKAGES += \\\n"
      "    datamap-classifier.tsv\n"),

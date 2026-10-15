@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.sovereignos.guardian.ui
+package org.freeholdos.guardian.ui
 
 import androidx.activity.compose.HarnessBackDispatcher
 import androidx.compose.ui.test.filterToOne
@@ -14,13 +14,13 @@ import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.sovereignos.guardian.application.GuardianApplicationResult
-import org.sovereignos.guardian.contracts.GuardianIncidentV1
-import org.sovereignos.guardian.overview.GuardianOverviewEntry
-import org.sovereignos.guardian.overview.GuardianOverviewSnapshot
-import org.sovereignos.guardian.overview.GuardianProtectionLifecycle
-import org.sovereignos.guardian.remediation.RemediationOutcome
-import org.sovereignos.guardianui.screens.GuardianIncidentTone
+import org.freeholdos.guardian.application.GuardianApplicationResult
+import org.freeholdos.guardian.contracts.GuardianIncidentV1
+import org.freeholdos.guardian.overview.GuardianOverviewEntry
+import org.freeholdos.guardian.overview.GuardianOverviewSnapshot
+import org.freeholdos.guardian.overview.GuardianProtectionLifecycle
+import org.freeholdos.guardian.remediation.RemediationOutcome
+import org.freeholdos.guardianui.screens.GuardianIncidentTone
 import org.junit.Rule
 
 /**

@@ -17,7 +17,7 @@ index 1992526..f26b070 100644
      datamap-classifier.tsv
  
 +# FreeholdOS Data Map (ADR-161): the read-only address data that gives a contacted address a hosting country, a city and
-+# an operator, read by the Data Map service from /system/etc/datamap. The module is defined in vendor/sovereignos/datamap.
++# an operator, read by the Data Map service from /system/etc/datamap. The module is defined in vendor/freeholdos/datamap.
 +PRODUCT_PACKAGES += \
 +    datamap-ipmap.bin
 +

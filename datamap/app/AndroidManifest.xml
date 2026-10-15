@@ -2,9 +2,9 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- ADR-157. No INTERNET permission and no service, receiver or provider: MAP-011, MAP-013, MAP-015 check this. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.sovereignos.datamap">
+    package="org.freeholdos.datamap">
 
-    <uses-permission android:name="org.sovereignos.permission.READ_DATA_MAP" />
+    <uses-permission android:name="org.freeholdos.permission.READ_DATA_MAP" />
     <!-- Needed to show the icon and name of every installed app; holds nothing else. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 

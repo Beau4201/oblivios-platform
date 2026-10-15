@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.sovereignos.guardian.ui
+package org.freeholdos.guardian.ui
 
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.sovereignos.guardianui.screens.GuardianIncidentTone
+import org.freeholdos.guardianui.screens.GuardianIncidentTone
 import org.junit.jupiter.api.Test
 
 /**

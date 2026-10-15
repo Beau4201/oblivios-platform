@@ -43,7 +43,7 @@ index 4716910..aaf01b5 100644
      boolean setAirPodsMetadata(in BluetoothDevice device, in int key, in byte[] value, in AttributionSource attributionSource);
  
 +    // For the AirPods audio route (ADR-125). Also requires
-+    // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
++    // org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
 +    // AdapterServiceBinder, see setAirPodsIdentity above for why the annotation cannot carry it).
 +    // The device must be bonded and registered. The token is a binder of the caller: if it dies
 +    // while the AirPods are routed away, the route is restored.
@@ -189,7 +189,7 @@ index 909a7db..481f4d2 100644
 +    /**
 +     * FreeholdOS ADR-125: takes the registered AirPods out of the active A2DP/HFP slots
 +     * ({@code away}) or puts them back. The caller (AdapterServiceBinder) has already enforced
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
 +     * accepted, under the same lock as register and unbond. {@code token} is a binder of the
 +     * calling process: if it dies while the AirPods are routed away, the route is restored.
 +     *
@@ -269,7 +269,7 @@ index 4e85f53..6b04636 100644
  
 +    /**
 +     * Takes the registered AirPods out of the active audio slots, or puts them back (ADR-125).
-+     * Scoped to the caller holding org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY, never a
++     * Scoped to the caller holding org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY, never a
 +     * general BLUETOOTH_PRIVILEGED holder; the bond and registration checks are in {@link
 +     * AdapterService#setAirPodsAudioRoute}.
 +     */
@@ -284,7 +284,7 @@ index 4e85f53..6b04636 100644
 +        }
 +
 +        service.enforceCallingOrSelfPermission(
-+                "org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY", null);
++                "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY", null);
 +
 +        return service.setAirPodsAudioRoute(device, away, token);
 +    }
@@ -620,7 +620,7 @@ index 956b231..23c1ebf 100644
 +     * turned off, or the calling process dies.
 +     *
 +     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
 +     * not require {@code BLUETOOTH_PRIVILEGED} or {@code MODIFY_AUDIO_ROUTING}.
 +     *
 +     * @return true when the request was applied or there was nothing to do; false when refused or on

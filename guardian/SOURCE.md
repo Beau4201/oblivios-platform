@@ -10,8 +10,13 @@
   runtime dependencies — confirmed via `guardian-core/build.gradle.kts`).
   Reproduced via `:guardian-core:clean :guardian-core:jar --offline` to rule
   out a stale Gradle cache; hash matched both times.
-- SHA-256 (current, after the `org.aegisos` -> `org.sovereignos` package
-  rename, re-vendored 2026-09-25 in `c3e1684`):
+- SHA-256 (current, after the `org.sovereignos` -> `org.freeholdos` package rename, ADR-170,
+  re-vendored 2026-10-15): `6c676f1071804015224727ffa79fcde49d4439d73ef495fc31437d464eed80e0`,
+  built at `freeholdos-services` `615caf8` with `./gradlew :guardian-core:clean :guardian-core:jar
+  --offline`, twice with the same hash. The entries equal those of the jar below with the prefix
+  mapped. The 154 tests of `./gradlew test --offline` pass.
+- SHA-256 of the jar of 2026-09-25 (`org.sovereignos` prefix, superseded; the next entry is the
+  one the text below describes, re-vendored in `c3e1684`):
   `f35ba45f394ee96beb3b7579a6c1b9e30684c93030996a0b3c834b7f5fc2ffac`.
   Independently reproduced 2026-09-28 with `./gradlew :guardian-core:clean
   :guardian-core:jar --offline` at `sovereignos-services` `92d29b7`: same

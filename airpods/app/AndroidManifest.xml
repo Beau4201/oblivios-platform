@@ -2,14 +2,14 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="org.sovereignos.airpods">
+    package="org.freeholdos.airpods">
 
     <!-- Every permission here is justified in
          the internal record "airpods platform api verification" (not published).
          Deliberately absent: BLUETOOTH_PRIVILEGED (ADR-117), any network
          permission, and every Guardian permission. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY" />
+    <uses-permission android:name="org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- POST_NOTIFICATIONS is deliberately absent: the app shows no notification, not even the one the
          foreground service below must carry (the owner wants none; a service without the grant keeps
@@ -75,7 +75,7 @@
         <!-- Ring icons for Settings; Settings gets a persistable read grant, nobody else can read. -->
         <provider
             android:name=".app.AirPodsIconProvider"
-            android:authorities="org.sovereignos.airpods.icons"
+            android:authorities="org.freeholdos.airpods.icons"
             android:exported="false"
             android:grantUriPermissions="true" />
 

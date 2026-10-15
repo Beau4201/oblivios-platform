@@ -22,7 +22,7 @@ index e4b025a..a421805 100644
 -         user. Only that app holds it (ADR-157). -->
 +         user. Only that app holds it (ADR-157).
 +         @hide -->
-     <permission android:name="org.sovereignos.permission.READ_DATA_MAP"
+     <permission android:name="org.freeholdos.permission.READ_DATA_MAP"
          android:label="@string/permlab_freeholdosReadDataMap"
          android:description="@string/permdesc_freeholdosReadDataMap"
 -- 

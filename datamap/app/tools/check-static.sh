@@ -35,16 +35,16 @@ grep -q 'Only connections Atlas could see are listed. There may be more.' "$APP/
   || fail "the note that a connection which is not listed is not proof of none is gone"
 # Review of 2026-10-13: a Switch restores its checked state by id, so two with one id swap their values on a theme change
 # and the listeners then change Collect and Keep for without a touch. A Switch keeps no saved state and has no shared id.
-grep -q 'setSaveEnabled(false)' "$APP/src/org/sovereignos/datamap/Controls.java" || fail "the Switch must not save its state (C1)"
-grep -q 'R.id.at_switch' "$APP/src/org/sovereignos/datamap/Controls.java" && fail "the Switches share one id (C1)"
+grep -q 'setSaveEnabled(false)' "$APP/src/org/freeholdos/datamap/Controls.java" || fail "the Switch must not save its state (C1)"
+grep -q 'R.id.at_switch' "$APP/src/org/freeholdos/datamap/Controls.java" && fail "the Switches share one id (C1)"
 # Choosing a place or an app leaves full screen (spec 3): the flights must take the globe back to its normal size.
-grep -E 'flyTo\(.*Motion\.FLY_(PLACE|APP)\)' "$APP/src/org/sovereignos/datamap/GlobeView.java" | grep -qv '0f, Motion' \
+grep -E 'flyTo\(.*Motion\.FLY_(PLACE|APP)\)' "$APP/src/org/freeholdos/datamap/GlobeView.java" | grep -qv '0f, Motion' \
   && fail "a flight to a place or an app must pass 0f as full screen (I1)"
 # The land is prepared on its own thread; behind the snapshot read it kept the empty state on screen (I3).
-grep -q 'mLand.execute' "$APP/src/org/sovereignos/datamap/MainActivity.java" || fail "the land needs its own executor (I3)"
+grep -q 'mLand.execute' "$APP/src/org/freeholdos/datamap/MainActivity.java" || fail "the land needs its own executor (I3)"
 # Device round 2026-10-13: the full-screen button is a FrameLayout around its icon; casting the button itself to an
 # ImageView killed the activity in onCreate. The icon is the child of the button.
-grep -q '(ImageView) ((FrameLayout) ((LinearLayout) mFullControl).getChildAt(0)).getChildAt(0)' "$APP/src/org/sovereignos/datamap/MapTab.java" \
+grep -q '(ImageView) ((FrameLayout) ((LinearLayout) mFullControl).getChildAt(0)).getChildAt(0)' "$APP/src/org/freeholdos/datamap/MapTab.java" \
   || fail "mFullIcon must be taken from inside the button FrameLayout (device crash in MapTab.<init>)"
 # Owner, 2026-10-13: an app's icon is the system's own icon, with no theme tint, no full bleed and no clipping of ours.
 if grep -rnE 'ThemedIcons|AppIcons|getMonochrome' "$APP/src" --include='*.java'; then
@@ -60,12 +60,12 @@ grep -q 'IP Geolocation by DB-IP' "$APP/res/values/strings.xml" || fail "the att
 # marker of a server place is hollow, and the three kinds with no place keep their own line in the list.
 for f in serverKind serverCountry serverCity serverLat serverLon serverOperator; do
   grep -q "^    [a-zA-Z]* $f;" "$APP/src/com/android/internal/datamap/DataMapEntry.aidl" || fail "DataMapEntry.aidl has no $f"
-  grep -qE "m\.$f = (nz\()?e\.$f\)?;" "$APP/src/org/sovereignos/datamap/SnapshotMapper.java" || fail "SnapshotMapper does not copy $f"
+  grep -qE "m\.$f = (nz\()?e\.$f\)?;" "$APP/src/org/freeholdos/datamap/SnapshotMapper.java" || fail "SnapshotMapper does not copy $f"
 done
-[ "$(grep -c 'if (!hollow) {' "$APP/src/org/sovereignos/datamap/GlobeView.java")" -eq 2 ] || fail "a server place must be drawn as a ring with nothing in it"
-grep -q 'mPlaces.get(i).lead.server);' "$APP/src/org/sovereignos/datamap/GlobeView.java" || fail "the marker of a server place must be hollow"
+[ "$(grep -c 'if (!hollow) {' "$APP/src/org/freeholdos/datamap/GlobeView.java")" -eq 2 ] || fail "a server place must be drawn as a ring with nothing in it"
+grep -q 'mPlaces.get(i).lead.server);' "$APP/src/org/freeholdos/datamap/GlobeView.java" || fail "the marker of a server place must be hollow"
 for k in SRV_UNCERTAIN SRV_ANYCAST SRV_STEERED; do
-  grep -q "case MapModel.$k:" "$APP/src/org/sovereignos/datamap/Texts.java" || fail "Texts.serverLine has no line for $k"
+  grep -q "case MapModel.$k:" "$APP/src/org/freeholdos/datamap/Texts.java" || fail "Texts.serverLine has no line for $k"
 done
 [ "$bad" -eq 0 ] && echo "static checks passed"
 exit "$bad"

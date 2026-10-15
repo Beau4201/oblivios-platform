@@ -1,0 +1,597 @@
+// SPDX-License-Identifier: Apache-2.0
+package org.freeholdos.airpods.app
+
+import android.app.AlertDialog
+import android.bluetooth.BluetoothManager
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
+import android.icu.text.ListFormatter
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.text.InputFilter
+import android.text.InputType
+import android.widget.EditText
+import android.widget.FrameLayout
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.preference.ListPreference
+import androidx.preference.Preference
+import androidx.preference.PreferenceCategory
+import androidx.preference.SwitchPreferenceCompat
+import com.android.settingslib.widget.FooterPreference
+import com.android.settingslib.widget.SegmentedButtonPreference
+import com.android.settingslib.widget.SettingsBasePreferenceFragment
+import com.android.settingslib.widget.SpacePreference
+import com.android.settingslib.widget.SliderPreference
+import com.android.settingslib.widget.theme.R as ThemeR
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import org.freeholdos.airpods.R
+import org.freeholdos.airpods.ui.AdaptiveSteps
+import org.freeholdos.airpods.ui.AirPodsUiState
+import org.freeholdos.airpods.ui.AirPodsUiState.Feature
+import org.freeholdos.airpods.ui.ControlRows
+import org.freeholdos.airpods.ui.DuckLevels
+import org.freeholdos.airpods.ui.ListeningModeToggles
+import org.freeholdos.airpods.ui.PressAndHoldChoices
+import org.freeholdos.airpods.validation.AapCodec
+import org.freeholdos.airpods.validation.ListeningModeState.ListeningMode
+
+/**
+ * The groups of our own page: Listening mode (four buttons, a description, the Adaptive strength
+ * slider), Comfort (the two switches), Volume while speaking (a slider, only while conversation awareness
+ * is on), Sound and controls (Press and hold, Personalized volume, Chime volume), Stem controls, Calls and microphone,
+ * Charging case, Find (Play sound) and About (Name, Model number, Firmware); the rows of the control groups come from
+ * [ControlRows] (Plan 9). It extends [SettingsBasePreferenceFragment] for the rounded card grouping of Settings
+ * (AIR-166). It shows
+ * [AirPodsStateStore] and sends commands through [AirPodsCommands.sink], on a worker thread because a
+ * command can wait on the session; every command ends by showing the real state again, so a refused
+ * command puts the control back. The state is the truth: switches return false from their change
+ * listener and are set by [render].
+ */
+class AirPodsSettingsFragment : SettingsBasePreferenceFragment() {
+    private lateinit var rings: RingsPreference
+    private lateinit var notConnected: Preference
+    private lateinit var listeningGroup: PreferenceCategory
+    private lateinit var listening: SegmentedButtonPreference
+    private lateinit var description: Preference
+    private lateinit var adaptive: SliderPreference
+    private lateinit var comfortGroup: PreferenceCategory
+    private lateinit var ear: SwitchPreferenceCompat
+    private lateinit var conversation: SwitchPreferenceCompat
+    private lateinit var duckGroup: PreferenceCategory
+    private lateinit var duck: SliderPreference
+    private lateinit var soundGroup: PreferenceCategory
+    private lateinit var pressHold: Preference
+    private lateinit var aboutGroup: PreferenceCategory
+    private lateinit var name: Preference
+    private lateinit var model: Preference
+    private lateinit var firmware: Preference
+    private lateinit var stemsGroup: PreferenceCategory
+    private lateinit var callsGroup: PreferenceCategory
+    private lateinit var caseGroup: PreferenceCategory
+    private lateinit var pageFooter: FooterPreference
+    private lateinit var findGroup: PreferenceCategory
+    private lateinit var findRow: Preference
+    private val controlPrefs = LinkedHashMap<ControlRows.Row, Preference>()
+    private val ticker = Handler(Looper.getMainLooper())
+    private var lastSound = NO_SOUND_STATE
+    private val tick = object : Runnable {
+        // The ear state and a sound that ended by itself do not reach the state store: look every second, but draw
+        // the page only when Play sound changed. A page that redraws every second never becomes idle, which
+        // uiautomator needs (found on the device on 2026-10-05: "could not get idle state").
+        override fun run() {
+            val sink = AirPodsCommands.sink
+            val now = (if (sink.soundPlaying) 1 else 0) or (if (sink.soundAvailable) 2 else 0)
+            if (now != lastSound) {
+                lastSound = now
+                render(AirPodsStateStore.state)
+            }
+            ticker.postDelayed(this, TICK_MS)
+        }
+    }
+
+    private var rendering = false
+    private val io: ExecutorService = Executors.newSingleThreadExecutor { r -> Thread(r, "AirPodsPage").apply { isDaemon = true } }
+    private val storeListener = AirPodsStateStore.Listener { _, new -> activity?.runOnUiThread { render(new) } }
+
+    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        val ctx = requireContext()
+        val screen = preferenceManager.createPreferenceScreen(ctx)
+
+        rings = RingsPreference(ctx)
+        screen.addPreference(rings)
+
+        notConnected = Preference(ctx).apply {
+            setTitle(R.string.airpods_not_connected)
+            isSelectable = false
+        }
+        screen.addPreference(notConnected)
+
+        listeningGroup = category(screen, "listening", R.string.airpods_group_listening)
+        listening = SegmentedButtonPreference(ctx).apply {
+            key = "listening_mode"
+            setLabelInsideButton(true)
+            setOnButtonClickListener { group, checkedId, isChecked ->
+                if (isChecked && !rendering) {
+                    val modes = ListeningModeToggles.modes(AirPodsStateStore.state)
+                    val index = group.indexOfChild(group.findViewById(checkedId))
+                    ListeningModeToggles.modeAt(modes, index)?.let { mode -> command { AirPodsCommands.sink.setListeningMode(mode) } }
+                }
+            }
+        }
+        listeningGroup.addPreference(listening)
+        // Room between the four buttons and their description: a SpacePreference is a section break of Settings' adapter.
+        listeningGroup.addPreference(SpacePreference(ctx, null).apply { setHeight((MODE_GAP_DP * resources.displayMetrics.density).toInt()) })
+        description = Preference(ctx).apply {
+            key = "listening_description"
+            isSelectable = false
+        }
+        listeningGroup.addPreference(description)
+        adaptive = SliderPreference(ctx).apply {
+            key = "adaptive_strength"
+            isPersistent = false // the state store is the only source of truth, not SharedPreferences
+            setTitle(R.string.airpods_adaptive_title)
+            setSummary(R.string.airpods_adaptive_summary)
+            min = 0
+            max = AdaptiveSteps.STEPS - 1
+            sliderIncrement = 1
+            setTickVisible(true)
+            setTextStart(R.string.airpods_mode_transparency)
+            setTextEnd(R.string.airpods_mode_noise_cancel)
+            setOnPreferenceChangeListener { _, value ->
+                if (!rendering) command { AirPodsCommands.sink.setAdaptiveStrength(AdaptiveSteps.percentOf(value as Int)) }
+                true
+            }
+        }
+        listeningGroup.addPreference(adaptive)
+
+        comfortGroup = category(screen, "comfort", R.string.airpods_group_comfort)
+        ear = switchRow("ear_detection", R.string.airpods_ear_detection_title, R.string.airpods_ear_detection_summary,
+            R.drawable.ic_airpods_ear, Feature.EAR_DETECTION)
+        comfortGroup.addPreference(ear)
+        conversation = switchRow("conversation_awareness", R.string.airpods_conversation_title,
+            R.string.airpods_conversation_summary, R.drawable.ic_airpods_voice, Feature.CONVERSATION_AWARENESS)
+        comfortGroup.addPreference(conversation)
+
+        duckGroup = category(screen, "duck", R.string.airpods_duck_title)
+        duck = SliderPreference(ctx).apply {
+            key = "duck_percent"
+            isPersistent = false
+            setTitle(R.string.airpods_duck_title)
+            setSummary(R.string.airpods_duck_summary)
+            min = DuckLevels.MIN
+            max = DuckLevels.MAX
+            sliderIncrement = 1
+            showSliderValue = true
+            setLabelFormater { value -> getString(R.string.airpods_duck_option, value.toInt()) }
+            setOnPreferenceChangeListener { _, value ->
+                if (!rendering) command { AirPodsCommands.sink.setDuckPercent(value as Int) }
+                true
+            }
+        }
+        duckGroup.addPreference(duck)
+
+        soundGroup = category(screen, "sound", R.string.airpods_group_sound)
+        pressHold = Preference(ctx).apply {
+            key = "press_hold"
+            setTitle(R.string.airpods_press_hold_title)
+            icon = tinted(R.drawable.ic_airpods_squeeze)
+            setOnPreferenceClickListener {
+                showPressHoldDialog()
+                true
+            }
+        }
+        soundGroup.addPreference(pressHold)
+
+        stemsGroup = category(screen, "stems", R.string.airpods_group_stems)
+        callsGroup = category(screen, "calls", R.string.airpods_group_calls)
+        caseGroup = category(screen, "case", R.string.airpods_group_case)
+        for (row in ControlRows.ROWS) {
+            val pref = controlPreference(row)
+            controlPrefs[row] = pref
+            groupOf(row.group).addPreference(pref)
+        }
+        findGroup = category(screen, "find", R.string.airpods_group_find)
+        findRow = Preference(ctx).apply {
+            key = "find_sound"
+            setOnPreferenceClickListener {
+                playOrStop()
+                true
+            }
+        }
+        findGroup.addPreference(findRow)
+        // Apple's network is reachable only through the owner's Apple ID on Apple's own site (ADR-137): the row opens
+        // that site in the browser and sends nothing from the app.
+        findGroup.addPreference(
+            Preference(ctx).apply {
+                key = "find_my"
+                setTitle(R.string.airpods_find_my_title)
+                setSummary(R.string.airpods_find_my_summary)
+                setOnPreferenceClickListener {
+                    openFindMy()
+                    true
+                }
+            },
+        )
+        pageFooter = FooterPreference(ctx).apply {
+            key = "page_footer"
+            setSummary(R.string.airpods_page_footer)
+        }
+        screen.addPreference(pageFooter)
+
+        aboutGroup = category(screen, "about", R.string.airpods_group_about)
+        name = Preference(ctx).apply {
+            key = "name"
+            setTitle(R.string.airpods_name_title)
+            setOnPreferenceClickListener {
+                showNameDialog()
+                true
+            }
+        }
+        aboutGroup.addPreference(name)
+        model = Preference(ctx).apply {
+            key = "model"
+            setTitle(R.string.airpods_model_title)
+            isSelectable = false
+        }
+        aboutGroup.addPreference(model)
+        firmware = Preference(ctx).apply {
+            key = "firmware"
+            setTitle(R.string.airpods_firmware_title)
+            isSelectable = false
+        }
+        aboutGroup.addPreference(firmware)
+
+        preferenceScreen = screen
+        render(AirPodsStateStore.state)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AirPodsStateStore.addListener(storeListener)
+        render(AirPodsStateStore.state)
+        lastSound = NO_SOUND_STATE
+        ticker.postDelayed(tick, TICK_MS)
+    }
+
+    override fun onStop() {
+        ticker.removeCallbacks(tick)
+        AirPodsStateStore.removeListener(storeListener)
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        io.shutdown()
+        super.onDestroy()
+    }
+
+    private fun category(screen: androidx.preference.PreferenceScreen, key: String, @StringRes title: Int): PreferenceCategory =
+        PreferenceCategory(requireContext()).apply {
+            this.key = key
+            layoutResource = R.layout.airpods_category
+            setTitle(title)
+            screen.addPreference(this)
+        }
+
+    private fun switchRow(key: String, @StringRes title: Int, @StringRes summary: Int, @DrawableRes icon: Int, feature: Feature) =
+        SwitchPreferenceCompat(requireContext()).apply {
+            this.key = key
+            isPersistent = false
+            setTitle(title)
+            setSummary(summary)
+            this.icon = tinted(icon)
+            // The state is the truth: refuse the tap here, the command comes back through the store and render().
+            setOnPreferenceChangeListener { _, value ->
+                if (!rendering) command { AirPodsCommands.sink.setFeature(feature, value as Boolean) }
+                false
+            }
+        }
+
+    /** Runs a command off the main thread, then shows the real state again (a refused command puts the control back). */
+    private fun command(block: () -> Unit) {
+        try {
+            io.execute {
+                block()
+                activity?.runOnUiThread { render(AirPodsStateStore.state) }
+            }
+        } catch (e: RejectedExecutionException) {
+            // the page is gone
+        }
+    }
+
+    private fun render(state: AirPodsUiState) {
+        if (!isAdded || preferenceScreen == null) return
+        rendering = true
+        try {
+            val connected = state.isConnected
+            rings.isVisible = connected
+            rings.show(state)
+            notConnected.isVisible = !connected
+
+            listeningGroup.isVisible = connected && Feature.LISTENING_MODE in state.supported
+            val modes = ListeningModeToggles.modes(state)
+            for (i in 0 until BUTTONS) {
+                if (i < modes.size) {
+                    listening.setUpButton(i, getString(labelOf(modes[i])), transparentIcon())
+                    listening.setButtonVisibility(i, true)
+                } else {
+                    listening.setButtonVisibility(i, false)
+                }
+            }
+            listening.setCheckedIndex(ListeningModeToggles.indexOf(modes, state.listeningMode))
+            listening.isEnabled = state.listeningMode != null
+            description.setSummary(descriptionOf(state.listeningMode))
+            adaptive.isVisible = Feature.ADAPTIVE_MODE in state.supported && state.listeningMode == ListeningMode.ADAPTIVE
+            val step = AdaptiveSteps.stepOf(state.adaptivePercent)
+            adaptive.isEnabled = step >= 0
+            if (step >= 0 && adaptive.value != step) adaptive.value = step
+
+            comfortGroup.isVisible = connected
+            ear.isVisible = Feature.EAR_DETECTION in state.supported
+            ear.isChecked = state.earDetection
+            conversation.isVisible = Feature.CONVERSATION_AWARENESS in state.supported
+            conversation.isChecked = state.conversationAwareness
+
+            duckGroup.isVisible = connected && Feature.CONVERSATION_AWARENESS in state.supported && state.conversationAwareness
+            if (duck.value != state.duckPercent) duck.value = state.duckPercent
+
+            for ((row, pref) in controlPrefs) {
+                pref.isVisible = ControlRows.visible(state, row.control)
+                showControl(row, pref, state.controlValue(row.control))
+            }
+            soundGroup.isVisible = connected && (Feature.PRESS_AND_HOLD in state.supported || anyVisible(ControlRows.Group.SOUND))
+            pressHold.isVisible = Feature.PRESS_AND_HOLD in state.supported
+            pressHold.setSummary(pressHoldSummary(state))
+            comfortGroup.isVisible = connected
+            stemsGroup.isVisible = connected && anyVisible(ControlRows.Group.STEMS)
+            callsGroup.isVisible = connected && anyVisible(ControlRows.Group.CALLS)
+            caseGroup.isVisible = connected && anyVisible(ControlRows.Group.CASE)
+            pageFooter.isVisible = connected
+
+            findGroup.isVisible = connected
+            val playing = AirPodsCommands.sink.soundPlaying
+            val available = playing || AirPodsCommands.sink.soundAvailable
+            findRow.setTitle(if (playing) R.string.airpods_find_stop else R.string.airpods_find_play)
+            findRow.setSummary(if (available) R.string.airpods_find_summary else R.string.airpods_find_unavailable)
+            findRow.isEnabled = available
+
+            aboutGroup.isVisible = connected
+            name.isVisible = Feature.RENAME in state.supported
+            name.summary = currentName(state)
+            model.summary = state.modelNumber ?: getString(R.string.airpods_unknown)
+            firmware.summary = state.firmware ?: getString(R.string.airpods_unknown)
+        } finally {
+            rendering = false
+        }
+    }
+
+    private fun groupOf(group: ControlRows.Group): PreferenceCategory = when (group) {
+        ControlRows.Group.SOUND -> soundGroup
+        ControlRows.Group.STEMS -> stemsGroup
+        ControlRows.Group.CALLS -> callsGroup
+        ControlRows.Group.COMFORT -> comfortGroup
+        ControlRows.Group.CASE -> caseGroup
+    }
+
+    private fun anyVisible(group: ControlRows.Group): Boolean =
+        controlPrefs.any { (row, pref) -> row.group() == group && pref.isVisible }
+
+    /** One row of [ControlRows]: a switch, a list or a slider. The state is the truth, like the other rows. */
+    private fun controlPreference(row: ControlRows.Row): Preference {
+        val ctx = requireContext()
+        val control = row.control()
+        return when (row.kind()) {
+            ControlRows.Kind.SWITCH -> SwitchPreferenceCompat(ctx).apply {
+                key = "control_" + control.name
+                isPersistent = false
+                icon = tinted(ControlTexts.icon(control))
+                setTitle(ControlTexts.title(control))
+                setSummary(ControlTexts.summary(control))
+                setOnPreferenceChangeListener { _, value ->
+                    val next = if (value as Boolean) row.onValue() else row.offValue()
+                    if (!rendering) command { AirPodsCommands.sink.setControl(control, next) }
+                    false
+                }
+            }
+            ControlRows.Kind.CHOICE -> ListPreference(ctx).apply {
+                key = "control_" + control.name
+                isPersistent = false
+                icon = tinted(ControlTexts.icon(control))
+                setTitle(ControlTexts.title(control))
+                setDialogTitle(ControlTexts.title(control))
+                val labels = ControlTexts.choiceLabels(control)
+                entries = Array<CharSequence>(row.choices().size) { getString(labels[it]) }
+                entryValues = Array<CharSequence>(row.choices().size) { row.choices()[it].toString() }
+                setOnPreferenceChangeListener { _, value ->
+                    if (!rendering) command { AirPodsCommands.sink.setControl(control, (value as String).toInt()) }
+                    false
+                }
+            }
+            ControlRows.Kind.SLIDER -> SliderPreference(ctx).apply {
+                key = "control_" + control.name
+                isPersistent = false
+                icon = tinted(ControlTexts.icon(control))
+                setTitle(ControlTexts.title(control))
+                setSummary(ControlTexts.summary(control))
+                min = row.lowest()
+                max = control.max()
+                sliderIncrement = row.step()
+                showSliderValue = true
+                setOnPreferenceChangeListener { _, value ->
+                    if (!rendering) command { AirPodsCommands.sink.setControl(control, ControlRows.snapped(row, value as Int)) }
+                    true
+                }
+            }
+        }
+    }
+
+    private fun showControl(row: ControlRows.Row, pref: Preference, value: Int) {
+        // A control the pair never reports has no value until the owner sets one from this phone: say so, so that
+        // an off switch or a slider at zero does not read as a value.
+        if (value < 0 && !row.reportedByPair() && row.kind() != ControlRows.Kind.CHOICE) {
+            pref.setSummary(R.string.airpods_press_hold_unset)
+        } else if (row.kind() != ControlRows.Kind.CHOICE) {
+            pref.setSummary(ControlTexts.summary(row.control()))
+        }
+        when (row.kind()) {
+            ControlRows.Kind.SWITCH -> (pref as SwitchPreferenceCompat).isChecked = ControlRows.isOn(row, value)
+            ControlRows.Kind.CHOICE -> {
+                val list = pref as ListPreference
+                val index = row.choices().indexOf(value)
+                list.value = if (index >= 0) value.toString() else null
+                if (index >= 0) list.setSummary(ControlTexts.choiceLabels(row.control())[index]) else list.setSummary(R.string.airpods_press_hold_unset)
+            }
+            ControlRows.Kind.SLIDER -> {
+                val slider = pref as SliderPreference
+                // A value below the slider's lowest (a stored value the pair ignored) or between two steps (another
+                // phone set 47 on a slider of steps of 5) is shown as the nearest step: the slider refuses a value off
+                // its grid.
+                if (value >= 0) {
+                    val shown = ControlRows.snapped(row, value)
+                    if (slider.value != shown) slider.value = shown
+                }
+            }
+        }
+    }
+
+    /** A constant URL in an ordinary view intent without extras; a phone without a browser shows nothing. */
+    private fun openFindMy() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(FIND_MY_URL)).addCategory(Intent.CATEGORY_BROWSABLE))
+        } catch (e: ActivityNotFoundException) {
+            android.util.Log.w("AirPodsPage", "no browser for Find My")
+        }
+    }
+
+    private fun playOrStop() {
+        if (AirPodsCommands.sink.soundPlaying) {
+            command { AirPodsCommands.sink.stopSound() }
+        } else {
+            command { AirPodsCommands.sink.playSound() }
+        }
+    }
+
+    private fun pressHoldSummary(state: AirPodsUiState): String {
+        if (state.pressHoldModes.isEmpty()) return getString(R.string.airpods_press_hold_unset)
+        val labels = PressAndHoldChoices.offered(state).filter { it in state.pressHoldModes }.map { getString(labelOf(it)) }
+        return ListFormatter.getInstance().format(labels)
+    }
+
+    private fun showPressHoldDialog() {
+        val state = AirPodsStateStore.state
+        if (!state.isConnected) return
+        val offered = PressAndHoldChoices.offered(state)
+        val labels = offered.map { getString(labelOf(it)) }.toTypedArray()
+        val checked = BooleanArray(offered.size) { offered[it] in state.pressHoldModes }
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.airpods_press_hold_dialog_title)
+            .setMultiChoiceItems(labels, checked) { dialog, which, isChecked ->
+                val next = PressAndHoldChoices.next(AirPodsStateStore.state.pressHoldModes, offered[which], isChecked)
+                if (next == null) {
+                    // Fewer than two would be left: put the box back.
+                    (dialog as AlertDialog).listView.setItemChecked(which, true)
+                } else {
+                    command { AirPodsCommands.sink.setPressAndHold(next) }
+                }
+            }
+            .setPositiveButton(R.string.airpods_done, null)
+            .show()
+    }
+
+    private fun showNameDialog() {
+        val input = EditText(requireContext()).apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+            filters = arrayOf(InputFilter.LengthFilter(NAME_INPUT_CHARS))
+            setText(currentName(AirPodsStateStore.state))
+            setSelection(text.length)
+        }
+        // A custom view of an AlertDialog gets no side inset of its own, while the title sits 24 dp from the edge: wrap
+        // the field in a container with the same inset so the field and its line start under the title.
+        val inset = (NAME_DIALOG_INSET_DP * resources.displayMetrics.density).toInt()
+        val field = FrameLayout(requireContext()).apply {
+            setPadding(inset, 0, inset, 0)
+            addView(input, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        }
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.airpods_name_dialog_title)
+            .setView(field)
+            .setPositiveButton(R.string.airpods_name_dialog_positive, null)
+            .setNegativeButton(R.string.airpods_name_dialog_negative, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val text = input.text.toString()
+                if (!AapCodec.isValidName(text)) {
+                    input.error = getString(R.string.airpods_name_invalid)
+                } else {
+                    dialog.dismiss()
+                    command { AirPodsCommands.sink.rename(text) }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    /** The phone's name for the pair (the alias, else the name): the page shows what Settings shows. */
+    private fun currentName(state: AirPodsUiState): String {
+        val address = state.address ?: return getString(R.string.airpods_unknown)
+        return try {
+            val device = requireContext().getSystemService(BluetoothManager::class.java).adapter.getRemoteDevice(address)
+            device.alias ?: device.name ?: getString(R.string.airpods_unknown)
+        } catch (e: IllegalArgumentException) {
+            getString(R.string.airpods_unknown)
+        } catch (e: SecurityException) {
+            getString(R.string.airpods_unknown)
+        }
+    }
+
+    @StringRes
+    private fun labelOf(mode: ListeningMode): Int = when (mode) {
+        ListeningMode.OFF -> R.string.airpods_mode_off
+        ListeningMode.TRANSPARENCY -> R.string.airpods_mode_transparency
+        ListeningMode.ANC -> R.string.airpods_mode_noise_cancel
+        ListeningMode.ADAPTIVE -> R.string.airpods_mode_adaptive
+    }
+
+    @StringRes
+    private fun descriptionOf(mode: ListeningMode?): Int = when (mode) {
+        ListeningMode.OFF -> R.string.airpods_mode_off_description
+        ListeningMode.TRANSPARENCY -> R.string.airpods_mode_transparency_description
+        ListeningMode.ANC -> R.string.airpods_mode_noise_cancel_description
+        ListeningMode.ADAPTIVE -> R.string.airpods_mode_adaptive_description
+        null -> R.string.airpods_mode_unknown_description
+    }
+
+    /** Row icons take the row-icon colour of the theme, like Settings' own rows. */
+    private fun tinted(@DrawableRes id: Int): Drawable? {
+        val drawable = requireContext().getDrawable(id)?.mutate() ?: return null
+        drawable.setTint(requireContext().getColor(ThemeR.color.settingslib_materialColorOnSurfaceVariant))
+        return drawable
+    }
+
+    /** The segmented button wants an icon; with the label inside the button it is not drawn. */
+    private fun transparentIcon(): Drawable {
+        val px = (ICON_DP * resources.displayMetrics.density).toInt()
+        return BitmapDrawable(resources, Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888))
+    }
+
+    private companion object {
+        const val BUTTONS = 4
+        const val ICON_DP = 24
+        const val NAME_INPUT_CHARS = 64
+
+        /** The side inset of an AlertDialog title and buttons; the name field gets the same. */
+        const val NAME_DIALOG_INSET_DP = 24
+        const val TICK_MS = 1_000L
+        const val MODE_GAP_DP = 16
+        const val NO_SOUND_STATE = -1
+        const val FIND_MY_URL = "https://www.icloud.com/find"
+    }
+}

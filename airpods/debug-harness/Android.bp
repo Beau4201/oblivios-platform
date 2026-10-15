@@ -17,8 +17,8 @@ android_app {
     sdk_version: "system_current",
     privileged: true,
     required: [
-        "privapp-permissions-org.sovereignos.airpods.debugharness.xml",
-        "hidden-api-whitelisted-app-org.sovereignos.airpods.debugharness.xml",
+        "privapp-permissions-org.freeholdos.airpods.debugharness.xml",
+        "hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml",
     ],
 }
 
@@ -29,7 +29,7 @@ android_app {
     resource_dirs: ["res"],
     sdk_version: "system_current",
     privileged: true,
-    required: ["hidden-api-whitelisted-app-org.sovereignos.airpods.debugharness.xml"],
+    required: ["hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml"],
 }
 
 android_app {
@@ -40,21 +40,21 @@ android_app {
     sdk_version: "system_current",
     privileged: true,
     required: [
-        "privapp-permissions-org.sovereignos.airpods.debugharness.xml",
-        "hidden-api-whitelisted-app-org.sovereignos.airpods.debugharness.xml",
+        "privapp-permissions-org.freeholdos.airpods.debugharness.xml",
+        "hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml",
     ],
 }
 
 prebuilt_etc {
-    name: "privapp-permissions-org.sovereignos.airpods.debugharness.xml",
-    src: "privapp-permissions-org.sovereignos.airpods.debugharness.xml",
+    name: "privapp-permissions-org.freeholdos.airpods.debugharness.xml",
+    src: "privapp-permissions-org.freeholdos.airpods.debugharness.xml",
     sub_dir: "permissions",
 }
 
 // Same mechanism and same /system/etc/sysconfig location as AirPodsApp (ADR-118): all three
 // apps get the same hidden-API standing, so only the permission set differs between them.
 prebuilt_etc {
-    name: "hidden-api-whitelisted-app-org.sovereignos.airpods.debugharness.xml",
-    src: "hidden-api-whitelisted-app-org.sovereignos.airpods.debugharness.xml",
+    name: "hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml",
+    src: "hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml",
     sub_dir: "sysconfig",
 }

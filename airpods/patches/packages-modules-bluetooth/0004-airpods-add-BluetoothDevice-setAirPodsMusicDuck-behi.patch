@@ -45,7 +45,7 @@ index aaf01b5..695a913 100644
      boolean setAirPodsAudioRoute(in BluetoothDevice device, in boolean away, in IBinder token, in AttributionSource attributionSource);
  
 +    // For the AirPods music duck (ADR-127). Also requires
-+    // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
++    // org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
 +    // AdapterServiceBinder). The device must be bonded, registered and the active A2DP device;
 +    // percent is an integer from 10 to 90. The token is a binder of the caller: if it dies while the
 +    // volume is lowered, it is given back.
@@ -195,7 +195,7 @@ index 481f4d2..f33d01f 100644
 +    /**
 +     * FreeholdOS ADR-127: lowers ({@code duck}) or gives back the music volume of the active
 +     * AirPods while the owner speaks. The caller (AdapterServiceBinder) has already enforced
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
 +     * accepted. {@code percent} must be an integer from 10 to 90. If {@code token} dies while the volume is
 +     * lowered, it is given back.
 +     *
@@ -269,7 +269,7 @@ index 6b04636..d7f4177 100644
  
 +    /**
 +     * Lowers or gives back the music volume of the active AirPods (ADR-127). Scoped to the caller
-+     * holding org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY; the bond, registration, active
++     * holding org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY; the bond, registration, active
 +     * device and percent checks are in {@link AdapterService#setAirPodsMusicDuck}.
 +     */
 +    @Override
@@ -287,7 +287,7 @@ index 6b04636..d7f4177 100644
 +        }
 +
 +        service.enforceCallingOrSelfPermission(
-+                "org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY", null);
++                "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY", null);
 +
 +        return service.setAirPodsMusicDuck(device, duck, percent, token);
 +    }
@@ -631,7 +631,7 @@ index 23c1ebf..33c024c 100644
 +     * dies.
 +     *
 +     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
 +     * not require {@code MODIFY_AUDIO_SETTINGS_PRIVILEGED} or {@code MODIFY_AUDIO_ROUTING}.
 +     *
 +     * @return true when the request was applied or there was nothing to do; false when refused or on

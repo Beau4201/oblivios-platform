@@ -4,7 +4,7 @@ Date: Sun, 11 Oct 2026 15:38:01 +0200
 Subject: [PATCH 3/4] datamap: add the Binder interface and the READ_DATA_MAP
  permission
 
-org.sovereignos.permission.READ_DATA_MAP is signature|privileged and only the Data Map app holds it.
+org.freeholdos.permission.READ_DATA_MAP is signature|privileged and only the Data Map app holds it.
 Structured parcelables, so that the app compiles the same files and no hand-written Parcelable is
 needed.
 ---
@@ -213,7 +213,7 @@ index 0000000..ed3cb28
 +
 +/**
 + * The Binder interface of the Data Map service. Every call acts on the calling user; there is no
-+ * user argument. Each call needs org.sovereignos.permission.READ_DATA_MAP, which only the Data Map
++ * user argument. Each call needs org.freeholdos.permission.READ_DATA_MAP, which only the Data Map
 + * app holds.
 + *
 + * <p>The transaction order is part of the contract with the app, which compiles its own copy of
@@ -252,7 +252,7 @@ index 5c9e490..e4b025a 100644
  
 +    <!-- Allows the FreeholdOS Data Map app to read which services each app contacts, for its own
 +         user. Only that app holds it (ADR-157). -->
-+    <permission android:name="org.sovereignos.permission.READ_DATA_MAP"
++    <permission android:name="org.freeholdos.permission.READ_DATA_MAP"
 +        android:label="@string/permlab_freeholdosReadDataMap"
 +        android:description="@string/permdesc_freeholdosReadDataMap"
 +        android:protectionLevel="signature|privileged" />

@@ -60,14 +60,14 @@ index b630dd1..e5fbae4 100644
 +PRODUCT_PACKAGES += \
 +    GuardianApp \
 +    GuardianLocationFixture \
-+    privapp-permissions-org.sovereignos.guardian.xml
++    privapp-permissions-org.freeholdos.guardian.xml
 +
 +# generic_system.mk's artifact path requirement otherwise rejects these --
 +# real Soong error found by Task 7's build, not a general GSI assumption.
 +PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
 +    system/priv-app/GuardianApp/% \
 +    system/app/GuardianLocationFixture/% \
-+    system/etc/permissions/privapp-permissions-org.sovereignos.guardian.xml
++    system/etc/permissions/privapp-permissions-org.freeholdos.guardian.xml
 +
  PRODUCT_COPY_FILES += \
      device/generic/goldfish/phone/overlay/frameworks/base/packages/overlays/GoldfishSkinConfig/readme.txt:$(TARGET_COPY_OUT_DATA)/misc/GoldfishSkinConfig \

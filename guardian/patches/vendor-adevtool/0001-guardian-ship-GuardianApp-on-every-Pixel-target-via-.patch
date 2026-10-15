@@ -29,7 +29,7 @@ index 4302cb5a6..645425224 100644
 +# entry for lynx silently left stallion without Guardian (2026-09-28).
 +PRODUCT_PACKAGES += \
 +    GuardianApp \
-+    privapp-permissions-org.sovereignos.guardian.xml
++    privapp-permissions-org.freeholdos.guardian.xml
 -- 
 2.56.0
 

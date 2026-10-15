@@ -63,7 +63,7 @@ index d160f2c..0daad67 100644
 +         recognized AirPods accessory, scoping the identity-presentation
 +         patch (ADR-108) to that one bonded device. Never granted to any
 +         other app. -->
-+    <permission android:name="org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY"
++    <permission android:name="org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY"
 +         android:label="@string/permlab_freeholdosAirpodsIdentity"
 +         android:description="@string/permdesc_freeholdosAirpodsIdentity"
 +         android:protectionLevel="signature|privileged"/>
@@ -80,7 +80,7 @@ index 16d58b5..0e21c4d 100644
      byte[] getMetadata(in BluetoothDevice device, in int key, in AttributionSource attributionSource);
  
 +    // For AirPods identity scoping (ADR-108). Also requires
-+    // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime
++    // org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY at runtime
 +    // (enforced in AdapterServiceBinder, not expressible here -- no
 +    // existing precedent in this file embeds a literal, non-Manifest
 +    // permission string in this annotation, so this comment carries that
@@ -193,7 +193,7 @@ index 8ac1bbf..15151c2 100644
 +     * accessory (ADR-108). Only the confirmed bonded BD_ADDR is ever
 +     * scoped this way -- never a device-wide identity change. The caller
 +     * (AdapterServiceBinder) has already enforced
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY before this is
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY before this is
 +     * reached.
 +     *
 +     * @return true on success; false when the device is not bonded (register
@@ -234,7 +234,7 @@ index 6c14a62..f250486 100644
 +    /**
 +     * Registers or clears a bonded device as a recognized AirPods accessory
 +     * (ADR-108). Scoped to the caller holding
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY -- FreeholdOS's own
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY -- FreeholdOS's own
 +     * signed AirPods app only, never a general BLUETOOTH_PRIVILEGED holder.
 +     */
 +    @Override
@@ -247,7 +247,7 @@ index 6c14a62..f250486 100644
 +        }
 +
 +        service.enforceCallingOrSelfPermission(
-+                "org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY", null);
++                "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY", null);
 +
 +        return service.setAirPodsIdentity(device, recognized);
 +    }
@@ -283,7 +283,7 @@ index 2b15548..f88ce3d 100644
 +     * automatically when the bond is removed.
 +     *
 +     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service.
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service.
 +     *
 +     * @param recognized true to register, false to clear
 +     * @return true on success, false on error, when not bonded, or when the registry is full

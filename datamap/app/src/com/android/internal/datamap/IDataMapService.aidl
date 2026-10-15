@@ -9,7 +9,7 @@ import com.android.internal.datamap.IDataMapObserver;
 
 /**
  * The Binder interface of the Data Map service. Every call acts on the calling user; there is no
- * user argument. Each call needs org.sovereignos.permission.READ_DATA_MAP, which only the Data Map
+ * user argument. Each call needs org.freeholdos.permission.READ_DATA_MAP, which only the Data Map
  * app holds.
  *
  * <p>The transaction order is part of the contract with the app, which compiles its own copy of

@@ -15,7 +15,7 @@
         android:layout_weight="1"
         android:gravity="center_horizontal"
         android:orientation="vertical">
-        <org.sovereignos.airpods.app.BatteryRingView
+        <org.freeholdos.airpods.app.BatteryRingView
             android:id="@+id/ring_left"
             android:layout_width="80dp"
             android:layout_height="90dp" />
@@ -37,7 +37,7 @@
         android:layout_weight="1"
         android:gravity="center_horizontal"
         android:orientation="vertical">
-        <org.sovereignos.airpods.app.BatteryRingView
+        <org.freeholdos.airpods.app.BatteryRingView
             android:id="@+id/ring_case"
             android:layout_width="80dp"
             android:layout_height="90dp" />
@@ -59,7 +59,7 @@
         android:layout_weight="1"
         android:gravity="center_horizontal"
         android:orientation="vertical">
-        <org.sovereignos.airpods.app.BatteryRingView
+        <org.freeholdos.airpods.app.BatteryRingView
             android:id="@+id/ring_right"
             android:layout_width="80dp"
             android:layout_height="90dp" />

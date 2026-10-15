@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<permissions>
+    <privapp-permissions package="org.freeholdos.datamap">
+        <permission name="org.freeholdos.permission.READ_DATA_MAP"/>
+    </privapp-permissions>
+</permissions>

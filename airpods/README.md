@@ -8,13 +8,13 @@ and the internal record "airpods settings ui design" (not published). Domain log
 ## Layout
 
 - `core/` — vendored `airpods-core.jar`. Provenance in `SOURCE.md`.
-- `app/` — `AirPodsApp`, the first-party priv-app (`org.sovereignos.airpods`):
+- `app/` — `AirPodsApp`, the first-party priv-app (`org.freeholdos.airpods`):
   the real accessory-protocol session in a foreground service, the native
   Settings page provider (config and per-item settings), the ear detection and
   conversation awareness controllers, the stores (ear detection, volume choice,
   last case battery), and the pure UI logic under `app/src/.../ui/` that the host
   checks run (`tools/run-host-checks.sh`). Own pages and the connection sheet are Plan 7B.
-- `probe/` — debug-only capture tool (`org.sovereignos.airpods.probe`), see `SOURCE.md`.
+- `probe/` — debug-only capture tool (`org.freeholdos.airpods.probe`), see `SOURCE.md`.
 - `tools/check-no-hardcoded-text.sh` — fails on user-visible text that is not a string resource.
 - `tools/check-devicesettings-vendoring.sh` — fails when the vendored DeviceSettings contract (`app/src/.../devicesettings/`) differs from the build tree.
 - `debug-harness/` — userdebug-only validation apps (ADR-120), never in `user` builds.
@@ -25,7 +25,7 @@ and the internal record "airpods settings ui design" (not published). Domain log
 
 `AirPodsApp` is not platform-signed and not `platform_apis`. It is a
 privileged app compiled against `system_current`. It holds one privileged
-permission, `org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY`, plus
+permission, `org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY`, plus
 `BLUETOOTH_CONNECT`, the foreground-service permissions and `RECEIVE_BOOT_COMPLETED`
 (normal; added in Plan 7A-2 for the start after a reboot), and it is
 named in `hidden-api-whitelisted-app-*.xml` so that only this package may use

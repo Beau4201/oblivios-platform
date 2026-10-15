@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.sovereignos.guardian.ui
+package org.freeholdos.guardian.ui
 
 sealed interface GuardianUiState {
     data class Detected(

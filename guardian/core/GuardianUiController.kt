@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.sovereignos.guardian.ui
+package org.freeholdos.guardian.ui
 
-import org.sovereignos.guardian.application.GuardianApplicationResult
-import org.sovereignos.guardian.overview.GuardianOverviewSnapshot
-import org.sovereignos.guardian.remediation.RemediationOutcome
+import org.freeholdos.guardian.application.GuardianApplicationResult
+import org.freeholdos.guardian.overview.GuardianOverviewSnapshot
+import org.freeholdos.guardian.remediation.RemediationOutcome
 
 interface GuardianUiScenario {
     fun detectBackgroundLocation(): GuardianApplicationResult

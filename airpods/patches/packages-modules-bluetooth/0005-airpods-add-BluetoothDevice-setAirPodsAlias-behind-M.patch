@@ -39,13 +39,13 @@ index 695a913..cfeb549 100644
      boolean setAirPodsMetadata(in BluetoothDevice device, in int key, in byte[] value, in AttributionSource attributionSource);
  
 +    // For the AirPods alias (ADR-135). Also requires
-+    // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime
++    // org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY at runtime
 +    // (enforced in AdapterServiceBinder). The device must be bonded and registered.
 +    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
 +    boolean setAirPodsAlias(in BluetoothDevice device, in String alias, in AttributionSource attributionSource);
 +
      // For the AirPods audio route (ADR-125). Also requires
-     // org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
+     // org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
      // AdapterServiceBinder, see setAirPodsIdentity above for why the annotation cannot carry it).
 diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterService.java b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
 index f33d01f..454bdc4 100644
@@ -57,7 +57,7 @@ index f33d01f..454bdc4 100644
  
 +    /**
 +     * Sets the alias of a bonded device that the AirPods app has registered (ADR-135). The caller
-+     * (AdapterServiceBinder) has already enforced org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY.
++     * (AdapterServiceBinder) has already enforced org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY.
 +     *
 +     * @return true when the alias now equals {@code alias}; false when the name is outside {@link
 +     *     AirPodsAliasPolicy}, the device is not bonded or not registered, or its properties are not
@@ -94,7 +94,7 @@ index d7f4177..939cad9 100644
  
 +    /**
 +     * Sets the alias of a bonded, registered AirPods device (ADR-135). Scoped to the caller holding
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY, never a general BLUETOOTH_PRIVILEGED holder;
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY, never a general BLUETOOTH_PRIVILEGED holder;
 +     * the name rule and the bond and registration checks are in {@link
 +     * AdapterService#setAirPodsAlias}.
 +     */
@@ -109,7 +109,7 @@ index d7f4177..939cad9 100644
 +        }
 +
 +        service.enforceCallingOrSelfPermission(
-+                "org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY", null);
++                "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY", null);
 +
 +        return service.setAirPodsAlias(device, alias);
 +    }
@@ -332,7 +332,7 @@ index 33c024c..0ae4f46 100644
 +     * visible text without leading or trailing white space; anything else is refused.
 +     *
 +     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
-+     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
++     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
 +     * not require {@code BLUETOOTH_PRIVILEGED} or a companion device association.
 +     *
 +     * @param alias the new name

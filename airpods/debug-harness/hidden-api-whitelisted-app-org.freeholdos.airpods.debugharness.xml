@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<config>
+    <hidden-api-whitelisted-app package="org.freeholdos.airpods.debugharness"/>
+    <hidden-api-whitelisted-app package="org.freeholdos.airpods.debugharness.noperm"/>
+    <hidden-api-whitelisted-app package="org.freeholdos.airpods.debugharness.btpriv"/>
+</config>

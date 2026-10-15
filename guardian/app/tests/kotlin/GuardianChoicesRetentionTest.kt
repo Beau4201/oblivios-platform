@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.sovereignos.guardianui.screens
+package org.freeholdos.guardianui.screens
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import org.sovereignos.guardianui.theme.GuardianTheme
+import org.freeholdos.guardianui.theme.GuardianTheme
 import org.junit.Rule
 import org.junit.Test
 

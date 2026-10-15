@@ -49,7 +49,7 @@ android_app {
 }
 
 prebuilt_etc {
-    name: "privapp-permissions-org.sovereignos.guardian.xml",
-    src: "privapp-permissions-org.sovereignos.guardian.xml",
+    name: "privapp-permissions-org.freeholdos.guardian.xml",
+    src: "privapp-permissions-org.freeholdos.guardian.xml",
     sub_dir: "permissions",
 }

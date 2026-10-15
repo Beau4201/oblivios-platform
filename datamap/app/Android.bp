@@ -20,20 +20,20 @@ android_app {
     sdk_version: "system_current",
     privileged: true,
     required: [
-        "privapp-permissions-org.sovereignos.datamap.xml",
-        "hidden-api-whitelisted-app-org.sovereignos.datamap.xml",
+        "privapp-permissions-org.freeholdos.datamap.xml",
+        "hidden-api-whitelisted-app-org.freeholdos.datamap.xml",
     ],
 }
 
 prebuilt_etc {
-    name: "privapp-permissions-org.sovereignos.datamap.xml",
-    src: "privapp-permissions-org.sovereignos.datamap.xml",
+    name: "privapp-permissions-org.freeholdos.datamap.xml",
+    src: "privapp-permissions-org.freeholdos.datamap.xml",
     sub_dir: "permissions",
 }
 
 // Read by SystemConfig only from /system/etc/sysconfig, as for AirPodsApp.
 prebuilt_etc {
-    name: "hidden-api-whitelisted-app-org.sovereignos.datamap.xml",
-    src: "hidden-api-whitelisted-app-org.sovereignos.datamap.xml",
+    name: "hidden-api-whitelisted-app-org.freeholdos.datamap.xml",
+    src: "hidden-api-whitelisted-app-org.freeholdos.datamap.xml",
     sub_dir: "sysconfig",
 }

@@ -32,7 +32,7 @@ class LogoError(Exception):
 
 
 def resource_name(owner_id):
-    """The same rule as org.sovereignos.datamap.model.LogoName; tests/fixtures/logo-names.tsv pins both."""
+    """The same rule as org.freeholdos.datamap.model.LogoName; tests/fixtures/logo-names.tsv pins both."""
     out = "logo_"
     for c in owner_id:
         if "A" <= c <= "Z":

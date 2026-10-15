@@ -107,7 +107,7 @@ index 2adad94..4a6b603 100644
 --- a/services/core/java/com/android/server/datamap/DataMapService.java
 +++ b/services/core/java/com/android/server/datamap/DataMapService.java
 @@ -67,15 +67,24 @@ public final class DataMapService extends IDataMapService.Stub implements DataMa
-     static final String PERMISSION = "org.sovereignos.permission.READ_DATA_MAP";
+     static final String PERMISSION = "org.freeholdos.permission.READ_DATA_MAP";
      private static final String CLASSIFIER_PATH = "/system/etc/datamap/classifier.tsv";
      private static final int MAX_CLASSIFIER_BYTES = 4 * 1024 * 1024;
 +    private static final String IPMAP_PATH = "/system/etc/datamap/ipmap.bin";

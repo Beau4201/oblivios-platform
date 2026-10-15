@@ -26,15 +26,15 @@ index 3ad9544..30d2fc1 100644
 @@ -72,3 +72,20 @@ PRODUCT_PACKAGES += restrict-pixel-health-association
  PRODUCT_PACKAGES += \
      GuardianApp \
-     privapp-permissions-org.sovereignos.guardian.xml
+     privapp-permissions-org.freeholdos.guardian.xml
 +
 +# FreeholdOS: AirPods compatibility app (ADR-118). Kept next to Guardian in the
 +# common file so every Pixel target ships it. The two XML modules are the privapp
 +# allow-list and the single-package hidden-API entry; the app needs both.
 +PRODUCT_PACKAGES += \
 +    AirPodsApp \
-+    privapp-permissions-org.sovereignos.airpods.xml \
-+    hidden-api-whitelisted-app-org.sovereignos.airpods.xml
++    privapp-permissions-org.freeholdos.airpods.xml \
++    hidden-api-whitelisted-app-org.freeholdos.airpods.xml
 +
 +# FreeholdOS: AirPods validation harness (ADR-120). PRODUCT_PACKAGES_DEBUG is installed
 +# for userdebug and eng builds only, never for user builds (build/make/core/main.mk).
