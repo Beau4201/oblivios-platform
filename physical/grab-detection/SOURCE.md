@@ -54,8 +54,8 @@ The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packa
 
 - Host: `test/run.sh` and `test/mutate.py`, 26 of 26 mutants killed (2026-10-15).
 - Replay: the seven `frameworks-base` patches and the `Settings` patch applied to the baseline reproduce the worktree trees (2026-10-15).
-- Not run: a build (`GRB-002`), a device check (`GRB-003` to `GRB-017`).
-- Not compiled: none of the Java or Kotlin has been built (`GRB-002`). The service was read against the build server tree; the host test covers `GrabDetector` only.
+- Not run: a device check (`GRB-003` to `GRB-017`).
+- Build: `m -j6 -k services SystemUI Settings` for `lynx-cur-userdebug` passed on the landed trees (2026-10-15, exit 0, no `FAILED:` or `error:` line; `GRB-002`). Module outputs only, no image.
 - Known break: `tests/utils/.../BouncerMessageInteractorKosmos.kt` builds `BouncerMessageInteractor` with named arguments and lacks `globalSettings` (`Kosmos.fakeGlobalSettings` exists). The SystemUI tests do not build until that line is added; the product build does not compile `tests/utils`.
 - Depends on the flag `revamped_bouncer_messages` being on in the release configuration of the build; with the legacy bouncer messages the grab text does not show.
 - The review dispositions and the rulings taken during execution are in the plan's execution record (not committed), summarised in the session report.
