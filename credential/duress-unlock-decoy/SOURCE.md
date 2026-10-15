@@ -1,5 +1,15 @@
 # Source record
 
+## Correction 2026-10-15: `system-current.txt` sort order after the FreeholdOS rename (`frameworks-base/0006`)
+
+The rename of `USER_TYPE_FULL_SOVEREIGNOS_DECOY` to `USER_TYPE_FULL_FREEHOLDOS_DECOY` (ADR-170) left the line where
+the old name sorted (after `..._SECONDARY`), so `check_current_api` failed at 96% of the first `lynx` build of the
+renamed tree (`2026101407`, the only failed step of 10 732). The same defect had happened at the earlier rename (see
+"Correction 2026-09-26" below). `frameworks-base/0006` moves the line before `..._GUEST`; one line, nothing else.
+Verified: `core/api/system-current.txt` after the patch is byte-identical to the API file the build generated
+(`diff` empty, blob `131a3e7ab661`), the build server's `freeholdos-2026100600` carries it as `e9f0c1e67143`. The
+rename tool does not re-sort API files; any further renamed name in a `*-current.txt` needs the same check.
+
 ## Patch series squashed again (2026-10-13) — read this before using any patch number
 
 The twelve `frameworks-base` and four `packages-apps-settings` patches were regrouped into five and
