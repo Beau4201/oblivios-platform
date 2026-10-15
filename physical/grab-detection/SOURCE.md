@@ -33,11 +33,28 @@ On the build server, with no build running and the trees clean:
     cd frameworks/base && git am <path>/physical/grab-detection/patches/frameworks-base/000*.patch
     cd packages/apps/Settings && git am <path>/physical/grab-detection/patches/packages-apps-Settings/0001-*.patch
 
+## Landed
+
+On the build server 2026-10-15 with `git am`, trees clean and no build running, branch `sovereignos-2026100600`. `git am` produces other hashes than the worktree commits.
+
+| Patch | Landed commit |
+| --- | --- |
+| `frameworks-base/0001` | `abf783cb1c44` |
+| `frameworks-base/0002` | `1f5d7f670e0b` |
+| `frameworks-base/0003` | `58bf873d670b` |
+| `frameworks-base/0004` | `f11e72195d6a` |
+| `frameworks-base/0005` | `c8ddeaa4cbc8` |
+| `frameworks-base/0006` | `c5569e8b39d7` |
+| `frameworks-base/0007` | `42a79c600313` |
+| `packages-apps-Settings/0001` | `f70f1e9fb78` |
+
+The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packages/apps/Settings`) equals the blob id in the worktree at its tip.
+
 ## Verification
 
 - Host: `test/run.sh` and `test/mutate.py`, 26 of 26 mutants killed (2026-10-15).
 - Replay: the seven `frameworks-base` patches and the `Settings` patch applied to the baseline reproduce the worktree trees (2026-10-15).
-- Not run: a build (`GRB-002`), a device check (`GRB-003` to `GRB-014`).
+- Not run: a build (`GRB-002`), a device check (`GRB-003` to `GRB-017`).
 - Not compiled: none of the Java or Kotlin has been built (`GRB-002`). The service was read against the build server tree; the host test covers `GrabDetector` only.
 - Known break: `tests/utils/.../BouncerMessageInteractorKosmos.kt` builds `BouncerMessageInteractor` with named arguments and lacks `globalSettings` (`Kosmos.fakeGlobalSettings` exists). The SystemUI tests do not build until that line is added; the product build does not compile `tests/utils`.
 - Depends on the flag `revamped_bouncer_messages` being on in the release configuration of the build; with the legacy bouncer messages the grab text does not show.
