@@ -1,7 +1,7 @@
 # identity-surface
 
 Three patches that stop apps from reading device-specific values (ADR-167). The design is
-`docs/superpowers/specs/2026-10-14-identity-surface-hardening-design.md` in `sovereignos-foundation`.
+`docs/superpowers/specs/2026-10-14-identity-surface-hardening-design.md` in `freeholdos-foundation`.
 
 | Patch | Project | Effect |
 | --- | --- | --- |

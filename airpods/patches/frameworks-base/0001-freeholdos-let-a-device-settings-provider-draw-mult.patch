@@ -1,7 +1,7 @@
 From 0a8bd532338a878fa3a9d3c901d07c6490f4b586 Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Thu, 1 Oct 2026 17:34:33 +0200
-Subject: [PATCH] sovereignos: let a device-settings provider draw multi-toggle
+Subject: [PATCH] freeholdos: let a device-settings provider draw multi-toggle
  labels inside the buttons
 
 Adds an opt-in boolean extra on ToggleInfo (TOGGLE_LABEL_IN_BUTTON), copies it into
@@ -10,14 +10,14 @@ button text with the separate label row hidden. Absent or false keeps the stock 
 so other callers and older providers are unchanged. The approved AirPods settings design
 shows the listening-mode text inside the buttons.
 
-sovereignos: give a button that shows its own label room for the whole label
+freeholdos: give a button that shows its own label room for the whole label
 
 The default text-button padding of 24 dp on each side cut "Transparency" and "Noise cancel"
 to "Transpare..." and "Noise can..." when three buttons share a row (seen on a Pixel 7a).
 In labelInsideButton mode the horizontal padding is 8 dp. The stock icon-only rendering is
 unchanged.
 
-sovereignos: let a label inside a segmented button wrap to two lines
+freeholdos: let a label inside a segmented button wrap to two lines
 
 At font scale 1.3 "Transparency" was cut to "Transparen..." and at 2.0 to "Transp...", because
 a button in labelInsideButton mode was single-line. It may now use two lines, hyphenate a word
@@ -50,7 +50,7 @@ index 1e07138..dae2e81 100644
      // Default checked button
      private var checkedIndex: Int = -1
  
-+    // SovereignOS: opt-in. Draw the label inside each button (no icon) and hide the separate label
++    // FreeholdOS: opt-in. Draw the label inside each button (no icon) and hide the separate label
 +    // row below the group. The approved AirPods design shows the listening-mode text in the
 +    // buttons.
 +    private var labelInsideButton: Boolean = false
@@ -62,7 +62,7 @@ index 1e07138..dae2e81 100644
          buttonLabels.add(1, holder.findViewById(R.id.button_2_text) as TextView)
          buttonLabels.add(2, holder.findViewById(R.id.button_3_text) as TextView)
          buttonLabels.add(3, holder.findViewById(R.id.button_4_text) as TextView)
-+        // SovereignOS: always assign so a recycled holder resets when the mode changes.
++        // FreeholdOS: always assign so a recycled holder resets when the mode changes.
 +        holder.findViewById(R.id.button_group_text)?.isGone = labelInsideButton
  
          // Apply stored data
@@ -94,7 +94,7 @@ index 1e07138..dae2e81 100644
 -                (buttonGroup?.getChildAt(index) as? MaterialButton)?.icon = icon.drawable
 +        val button = buttonGroup?.getChildAt(index) as? MaterialButton
 +        if (labelInsideButton) {
-+            // SovereignOS: the label is the button content; the provider's icon is not shown.
++            // FreeholdOS: the label is the button content; the provider's icon is not shown.
 +            button?.icon = null
 +            button?.text = text
 +            // The default text-button padding (24 dp on each side) cuts a label such as
@@ -128,10 +128,10 @@ index 1e07138..dae2e81 100644
      }
 +
 +    private companion object {
-+        // SovereignOS: horizontal padding of a button that shows its label (labelInsideButton).
++        // FreeholdOS: horizontal padding of a button that shows its label (labelInsideButton).
 +        const val LABEL_INSIDE_PADDING_DP = 8
 +
-+        // SovereignOS: lines a label may use before it is cut (labelInsideButton).
++        // FreeholdOS: lines a label may use before it is cut (labelInsideButton).
 +        const val LABEL_INSIDE_MAX_LINES = 2
 +    }
  }
@@ -146,7 +146,7 @@ index 65adec4..066ee8a 100644
 +
 +    /**
 +     * Boolean extra on a [ToggleInfo]: draw the toggle's label inside its button instead of an
-+     * icon with the label in a separate row below. SovereignOS: the approved AirPods design shows
++     * icon with the label in a separate row below. FreeholdOS: the approved AirPods design shows
 +     * the listening-mode text in the buttons; absent or false keeps the stock rendering.
 +     */
 +    const val TOGGLE_LABEL_IN_BUTTON = "TOGGLE_LABEL_IN_BUTTON"
@@ -180,7 +180,7 @@ index 93159f4..a5691c0 100644
 +data class ToggleModel(
 +    val label: String,
 +    val icon: DeviceSettingIcon,
-+    // SovereignOS: opt-in, see DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON. The default keeps
++    // FreeholdOS: opt-in, see DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON. The default keeps
 +    // every existing caller (SystemUI, tests) source-compatible.
 +    val labelInsideButton: Boolean = false,
 +)

@@ -17,7 +17,7 @@ index 88bcc2c07..ee21abded 100644
 +++ b/config/device/common/sysprop-exclusion.yml
 @@ -1,4 +1,8 @@
  sysprop_exclusions:
-+  # SovereignOS (ADR-150): device-common.mk sets mmd.zram.size; a second value fails post_process_props.py.
++  # FreeholdOS (ADR-150): device-common.mk sets mmd.zram.size; a second value fails post_process_props.py.
 +  # Leaving the value out of sysprop-inclusion.yml is not enough: an unknown entry is included.
 +  - mmd.zram.size = 3221225472
 +  - mmd.zram.size = 50%

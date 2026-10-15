@@ -10,7 +10,7 @@ Network access, one query per kind, run by hand and never during a build.
 import json, sys, urllib.parse, urllib.request
 
 ENDPOINT = "https://query.wikidata.org/sparql"
-UA = "sovereignos-classifier-research/1.0 (privacy-oriented Android OS; contact via project repository)"
+UA = "freeholdos-classifier-research/1.0 (privacy-oriented Android OS; contact via project repository)"
 CAPITALS = ('SELECT ?cc ?co WHERE { ?c wdt:P297 ?cc . ?c wdt:P36 ?cap . ?cap wdt:P625 ?co . '
             'FILTER NOT EXISTS { ?c wdt:P576 ?end } }')
 COUNTRIES = 'SELECT ?cc ?co WHERE { ?c wdt:P297 ?cc . ?c wdt:P625 ?co . FILTER NOT EXISTS { ?c wdt:P576 ?end } }'

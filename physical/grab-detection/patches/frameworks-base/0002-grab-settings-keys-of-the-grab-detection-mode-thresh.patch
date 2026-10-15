@@ -17,7 +17,7 @@ index b0eb63a..1af4f3c 100644
              // default value: 18 hours
              (int) TimeUnit.HOURS.toMillis(18));
  
-+    // SovereignOS grab detection (ADR-169)
++    // FreeholdOS grab detection (ADR-169)
 +    public static final int GRAB_DETECTION_OFF = 0;
 +    public static final int GRAB_DETECTION_SHADOW = 1;
 +    public static final int GRAB_DETECTION_ACTIVE = 2;
@@ -57,7 +57,7 @@ index 4c940ca..1f8b701 100644
          @Protected(readWrite = KnownSystemPackage.SETTINGS)
          public static final String AUTO_REBOOT_TIMEOUT = "settings_reboot_after_timeout";
  
-+        // SovereignOS grab detection (ADR-169). Not @Protected on purpose: `adb shell settings
++        // FreeholdOS grab detection (ADR-169). Not @Protected on purpose: `adb shell settings
 +        // put global` must work on a user build to tune the shadow mode and to switch back to it.
 +
 +        /** 0 off, 1 shadow (log only), 2 active @hide */

@@ -22,7 +22,7 @@ index 0000000..b0474df
 +++ b/services/sensorservice/SensorBiasFold.h
 @@ -0,0 +1,60 @@
 +/*
-+ * SovereignOS: do not deliver the bias estimate of the uncalibrated sensors to apps.
++ * FreeholdOS: do not deliver the bias estimate of the uncalibrated sensors to apps.
 + *
 + * Why this diverges from upstream: the accelerometer, gyroscope and magnetometer each have an
 + * uncalibrated variant that reports {x, y, z, bias x, bias y, bias z}. The bias estimate is
@@ -106,7 +106,7 @@ index 05790a0..451ac60 100644
  
      int count = 0;
      Mutex::Autolock _l(mConnectionLock);
-+    // SovereignOS (ADR-167): every app gets the uncalibrated sensors without the bias estimate,
++    // FreeholdOS (ADR-167): every app gets the uncalibrated sensors without the bias estimate,
 +    // which identifies the device. Native daemons and platform uids keep the unchanged event.
 +    const bool foldBias = shouldFoldFor(mUid);
      if (scratch) {

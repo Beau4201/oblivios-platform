@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 SovereignOS
+ * Copyright (C) 2026 FreeholdOS
  * SPDX-License-Identifier: Apache-2.0
  */
 

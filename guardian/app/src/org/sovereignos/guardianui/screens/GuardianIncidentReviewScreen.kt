@@ -26,7 +26,7 @@ import org.sovereignos.guardianui.icons.GuardianIcons
 import org.sovereignos.guardianui.theme.GuardianColor
 
 /**
- * SovereignOS Android port deviation (see guardian/SOURCE.md). The real app
+ * FreeholdOS Android port deviation (see guardian/SOURCE.md). The real app
  * resolves the whole Observe -> Explain -> Choose -> Enforce -> Verify ->
  * Undo loop on this one screen (the design spec asks for exactly that), so
  * the status chip has to be able to say "protected" or "this could not be
@@ -47,14 +47,14 @@ data class GuardianIncidentUiState(
 )
 
 /**
- * [primaryActionLabel] and [secondaryActionLabel] are a SovereignOS Android
+ * [primaryActionLabel] and [secondaryActionLabel] are a FreeholdOS Android
  * port deviation (see guardian/SOURCE.md), for the same reason as
  * [GuardianIncidentTone]: once the owner has acted, this screen's two
  * actions become "Done" plus "Undo"/"Try again" rather than
  * "Restrict ..."/"Not now". The defaults reproduce the reference module's
  * labels exactly; a null [secondaryActionLabel] hides the secondary action.
  *
- * [secondaryActionNote] is a further SovereignOS deviation: a caveat rendered
+ * [secondaryActionNote] is a further FreeholdOS deviation: a caveat rendered
  * directly under the secondary action, for the case where accepting that
  * action promises the owner less than its label implies. It exists because
  * deferring a detection is only as durable as the in-memory queue holding it.
@@ -177,7 +177,7 @@ fun GuardianIncidentReviewScreen(
                 onClick = onRestrict,
             )
             secondaryActionLabel?.let { label ->
-                // SovereignOS deviation: the label and its caveat are one visual
+                // FreeholdOS deviation: the label and its caveat are one visual
                 // unit, so they are wrapped rather than left as two children
                 // of the spaced parent. With no note (the reference module's
                 // only case) the layout is unchanged.

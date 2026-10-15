@@ -1,17 +1,17 @@
 From fde4699cf4811946da57569c593fb850a12fc2c1 Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Thu, 6 Aug 2026 02:32:15 +0200
-Subject: [PATCH] sovereignos: add Guardian to the emulator base_phone product
+Subject: [PATCH] freeholdos: add Guardian to the emulator base_phone product
  and make room for it
 
-sovereignos: add Guardian packages to base_phone product
+freeholdos: add Guardian packages to base_phone product
 
 PRODUCT_PACKAGES addition for GuardianApp, GuardianLocationFixture, and
 its privapp-permissions allowlist, feeding sdk_phone64_x86_64 via
-phone.mk -> base_phone.mk. See sovereignos-foundation ADR (to be filled in
+phone.mk -> base_phone.mk. See freeholdos-foundation ADR (to be filled in
 Task 9) and docs/superpowers/plans/2026-08-05-guardian-platform-integration.md.
 
-sovereignos: allow Guardian artifacts past generic_system.mk path requirement
+freeholdos: allow Guardian artifacts past generic_system.mk path requirement
 
 sdk_phone64_x86_64 relaxes PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS but
 still rejects unlisted files inside generic_system.mk own requirement.
@@ -19,7 +19,7 @@ Found by Task 7 real build (soong_build error: internal error: Device
 makefile produces files inside build/make/target/product/generic_system.mk
 artifact path requirement).
 
-sovereignos: bump emulator dynamic-partitions budget for Guardian
+freeholdos: bump emulator dynamic-partitions budget for Guardian
 
 BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE 2800->3000 (MiB blocks). Guardian
 GuardianApp bundles an unshrunk Compose runtime (optimize.enabled=false),
@@ -41,9 +41,9 @@ index 405f414..27d5d4a 100644
  
 -# 2.75 GiB
 -BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE ?= $(shell expr 2800 \* 1048576 )
-+# 2.75 GiB, bumped to ~2.86 GiB for SovereignOS Guardian (adds a Compose-based
++# 2.75 GiB, bumped to ~2.86 GiB for FreeholdOS Guardian (adds a Compose-based
 +# priv-app; unshrunk build put the dynamic-partition group ~64MB over the
-+# original 2800 budget) -- see sovereignos-foundation ADR <to be filled in Task 9>
++# original 2800 budget) -- see freeholdos-foundation ADR <to be filled in Task 9>
 +BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE ?= $(shell expr 3000 \* 1048576 )
  BOARD_SUPER_PARTITION_SIZE := $(shell expr $(BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE) + 8388608 )  # +8M
  
@@ -56,7 +56,7 @@ index b630dd1..e5fbae4 100644
  
  $(call inherit-product, device/generic/goldfish/product/phone_overlays.mk)
  
-+# SovereignOS Guardian -- see sovereignos-foundation ADR <to be filled in Task 9>
++# FreeholdOS Guardian -- see freeholdos-foundation ADR <to be filled in Task 9>
 +PRODUCT_PACKAGES += \
 +    GuardianApp \
 +    GuardianLocationFixture \

@@ -1,7 +1,7 @@
 From 731facff8f747082b9169616fe86345c5dd21cf3 Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
 Date: Thu, 8 Oct 2026 14:44:09 +0200
-Subject: [PATCH 1/2] sovereignos: restyle the keyboard as rounded caps
+Subject: [PATCH 1/2] freeholdos: restyle the keyboard as rounded caps
 
 Upstream draws every key in the colour of the keyboard background, so the gaps between keys are invisible and the keys read as one surface. Each key is now its own rounded cap on a different tone with a bottom edge, the top of the keyboard is rounded, the suggestion dividers are visible, and the popups follow. The edge is the drawable padding, so a label centred on the key is centred on the cap. The action caps and the key preview carry an intrinsic size because the enter and emoji keys scale their background by it and the key preview scales its label by it. One tap on shift shows the letter tone, the hint letters keep 5 dp from the corner, the digits of the phone and number layouts are smaller with their sub-labels kept off the cap edge, the emoji panel keeps the rounded top and its caps keep off the screen edges, and the phone mode keys are functional keys. Text colours that lose contrast on the new fills are raised. Resources only; the keyboard background of the input view is moved to the window by the next patch. ADR-146.
 ---
@@ -17,66 +17,66 @@ Upstream draws every key in the colour of the keyboard background, so the gaps b
  .../res/drawable/btn_suggestion_lxx_light.xml | 16 ++++++-----
  .../keyboard_key_feedback_lxx_dark.xml        | 23 +++-------------
  .../keyboard_key_feedback_lxx_light.xml       | 23 +++-------------
- .../sovereignos_background_keyboard.xml       |  6 +++++
- .../sovereignos_background_padtop.xml         |  6 +++++
- .../sovereignos_key_cap_action_dark.xml       | 20 ++++++++++++++
- .../sovereignos_key_cap_action_light.xml      | 20 ++++++++++++++
+ .../freeholdos_background_keyboard.xml       |  6 +++++
+ .../freeholdos_background_padtop.xml         |  6 +++++
+ .../freeholdos_key_cap_action_dark.xml       | 20 ++++++++++++++
+ .../freeholdos_key_cap_action_light.xml      | 20 ++++++++++++++
  ...overeignos_key_cap_action_pressed_dark.xml | 27 +++++++++++++++++++
  ...vereignos_key_cap_action_pressed_light.xml | 27 +++++++++++++++++++
- .../res/drawable/sovereignos_key_cap_dark.xml | 18 +++++++++++++
- .../sovereignos_key_cap_functional_dark.xml   | 18 +++++++++++++
- .../sovereignos_key_cap_functional_light.xml  | 18 +++++++++++++
+ .../res/drawable/freeholdos_key_cap_dark.xml | 18 +++++++++++++
+ .../freeholdos_key_cap_functional_dark.xml   | 18 +++++++++++++
+ .../freeholdos_key_cap_functional_light.xml  | 18 +++++++++++++
  ...eignos_key_cap_functional_pressed_dark.xml | 24 +++++++++++++++++
  ...ignos_key_cap_functional_pressed_light.xml | 24 +++++++++++++++++
- .../drawable/sovereignos_key_cap_light.xml    | 18 +++++++++++++
- .../sovereignos_key_cap_pressed_dark.xml      | 24 +++++++++++++++++
- .../sovereignos_key_cap_pressed_light.xml     | 24 +++++++++++++++++
- .../drawable/sovereignos_key_preview_dark.xml | 20 ++++++++++++++
- .../sovereignos_key_preview_light.xml         | 20 ++++++++++++++
- .../sovereignos_keyboard_background_dark.xml  |  7 +++++
- .../sovereignos_keyboard_background_light.xml |  7 +++++
- .../drawable/sovereignos_popup_panel_dark.xml | 18 +++++++++++++
- .../sovereignos_popup_panel_light.xml         | 18 +++++++++++++
- .../sovereignos_popup_selected_dark.xml       |  6 +++++
- .../sovereignos_popup_selected_light.xml      |  6 +++++
- .../sovereignos_suggestion_divider_dark.xml   |  6 +++++
- .../sovereignos_suggestion_divider_light.xml  |  6 +++++
+ .../drawable/freeholdos_key_cap_light.xml    | 18 +++++++++++++
+ .../freeholdos_key_cap_pressed_dark.xml      | 24 +++++++++++++++++
+ .../freeholdos_key_cap_pressed_light.xml     | 24 +++++++++++++++++
+ .../drawable/freeholdos_key_preview_dark.xml | 20 ++++++++++++++
+ .../freeholdos_key_preview_light.xml         | 20 ++++++++++++++
+ .../freeholdos_keyboard_background_dark.xml  |  7 +++++
+ .../freeholdos_keyboard_background_light.xml |  7 +++++
+ .../drawable/freeholdos_popup_panel_dark.xml | 18 +++++++++++++
+ .../freeholdos_popup_panel_light.xml         | 18 +++++++++++++
+ .../freeholdos_popup_selected_dark.xml       |  6 +++++
+ .../freeholdos_popup_selected_light.xml      |  6 +++++
+ .../freeholdos_suggestion_divider_dark.xml   |  6 +++++
+ .../freeholdos_suggestion_divider_light.xml  |  6 +++++
  java/res/layout/emoji_palettes_view.xml       |  6 +++++
  java/res/values-land/config.xml               |  2 +-
  java/res/values/colors.xml                    | 23 +++++++++-------
  java/res/values/config.xml                    |  4 +--
- java/res/values/sovereignos_keyboard.xml      | 24 +++++++++++++++++
+ java/res/values/freeholdos_keyboard.xml      | 24 +++++++++++++++++
  java/res/values/themes-lxx-dark.xml           | 24 +++++++++++++----
  java/res/values/themes-lxx-light.xml          | 24 +++++++++++++----
  java/res/values/themes-lxx.xml                |  2 +-
  java/res/xml/key_styles_common.xml            |  2 +-
  java/res/xml/key_styles_number.xml            |  1 +
  46 files changed, 534 insertions(+), 104 deletions(-)
- create mode 100644 java/res/drawable/sovereignos_background_keyboard.xml
- create mode 100644 java/res/drawable/sovereignos_background_padtop.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_action_dark.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_action_light.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_action_pressed_dark.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_action_pressed_light.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_dark.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_functional_dark.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_functional_light.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_functional_pressed_dark.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_functional_pressed_light.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_light.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_pressed_dark.xml
- create mode 100644 java/res/drawable/sovereignos_key_cap_pressed_light.xml
- create mode 100644 java/res/drawable/sovereignos_key_preview_dark.xml
- create mode 100644 java/res/drawable/sovereignos_key_preview_light.xml
- create mode 100644 java/res/drawable/sovereignos_keyboard_background_dark.xml
- create mode 100644 java/res/drawable/sovereignos_keyboard_background_light.xml
- create mode 100644 java/res/drawable/sovereignos_popup_panel_dark.xml
- create mode 100644 java/res/drawable/sovereignos_popup_panel_light.xml
- create mode 100644 java/res/drawable/sovereignos_popup_selected_dark.xml
- create mode 100644 java/res/drawable/sovereignos_popup_selected_light.xml
- create mode 100644 java/res/drawable/sovereignos_suggestion_divider_dark.xml
- create mode 100644 java/res/drawable/sovereignos_suggestion_divider_light.xml
- create mode 100644 java/res/values/sovereignos_keyboard.xml
+ create mode 100644 java/res/drawable/freeholdos_background_keyboard.xml
+ create mode 100644 java/res/drawable/freeholdos_background_padtop.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_action_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_action_light.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_action_pressed_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_action_pressed_light.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_functional_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_functional_light.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_functional_pressed_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_functional_pressed_light.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_light.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_pressed_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_key_cap_pressed_light.xml
+ create mode 100644 java/res/drawable/freeholdos_key_preview_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_key_preview_light.xml
+ create mode 100644 java/res/drawable/freeholdos_keyboard_background_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_keyboard_background_light.xml
+ create mode 100644 java/res/drawable/freeholdos_popup_panel_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_popup_panel_light.xml
+ create mode 100644 java/res/drawable/freeholdos_popup_selected_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_popup_selected_light.xml
+ create mode 100644 java/res/drawable/freeholdos_suggestion_divider_dark.xml
+ create mode 100644 java/res/drawable/freeholdos_suggestion_divider_light.xml
+ create mode 100644 java/res/values/freeholdos_keyboard.xml
 
 diff --git a/java/res/drawable/btn_keyboard_key_functional_lxx_dark.xml b/java/res/drawable/btn_keyboard_key_functional_lxx_dark.xml
 index fd1dbb9f0..6d07d6a2f 100644
@@ -88,8 +88,8 @@ index fd1dbb9f0..6d07d6a2f 100644
      <item android:state_pressed="true"
 -          android:drawable="@color/key_background_pressed_lxx_dark" />
 -    <item android:drawable="@color/key_background_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_key_cap_functional_pressed_dark" />
-+    <item android:drawable="@drawable/sovereignos_key_cap_functional_dark" />
++          android:drawable="@drawable/freeholdos_key_cap_functional_pressed_dark" />
++    <item android:drawable="@drawable/freeholdos_key_cap_functional_dark" />
  </selector>
 diff --git a/java/res/drawable/btn_keyboard_key_functional_lxx_light.xml b/java/res/drawable/btn_keyboard_key_functional_lxx_light.xml
 index e518ca11d..d77d9d337 100644
@@ -101,8 +101,8 @@ index e518ca11d..d77d9d337 100644
      <item android:state_pressed="true"
 -          android:drawable="@color/key_background_pressed_lxx_light" />
 -    <item android:drawable="@color/key_background_lxx_light" />
-+          android:drawable="@drawable/sovereignos_key_cap_functional_pressed_light" />
-+    <item android:drawable="@drawable/sovereignos_key_cap_functional_light" />
++          android:drawable="@drawable/freeholdos_key_cap_functional_pressed_light" />
++    <item android:drawable="@drawable/freeholdos_key_cap_functional_light" />
  </selector>
 diff --git a/java/res/drawable/btn_keyboard_key_lxx_dark.xml b/java/res/drawable/btn_keyboard_key_lxx_dark.xml
 index 161592d3d..31e26ba7a 100644
@@ -116,25 +116,25 @@ index 161592d3d..31e26ba7a 100644
 +    <!-- Action keys: the teal accent of the theme. -->
      <item android:state_active="true" android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_key_active_pressed_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_key_cap_action_pressed_dark" />
++          android:drawable="@drawable/freeholdos_key_cap_action_pressed_dark" />
      <item android:state_active="true"
 -          android:drawable="@drawable/btn_keyboard_key_active_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_key_cap_action_dark" />
++          android:drawable="@drawable/freeholdos_key_cap_action_dark" />
  
 -    <!-- Toggle keys. Use checkable/checked state. -->
 +    <!-- Toggle keys (shift): on takes the letter tone, off the functional tone. -->
      <item android:state_checkable="true" android:state_checked="true" android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_key_pressed_on_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_key_cap_pressed_dark" />
++          android:drawable="@drawable/freeholdos_key_cap_pressed_dark" />
      <item android:state_checkable="true" android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_key_pressed_off_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_key_cap_functional_pressed_dark" />
++          android:drawable="@drawable/freeholdos_key_cap_functional_pressed_dark" />
      <item android:state_checkable="true" android:state_checked="true"
 -          android:drawable="@drawable/btn_keyboard_key_normal_on_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_key_cap_dark" />
++          android:drawable="@drawable/freeholdos_key_cap_dark" />
      <item android:state_checkable="true"
 -          android:drawable="@drawable/btn_keyboard_key_normal_off_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_key_cap_functional_dark" />
++          android:drawable="@drawable/freeholdos_key_cap_functional_dark" />
  
      <!-- Empty background keys. -->
      <item android:state_empty="true" android:state_pressed="true"
@@ -144,8 +144,8 @@ index 161592d3d..31e26ba7a 100644
      <item android:state_pressed="true"
 -          android:drawable="@color/key_background_pressed_lxx_dark" />
 -    <item android:drawable="@color/key_background_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_key_cap_pressed_dark" />
-+    <item android:drawable="@drawable/sovereignos_key_cap_dark" />
++          android:drawable="@drawable/freeholdos_key_cap_pressed_dark" />
++    <item android:drawable="@drawable/freeholdos_key_cap_dark" />
  </selector>
 diff --git a/java/res/drawable/btn_keyboard_key_lxx_light.xml b/java/res/drawable/btn_keyboard_key_lxx_light.xml
 index 0154d75b4..da33c77a5 100644
@@ -159,25 +159,25 @@ index 0154d75b4..da33c77a5 100644
 +    <!-- Action keys: the teal accent of the theme. -->
      <item android:state_active="true" android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_key_active_pressed_lxx_light" />
-+          android:drawable="@drawable/sovereignos_key_cap_action_pressed_light" />
++          android:drawable="@drawable/freeholdos_key_cap_action_pressed_light" />
      <item android:state_active="true"
 -          android:drawable="@drawable/btn_keyboard_key_active_lxx_light" />
-+          android:drawable="@drawable/sovereignos_key_cap_action_light" />
++          android:drawable="@drawable/freeholdos_key_cap_action_light" />
  
 -    <!-- Toggle keys. Use checkable/checked state. -->
 +    <!-- Toggle keys (shift): on takes the letter tone, off the functional tone. -->
      <item android:state_checkable="true" android:state_checked="true" android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_key_pressed_on_lxx_light" />
-+          android:drawable="@drawable/sovereignos_key_cap_pressed_light" />
++          android:drawable="@drawable/freeholdos_key_cap_pressed_light" />
      <item android:state_checkable="true" android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_key_pressed_off_lxx_light" />
-+          android:drawable="@drawable/sovereignos_key_cap_functional_pressed_light" />
++          android:drawable="@drawable/freeholdos_key_cap_functional_pressed_light" />
      <item android:state_checkable="true" android:state_checked="true"
 -          android:drawable="@drawable/btn_keyboard_key_normal_on_lxx_light" />
-+          android:drawable="@drawable/sovereignos_key_cap_light" />
++          android:drawable="@drawable/freeholdos_key_cap_light" />
      <item android:state_checkable="true"
 -          android:drawable="@drawable/btn_keyboard_key_normal_off_lxx_light" />
-+          android:drawable="@drawable/sovereignos_key_cap_functional_light" />
++          android:drawable="@drawable/freeholdos_key_cap_functional_light" />
  
      <!-- Empty background keys. -->
      <item android:state_empty="true" android:state_pressed="true"
@@ -187,8 +187,8 @@ index 0154d75b4..da33c77a5 100644
      <item android:state_pressed="true"
 -          android:drawable="@color/key_background_pressed_lxx_light" />
 -    <item android:drawable="@color/key_background_lxx_light" />
-+          android:drawable="@drawable/sovereignos_key_cap_pressed_light" />
-+    <item android:drawable="@drawable/sovereignos_key_cap_light" />
++          android:drawable="@drawable/freeholdos_key_cap_pressed_light" />
++    <item android:drawable="@drawable/freeholdos_key_cap_light" />
  </selector>
 diff --git a/java/res/drawable/btn_keyboard_key_popup_lxx_dark.xml b/java/res/drawable/btn_keyboard_key_popup_lxx_dark.xml
 index dee645712..9f84a2fd5 100644
@@ -199,7 +199,7 @@ index dee645712..9f84a2fd5 100644
  <selector xmlns:android="http://schemas.android.com/apk/res/android">
      <item android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_key_popup_selected_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_popup_selected_dark" />
++          android:drawable="@drawable/freeholdos_popup_selected_dark" />
      <item android:drawable="@android:color/transparent" />
  </selector>
 diff --git a/java/res/drawable/btn_keyboard_key_popup_lxx_light.xml b/java/res/drawable/btn_keyboard_key_popup_lxx_light.xml
@@ -211,7 +211,7 @@ index d6cd2b831..cf27ba343 100644
  <selector xmlns:android="http://schemas.android.com/apk/res/android">
      <item android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_key_popup_selected_lxx_light" />
-+          android:drawable="@drawable/sovereignos_popup_selected_light" />
++          android:drawable="@drawable/freeholdos_popup_selected_light" />
      <item android:drawable="@android:color/transparent" />
  </selector>
 diff --git a/java/res/drawable/btn_keyboard_spacebar_lxx_dark.xml b/java/res/drawable/btn_keyboard_spacebar_lxx_dark.xml
@@ -224,8 +224,8 @@ index e930e40e4..f06c70d36 100644
      <item android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_spacebar_pressed_lxx_dark" />
 -    <item android:drawable="@drawable/btn_keyboard_spacebar_normal_lxx_dark" />
-+          android:drawable="@drawable/sovereignos_key_cap_pressed_dark" />
-+    <item android:drawable="@drawable/sovereignos_key_cap_dark" />
++          android:drawable="@drawable/freeholdos_key_cap_pressed_dark" />
++    <item android:drawable="@drawable/freeholdos_key_cap_dark" />
  </selector>
 diff --git a/java/res/drawable/btn_keyboard_spacebar_lxx_light.xml b/java/res/drawable/btn_keyboard_spacebar_lxx_light.xml
 index 2b059938d..eaa556a69 100644
@@ -237,8 +237,8 @@ index 2b059938d..eaa556a69 100644
      <item android:state_pressed="true"
 -          android:drawable="@drawable/btn_keyboard_spacebar_pressed_lxx_light" />
 -    <item android:drawable="@drawable/btn_keyboard_spacebar_normal_lxx_light" />
-+          android:drawable="@drawable/sovereignos_key_cap_pressed_light" />
-+    <item android:drawable="@drawable/sovereignos_key_cap_light" />
++          android:drawable="@drawable/freeholdos_key_cap_pressed_light" />
++    <item android:drawable="@drawable/freeholdos_key_cap_light" />
  </selector>
 diff --git a/java/res/drawable/btn_suggestion_lxx_dark.xml b/java/res/drawable/btn_suggestion_lxx_dark.xml
 index 84a91209e..7316f02be 100644
@@ -260,7 +260,7 @@ index 84a91209e..7316f02be 100644
 +               android:insetTop="4dp" android:insetBottom="4dp">
 +            <shape android:shape="rectangle">
 +                <solid android:color="@color/suggested_word_background_selected_lxx_dark" />
-+                <corners android:radius="@dimen/sovereignos_suggestion_pill_radius" />
++                <corners android:radius="@dimen/freeholdos_suggestion_pill_radius" />
 +            </shape>
 +        </inset>
 +    </item>
@@ -285,7 +285,7 @@ index 8dce19517..d5465dfa1 100644
 +               android:insetTop="4dp" android:insetBottom="4dp">
 +            <shape android:shape="rectangle">
 +                <solid android:color="@color/suggested_word_background_selected_lxx_light" />
-+                <corners android:radius="@dimen/sovereignos_suggestion_pill_radius" />
++                <corners android:radius="@dimen/freeholdos_suggestion_pill_radius" />
 +            </shape>
 +        </inset>
 +    </item>
@@ -320,7 +320,7 @@ index ab1109bcc..0a06d5c83 100644
 +<selector xmlns:android="http://schemas.android.com/apk/res/android">
 +    <!-- One rounded body for every state: the 9-patches it replaces differed only in a
 +         marker that the restyle does not draw. -->
-+    <item android:drawable="@drawable/sovereignos_key_preview_dark" />
++    <item android:drawable="@drawable/freeholdos_key_preview_dark" />
  </selector>
 diff --git a/java/res/drawable/keyboard_key_feedback_lxx_light.xml b/java/res/drawable/keyboard_key_feedback_lxx_light.xml
 index f4341c9b5..622f74487 100644
@@ -352,539 +352,539 @@ index f4341c9b5..622f74487 100644
 +<selector xmlns:android="http://schemas.android.com/apk/res/android">
 +    <!-- One rounded body for every state: the 9-patches it replaces differed only in a
 +         marker that the restyle does not draw. -->
-+    <item android:drawable="@drawable/sovereignos_key_preview_light" />
++    <item android:drawable="@drawable/freeholdos_key_preview_light" />
  </selector>
-diff --git a/java/res/drawable/sovereignos_background_keyboard.xml b/java/res/drawable/sovereignos_background_keyboard.xml
+diff --git a/java/res/drawable/freeholdos_background_keyboard.xml b/java/res/drawable/freeholdos_background_keyboard.xml
 new file mode 100644
 index 000000000..a72382443
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_background_keyboard.xml
++++ b/java/res/drawable/freeholdos_background_keyboard.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +    <solid android:color="@android:color/transparent" />
-+    <padding android:top="1dp" android:bottom="@dimen/sovereignos_key_edge" />
++    <padding android:top="1dp" android:bottom="@dimen/freeholdos_key_edge" />
 +</shape>
-diff --git a/java/res/drawable/sovereignos_background_padtop.xml b/java/res/drawable/sovereignos_background_padtop.xml
+diff --git a/java/res/drawable/freeholdos_background_padtop.xml b/java/res/drawable/freeholdos_background_padtop.xml
 new file mode 100644
 index 000000000..05309d96c
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_background_padtop.xml
++++ b/java/res/drawable/freeholdos_background_padtop.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +    <solid android:color="@android:color/transparent" />
 +    <padding android:top="1dp" />
 +</shape>
-diff --git a/java/res/drawable/sovereignos_key_cap_action_dark.xml b/java/res/drawable/sovereignos_key_cap_action_dark.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_action_dark.xml b/java/res/drawable/freeholdos_key_cap_action_dark.xml
 new file mode 100644
 index 000000000..b7aa7fc3d
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_action_dark.xml
++++ b/java/res/drawable/freeholdos_key_cap_action_dark.xml
 @@ -0,0 +1,20 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
-+            <solid android:color="@color/sovereignos_key_edge_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
 +            <solid android:color="@color/highlight_color_lxx_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_action_light.xml b/java/res/drawable/sovereignos_key_cap_action_light.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_action_light.xml b/java/res/drawable/freeholdos_key_cap_action_light.xml
 new file mode 100644
 index 000000000..d112d7fa9
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_action_light.xml
++++ b/java/res/drawable/freeholdos_key_cap_action_light.xml
 @@ -0,0 +1,20 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
-+            <solid android:color="@color/sovereignos_key_edge_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
 +            <solid android:color="@color/highlight_color_lxx_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_action_pressed_dark.xml b/java/res/drawable/sovereignos_key_cap_action_pressed_dark.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_action_pressed_dark.xml b/java/res/drawable/freeholdos_key_cap_action_pressed_dark.xml
 new file mode 100644
 index 000000000..d179e8104
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_action_pressed_dark.xml
++++ b/java/res/drawable/freeholdos_key_cap_action_pressed_dark.xml
 @@ -0,0 +1,27 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
-+            <solid android:color="@color/sovereignos_key_edge_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
 +            <solid android:color="@color/highlight_color_lxx_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
 +            <solid android:color="@color/key_background_pressed_lxx_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_action_pressed_light.xml b/java/res/drawable/sovereignos_key_cap_action_pressed_light.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_action_pressed_light.xml b/java/res/drawable/freeholdos_key_cap_action_pressed_light.xml
 new file mode 100644
 index 000000000..a63d761cf
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_action_pressed_light.xml
++++ b/java/res/drawable/freeholdos_key_cap_action_pressed_light.xml
 @@ -0,0 +1,27 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
-+            <solid android:color="@color/sovereignos_key_edge_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
 +            <solid android:color="@color/highlight_color_lxx_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <size android:width="38dp" android:height="38dp" />
 +            <solid android:color="@color/key_background_pressed_lxx_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_dark.xml b/java/res/drawable/sovereignos_key_cap_dark.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_dark.xml b/java/res/drawable/freeholdos_key_cap_dark.xml
 new file mode 100644
 index 000000000..d8e19d129
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_dark.xml
++++ b/java/res/drawable/freeholdos_key_cap_dark.xml
 @@ -0,0 +1,18 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_cap_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_cap_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_functional_dark.xml b/java/res/drawable/sovereignos_key_cap_functional_dark.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_functional_dark.xml b/java/res/drawable/freeholdos_key_cap_functional_dark.xml
 new file mode 100644
 index 000000000..2b16cd33d
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_functional_dark.xml
++++ b/java/res/drawable/freeholdos_key_cap_functional_dark.xml
 @@ -0,0 +1,18 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_cap_functional_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_cap_functional_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_functional_light.xml b/java/res/drawable/sovereignos_key_cap_functional_light.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_functional_light.xml b/java/res/drawable/freeholdos_key_cap_functional_light.xml
 new file mode 100644
 index 000000000..230b03373
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_functional_light.xml
++++ b/java/res/drawable/freeholdos_key_cap_functional_light.xml
 @@ -0,0 +1,18 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_cap_functional_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_cap_functional_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_functional_pressed_dark.xml b/java/res/drawable/sovereignos_key_cap_functional_pressed_dark.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_functional_pressed_dark.xml b/java/res/drawable/freeholdos_key_cap_functional_pressed_dark.xml
 new file mode 100644
 index 000000000..f0ee61250
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_functional_pressed_dark.xml
++++ b/java/res/drawable/freeholdos_key_cap_functional_pressed_dark.xml
 @@ -0,0 +1,24 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_cap_functional_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_cap_functional_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <solid android:color="@color/key_background_pressed_lxx_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_functional_pressed_light.xml b/java/res/drawable/sovereignos_key_cap_functional_pressed_light.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_functional_pressed_light.xml b/java/res/drawable/freeholdos_key_cap_functional_pressed_light.xml
 new file mode 100644
 index 000000000..0d9e25f62
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_functional_pressed_light.xml
++++ b/java/res/drawable/freeholdos_key_cap_functional_pressed_light.xml
 @@ -0,0 +1,24 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_cap_functional_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_cap_functional_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <solid android:color="@color/key_background_pressed_lxx_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_light.xml b/java/res/drawable/sovereignos_key_cap_light.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_light.xml b/java/res/drawable/freeholdos_key_cap_light.xml
 new file mode 100644
 index 000000000..84a2779d9
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_light.xml
++++ b/java/res/drawable/freeholdos_key_cap_light.xml
 @@ -0,0 +1,18 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_cap_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_cap_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_pressed_dark.xml b/java/res/drawable/sovereignos_key_cap_pressed_dark.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_pressed_dark.xml b/java/res/drawable/freeholdos_key_cap_pressed_dark.xml
 new file mode 100644
 index 000000000..051faf358
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_pressed_dark.xml
++++ b/java/res/drawable/freeholdos_key_cap_pressed_dark.xml
 @@ -0,0 +1,24 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_cap_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_cap_dark" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <solid android:color="@color/key_background_pressed_lxx_dark" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_cap_pressed_light.xml b/java/res/drawable/sovereignos_key_cap_pressed_light.xml
+diff --git a/java/res/drawable/freeholdos_key_cap_pressed_light.xml b/java/res/drawable/freeholdos_key_cap_pressed_light.xml
 new file mode 100644
 index 000000000..ac3a8a2f2
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_cap_pressed_light.xml
++++ b/java/res/drawable/freeholdos_key_cap_pressed_light.xml
 @@ -0,0 +1,24 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="0dp" android:paddingTop="0dp" android:paddingRight="0dp"
-+    android:paddingBottom="@dimen/sovereignos_key_edge">
++    android:paddingBottom="@dimen/freeholdos_key_edge">
 +    <item>
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_cap_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <solid android:color="@color/freeholdos_key_cap_light" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
-+    <item android:bottom="@dimen/sovereignos_key_edge">
++    <item android:bottom="@dimen/freeholdos_key_edge">
 +        <shape android:shape="rectangle">
 +            <solid android:color="@color/key_background_pressed_lxx_light" />
-+            <corners android:radius="@dimen/sovereignos_key_corner_radius" />
++            <corners android:radius="@dimen/freeholdos_key_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_preview_dark.xml b/java/res/drawable/sovereignos_key_preview_dark.xml
+diff --git a/java/res/drawable/freeholdos_key_preview_dark.xml b/java/res/drawable/freeholdos_key_preview_dark.xml
 new file mode 100644
 index 000000000..d0cf2615f
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_preview_dark.xml
++++ b/java/res/drawable/freeholdos_key_preview_dark.xml
 @@ -0,0 +1,20 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="4dp" android:paddingTop="2dp" android:paddingRight="4dp"
 +    android:paddingBottom="64dp">
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="4.5dp">
 +        <shape android:shape="rectangle">
 +            <size android:width="48dp" android:height="70dp" />
-+            <solid android:color="@color/sovereignos_key_edge_dark" />
-+            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_dark" />
++            <corners android:radius="@dimen/freeholdos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="6dp">
 +        <shape android:shape="rectangle">
 +            <size android:width="48dp" android:height="70dp" />
-+            <solid android:color="@color/sovereignos_popup_dark" />
-+            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
++            <solid android:color="@color/freeholdos_popup_dark" />
++            <corners android:radius="@dimen/freeholdos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_key_preview_light.xml b/java/res/drawable/sovereignos_key_preview_light.xml
+diff --git a/java/res/drawable/freeholdos_key_preview_light.xml b/java/res/drawable/freeholdos_key_preview_light.xml
 new file mode 100644
 index 000000000..a4b71a1df
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_key_preview_light.xml
++++ b/java/res/drawable/freeholdos_key_preview_light.xml
 @@ -0,0 +1,20 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="4dp" android:paddingTop="2dp" android:paddingRight="4dp"
 +    android:paddingBottom="64dp">
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="4.5dp">
 +        <shape android:shape="rectangle">
 +            <size android:width="48dp" android:height="70dp" />
-+            <solid android:color="@color/sovereignos_key_edge_light" />
-+            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_light" />
++            <corners android:radius="@dimen/freeholdos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="6dp">
 +        <shape android:shape="rectangle">
 +            <size android:width="48dp" android:height="70dp" />
-+            <solid android:color="@color/sovereignos_popup_light" />
-+            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
++            <solid android:color="@color/freeholdos_popup_light" />
++            <corners android:radius="@dimen/freeholdos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_keyboard_background_dark.xml b/java/res/drawable/sovereignos_keyboard_background_dark.xml
+diff --git a/java/res/drawable/freeholdos_keyboard_background_dark.xml b/java/res/drawable/freeholdos_keyboard_background_dark.xml
 new file mode 100644
 index 000000000..2a1b2c508
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_keyboard_background_dark.xml
++++ b/java/res/drawable/freeholdos_keyboard_background_dark.xml
 @@ -0,0 +1,7 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-+    <solid android:color="@color/sovereignos_keyboard_background_dark" />
-+    <corners android:topLeftRadius="@dimen/sovereignos_keyboard_top_radius"
-+             android:topRightRadius="@dimen/sovereignos_keyboard_top_radius" />
++    <solid android:color="@color/freeholdos_keyboard_background_dark" />
++    <corners android:topLeftRadius="@dimen/freeholdos_keyboard_top_radius"
++             android:topRightRadius="@dimen/freeholdos_keyboard_top_radius" />
 +</shape>
-diff --git a/java/res/drawable/sovereignos_keyboard_background_light.xml b/java/res/drawable/sovereignos_keyboard_background_light.xml
+diff --git a/java/res/drawable/freeholdos_keyboard_background_light.xml b/java/res/drawable/freeholdos_keyboard_background_light.xml
 new file mode 100644
 index 000000000..2fb033738
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_keyboard_background_light.xml
++++ b/java/res/drawable/freeholdos_keyboard_background_light.xml
 @@ -0,0 +1,7 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-+    <solid android:color="@color/sovereignos_keyboard_background_light" />
-+    <corners android:topLeftRadius="@dimen/sovereignos_keyboard_top_radius"
-+             android:topRightRadius="@dimen/sovereignos_keyboard_top_radius" />
++    <solid android:color="@color/freeholdos_keyboard_background_light" />
++    <corners android:topLeftRadius="@dimen/freeholdos_keyboard_top_radius"
++             android:topRightRadius="@dimen/freeholdos_keyboard_top_radius" />
 +</shape>
-diff --git a/java/res/drawable/sovereignos_popup_panel_dark.xml b/java/res/drawable/sovereignos_popup_panel_dark.xml
+diff --git a/java/res/drawable/freeholdos_popup_panel_dark.xml b/java/res/drawable/freeholdos_popup_panel_dark.xml
 new file mode 100644
 index 000000000..a41179251
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_popup_panel_dark.xml
++++ b/java/res/drawable/freeholdos_popup_panel_dark.xml
 @@ -0,0 +1,18 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="4dp" android:paddingTop="2dp" android:paddingRight="4dp"
 +    android:paddingBottom="8dp">
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="6.5dp">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_dark" />
-+            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_dark" />
++            <corners android:radius="@dimen/freeholdos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="8dp">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_popup_dark" />
-+            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
++            <solid android:color="@color/freeholdos_popup_dark" />
++            <corners android:radius="@dimen/freeholdos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_popup_panel_light.xml b/java/res/drawable/sovereignos_popup_panel_light.xml
+diff --git a/java/res/drawable/freeholdos_popup_panel_light.xml b/java/res/drawable/freeholdos_popup_panel_light.xml
 new file mode 100644
 index 000000000..b78cc6a04
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_popup_panel_light.xml
++++ b/java/res/drawable/freeholdos_popup_panel_light.xml
 @@ -0,0 +1,18 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:paddingLeft="4dp" android:paddingTop="2dp" android:paddingRight="4dp"
 +    android:paddingBottom="8dp">
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="6.5dp">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_key_edge_light" />
-+            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
++            <solid android:color="@color/freeholdos_key_edge_light" />
++            <corners android:radius="@dimen/freeholdos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +    <item android:left="4dp" android:top="2dp" android:right="4dp" android:bottom="8dp">
 +        <shape android:shape="rectangle">
-+            <solid android:color="@color/sovereignos_popup_light" />
-+            <corners android:radius="@dimen/sovereignos_popup_corner_radius" />
++            <solid android:color="@color/freeholdos_popup_light" />
++            <corners android:radius="@dimen/freeholdos_popup_corner_radius" />
 +        </shape>
 +    </item>
 +</layer-list>
-diff --git a/java/res/drawable/sovereignos_popup_selected_dark.xml b/java/res/drawable/sovereignos_popup_selected_dark.xml
+diff --git a/java/res/drawable/freeholdos_popup_selected_dark.xml b/java/res/drawable/freeholdos_popup_selected_dark.xml
 new file mode 100644
 index 000000000..d94ff2138
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_popup_selected_dark.xml
++++ b/java/res/drawable/freeholdos_popup_selected_dark.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +    <solid android:color="@color/key_background_pressed_lxx_dark" />
-+    <corners android:radius="@dimen/sovereignos_popup_selected_radius" />
++    <corners android:radius="@dimen/freeholdos_popup_selected_radius" />
 +</shape>
-diff --git a/java/res/drawable/sovereignos_popup_selected_light.xml b/java/res/drawable/sovereignos_popup_selected_light.xml
+diff --git a/java/res/drawable/freeholdos_popup_selected_light.xml b/java/res/drawable/freeholdos_popup_selected_light.xml
 new file mode 100644
 index 000000000..152bba05a
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_popup_selected_light.xml
++++ b/java/res/drawable/freeholdos_popup_selected_light.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +    <solid android:color="@color/key_background_pressed_lxx_light" />
-+    <corners android:radius="@dimen/sovereignos_popup_selected_radius" />
++    <corners android:radius="@dimen/freeholdos_popup_selected_radius" />
 +</shape>
-diff --git a/java/res/drawable/sovereignos_suggestion_divider_dark.xml b/java/res/drawable/sovereignos_suggestion_divider_dark.xml
+diff --git a/java/res/drawable/freeholdos_suggestion_divider_dark.xml b/java/res/drawable/freeholdos_suggestion_divider_dark.xml
 new file mode 100644
 index 000000000..12fe45372
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_suggestion_divider_dark.xml
++++ b/java/res/drawable/freeholdos_suggestion_divider_dark.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +    <size android:width="1dp" android:height="24dp" />
-+    <solid android:color="@color/sovereignos_suggestion_divider_dark" />
++    <solid android:color="@color/freeholdos_suggestion_divider_dark" />
 +</shape>
-diff --git a/java/res/drawable/sovereignos_suggestion_divider_light.xml b/java/res/drawable/sovereignos_suggestion_divider_light.xml
+diff --git a/java/res/drawable/freeholdos_suggestion_divider_light.xml b/java/res/drawable/freeholdos_suggestion_divider_light.xml
 new file mode 100644
 index 000000000..fed01a371
 --- /dev/null
-+++ b/java/res/drawable/sovereignos_suggestion_divider_light.xml
++++ b/java/res/drawable/freeholdos_suggestion_divider_light.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +    <size android:width="1dp" android:height="24dp" />
-+    <solid android:color="@color/sovereignos_suggestion_divider_light" />
++    <solid android:color="@color/freeholdos_suggestion_divider_light" />
 +</shape>
 diff --git a/java/res/layout/emoji_palettes_view.xml b/java/res/layout/emoji_palettes_view.xml
 index 7c5f6c0a6..d9cddda4c 100644
@@ -942,7 +942,7 @@ index 5453d51c1..d1922825a 100644
 -    <color name="key_text_inactive_color_lxx_light">#B337474F</color>
 -    <color name="key_hint_letter_color_lxx_light">#B337474F</color>
 -    <color name="language_on_spacebar_text_color_lxx_light">#B337474F</color>
-+    <!-- sovereignos: key text and hint colours raised so the pairs on resting caps keep 4.5:1
++    <!-- freeholdos: key text and hint colours raised so the pairs on resting caps keep 4.5:1
 +         (ADR-146): functional text 3.48 -> 5.06, hints 4.16 -> 5.42 in light, 3.13 -> 4.54 in
 +         dark; suggested words 3.42 -> 4.72 on the new strip. Not raised: text on pressed caps
 +         (4.14 light functional, 4.30 dark), hints on functional caps (3.48 light) and the
@@ -1006,35 +1006,35 @@ index cda7a38e5..aa5772700 100644
      <dimen name="config_key_shifted_letter_hint_padding">2dp</dimen>
  
      <!-- For 5-row keyboard -->
-diff --git a/java/res/values/sovereignos_keyboard.xml b/java/res/values/sovereignos_keyboard.xml
+diff --git a/java/res/values/freeholdos_keyboard.xml b/java/res/values/freeholdos_keyboard.xml
 new file mode 100644
 index 000000000..84b3c9656
 --- /dev/null
-+++ b/java/res/values/sovereignos_keyboard.xml
++++ b/java/res/values/freeholdos_keyboard.xml
 @@ -0,0 +1,24 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- SovereignOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<!-- FreeholdOS keyboard restyle (ADR-146). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
 +<resources>
 +    <!-- A key is a rounded cap with a darker bottom edge. The edge is drawn below the key
 +         rectangle (the drawable padding), so a label centred on the key is centred on the cap. -->
-+    <dimen name="sovereignos_key_corner_radius">10dp</dimen>
-+    <dimen name="sovereignos_key_edge">1.5dp</dimen>
-+    <dimen name="sovereignos_keyboard_top_radius">16dp</dimen>
-+    <dimen name="sovereignos_popup_corner_radius">14dp</dimen>
-+    <dimen name="sovereignos_popup_selected_radius">10dp</dimen>
-+    <dimen name="sovereignos_suggestion_pill_radius">8dp</dimen>
-+    <color name="sovereignos_keyboard_background_light">#CFD8DC</color>
-+    <color name="sovereignos_key_cap_light">#FFFFFF</color>
-+    <color name="sovereignos_key_cap_functional_light">#B0BEC5</color>
-+    <color name="sovereignos_key_edge_light">#90A4AE</color>
-+    <color name="sovereignos_popup_light">#FFFFFF</color>
-+    <color name="sovereignos_suggestion_divider_light">#4D37474F</color>
-+    <color name="sovereignos_keyboard_background_dark">#263238</color>
-+    <color name="sovereignos_key_cap_dark">#455A64</color>
-+    <color name="sovereignos_key_cap_functional_dark">#37474F</color>
-+    <color name="sovereignos_key_edge_dark">#1B2327</color>
-+    <color name="sovereignos_popup_dark">#455A64</color>
-+    <color name="sovereignos_suggestion_divider_dark">#4DFFFFFF</color>
++    <dimen name="freeholdos_key_corner_radius">10dp</dimen>
++    <dimen name="freeholdos_key_edge">1.5dp</dimen>
++    <dimen name="freeholdos_keyboard_top_radius">16dp</dimen>
++    <dimen name="freeholdos_popup_corner_radius">14dp</dimen>
++    <dimen name="freeholdos_popup_selected_radius">10dp</dimen>
++    <dimen name="freeholdos_suggestion_pill_radius">8dp</dimen>
++    <color name="freeholdos_keyboard_background_light">#CFD8DC</color>
++    <color name="freeholdos_key_cap_light">#FFFFFF</color>
++    <color name="freeholdos_key_cap_functional_light">#B0BEC5</color>
++    <color name="freeholdos_key_edge_light">#90A4AE</color>
++    <color name="freeholdos_popup_light">#FFFFFF</color>
++    <color name="freeholdos_suggestion_divider_light">#4D37474F</color>
++    <color name="freeholdos_keyboard_background_dark">#263238</color>
++    <color name="freeholdos_key_cap_dark">#455A64</color>
++    <color name="freeholdos_key_cap_functional_dark">#37474F</color>
++    <color name="freeholdos_key_edge_dark">#1B2327</color>
++    <color name="freeholdos_popup_dark">#455A64</color>
++    <color name="freeholdos_suggestion_divider_dark">#4DFFFFFF</color>
 +</resources>
 diff --git a/java/res/values/themes-lxx-dark.xml b/java/res/values/themes-lxx-dark.xml
 index 44cad972a..d72c4cbb7 100644
@@ -1053,7 +1053,7 @@ index 44cad972a..d72c4cbb7 100644
          <item name="pasteButtonStyle">@style/PasteButton.LXX_Dark</item>
          <item name="pasteButtonTextStyle">@style/PasteButtonText.LXX_Dark</item>
      </style>
-+    <!-- sovereignos: the keyboard background, edge to edge, with a rounded top. LatinIME
++    <!-- freeholdos: the keyboard background, edge to edge, with a rounded top. LatinIME
 +         moves it from the input view to the window background and draws it from the top of
 +         the keyboard down, because the input view is as tall as the screen. The keyboard
 +         and strip views are transparent so the rounding is not covered. -->
@@ -1061,7 +1061,7 @@ index 44cad972a..d72c4cbb7 100644
 +        name="InputView.LXX_Dark"
 +        parent="InputView.LXX"
 +    >
-+        <item name="android:background">@drawable/sovereignos_keyboard_background_dark</item>
++        <item name="android:background">@drawable/freeholdos_keyboard_background_dark</item>
 +        <!-- The shadow of the input view (outline from the insets) would fall on the keyboard
 +             background, which now lies below the view in the window. -->
 +        <item name="android:elevation">0dp</item>
@@ -1075,7 +1075,7 @@ index 44cad972a..d72c4cbb7 100644
          parent="KeyboardView.LXX"
      >
 -        <item name="android:background">@drawable/keyboard_background_lxx_dark</item>
-+        <item name="android:background">@drawable/sovereignos_background_keyboard</item>
++        <item name="android:background">@drawable/freeholdos_background_keyboard</item>
          <item name="keyBackground">@drawable/btn_keyboard_key_lxx_dark</item>
          <item name="functionalKeyBackground">@drawable/btn_keyboard_key_functional_lxx_dark</item>
          <item name="spacebarBackground">@drawable/btn_keyboard_spacebar_lxx_dark</item>
@@ -1084,7 +1084,7 @@ index 44cad972a..d72c4cbb7 100644
          parent="KeyboardView.LXX_Dark"
      >
 -        <item name="android:background">@drawable/keyboard_popup_panel_background_lxx_dark</item>
-+        <item name="android:background">@drawable/sovereignos_popup_panel_dark</item>
++        <item name="android:background">@drawable/freeholdos_popup_panel_dark</item>
          <item name="keyBackground">@drawable/btn_keyboard_key_popup_lxx_dark</item>
          <item name="divider">@drawable/more_keys_divider</item>
          <item name="keyTypeface">normal</item>
@@ -1094,8 +1094,8 @@ index 44cad972a..d72c4cbb7 100644
          <item name="minMoreSuggestionsWidth">@fraction/config_min_more_suggestions_width</item>
 -        <item name="android:background">@drawable/keyboard_suggest_strip_lxx_dark</item>
 -        <item name="android:src">@drawable/suggestions_strip_divider_lxx_dark</item>
-+        <item name="android:background">@drawable/sovereignos_background_padtop</item>
-+        <item name="android:src">@drawable/sovereignos_suggestion_divider_dark</item>
++        <item name="android:background">@drawable/freeholdos_background_padtop</item>
++        <item name="android:src">@drawable/freeholdos_suggestion_divider_dark</item>
          <item name="suggestionStripOptions">autoCorrectBold|validTypedWordBold</item>
          <item name="colorValidTypedWord">@color/typed_word_color_lxx_dark</item>
          <item name="colorTypedWord">@color/typed_word_color_lxx_dark</item>
@@ -1116,7 +1116,7 @@ index 1b3283ffa..791a5aa38 100644
          <item name="pasteButtonStyle">@style/PasteButton.LXX_Light</item>
          <item name="pasteButtonTextStyle">@style/PasteButtonText.LXX_Light</item>
      </style>
-+    <!-- sovereignos: the keyboard background, edge to edge, with a rounded top. LatinIME
++    <!-- freeholdos: the keyboard background, edge to edge, with a rounded top. LatinIME
 +         moves it from the input view to the window background and draws it from the top of
 +         the keyboard down, because the input view is as tall as the screen. The keyboard
 +         and strip views are transparent so the rounding is not covered. -->
@@ -1124,7 +1124,7 @@ index 1b3283ffa..791a5aa38 100644
 +        name="InputView.LXX_Light"
 +        parent="InputView.LXX"
 +    >
-+        <item name="android:background">@drawable/sovereignos_keyboard_background_light</item>
++        <item name="android:background">@drawable/freeholdos_keyboard_background_light</item>
 +        <!-- The shadow of the input view (outline from the insets) would fall on the keyboard
 +             background, which now lies below the view in the window. -->
 +        <item name="android:elevation">0dp</item>
@@ -1138,7 +1138,7 @@ index 1b3283ffa..791a5aa38 100644
          parent="KeyboardView.LXX"
      >
 -        <item name="android:background">@drawable/keyboard_background_lxx_light</item>
-+        <item name="android:background">@drawable/sovereignos_background_keyboard</item>
++        <item name="android:background">@drawable/freeholdos_background_keyboard</item>
          <item name="keyBackground">@drawable/btn_keyboard_key_lxx_light</item>
          <item name="functionalKeyBackground">@drawable/btn_keyboard_key_functional_lxx_light</item>
          <item name="spacebarBackground">@drawable/btn_keyboard_spacebar_lxx_light</item>
@@ -1147,7 +1147,7 @@ index 1b3283ffa..791a5aa38 100644
          parent="KeyboardView.LXX_Light"
      >
 -        <item name="android:background">@drawable/keyboard_popup_panel_background_lxx_light</item>
-+        <item name="android:background">@drawable/sovereignos_popup_panel_light</item>
++        <item name="android:background">@drawable/freeholdos_popup_panel_light</item>
          <item name="keyBackground">@drawable/btn_keyboard_key_popup_lxx_light</item>
          <item name="divider">@drawable/more_keys_divider</item>
          <item name="keyTypeface">normal</item>
@@ -1157,8 +1157,8 @@ index 1b3283ffa..791a5aa38 100644
          <item name="minMoreSuggestionsWidth">@fraction/config_min_more_suggestions_width</item>
 -        <item name="android:background">@drawable/keyboard_suggest_strip_lxx_light</item>
 -        <item name="android:src">@drawable/suggestions_strip_divider_lxx_light</item>
-+        <item name="android:background">@drawable/sovereignos_background_padtop</item>
-+        <item name="android:src">@drawable/sovereignos_suggestion_divider_light</item>
++        <item name="android:background">@drawable/freeholdos_background_padtop</item>
++        <item name="android:src">@drawable/freeholdos_suggestion_divider_light</item>
          <item name="suggestionStripOptions">autoCorrectBold|validTypedWordBold</item>
          <item name="colorValidTypedWord">@color/typed_word_color_lxx_light</item>
          <item name="colorTypedWord">@color/typed_word_color_lxx_light</item>

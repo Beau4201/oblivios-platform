@@ -277,7 +277,7 @@ private val SwitchThumbOnTop = 3.dp
 private val SwitchThumbOffTop = 3.5.dp
 
 /**
- * SovereignOS Android port deviation (see guardian/SOURCE.md): [enabled] gained
+ * FreeholdOS Android port deviation (see guardian/SOURCE.md): [enabled] gained
  * a real effect here (dimmed + non-interactive) rather than only existing as
  * a parameter, because the reference module's stock-Switch predecessor got
  * this behavior for free from Material3's own `Switch(enabled = ...)` and

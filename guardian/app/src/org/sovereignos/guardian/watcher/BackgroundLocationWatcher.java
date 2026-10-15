@@ -78,7 +78,7 @@ public final class BackgroundLocationWatcher {
         }
         // startWatchingNoted/startWatchingActive are registered system-wide, not scoped to
         // this process's own Android user -- confirmed via real source read, not assumed. On
-        // a SovereignOS multi-user device (e.g. a Duress Unlock decoy session, or any two ordinary
+        // a FreeholdOS multi-user device (e.g. a Duress Unlock decoy session, or any two ordinary
         // users) this Guardian instance would otherwise be notified about, and ingest, another
         // user's own app activity into this user's own overview store (which has no userId
         // field to filter on downstream). Found during an exhaustive audit of decoy

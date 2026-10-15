@@ -1,5 +1,5 @@
 From e2cf1c7dc7cf7be073d674c32469c0d33cd82b64 Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Tue, 29 Sep 2026 17:19:37 +0200
 Subject: [PATCH] airpods: ship AirPodsApp on every Pixel target and its
  validation harness in debug builds
@@ -28,7 +28,7 @@ index 3ad9544..30d2fc1 100644
      GuardianApp \
      privapp-permissions-org.sovereignos.guardian.xml
 +
-+# SovereignOS: AirPods compatibility app (ADR-118). Kept next to Guardian in the
++# FreeholdOS: AirPods compatibility app (ADR-118). Kept next to Guardian in the
 +# common file so every Pixel target ships it. The two XML modules are the privapp
 +# allow-list and the single-package hidden-API entry; the app needs both.
 +PRODUCT_PACKAGES += \
@@ -36,7 +36,7 @@ index 3ad9544..30d2fc1 100644
 +    privapp-permissions-org.sovereignos.airpods.xml \
 +    hidden-api-whitelisted-app-org.sovereignos.airpods.xml
 +
-+# SovereignOS: AirPods validation harness (ADR-120). PRODUCT_PACKAGES_DEBUG is installed
++# FreeholdOS: AirPods validation harness (ADR-120). PRODUCT_PACKAGES_DEBUG is installed
 +# for userdebug and eng builds only, never for user builds (build/make/core/main.mk).
 +# Each app pulls in the privapp allow-list and the hidden-API exemption it needs through
 +# its own required: list.

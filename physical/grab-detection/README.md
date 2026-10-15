@@ -2,7 +2,7 @@
 
 Eight patches that lock the phone when it is pulled out of a hand in use and restart it after
 60 seconds without a PIN (ADR-169). The design is
-`docs/superpowers/specs/2026-10-15-grab-detection-design.md` in `sovereignos-foundation`.
+`docs/superpowers/specs/2026-10-15-grab-detection-design.md` in `freeholdos-foundation`.
 
 | Patch | Project | Effect |
 | --- | --- | --- |

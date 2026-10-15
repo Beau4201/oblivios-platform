@@ -13,7 +13,7 @@ import org.sovereignos.guardian.remediation.RemediationActionId;
 
 import java.util.Map;
 
-public final class SovereignOSPlatformGateway implements GuardianPlatformGateway {
+public final class FreeholdOSPlatformGateway implements GuardianPlatformGateway {
     private static final String BACKGROUND_LOCATION_PERMISSION =
         "android.permission.ACCESS_BACKGROUND_LOCATION";
     private static final String BACKGROUND_LOCATION_GRANTED_KEY =
@@ -22,7 +22,7 @@ public final class SovereignOSPlatformGateway implements GuardianPlatformGateway
     private final PackageManager packageManager;
     private final UserHandle user;
 
-    public SovereignOSPlatformGateway(PackageManager packageManager, UserHandle user) {
+    public FreeholdOSPlatformGateway(PackageManager packageManager, UserHandle user) {
         this.packageManager = packageManager;
         this.user = user;
     }
@@ -33,27 +33,27 @@ public final class SovereignOSPlatformGateway implements GuardianPlatformGateway
         try {
             granted = hasBackgroundLocation(packageName);
         } catch (SecurityException | IllegalArgumentException failure) {
-            Log.e("SovereignOSPlatformGateway", "snapshot() hasBackgroundLocation threw for " + packageName, failure);
+            Log.e("FreeholdOSPlatformGateway", "snapshot() hasBackgroundLocation threw for " + packageName, failure);
             granted = false;
         }
-        Log.i("SovereignOSPlatformGateway", "snapshot() packageName=" + packageName + " granted=" + granted);
+        Log.i("FreeholdOSPlatformGateway", "snapshot() packageName=" + packageName + " granted=" + granted);
         return new PlatformSnapshot(packageName, Map.of(
             BACKGROUND_LOCATION_GRANTED_KEY, String.valueOf(granted)));
     }
 
     @Override
     public GatewayExecution apply(RemediationActionId actionId, String packageName) {
-        Log.i("SovereignOSPlatformGateway", "apply() called: actionId=" + actionId + " packageName=" + packageName);
+        Log.i("FreeholdOSPlatformGateway", "apply() called: actionId=" + actionId + " packageName=" + packageName);
         if (actionId != RemediationActionId.REVOKE_BACKGROUND_LOCATION) {
-            Log.w("SovereignOSPlatformGateway", "apply() unsupported actionId: " + actionId);
+            Log.w("FreeholdOSPlatformGateway", "apply() unsupported actionId: " + actionId);
             return new GatewayExecution(false, "Unsupported action for this gateway: " + actionId);
         }
         try {
             packageManager.revokeRuntimePermission(packageName, BACKGROUND_LOCATION_PERMISSION, user);
-            Log.i("SovereignOSPlatformGateway", "apply() revokeRuntimePermission succeeded");
+            Log.i("FreeholdOSPlatformGateway", "apply() revokeRuntimePermission succeeded");
             return new GatewayExecution(true, "Revoked " + BACKGROUND_LOCATION_PERMISSION);
         } catch (SecurityException | IllegalArgumentException failure) {
-            Log.e("SovereignOSPlatformGateway", "apply() revokeRuntimePermission threw", failure);
+            Log.e("FreeholdOSPlatformGateway", "apply() revokeRuntimePermission threw", failure);
             return new GatewayExecution(false, "revokeRuntimePermission failed: " + failure.getMessage());
         }
     }

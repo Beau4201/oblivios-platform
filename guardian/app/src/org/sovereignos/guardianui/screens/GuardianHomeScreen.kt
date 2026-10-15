@@ -36,7 +36,7 @@ data class GuardianRecentChange(
     val description: String,
     val isSafe: Boolean,
     /**
-     * SovereignOS Android port deviation (see guardian/SOURCE.md): an opaque,
+     * FreeholdOS Android port deviation (see guardian/SOURCE.md): an opaque,
      * list-unique row identity so the real app can resolve a tapped row back
      * to the domain object behind it (a pending incident to review, or an
      * active protection to undo) without this screen knowing anything about

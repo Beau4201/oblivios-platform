@@ -1,5 +1,5 @@
 From 43e0734ae7ca27266a117704b21617b17841f8ee Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Sun, 11 Oct 2026 23:54:14 +0200
 Subject: [PATCH] sepolicy: list the Data Map service without a fuzzer
 

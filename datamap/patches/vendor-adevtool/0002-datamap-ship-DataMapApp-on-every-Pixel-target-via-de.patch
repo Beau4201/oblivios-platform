@@ -1,5 +1,5 @@
 From b0a73e22091e033cc29c6107e359603e3466ae31 Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Sun, 11 Oct 2026 18:52:44 +0200
 Subject: [PATCH] datamap: ship DataMapApp on every Pixel target via
  device-common.mk
@@ -17,7 +17,7 @@ index 067c7d1..1992526 100644
  PRODUCT_PACKAGES += \
      datamap-classifier.tsv
 +
-+# SovereignOS Data Map (ADR-157): the app that shows the data. It is privileged and holds
++# FreeholdOS Data Map (ADR-157): the app that shows the data. It is privileged and holds
 +# READ_DATA_MAP; DataMapApp pulls in its privapp-permissions and sysconfig files itself ("required").
 +PRODUCT_PACKAGES += \
 +    DataMapApp

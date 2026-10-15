@@ -16,7 +16,7 @@ index 0000000..5fd733c
 +++ b/services/core/java/com/android/server/grab/GrabDetector.java
 @@ -0,0 +1,173 @@
 +/*
-+ * Copyright (C) 2026 SovereignOS
++ * Copyright (C) 2026 FreeholdOS
 + * SPDX-License-Identifier: Apache-2.0
 + */
 +

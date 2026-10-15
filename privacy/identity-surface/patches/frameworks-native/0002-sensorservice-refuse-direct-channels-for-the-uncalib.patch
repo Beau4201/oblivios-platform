@@ -29,7 +29,7 @@ index 00daa9b..5e1fc1a 100644
          return INVALID_OPERATION;
      }
  
-+    // SovereignOS (ADR-167): the HAL writes direct events into shared memory without passing
++    // FreeholdOS (ADR-167): the HAL writes direct events into shared memory without passing
 +    // SensorEventConnection::sendEvents, so the bias of the uncalibrated sensors cannot be
 +    // folded there. An app gets no direct channel for them.
 +    if (shouldFoldFor(mUid) && eventCarriesBias(s.getType()) &&

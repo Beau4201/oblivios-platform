@@ -1,5 +1,5 @@
 From b2f271baccb480d0dc7ccdd176735d558950e496 Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Sun, 4 Oct 2026 18:36:28 +0200
 Subject: [PATCH 5/5] airpods: add BluetoothDevice#setAirPodsAlias behind
  MANAGE_AIRPODS_IDENTITY
@@ -144,7 +144,7 @@ index 0000000..664fed5
 +import java.nio.charset.StandardCharsets;
 +
 +/**
-+ * SovereignOS ADR-135: what {@link AdapterService#setAirPodsAlias} may write. The rule is the one of
++ * FreeholdOS ADR-135: what {@link AdapterService#setAirPodsAlias} may write. The rule is the one of
 + * the AirPods app's {@code AapCodec.isValidName}: 1 to {@value #MAX_BYTES} UTF-8 bytes of visible text,
 + * no leading or trailing white space, and none of the control, format, private-use, surrogate,
 + * unassigned, line-separator or paragraph-separator characters. Also refused: a name that starts or ends in
@@ -233,7 +233,7 @@ index bb4e7d5..1e662fa 100644
 +    }
 +
      companion object {
-+        // SovereignOS ADR-135
++        // FreeholdOS ADR-135
 +        private const val AIRPODS_ALIAS = "AirPods Test"
          // Transport constants from BluetoothDevice
          private const val INVALID_TRANSPORT_NEGATIVE = -1

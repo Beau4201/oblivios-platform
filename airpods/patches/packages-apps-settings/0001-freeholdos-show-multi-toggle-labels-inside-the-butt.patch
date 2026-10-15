@@ -1,7 +1,7 @@
 From d5b871d8aa32fb7873346a7c27c003407c710011 Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Thu, 1 Oct 2026 17:34:33 +0200
-Subject: [PATCH] sovereignos: show multi-toggle labels inside the buttons when
+Subject: [PATCH] freeholdos: show multi-toggle labels inside the buttons when
  the provider opts in
 
 BluetoothDetailsConfigurableFragment passes ToggleModel.labelInsideButton to
@@ -19,7 +19,7 @@ index 98356846b9a..753095fff94 100644
                          existedPref as? SegmentedButtonPreference
                              ?: SegmentedButtonPreference(requireContext())
                      pref.apply {
-+                        // SovereignOS: text inside the buttons when every toggle opts in
++                        // FreeholdOS: text inside the buttons when every toggle opts in
 +                        // (DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON); stock look otherwise.
 +                        pref.setLabelInsideButton(
 +                            model.toggles.isNotEmpty() && model.toggles.all { it.labelInsideButton }

@@ -1,11 +1,11 @@
 From 061d9e0850f07cb329655078d0f64bda75484866 Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Sun, 11 Oct 2026 15:38:01 +0200
 Subject: [PATCH 1/4] datamap: add the pure core of the Data Map service
 
 Host name validation, the classifier file parser, the bounded per-user store, the link derivation,
 the history file codec and the per-user settings. None of it uses an Android class, so it is
-checked on the host (datamap/tests/host in sovereignos-platform).
+checked on the host (datamap/tests/host in freeholdos-platform).
 ---
  .../com/android/server/datamap/Category.java  |  42 +++
  .../android/server/datamap/Classifier.java    | 344 ++++++++++++++++++

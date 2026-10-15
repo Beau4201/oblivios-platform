@@ -9,12 +9,12 @@ import androidx.compose.ui.res.painterResource
 import org.sovereignos.guardian.R
 
 /**
- * The real SovereignOS shield mark — a transparent-background crop of the
+ * The real FreeholdOS shield mark — a transparent-background crop of the
  * actual, ADR-019-approved boot asset. Never replace this with a
  * hand-drawn vector; two attempts at that were both visibly wrong in
  * review (see the visual-identity design spec, "The mark").
  *
- * SovereignOS Android port deviation (see guardian/SOURCE.md): the reference
+ * FreeholdOS Android port deviation (see guardian/SOURCE.md): the reference
  * module decodes the PNG with `androidx.compose.ui.res.useResource` and
  * `org.jetbrains.skia.Image`, both Compose Desktop-only APIs that do not
  * exist on Android. The same bytes ship here as the `guardian_mark`
@@ -26,7 +26,7 @@ import org.sovereignos.guardian.R
 fun GuardianMark(modifier: Modifier = Modifier) {
     Image(
         painter = painterResource(R.drawable.guardian_mark),
-        contentDescription = "SovereignOS shield mark",
+        contentDescription = "FreeholdOS shield mark",
         modifier = modifier.aspectRatio(1f),
     )
 }

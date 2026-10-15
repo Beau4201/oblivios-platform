@@ -8,7 +8,7 @@
 set -o errexit -o nounset -o pipefail
 WT="$1"
 SSH_TARGET="${BUILD_SSH:?set BUILD_SSH to the build server login (see the private local server notes)}"
-TREE="${AOSP_TREE:-/srv/sovereignos/platform-primary}"
+TREE="${AOSP_TREE:-/srv/freeholdos/platform-primary}"
 FILES=(
   "frameworks/base core/java/android/net/INetdEventCallback.aidl"
   "frameworks/base services/core/java/com/android/server/connectivity/NetdEventListenerService.java"
@@ -36,8 +36,8 @@ done
 for entry in "${FILES[@]}"; do
   repo="${entry%% *}"; path="${entry#* }"
   [ -d "$WT/$repo/.git" ] || git -C "$WT/$repo" init -q
-  git -C "$WT/$repo" config user.name "SovereignOS Build"
-  git -C "$WT/$repo" config user.email "build@sovereignos.local"
+  git -C "$WT/$repo" config user.name "FreeholdOS Build"
+  git -C "$WT/$repo" config user.email "build@freeholdos.local"
   git -C "$WT/$repo" add "$path"
 done
 for repo in "${!HEADS[@]}"; do

@@ -1,5 +1,5 @@
 From f709a9bfb87f4c6d789ee91f9e0a5e8ea53f9797 Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Tue, 13 Oct 2026 21:21:20 +0200
 Subject: [PATCH] datamap: give every contacted address a server place
  (ADR-161)

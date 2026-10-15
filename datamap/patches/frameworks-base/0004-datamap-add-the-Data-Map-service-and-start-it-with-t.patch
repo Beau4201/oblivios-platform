@@ -1,5 +1,5 @@
 From 44b6bff70182b606a9e4e8e72eb7b512f66148cf Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Sun, 11 Oct 2026 15:38:01 +0200
 Subject: [PATCH 4/4] datamap: add the Data Map service and start it with the
  system server
@@ -24,7 +24,7 @@ index c604779..0f2beea 100644
  51630 timezone_request_nothing (token|3)
  51631 timezone_nothing_complete (token|3)
 +
-+# SovereignOS Data Map (ADR-157): what the user changed, never what was collected
++# FreeholdOS Data Map (ADR-157): what the user changed, never what was collected
 +51700 datamap_collecting (user|1), (enabled|1)
 +51701 datamap_history (user|1), (enabled|1), (days|1)
 +51702 datamap_cleared (user|1)

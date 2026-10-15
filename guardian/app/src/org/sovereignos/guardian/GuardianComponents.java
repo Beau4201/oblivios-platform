@@ -10,7 +10,7 @@ import org.sovereignos.guardian.detection.GuardianDetectionService;
 import org.sovereignos.guardian.detection.InMemoryGuardianDetectionCommitStore;
 import org.sovereignos.guardian.evidence.GuardianEvidenceRetentionPeriod;
 import org.sovereignos.guardian.overview.FileGuardianOverviewStore;
-import org.sovereignos.guardian.platform.android.SovereignOSPlatformGateway;
+import org.sovereignos.guardian.platform.android.FreeholdOSPlatformGateway;
 import org.sovereignos.guardian.remediation.GuardianRemediationService;
 import org.sovereignos.guardian.remediation.RemediationCatalog;
 import org.sovereignos.guardian.validation.GuardianEventParser;
@@ -28,10 +28,10 @@ public final class GuardianComponents {
     }
 
     public static GuardianComponents create(Context context) {
-        SovereignOSPlatformGateway gateway = new SovereignOSPlatformGateway(
+        FreeholdOSPlatformGateway gateway = new FreeholdOSPlatformGateway(
             context.getPackageManager(), Process.myUserHandle());
 
-        // Mirrors GuardianReferenceScenario.createService() in sovereignos-services,
+        // Mirrors GuardianReferenceScenario.createService() in freeholdos-services,
         // substituting SimulatedGuardianPlatformGateway with the real gateway
         // above, and (as of the residuals-hardening pass) InMemoryGuardianAuditStore
         // with a FileGuardianAuditStore backed by this app's private storage --

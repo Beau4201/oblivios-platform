@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="2400" viewBox="0 0 1080 2400">
-<title>SovereignOS boot picture: lighthouse mask</title>
+<title>FreeholdOS boot picture: lighthouse mask</title>
 <desc>Static full-screen picture for the built-in boot renderer. The 260 x 5 window at (410,2152) is transparent so the scrolling texture shows through as the loading bar.</desc>
 <defs>
  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1500" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#030706"/><stop offset=".6" stop-color="#07130F"/><stop offset="1" stop-color="#0F2A25"/></linearGradient>

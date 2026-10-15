@@ -48,15 +48,15 @@ from Trust to Choices in the 2026-08-14 visual-identity re-vendor.
 **There is no in-tree runner.** `guardian/app` is an `android_app` Soong
 module with no test target, and its UI depends on Jetpack Compose, so these
 cannot run under `java_test_host` either. They are written for, and were run
-against, a throwaway JVM harness built on `sovereignos-services`' own Compose
+against, a throwaway JVM harness built on `freeholdos-services`' own Compose
 Desktop Gradle setup:
 
-1. Build `guardian-core.jar` from the `sovereignos-services` branch this app's
+1. Build `guardian-core.jar` from the `freeholdos-services` branch this app's
    sources actually target (currently `guardian-residuals-hardening` — see
    the stale-jar note in `guardian/SOURCE.md`):
    `./gradlew :guardian-core:jar`
 2. Create a Kotlin/JVM Gradle project with the same plugin versions as
-   `sovereignos-services`' root `build.gradle.kts`, depending on that jar plus
+   `freeholdos-services`' root `build.gradle.kts`, depending on that jar plus
    `compose.desktop.currentOs`, `compose.material3`, `kotlin("test")` and
    JUnit 5.
 3. Copy in `src/org/sovereignos/guardianui/**`, `GuardianScreenModels.kt`, and
@@ -81,7 +81,7 @@ The composable tests are JUnit 4 (`createComposeRule`, run through the vintage
 engine); the plain ones are JUnit 5. Both engines are on the test runtime
 classpath, and a single file can hold classes of each kind.
 
-Copying `sovereignos-services`' own
+Copying `freeholdos-services`' own
 `guardian-ui-reference/src/test/kotlin/org/sovereignos/guardianui/**` tests into
 the same harness is worth doing at the same time: they exercise the ported
 screens directly and will catch a port deviation that changed their

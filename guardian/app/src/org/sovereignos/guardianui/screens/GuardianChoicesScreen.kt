@@ -31,7 +31,7 @@ import org.sovereignos.guardianui.theme.GuardianColor
 import androidx.compose.material3.Icon
 
 /**
- * [changeable] is a SovereignOS Android port deviation (see guardian/SOURCE.md).
+ * [changeable] is a FreeholdOS Android port deviation (see guardian/SOURCE.md).
  * A detection category that is genuinely always-on in the current build is
  * shown at its real value with its switch disabled, rather than as a switch
  * that appears to control something it does not. Defaults to true, so the
@@ -56,7 +56,7 @@ data class GuardianChoicesUiState(
     val notifyImmediatelyChangeable: Boolean = true,
     val retention: GuardianRetentionOption = GuardianRetentionOption.ThirtyDays,
     /**
-     * SovereignOS Android port deviation (see guardian/SOURCE.md). When false,
+     * FreeholdOS Android port deviation (see guardian/SOURCE.md). When false,
      * the retention selector renders as a single static pill stating the
      * period actually in force, instead of four tappable options — the
      * current build has no reviewed way to change it (changing it prunes the
@@ -66,7 +66,7 @@ data class GuardianChoicesUiState(
      */
     val retentionChangeable: Boolean = true,
     /**
-     * SovereignOS Android port deviation (see guardian/SOURCE.md). When false,
+     * FreeholdOS Android port deviation (see guardian/SOURCE.md). When false,
      * this screen must not imply the device is deleting anything on the shown
      * schedule: [retention] is then only the period recorded in the audit
      * store, and nothing in this build ever applies it. The section is
@@ -200,7 +200,7 @@ fun GuardianChoicesScreen(
                     val options = if (state.retentionChangeable) {
                         GuardianRetentionOption.values().toList()
                     } else {
-                        // SovereignOS deviation: show only the period actually in
+                        // FreeholdOS deviation: show only the period actually in
                         // force, with nothing to tap, rather than four options
                         // of which three would silently do nothing.
                         listOf(state.retention)
@@ -250,7 +250,7 @@ fun GuardianChoicesScreen(
                     }
                 }
                 if (!state.retentionEnforced) {
-                    // SovereignOS deviation: this screen's own header promises that
+                    // FreeholdOS deviation: this screen's own header promises that
                     // every claim on it points to a real record. The recorded
                     // period is real; the deletion it implies is not happening,
                     // because nothing in this build calls applyRetention(). Say

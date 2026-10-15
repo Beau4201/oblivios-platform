@@ -2,8 +2,8 @@
 
 Implements the full Duress Unlock decoy mechanism across three plans:
 Tasks 1-6 of the internal record "duress decoy user switch" (not published)
-(a new SovereignOS-defined Android user type,
-`USER_TYPE_FULL_SOVEREIGNOS_DECOY`; a dialog-free silent user switch; decoy
+(a new FreeholdOS-defined Android user type,
+`USER_TYPE_FULL_FREEHOLDOS_DECOY`; a dialog-free silent user switch; decoy
 profile routing state storage; the `DecoyProfileHelper` keyguard-hook
 orchestration; its wiring into `doVerifyCredentialInner`; and the
 `set-decoy-profile`/`clear-decoy-profile` shell command backend), and all 8

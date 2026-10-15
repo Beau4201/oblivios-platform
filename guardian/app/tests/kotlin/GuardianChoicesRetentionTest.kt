@@ -8,7 +8,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * SovereignOS-specific tests for Choices' retention section — the one place on
+ * FreeholdOS-specific tests for Choices' retention section — the one place on
  * this build that used to imply (on Trust, before the control moved here)
  * that the device enforces a deletion schedule it never runs.
  *

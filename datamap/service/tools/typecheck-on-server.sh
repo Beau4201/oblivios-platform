@@ -7,7 +7,7 @@
 # directory of AIDL files (a changed AIDL file with its tree copy on the include path is a duplicate to aidl).
 set -o errexit -o nounset -o pipefail
 W="$(cd "$1" && pwd)"
-T="${AOSP_TREE:-/srv/sovereignos/platform-primary}"
+T="${AOSP_TREE:-/srv/freeholdos/platform-primary}"
 OBJ="${AOSP_OUT:-$T/out-lynx}"
 I="$OBJ/soong/.intermediates/frameworks/base"
 FRAMEWORK="$I/framework-minus-apex/android_common/combined/framework.jar"

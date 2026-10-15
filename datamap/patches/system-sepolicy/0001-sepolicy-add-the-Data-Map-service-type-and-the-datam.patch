@@ -1,5 +1,5 @@
 From be872ecd98e916083364577c868632966ecbb296 Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Sun, 11 Oct 2026 15:35:45 +0200
 Subject: [PATCH] sepolicy: add the Data Map service type and the datamap_app
  domain
@@ -19,7 +19,7 @@ index 0000000..2e63d15
 +++ b/private/datamap_app.te
 @@ -0,0 +1,13 @@
 +# SPDX-License-Identifier: Apache-2.0
-+# The SovereignOS Data Map app (ADR-157): an app domain like logviewer_app, with one extra permission, to
++# The FreeholdOS Data Map app (ADR-157): an app domain like logviewer_app, with one extra permission, to
 +# find the Data Map service. It declares no network permission and has no service, receiver or provider.
 +type datamap_app, domain;
 +typeattribute datamap_app coredomain;

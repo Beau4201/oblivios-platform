@@ -35,7 +35,7 @@ Result of the build of 2026-10-13 (the rule of ADR-164, the seven inputs above u
 - Many geofeeds that feed the PDDL part have no explicit licence (accepted, ADR-161 (6)).
 - DB-IP Lite is updated monthly and the country part daily: the file is as old as the image.
 - The census finds anycast only; DNS-steered networks are named by the words of the operator name, and their country is that of the registration. `tools/audit-steered.py` prints the networks that match; the list is read against the inputs before a file is shipped, and the choice of the names is `[assumption]` until then.
-- The inputs are archived on the build server (`/srv/sovereignos/datamap-inputs/2026-10-13/`, checked against `PINS.sha256`). The "latest" release of `ip-location-db` changes every day: a later build takes new pins, a new table above and a new measurement.
+- The inputs are archived on the build server (`/srv/freeholdos/datamap-inputs/2026-10-13/`, checked against `PINS.sha256`). The "latest" release of `ip-location-db` changes every day: a later build takes new pins, a new table above and a new measurement.
 - An IPv4 server of a NAT64 network shows as an address of `64:ff9b::/96`; the reader takes the IPv4 address from it. Another prefix of that kind is not unwrapped.
 - Country agreement between the two sources is 93% for ordinary addresses and 35% for anycast ones (measured on 1877 resolved domains, `datamap-ip-location-data.md`).
 - Not measured: the phone's own resolver, IPv6 city data, and the cost of a lookup in `system_server` (`MAP-032`).

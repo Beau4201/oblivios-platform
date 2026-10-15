@@ -1,7 +1,7 @@
 From 6f0d935bafa9e67d384951bca1a89a996395787f Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
 Date: Thu, 8 Oct 2026 14:44:09 +0200
-Subject: [PATCH 2/2] sovereignos: keep the keyboard inside the cutout and
+Subject: [PATCH 2/2] freeholdos: keep the keyboard inside the cutout and
  system-bar insets in landscape
 
 The platform lays the input method window out inside the display cutout, so in landscape an empty strip beside the keyboard shows the app instead of the keyboard background. The window is now laid out under the cutout, where the platform pads its content root by the cutout and system-bar insets, so the keys stay where they were. The keyboard background moves from the input view, which is as tall as the screen, to the window background and is drawn from the top of the keyboard down over the whole width. The insets and the touchable region are computed in window coordinates, and the key preview, the popup panels and the gesture trail are placed relative to the content view that holds them. The measurement is recorded in docs/research/keyboard-landscape-inset-investigation.md. ADR-146.
@@ -73,7 +73,7 @@ index 000000000..c3aed0938
 +++ b/java/src/com/android/inputmethod/latin/KeyboardWindowBackground.java
 @@ -0,0 +1,72 @@
 +/*
-+ * Copyright (C) 2026 The SovereignOS Authors
++ * Copyright (C) 2026 The FreeholdOS Authors
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
 + * you may not use this file except in compliance with the License.
@@ -160,7 +160,7 @@ index 728e4883f..3eb3c2ab7 100644
  
      // TODO: Move these {@link View}s to {@link KeyboardSwitcher}.
      private View mInputView;
-+    // sovereignos: see setInputView and onComputeInsets.
++    // freeholdos: see setInputView and onComputeInsets.
 +    private KeyboardWindowBackground mWindowBackground;
 +    private final int[] mInputViewLocation = new int[2];
      private InsetsUpdater mInsetsUpdater;
@@ -170,7 +170,7 @@ index 728e4883f..3eb3c2ab7 100644
      public void setInputView(final View view) {
          super.setInputView(view);
          mInputView = view;
-+        // sovereignos: the keyboard background of the input view (its theme style) becomes the
++        // freeholdos: the keyboard background of the input view (its theme style) becomes the
 +        // window background, drawn from the top of the keyboard down over the whole window width,
 +        // cutout margin included. The input view is as tall as the screen, so it cannot carry it.
 +        final Drawable keyboardBackground = view.getBackground();
@@ -192,7 +192,7 @@ index 728e4883f..3eb3c2ab7 100644
 -            outInsets.contentTopInsets = inputHeight;
 -            outInsets.visibleTopInsets = inputHeight;
 +            if (mWindowBackground != null) {
-+                // sovereignos: nothing is visible, so the window background is not drawn either.
++                // freeholdos: nothing is visible, so the window background is not drawn either.
 +                mWindowBackground.setTop(Integer.MAX_VALUE);
 +            }
 +            mInputView.getLocationInWindow(mInputViewLocation);
@@ -205,7 +205,7 @@ index 728e4883f..3eb3c2ab7 100644
                  ? mSuggestionStripView.getHeight() : 0;
          final int visibleTopY = inputHeight - visibleKeyboardView.getHeight() - suggestionsHeight;
          mSuggestionStripView.setMoreSuggestionsHeight(visibleTopY);
-+        // sovereignos: the platform pads the content root of the window by the cutout and system-bar
++        // freeholdos: the platform pads the content root of the window by the cutout and system-bar
 +        // insets, so the input view may not start at the window origin. The insets and the touchable
 +        // region are in window coordinates, and the keyboard background covers the whole window width.
 +        mInputView.getLocationInWindow(mInputViewLocation);
@@ -237,7 +237,7 @@ index 728e4883f..3eb3c2ab7 100644
          // See {@link InputMethodService#setinputView(View)} and
          // {@link SoftInputWindow#updateWidthHeight(WindowManager.LayoutParams)}.
          final Window window = getWindow().getWindow();
-+        // sovereignos: lay the window out under the display cutout. Otherwise the platform keeps it
++        // freeholdos: lay the window out under the display cutout. Otherwise the platform keeps it
 +        // inside the cutout safe area and an empty strip is left beside the keyboard in landscape.
 +        final WindowManager.LayoutParams windowParams = window.getAttributes();
 +        if (windowParams.layoutInDisplayCutoutMode
@@ -256,7 +256,7 @@ index 000000000..d4e70c74c
 +++ b/java/src/com/android/inputmethod/latin/utils/WindowContentOrigin.java
 @@ -0,0 +1,50 @@
 +/*
-+ * Copyright (C) 2026 The SovereignOS Authors
++ * Copyright (C) 2026 The FreeholdOS Authors
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
 + * you may not use this file except in compliance with the License.
@@ -278,7 +278,7 @@ index 000000000..d4e70c74c
 +import com.android.inputmethod.latin.common.CoordinateUtils;
 +
 +/**
-+ * sovereignos: the key previews, the more-keys and more-suggestions panels and the gesture trail are
++ * freeholdos: the key previews, the more-keys and more-suggestions panels and the gesture trail are
 + * added to {@code android.R.id.content}, but upstream places them from
 + * {@link View#getLocationInWindow}. The two coordinate systems differ by the padding that the
 + * platform applies to the content root of the window (display cutout and system bars), which is

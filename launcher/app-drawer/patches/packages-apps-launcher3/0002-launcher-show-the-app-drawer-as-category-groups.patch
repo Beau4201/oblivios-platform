@@ -46,7 +46,7 @@ its icons. It now listens for the start of a drag and closes, as the stock
 icon menu does, and its view is removed when the drag ends.
 ---
  res/layout/category_group_icon.xml            |   8 +
- res/values/sovereignos_app_drawer.xml         |  36 ++
+ res/values/freeholdos_app_drawer.xml         |  36 ++
  .../launcher3/AbstractFloatingView.java       |   5 +-
  .../launcher3/allapps/AllAppsGridAdapter.java |  16 +-
  .../allapps/AlphabeticalAppsList.java         |  58 ++-
@@ -58,7 +58,7 @@ icon menu does, and its view is removed when the drag ends.
  .../allapps/category/AppGrouperTest.kt        |  57 ++-
  11 files changed, 796 insertions(+), 38 deletions(-)
  create mode 100644 res/layout/category_group_icon.xml
- create mode 100644 res/values/sovereignos_app_drawer.xml
+ create mode 100644 res/values/freeholdos_app_drawer.xml
  create mode 100644 src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
  create mode 100644 src/com/android/launcher3/allapps/category/CategoryGroupView.kt
  create mode 100644 src/com/android/launcher3/allapps/category/CategoryGroups.kt
@@ -70,21 +70,21 @@ index 0000000..27e0d62
 +++ b/res/layout/category_group_icon.xml
 @@ -0,0 +1,8 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- Copyright (C) 2026 SovereignOS. Licensed under the Apache License, Version 2.0. -->
++<!-- Copyright (C) 2026 FreeholdOS. Licensed under the Apache License, Version 2.0. -->
 +<com.android.launcher3.BubbleTextView xmlns:android="http://schemas.android.com/apk/res/android"
 +    xmlns:launcher="http://schemas.android.com/apk/res-auto"
 +    style="@style/BaseIcon.AllApps"
 +    android:id="@+id/icon"
 +    launcher:iconDisplay="all_apps"
 +    launcher:iconSizeOverride="@dimen/app_group_sheet_icon_size" />
-diff --git a/res/values/sovereignos_app_drawer.xml b/res/values/sovereignos_app_drawer.xml
+diff --git a/res/values/freeholdos_app_drawer.xml b/res/values/freeholdos_app_drawer.xml
 new file mode 100644
 index 0000000..0a61c44
 --- /dev/null
-+++ b/res/values/sovereignos_app_drawer.xml
++++ b/res/values/freeholdos_app_drawer.xml
 @@ -0,0 +1,36 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- Copyright (C) 2026 SovereignOS. Licensed under the Apache License, Version 2.0.
++<!-- Copyright (C) 2026 FreeholdOS. Licensed under the Apache License, Version 2.0.
 +     Resources of the app drawer groups, in their own file so upstream resource files stay untouched. -->
 +<resources>
 +    <!-- Name of the group that holds audio, video and image apps. -->
@@ -135,7 +135,7 @@ index 4fd4095..fdb63ad 100644
      public static final int TYPE_NUDGE = 1 << 24;
      public static final int TYPE_TASKBAR_OVERFLOW = 1 << 25;
      public static final int TYPE_DIALOG_LISTENER = 1 << 26;
-+    // sovereignos: the opened group of the app drawer, see allapps/category/CategoryGroupSheet.
++    // freeholdos: the opened group of the app drawer, see allapps/category/CategoryGroupSheet.
 +    public static final int TYPE_CATEGORY_GROUP = 1 << 27;
  
      public static final int TYPE_ALL = TYPE_FOLDER | TYPE_ACTION_POPUP
@@ -157,7 +157,7 @@ index 64bc046..a24ea47 100644
          @Override
          public int getColumnCountForAccessibility(RecyclerView.Recycler recycler,
                  RecyclerView.State state) {
-+            // sovereignos: category groups sit two to a row, whatever the icon column count is.
++            // freeholdos: category groups sit two to a row, whatever the icon column count is.
 +            for (AdapterItem item : mApps.getAdapterItems()) {
 +                if (item.viewType == VIEW_TYPE_CATEGORY_GROUP) {
 +                    return CATEGORY_GROUPS_PER_ROW;
@@ -171,7 +171,7 @@ index 64bc046..a24ea47 100644
              int extraRows = 0;
              for (int i = 0; i <= adapterPosition && i < items.size(); i++) {
 -                if (!isViewType(items.get(i).viewType, VIEW_TYPE_MASK_ICON)) {
-+                // sovereignos: a category group is a row of the collection, not an extra row.
++                // freeholdos: a category group is a row of the collection, not an extra row.
 +                if (!isViewType(items.get(i).viewType, VIEW_TYPE_MASK_ICON)
 +                        && items.get(i).viewType != VIEW_TYPE_CATEGORY_GROUP) {
                      extraRows++;
@@ -235,7 +235,7 @@ index 33dc0cf..825806d 100644
  
      private final PrivateProfileManager mPrivateProviderManager;
  
-+    // sovereignos: ApplicationInfo.category of the apps, used to group the app drawer. Only known
++    // freeholdos: ApplicationInfo.category of the apps, used to group the app drawer. Only known
 +    // categories are cached, so an app whose installer sets its category later is read again.
 +    private final Map<String, Integer> mCategoryCache = new HashMap<>();
 +
@@ -328,11 +328,11 @@ index 54d42d1..b64e306 100644
      public static final int VIEW_TYPE_PRIVATE_SPACE_APP_ICON = 1 << 9;
      public static final int VIEW_TYPE_PRIVATE_SPACE_RESULT = 1 << 10;
 -    public static final int NEXT_ID = 11;
-+    // sovereignos: a category group of the app drawer, see allapps/category.
++    // freeholdos: a category group of the app drawer, see allapps/category.
 +    public static final int VIEW_TYPE_CATEGORY_GROUP = 1 << 11;
 +    public static final int NEXT_ID = 12;
 +
-+    // sovereignos: category groups per row of the app drawer.
++    // freeholdos: category groups per row of the app drawer.
 +    public static final int CATEGORY_GROUPS_PER_ROW = 2;
  
      // Common view type masks
@@ -376,7 +376,7 @@ index b203135..3197373 100644
  
  /** Puts apps in the drawer groups. No Android state: it only maps a category to a group. */
  object AppGrouper {
--    // sovereignos: preinstalled apps that declare no ApplicationInfo.category. Used only when the
+-    // freeholdos: preinstalled apps that declare no ApplicationInfo.category. Used only when the
 -    // manifest and the installer give none, so a declared category always wins.
 -    private val UNDECLARED_OVERRIDES =
 -        mapOf(
@@ -385,7 +385,7 @@ index b203135..3197373 100644
 -            "app.attestation.auditor" to AppGroup.PRODUCTIVITY,
 -        )
 -
-+    // sovereignos: every preinstalled app is in System, whatever category it declares. That also
++    // freeholdos: every preinstalled app is in System, whatever category it declares. That also
 +    // places the preinstalled apps that declare none (Camera, PDF Viewer, Auditor), so no fixed
 +    // per-package groups are needed.
      @JvmStatic
@@ -438,7 +438,7 @@ index 0000000..3f1d235
 +++ b/src/com/android/launcher3/allapps/category/CategoryGroupSheet.kt
 @@ -0,0 +1,343 @@
 +/*
-+ * Copyright (C) 2026 SovereignOS
++ * Copyright (C) 2026 FreeholdOS
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
 + * you may not use this file except in compliance with the License.
@@ -515,7 +515,7 @@ index 0000000..3f1d235
 +    // would start one of them.
 +    private var interactive = false
 +
-+    // sovereignos: an icon dragged out of the card closes it, as the stock icon menu does (the card
++    // freeholdos: an icon dragged out of the card closes it, as the stock icon menu does (the card
 +    // otherwise stayed over the home screen). Its view stays until the drag ends, as the menu's
 +    // does: removing it in the middle of the gesture interferes with the touch events.
 +    private var dragging = false
@@ -787,7 +787,7 @@ index 0000000..5af862a
 +++ b/src/com/android/launcher3/allapps/category/CategoryGroupView.kt
 @@ -0,0 +1,178 @@
 +/*
-+ * Copyright (C) 2026 SovereignOS
++ * Copyright (C) 2026 FreeholdOS
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
 + * you may not use this file except in compliance with the License.
@@ -971,7 +971,7 @@ index 0000000..a71d0b6
 +++ b/src/com/android/launcher3/allapps/category/CategoryGroups.kt
 @@ -0,0 +1,81 @@
 +/*
-+ * Copyright (C) 2026 SovereignOS
++ * Copyright (C) 2026 FreeholdOS
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
 + * you may not use this file except in compliance with the License.

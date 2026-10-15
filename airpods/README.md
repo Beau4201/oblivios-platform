@@ -1,8 +1,8 @@
-# AirPods (SovereignOS platform integration)
+# AirPods (FreeholdOS platform integration)
 
 Platform side of the AirPods compatibility feature, per
 the internal record "airpods compatibility and finding design" (not published)
-and the internal record "airpods settings ui design" (not published). Domain logic is vendored from `sovereignos-services`
+and the internal record "airpods settings ui design" (not published). Domain logic is vendored from `freeholdos-services`
 (`airpods-core`, see `SOURCE.md`) and unmodified here.
 
 ## Layout

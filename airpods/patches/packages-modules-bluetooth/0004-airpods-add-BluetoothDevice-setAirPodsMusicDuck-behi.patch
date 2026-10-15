@@ -1,5 +1,5 @@
 From 9c12403efb1b3fd2fb71125827b92fae5eebaabb Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Sat, 3 Oct 2026 21:21:51 +0200
 Subject: [PATCH 4/5] airpods: add BluetoothDevice#setAirPodsMusicDuck behind
  MANAGE_AIRPODS_IDENTITY
@@ -71,7 +71,7 @@ index 268b1b4..846e0c8 100644
      // cannot interleave with an active-device event.
      private final AirPodsRouteTracker mAirPodsRoute = new AirPodsRouteTracker();
  
-+    // SovereignOS ADR-127: the music volume lowered while the owner speaks. The lock serialises
++    // FreeholdOS ADR-127: the music volume lowered while the owner speaks. The lock serialises
 +    // lower and restore (a fade takes up to about 0.8 s) and is never taken while holding mLock.
 +    private static final long AIRPODS_FADE_STEP_MS = 40;
 +    private final AirPodsDuckTracker mAirPodsDuck = new AirPodsDuckTracker();
@@ -110,7 +110,7 @@ index 268b1b4..846e0c8 100644
 +    }
 +
 +    /**
-+     * SovereignOS ADR-127: lowers the music stream to {@code percent} (10 to 90) of its
++     * FreeholdOS ADR-127: lowers the music stream to {@code percent} (10 to 90) of its
 +     * current volume while {@code device} is the active A2DP device, one index at a time. Never
 +     * raises the volume and never goes below the stream minimum. The audio hardening ignores this
 +     * from an app; this runs in the Bluetooth process, which it exempts by uid.
@@ -133,7 +133,7 @@ index 268b1b4..846e0c8 100644
 +    }
 +
 +    /**
-+     * SovereignOS ADR-127: gives the lowered music volume back, only if {@code device} is still the
++     * FreeholdOS ADR-127: gives the lowered music volume back, only if {@code device} is still the
 +     * active A2DP device and the volume is still the value {@link #duckAirPodsMusic} set. Otherwise
 +     * the record is dropped and the volume is left as it is (the owner's change wins, and the
 +     * stream volume of another output is none of ours).
@@ -193,7 +193,7 @@ index 481f4d2..f33d01f 100644
  
 -    private boolean watchAirPodsRoute(BluetoothDevice device, IBinder token) {
 +    /**
-+     * SovereignOS ADR-127: lowers ({@code duck}) or gives back the music volume of the active
++     * FreeholdOS ADR-127: lowers ({@code duck}) or gives back the music volume of the active
 +     * AirPods while the owner speaks. The caller (AdapterServiceBinder) has already enforced
 +     * org.sovereignos.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
 +     * accepted. {@code percent} must be an integer from 10 to 90. If {@code token} dies while the volume is
@@ -325,7 +325,7 @@ index 0000000..b85d31a
 +import java.util.Map;
 +
 +/**
-+ * SovereignOS ADR-127: the record of a music volume that was lowered for a registered AirPods
++ * FreeholdOS ADR-127: the record of a music volume that was lowered for a registered AirPods
 + * device while the owner speaks. It decides nothing about audio; {@link ActiveDeviceManager} passes
 + * in the current volume and acts on the answer. The record is what lets a restore touch only what
 + * this feature lowered, and only while the volume is still the value this feature set (an owner's
@@ -483,7 +483,7 @@ index 0000000..f7d6b79
 +import org.junit.Test;
 +import org.junit.runner.RunWith;
 +
-+/** SovereignOS ADR-127: what the AirPods duck tracker lowers and restores. */
++/** FreeholdOS ADR-127: what the AirPods duck tracker lowers and restores. */
 +@SmallTest
 +@RunWith(AndroidJUnit4.class)
 +public class AirPodsDuckTrackerTest {

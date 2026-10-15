@@ -1,4 +1,4 @@
-SovereignOS platform patches
+FreeholdOS platform patches
 Copyright 2026 Beau ten Berge
 
 LICENCE
@@ -12,13 +12,13 @@ Everything in this repository is licensed under the Apache License, Version 2.0
 2. Third-party material listed under "THIRD-PARTY MATERIAL" keeps its own
    licence.
 
-A file that a patch creates inside an upstream project is SovereignOS work and
+A file that a patch creates inside an upstream project is FreeholdOS work and
 is offered under Apache-2.0, unless the file carries its own licence header.
 
 UPSTREAM PROJECTS MODIFIED BY THE PATCHES
 
 Licences were read from the upstream sources at the revisions pinned in
-sovereignos-manifest (manifest/upstream-2026091900.xml, tag 2026091900), for
+freeholdos-manifest (manifest/upstream-2026091900.xml, tag 2026091900), for
 every file that a patch modifies (149 files). "Header" means the licence header
 at the top of the modified upstream files.
 
@@ -35,7 +35,7 @@ at the top of the modified upstream files.
 | packages/apps/Updater            | MIT                      | LICENSE in the project root (GrapheneOS) |
 | vendor/adevtool                  | MIT                      | LICENSE in the project root (GrapheneOS) |
 | system/sepolicy                  | Public domain (NSA)      | NOTICE in the project root states that the configuration is public domain, with a warranty exclusion; none of the 5 modified files has a header |
-| build/release                    | Not established          | The project root has no licence file. The patch only adds one new file, which is SovereignOS work under Apache-2.0 |
+| build/release                    | Not established          | The project root has no licence file. The patch only adds one new file, which is FreeholdOS work under Apache-2.0 |
 
 Upstream files without a header that a patch modifies are data or build files
 (AndroidManifest.xml, system-current.txt, init.rc, *.te, *.yml, *.mk, Android.bp)
@@ -99,6 +99,6 @@ flag-icons (country flags of the Data Map app, datamap/app/res/drawable-nodpi/fl
 
 TRADEMARKS
 
-The name SovereignOS and its logo are not licensed; section 6 of the Apache
+The name FreeholdOS and its logo are not licensed; section 6 of the Apache
 License grants no right to use them. This project is not affiliated with
 GrapheneOS, Google, or any other product that uses a similar name.

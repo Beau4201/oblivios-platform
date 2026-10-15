@@ -1,5 +1,5 @@
 From d9665a565a5620ec9da499fd9195b08401e1c83b Mon Sep 17 00:00:00 2001
-From: SovereignOS Build <build@sovereignos.local>
+From: FreeholdOS Build <build@freeholdos.local>
 Date: Sat, 10 Oct 2026 03:48:20 +0200
 Subject: [PATCH] memory: do not carry the Pixel overlay value of the cached
  process cap
@@ -21,7 +21,7 @@ index fc186bd7..09ef7cf5 100644
        - android:integer/config_autoBrightnessDarkeningLightDebounce|*
        - android:integer/config_cameraPrivacyLightAlsAveragingIntervalMillis|*
 -      - android:integer/config_customizedMaxCachedProcesses = 1024
-+      # SovereignOS: config_customizedMaxCachedProcesses = 1024 is not carried; frameworks/base sets the
++      # FreeholdOS: config_customizedMaxCachedProcesses = 1024 is not carried; frameworks/base sets the
 +      # value (a vendor overlay would override it). See memory/cached-process-cap.
        - android:integer/config_datagram_wait_for_connected_state_timeout_millis = 180000
        - android:integer/config_defaultAlarmVibrationIntensity = 3
