@@ -1,0 +1,86 @@
+From dc7cc31a37f44449331d8c316c3b3df7f3ac1ecf Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 23:28:20 +0200
+Subject: [PATCH] bpf: refuse broadcast and multicast datagrams between apps on
+ the loopback path
+
+The loopback check judged a datagram by one socket found with a tuple lookup. A
+broadcast (127.255.255.255) or multicast datagram is delivered to every matching
+socket, so an app that binds a socket of its own on the same port made the lookup
+return its own socket, and a second app received the datagram. Multicast and
+broadcast that the host loops back to its own sockets (PACKET_LOOPBACK) never
+passed the egress check at all. A non-unicast destination on the loopback
+interface is now judged by the sender alone, and an app without a loopback
+permission does not receive a looped-back multicast or broadcast datagram.
+freeholdos_loopback_open switches both checks off as before.
+---
+ bpf/progs/netd.c | 39 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+
+diff --git a/bpf/progs/netd.c b/bpf/progs/netd.c
+index 03125ea031..3e21018cc9 100644
+--- a/bpf/progs/netd.c
++++ b/bpf/progs/netd.c
+@@ -533,6 +533,27 @@ function bool uids_have_loopback_permissions(const uint32_t sender_uid,
+     }
+ }
+ 
++// FreeholdOS (review F07): true if the uid may use the loopback path without being one of two
++// judged apps: a system uid, or an app that holds USE_LOOPBACK_INTERFACE or the force permission.
++function bool uid_may_use_loopback(const uint32_t uid) {
++    if (is_system_uid(uid)) return true;
++    const uint32_t perms = get_chunk_permissions(uid);
++    return can_force_loopback(perms) || (perms & PERMISSION_BIT_USE_LOOPBACK_INTERFACE) != 0;
++}
++
++// FreeholdOS (review F07): true for a broadcast or multicast destination (224.0.0.0/4, the
++// limited broadcast 255.255.255.255, the loopback broadcast 127.255.255.255, ff00::/8). The
++// kernel delivers such a datagram to every socket that matches, the lookup of
++// should_block_loopback_access finds one.
++function bool is_non_unicast_dst(const SkbIpPacketData *const packet) {
++    if (packet->ip_version == 4) {
++        const uint32_t d = ntohl(packet->daddr.s6_addr32[3]);
++        return ((d >> 28) == 0xE) || (d == 0xFFFFFFFFu) || (d == 0x7FFFFFFFu);
++    }
++    if (packet->ip_version == 6) return packet->daddr.s6_addr[0] == 0xff;
++    return false;
++}
++
+ function bool parse_skb(SkbIpPacketData *const packet,
+                         const struct __sk_buff *const skb,
+                         const struct kver_uint kver) {
+@@ -624,6 +645,14 @@ procedure bool should_block_loopback_access(const SkbIpPacketData *const packet_
+     struct bpf_sock_tuple sock_tuple = {};
+     uint32_t tuple_size;
+ 
++    // FreeholdOS (review F07): judge a broadcast or multicast datagram by its sender alone.
++    // Reached on the loopback interface only; a socket of the sender that matches the
++    // destination would otherwise make the lookup below find the sender's own socket, and
++    // the datagram would still reach the sockets of other apps.
++    if (is_non_unicast_dst(packet_data)) {
++        return checks_enabled && !uid_may_use_loopback(sender_uid);
++    }
++
+     if (packet_data->ip_version == 4) {
+         // IPv4-mapped-v6
+         sock_tuple.ipv4.saddr = packet_data->saddr.s6_addr32[3];
+@@ -941,6 +970,16 @@ function int bpf_traffic_account(struct __sk_buff* skb,
+         }
+     }
+ 
++    // FreeholdOS (review F07): a multicast or broadcast datagram that the host loops back to its
++    // own sockets (PACKET_LOOPBACK) is delivered to every socket of the group and never passes
++    // the loopback egress check above; the sender is not known here. An app that holds no
++    // loopback permission does not receive such a datagram.
++    if (API_IS_AT_LEAST(lvl, 25Q4) && parsed && (match != DROP) && !egress.egress
++        && skb->pkt_type == PACKET_LOOPBACK && loopback_checks_enabled()
++        && !uid_may_use_loopback(sock_uid)) {
++        match = DROP;
++    }
++
+     if (API_IS_AT_LEAST(lvl, 25Q2) && parsed && (match != DROP) && !dns) {
+         if (should_block_local_network_packets(&packet_data, skb, sock_uid,
+                                                skb->ifindex, egress, kver)) {
+-- 
+2.39.5
+

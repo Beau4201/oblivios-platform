@@ -1,0 +1,139 @@
+From d0295a0f9830a660c67a2bcd98ffb5b245d71afa Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 23:26:50 +0200
+Subject: [PATCH] SettingsProvider: let an app read accessibility_enabled and
+ its own entry of the list settings
+
+The allowlist of ADR-173 to ADR-175 hid accessibility_enabled, so
+ConfirmationPrompt.isAccessibilityServiceRunning() caught the missing setting and
+returned false: a confirmation prompt went ahead while an accessibility service
+ran, which weakens an upstream protection. Allow the key (AccessibilityManager shows
+the same bit to every app).
+
+Apps and libraries read enabled_notification_listeners, enabled_accessibility_services,
+enabled_input_methods and default_input_method to see whether they were enabled; hidden,
+a notification forwarder or a keyboard setup screen asks for access that is already
+granted, for ever. Such a read now returns the entries of the calling package and
+nothing of the other apps; the whole value stays hidden. Host tests and a mutation
+check cover the matching.
+---
+ .../providers/settings/SettingsHardening.java | 43 +++++++++++++++++++
+ .../providers/settings/SettingsProvider.java  | 32 ++++++++++++++
+ 2 files changed, 75 insertions(+)
+
+diff --git a/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java b/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java
+index 66a2d00650cc..abb85b3ef2b5 100644
+--- a/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java
++++ b/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java
+@@ -38,6 +38,10 @@ final class SettingsHardening {
+             "auto_caps", "auto_replace", "auto_punctuate", "show_password_touch",
+             "show_password_physical", "key_repeat_timeout", "key_repeat_delay",
+             "accessibility_text_cursor_blink_interval_ms",
++            // ConfirmationPrompt reads it in the app process to refuse a prompt while an
++            // accessibility service runs; hidden, the read fails and the prompt goes ahead. Also
++            // answered by AccessibilityManager.isEnabled(), so it adds nothing to the fingerprint.
++            "accessibility_enabled",
+             // CaptioningManager: how an app draws the captions the user asked for.
+             "accessibility_captioning_enabled", "accessibility_captioning_locale",
+             "accessibility_captioning_easy_reader_enabled", "accessibility_captioning_preset",
+@@ -46,8 +50,47 @@ final class SettingsHardening {
+             "accessibility_captioning_edge_color", "accessibility_captioning_window_color",
+             "accessibility_captioning_typeface", "accessibility_captioning_font_scale");
+ 
++    /**
++     * List settings in which an app reads its own entries and no others: which notification
++     * listeners, accessibility services and input methods are enabled, and which input method is
++     * the default. Apps and libraries read them to see whether they were granted access or
++     * enabled as a keyboard; hidden, they show a "grant access" screen for ever. The whole value
++     * names the other apps of the user and stays hidden.
++     */
++    private static final Set<String> OWN_ENTRY_KEYS = Set.of("enabled_notification_listeners",
++            "enabled_accessibility_services", "enabled_input_methods", "default_input_method");
++
+     private SettingsHardening() {}
+ 
++    /** True if a hardened app reads the entries of the key that name its own package. */
++    static boolean isOwnEntryKey(String name) {
++        return name != null && OWN_ENTRY_KEYS.contains(name);
++    }
++
++    /**
++     * The entries of a colon-separated component list (package/class, an input method with its
++     * subtype ids after semicolons) whose package is exactly packageName, joined with a colon;
++     * null if there is none.
++     */
++    static String ownEntries(String value, String packageName) {
++        if (value == null || packageName == null || packageName.isEmpty()) {
++            return null;
++        }
++        StringBuilder own = null;
++        for (String entry : value.split(":")) {
++            final int slash = entry.indexOf('/');
++            if (slash >= 0 && entry.substring(0, slash).equals(packageName)) {
++                if (own == null) {
++                    own = new StringBuilder();
++                } else {
++                    own.append(':');
++                }
++                own.append(entry);
++            }
++        }
++        return own == null ? null : own.toString();
++    }
++
+     /** True if a hardened app may read the key. */
+     static boolean isAllowedForApps(String name) {
+         return name != null && ALLOWED_FOR_APPS.contains(name);
+diff --git a/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java b/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java
+index 07aa020df254..02b45f8cb11f 100644
+--- a/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java
++++ b/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java
+@@ -1828,6 +1828,11 @@ public class SettingsProvider extends ContentProvider {
+         }
+ 
+         if (isHiddenFromCaller(name)) {
++            // FreeholdOS: an app still reads its own entry of a list setting.
++            final Setting own = getOwnEntrySecureSetting(name, owningUserId, deviceId);
++            if (own != null) {
++                return own;
++            }
+             // Pretend the setting doesn't exist.
+             SettingsState settings = mSettingsRegistry.getSettingsLocked(SETTINGS_TYPE_SECURE,
+                     owningUserId, deviceId);
+@@ -1850,6 +1855,33 @@ public class SettingsProvider extends ContentProvider {
+         }
+     }
+ 
++    /**
++     * FreeholdOS: for a list setting that an app reads to learn whether it was enabled (see
++     * SettingsHardening#isOwnEntryKey), a copy of the real value that holds only the entries of
++     * the calling package; null if the key is not such a list or the caller has no entry.
++     */
++    private Setting getOwnEntrySecureSetting(String name, int owningUserId, int deviceId) {
++        if (!SettingsHardening.isOwnEntryKey(name)) {
++            return null;
++        }
++        final String packageName = getCallingApplicationInfoOrThrow().packageName;
++        synchronized (mLock) {
++            final Setting real = mSettingsRegistry.getSettingLocked(SETTINGS_TYPE_SECURE,
++                    owningUserId, deviceId, name);
++            if (real == null || real.isNull()) {
++                return null;
++            }
++            final String own = SettingsHardening.ownEntries(real.getValue(), packageName);
++            final SettingsState settings = mSettingsRegistry.getSettingsLocked(
++                    SETTINGS_TYPE_SECURE, owningUserId, deviceId);
++            if (own == null || settings == null) {
++                return null;
++            }
++            return settings.new Setting(name, own, /* makeDefault= */ false, packageName,
++                    /* tag= */ null);
++        }
++    }
++
+     private boolean isNewSsaidSetting(String name) {
+         return Settings.Secure.ANDROID_ID.equals(name)
+                 && UserHandle.getAppId(Binder.getCallingUid()) >= Process.FIRST_APPLICATION_UID;
+-- 
+2.39.5
+

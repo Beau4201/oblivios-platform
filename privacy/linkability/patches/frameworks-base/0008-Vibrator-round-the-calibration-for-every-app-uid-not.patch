@@ -1,0 +1,36 @@
+From e75611e0988a90b3296bcf0828f7a7002448bf5b Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 23:23:53 +0200
+Subject: [PATCH] Vibrator: round the calibration for every app uid, not only
+ ids 10000 to 19999
+
+getVibratorInfo() rounded the calibration of the motor only when
+UserHandle.isApp() was true, which covers the application range alone. SDK-sandbox
+and isolated processes read the measured resonant frequency, Q factor and
+acceleration curve. Use the app id against FIRST_APPLICATION_UID, as the sensor and
+settings hardening do.
+---
+ .../com/android/server/vibrator/VibratorManagerService.java | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/vibrator/VibratorManagerService.java b/services/core/java/com/android/server/vibrator/VibratorManagerService.java
+index caf32300391f..58d4c5875c8e 100644
+--- a/services/core/java/com/android/server/vibrator/VibratorManagerService.java
++++ b/services/core/java/com/android/server/vibrator/VibratorManagerService.java
+@@ -454,7 +454,11 @@ public class VibratorManagerService extends IVibratorManagerService.Stub {
+         final VibratorInfo info = getVibratorInfoInternal(vibratorId);
+         // FreeholdOS (ADR-173): the calibration of the motor identifies the unit; an app gets it
+         // rounded (see VibratorInfo#withCoarseCalibration), the system gets it as measured.
+-        if (info != null && UserHandle.isApp(Binder.getCallingUid())) {
++        // Every uid from the first application id up is an app: UserHandle.isApp() stops at the
++        // application range (10000 to 19999) and would hand the measured values to SDK-sandbox
++        // (20000 to 29999) and isolated (90000 and up) processes.
++        if (info != null
++                && UserHandle.getAppId(Binder.getCallingUid()) >= Process.FIRST_APPLICATION_UID) {
+             return info.withCoarseCalibration();
+         }
+         return info;
+-- 
+2.39.5
+
+
