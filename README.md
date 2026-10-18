@@ -28,6 +28,8 @@ and device logs do not belong in this repository.
   told when the user takes a screenshot (one `frameworks/base` patch).
 - [`privacy/identity-surface`](privacy/identity-surface/README.md) — apps cannot read the
   unit-specific boot properties or the bias estimates of the uncalibrated sensors (ADR-167).
+- [`privacy/linkability`](privacy/linkability/README.md) — loopback between apps, the clipboard, the
+  settings tables, the vibrator calibration and the device colour are closed for ordinary apps (ADR-174).
 - [`physical/grab-detection`](physical/grab-detection/README.md) — the phone locks when it is pulled out
   of a hand in use and restarts after 60 seconds without a PIN (ADR-169).
 - [`release/ota-server-url`](release/ota-server-url/README.md) — points
