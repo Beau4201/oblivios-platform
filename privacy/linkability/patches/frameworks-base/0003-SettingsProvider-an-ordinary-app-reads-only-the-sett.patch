@@ -1,0 +1,221 @@
+From a3cabf672914e7438950ba7b8a59f8158b228736 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 04:17:40 +0200
+Subject: [PATCH 3/5] SettingsProvider: an ordinary app reads only the settings
+ it needs
+
+All 262 readable settings were readable by any app, together a
+fingerprint of the phone and its owner, with boot_count and device_name
+among them. An app that is not a system app, platform-signed or test-only
+now sees 14 keys that the framework reads inside the app process; every
+other key reads as unset. freeholdos_settings_open = 1 switches this off
+and freeholdos_settings_real_packages names the packages that read the
+real settings.
+---
+ .../providers/settings/SettingsHardening.java | 48 +++++++++++++
+ .../providers/settings/SettingsProvider.java  | 71 +++++++++++++++++++
+ 2 files changed, 119 insertions(+)
+ create mode 100644 packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java
+
+diff --git a/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java b/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java
+new file mode 100644
+index 0000000..3ecbb23
+--- /dev/null
++++ b/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java
+@@ -0,0 +1,48 @@
++package com.android.providers.settings;
++
++import java.util.Set;
++
++/**
++ * FreeholdOS (ADR-173): which settings an ordinary app may read. A settings table holds the
++ * configuration of one phone; read together, its values identify the phone and the person who
++ * configured it, and two apps that read the same values can be linked by them. An app that is not
++ * a system app therefore sees the keys below and nothing else: every other key reads as unset,
++ * the answer an app already gets for a key that does not exist.
++ *
++ * The keys are those that the framework itself reads inside the app process to lay out and
++ * format the app (view timeouts, text scale and animation scales, rotation, date and time format,
++ * password echo) and the per-app android_id. The keys are matched by name only; none of them
++ * exists in two tables.
++ */
++final class SettingsHardening {
++    /** Global setting: 1 switches the hardening off for every app. */
++    static final String OPEN_SETTING = "freeholdos_settings_open";
++    /** Global setting: comma-separated package names that read the real settings. */
++    static final String REAL_PACKAGES_SETTING = "freeholdos_settings_real_packages";
++
++    private static final Set<String> ALLOWED_FOR_APPS = Set.of(
++            "airplane_mode_on", "animator_duration_scale", "transition_animation_scale",
++            "window_animation_scale", "android_id", "long_press_timeout", "multi_press_timeout",
++            "speak_password", "show_password", "font_scale", "time_12_24", "date_format",
++            "accelerometer_rotation", "user_rotation");
++
++    private SettingsHardening() {}
++
++    /** True if a hardened app may read the key. */
++    static boolean isAllowedForApps(String name) {
++        return name != null && ALLOWED_FOR_APPS.contains(name);
++    }
++
++    /** True if the comma-separated list names the package exactly. */
++    static boolean listContains(String commaSeparated, String packageName) {
++        if (commaSeparated == null || packageName == null) {
++            return false;
++        }
++        for (String entry : commaSeparated.split(",")) {
++            if (entry.trim().equals(packageName)) {
++                return true;
++            }
++        }
++        return false;
++    }
++}
+diff --git a/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java b/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java
+index 1fbd8bc..07aa020 100644
+--- a/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java
++++ b/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java
+@@ -1556,6 +1556,7 @@ public class SettingsProvider extends ContentProvider {
+                     UserHandle.USER_SYSTEM, Context.DEVICE_ID_DEFAULT);
+ 
+             final int nameCount = names.size();
++            final boolean hardenedCaller = isHardenedCaller();
+ 
+             String[] normalizedProjection = normalizeProjection(projection);
+             MatrixCursor result = new MatrixCursor(normalizedProjection, nameCount);
+@@ -1570,6 +1571,9 @@ public class SettingsProvider extends ContentProvider {
+                     // Caller doesn't have permission to read this setting
+                     continue;
+                 }
++                if (hardenedCaller && !SettingsHardening.isAllowedForApps(name)) {
++                    continue;
++                }
+ 
+                 Setting setting = settingsState.getSettingLocked(name);
+                 if (setting == null || setting.isNull()) {
+@@ -1592,6 +1596,13 @@ public class SettingsProvider extends ContentProvider {
+         // Ensure the caller can access the setting.
+         enforceSettingReadable(name, SETTINGS_TYPE_GLOBAL, UserHandle.getCallingUserId());
+ 
++        if (isHiddenFromCaller(name)) {
++            // Pretend the setting doesn't exist.
++            final SettingsState settings = mSettingsRegistry.getSettingsLocked(
++                    SETTINGS_TYPE_GLOBAL, UserHandle.USER_SYSTEM, Context.DEVICE_ID_DEFAULT);
++            return settings != null ? settings.getNullSetting() : null;
++        }
++
+         // Get the value.
+         synchronized (mLock) {
+             // Global settings are applicable only for the default device, hence pass
+@@ -1743,6 +1754,7 @@ public class SettingsProvider extends ContentProvider {
+                     deviceId);
+ 
+             final int nameCount = names.size();
++            final boolean hardenedCaller = isHardenedCaller();
+ 
+             String[] normalizedProjection = normalizeProjection(projection);
+             MatrixCursor result = new MatrixCursor(normalizedProjection, nameCount);
+@@ -1765,6 +1777,9 @@ public class SettingsProvider extends ContentProvider {
+                     // Caller doesn't have permission to read this setting
+                     continue;
+                 }
++                if (hardenedCaller && !SettingsHardening.isAllowedForApps(name)) {
++                    continue;
++                }
+ 
+                 // As of Android O, the SSAID is read from an app-specific entry in table
+                 // SETTINGS_FILE_SSAID, unless accessed by a system process.
+@@ -1812,6 +1827,13 @@ public class SettingsProvider extends ContentProvider {
+             return settings != null ? settings.getNullSetting() : null;
+         }
+ 
++        if (isHiddenFromCaller(name)) {
++            // Pretend the setting doesn't exist.
++            SettingsState settings = mSettingsRegistry.getSettingsLocked(SETTINGS_TYPE_SECURE,
++                    owningUserId, deviceId);
++            return settings != null ? settings.getNullSetting() : null;
++        }
++
+         // As of Android O, the SSAID is read from an app-specific entry in table
+         // SETTINGS_FILE_SSAID, unless accessed by a system process.
+         if (isNewSsaidSetting(name)) {
+@@ -2042,6 +2064,7 @@ public class SettingsProvider extends ContentProvider {
+                     deviceId);
+ 
+             final int nameCount = names.size();
++            final boolean hardenedCaller = isHardenedCaller();
+ 
+             String[] normalizedProjection = normalizeProjection(projection);
+             MatrixCursor result = new MatrixCursor(normalizedProjection, nameCount);
+@@ -2054,6 +2077,9 @@ public class SettingsProvider extends ContentProvider {
+                     // Caller doesn't have permission to read this setting
+                     continue;
+                 }
++                if (hardenedCaller && !SettingsHardening.isAllowedForApps(name)) {
++                    continue;
++                }
+                 // Determine the owning user as some profile settings are cloned from the parent.
+                 final int owningUserId = resolveOwningUserIdForSystemSettingLocked(callingUserId,
+                         name);
+@@ -2087,6 +2113,13 @@ public class SettingsProvider extends ContentProvider {
+         // Determine the owning user as some profile settings are cloned from the parent.
+         final int owningUserId = resolveOwningUserIdForSystemSettingLocked(callingUserId, name);
+ 
++        if (isHiddenFromCaller(name)) {
++            // Pretend the setting doesn't exist.
++            final SettingsState settings = mSettingsRegistry.getSettingsLocked(
++                    SETTINGS_TYPE_SYSTEM, owningUserId, deviceId);
++            return settings != null ? settings.getNullSetting() : null;
++        }
++
+         // Get the value.
+         synchronized (mLock) {
+             return mSettingsRegistry.getSettingLocked(SETTINGS_TYPE_SYSTEM, owningUserId,
+@@ -2498,6 +2531,44 @@ public class SettingsProvider extends ContentProvider {
+         return setting.getValue();
+     }
+ 
++    /**
++     * FreeholdOS (ADR-173): true if this read must answer as if the key were unset: the caller is
++     * an ordinary app and the key is not one of {@link SettingsHardening#isAllowedForApps}.
++     */
++    private boolean isHiddenFromCaller(String name) {
++        return !SettingsHardening.isAllowedForApps(name) && isHardenedCaller();
++    }
++
++    /**
++     * FreeholdOS (ADR-173): true if the caller reads the hardened view of the settings. That is
++     * every ordinary app (not a system app, not platform-signed, not test-only), unless the
++     * global setting freeholdos_settings_open is 1 or the package is named in
++     * freeholdos_settings_real_packages.
++     */
++    private boolean isHardenedCaller() {
++        if (UserHandle.getAppId(Binder.getCallingUid()) < Process.FIRST_APPLICATION_UID) {
++            return false;
++        }
++        final ApplicationInfo ai = getCallingApplicationInfoOrThrow();
++        if (ai.isSystemApp() || ai.isSignedWithPlatformKey()
++                || (ai.flags & ApplicationInfo.FLAG_TEST_ONLY) != 0) {
++            return false;
++        }
++        if ("1".equals(getFreeholdGlobalValue(SettingsHardening.OPEN_SETTING))) {
++            return false;
++        }
++        return !SettingsHardening.listContains(
++                getFreeholdGlobalValue(SettingsHardening.REAL_PACKAGES_SETTING), ai.packageName);
++    }
++
++    private String getFreeholdGlobalValue(String key) {
++        synchronized (mLock) {
++            final Setting setting = mSettingsRegistry.getSettingLocked(SETTINGS_TYPE_GLOBAL,
++                    UserHandle.USER_SYSTEM, Context.DEVICE_ID_DEFAULT, key);
++            return setting == null || setting.isNull() ? null : setting.getValue();
++        }
++    }
++
+     private void enforceSettingReadable(String settingName, int settingsType, int userId) {
+         checkProtectedSettingAccess(/* isRead */ true, settingName, getProtectedSettings(settingsType));
+ 
+-- 
+2.56.0
+

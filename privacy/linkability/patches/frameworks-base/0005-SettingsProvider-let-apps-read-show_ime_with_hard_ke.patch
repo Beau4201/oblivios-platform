@@ -1,0 +1,38 @@
+From dba86e40411a70353b64cc338287f62d870699eb Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 04:25:57 +0200
+Subject: [PATCH 5/5] SettingsProvider: let apps read
+ show_ime_with_hard_keyboard
+
+The framework reads it inside the app process (a reader search of
+core/java found it next to time_12_24), so hiding it would change how
+every app places the soft keyboard.
+---
+ .../src/com/android/providers/settings/SettingsHardening.java | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java b/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java
+index 3ecbb23..c848ded 100644
+--- a/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java
++++ b/packages/SettingsProvider/src/com/android/providers/settings/SettingsHardening.java
+@@ -11,7 +11,7 @@ import java.util.Set;
+  *
+  * The keys are those that the framework itself reads inside the app process to lay out and
+  * format the app (view timeouts, text scale and animation scales, rotation, date and time format,
+- * password echo) and the per-app android_id. The keys are matched by name only; none of them
++ * password echo, whether a hard keyboard hides the soft one) and the per-app android_id. The keys are matched by name only; none of them
+  * exists in two tables.
+  */
+ final class SettingsHardening {
+@@ -24,7 +24,7 @@ final class SettingsHardening {
+             "airplane_mode_on", "animator_duration_scale", "transition_animation_scale",
+             "window_animation_scale", "android_id", "long_press_timeout", "multi_press_timeout",
+             "speak_password", "show_password", "font_scale", "time_12_24", "date_format",
+-            "accelerometer_rotation", "user_rotation");
++            "accelerometer_rotation", "user_rotation", "show_ime_with_hard_keyboard");
+ 
+     private SettingsHardening() {}
+ 
+-- 
+2.56.0
+

@@ -1,0 +1,94 @@
+From 64e7c72e86917de6e4efd07aa2d6f6d817881f78 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 04:15:14 +0200
+Subject: [PATCH] bpf: refuse loopback traffic between two apps of one user
+
+The loopback check judged only traffic between profiles; two apps of one
+user always passed, so two apps could link themselves through 127.0.0.1
+without any permission. Two different app ids of one user now pass only
+if either side holds USE_LOOPBACK_INTERFACE. The global setting
+freeholdos_loopback_open = 1 switches the check off at boot.
+---
+ bpf/progs/netd.c                               | 18 ++++++++++++++----
+ service/src/com/android/server/BpfNetMaps.java | 17 ++++++++++++++++-
+ 2 files changed, 30 insertions(+), 5 deletions(-)
+
+diff --git a/bpf/progs/netd.c b/bpf/progs/netd.c
+index de72e54..03125ea 100644
+--- a/bpf/progs/netd.c
++++ b/bpf/progs/netd.c
+@@ -502,15 +502,25 @@ function bool uids_have_loopback_permissions(const uint32_t sender_uid,
+     // TODO: be more specific about which system uids we should exempt
+     if (is_system_uid(sender_uid) || is_system_uid(receiver_uid)) return true;
+ 
+-    bool same_profile =
+-        sender_uid / AID_USER_OFFSET == receiver_uid / AID_USER_OFFSET;
+-    if (same_profile) return true;
+-
+     uint32_t sender_perms = get_chunk_permissions(sender_uid);
+     uint32_t receiver_perms = get_chunk_permissions(receiver_uid);
+     if (can_force_loopback(sender_perms)
+         || can_force_loopback(receiver_perms)) return true;
+ 
++    bool same_profile =
++        sender_uid / AID_USER_OFFSET == receiver_uid / AID_USER_OFFSET;
++    if (same_profile) {
++        // FreeholdOS: two different apps of one user may not talk over the loopback interface
++        // (127.0.0.0/8 and ::1). It is a channel by which two apps link themselves to one
++        // device without any permission; the upstream check only covers traffic between
++        // profiles. Either side holding
++        // USE_LOOPBACK_INTERFACE lets the pair through, which is how a user admits a local
++        // server app (a proxy, a sync tool). Two uids of one user that are not two apps never
++        // reach this branch (system uids returned above, equal uids are not judged).
++        return (sender_perms & PERMISSION_BIT_USE_LOOPBACK_INTERFACE) != 0
++            || (receiver_perms & PERMISSION_BIT_USE_LOOPBACK_INTERFACE) != 0;
++    }
++
+     // TODO: check loopback interface permissions for both sender and receiver
+     bool same_app_id =
+         sender_uid % AID_USER_OFFSET == receiver_uid % AID_USER_OFFSET;
+diff --git a/service/src/com/android/server/BpfNetMaps.java b/service/src/com/android/server/BpfNetMaps.java
+index 426a356..2ac530e 100644
+--- a/service/src/com/android/server/BpfNetMaps.java
++++ b/service/src/com/android/server/BpfNetMaps.java
+@@ -109,6 +109,7 @@ import android.os.Process;
+ import android.os.RemoteException;
+ import android.os.ServiceSpecificException;
+ import android.os.UserHandle;
++import android.provider.Settings;
+ import android.system.ErrnoException;
+ import android.system.Os;
+ import android.util.ArrayMap;
+@@ -815,6 +816,20 @@ public class BpfNetMaps {
+         }
+     }
+ 
++    /**
++     * FreeholdOS: the loopback check now judges two apps of one user. The global setting
++     * freeholdos_loopback_open = 1 switches the check off for the whole device (read once, at
++     * boot). Unset or unreadable means the check stays on.
++     */
++    private static boolean isLoopbackOpenSetting(final Context context) {
++        try {
++            return Settings.Global.getInt(context.getContentResolver(),
++                    "freeholdos_loopback_open", 0) != 0;
++        } catch (RuntimeException e) {
++            return false;
++        }
++    }
++
+     /**
+      * Initializes the class if it is not already initialized. This method will open maps but not
+      * cause any other effects. This method may be called multiple times on any thread.
+@@ -824,7 +839,7 @@ public class BpfNetMaps {
+         if (sInitialized) return;
+         sPermissionMapUidMigrationEnabled = deps.isPermissionMapUidMigrationEnabled();
+         sLoopbackAccessMetricsEnabled = deps.isLoopbackAccessMetricsEnabled();
+-        sLoopbackChecksEnabled = deps.isLoopbackChecksEnabled();
++        sLoopbackChecksEnabled = deps.isLoopbackChecksEnabled() && !isLoopbackOpenSetting(context);
+         sBetaMetricsEnabled = deps.isBetaMetricsEnabled();
+         if (SdkLevel.isAtLeastT()) {
+             sL4sSupported = deps.isL4sProgramLoaded();
+-- 
+2.56.0
+

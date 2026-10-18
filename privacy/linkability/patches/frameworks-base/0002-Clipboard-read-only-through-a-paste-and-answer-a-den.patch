@@ -1,0 +1,151 @@
+From 8e999692e710bff98fa4e50bdbee404ab24316c4 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 04:17:40 +0200
+Subject: [PATCH 2/5] Clipboard: read only through a paste, and answer a denied
+ caller the same for every clip
+
+The default of the per-app clipboard read switch becomes off, so an app
+reads a clip it did not set only during a user paste or when the user
+enables the app. A caller that may not read now gets one fixed description
+(no label, time 0, a fixed set of MIME types), a constant answer to
+hasPrimaryClip and hasClipboardText, and no change notification; the label,
+time, MIME types, presence and the moment of a change were all ways for
+the app that set the clip to pass a message to a focused app.
+---
+ core/res/res/values/config_ext.xml            |  2 +-
+ .../server/clipboard/ClipboardAccess.java     | 49 +++++++++++++------
+ .../server/clipboard/ClipboardService.java    | 15 ++++--
+ 3 files changed, 48 insertions(+), 18 deletions(-)
+
+diff --git a/core/res/res/values/config_ext.xml b/core/res/res/values/config_ext.xml
+index bd323af..f445554 100644
+--- a/core/res/res/values/config_ext.xml
++++ b/core/res/res/values/config_ext.xml
+@@ -55,7 +55,7 @@
+     <integer name="setting_default_display_color_mode">-1</integer>
+     <java-symbol type="integer" name="setting_default_display_color_mode" />
+ 
+-    <bool name="setting_default_allow_clipboard_read">true</bool>
++    <bool name="setting_default_allow_clipboard_read">false</bool>
+     <java-symbol type="bool" name="setting_default_allow_clipboard_read" />
+ 
+ </resources>
+diff --git a/services/core/java/com/android/server/clipboard/ClipboardAccess.java b/services/core/java/com/android/server/clipboard/ClipboardAccess.java
+index e987884..0d5353f 100644
+--- a/services/core/java/com/android/server/clipboard/ClipboardAccess.java
++++ b/services/core/java/com/android/server/clipboard/ClipboardAccess.java
+@@ -179,19 +179,39 @@ final class ClipboardAccess {
+                 intendingDeviceId);
+         final ClipDescription description = clipboard != null && clipboard.primaryClip != null
+                 ? clipboard.primaryClip.getDescription() : null;
+-        if (description == null || access != PayloadReadAccess.DENIED) {
++        if (access != PayloadReadAccess.DENIED) {
+             return description;
+         }
++        return newDeniedClipDescription();
++    }
++
++    /**
++     * FreeholdOS: what a caller that may not read the clip learns about it. The label, the time it
++     * was set, the MIME types, whether it is styled and whether there is a clip at all are all
++     * chosen by the app that wrote the clip, so each is a way for two apps to pass a message
++     * without a grant. The answer is therefore the same for every clip: the types the Paste entry
++     * of a text field or a content receiver asks for, and nothing else.
++     */
++    static ClipDescription newDeniedClipDescription() {
++        final ClipDescription description = new ClipDescription(null, new String[] {
++                ClipDescription.MIMETYPE_TEXT_PLAIN, ClipDescription.MIMETYPE_TEXT_HTML,
++                ClipDescription.MIMETYPE_TEXT_URILIST, "image/png", "image/jpeg"});
++        description.setTimestamp(0);
++        return description;
++    }
+ 
+-        final String[] mimeTypes = new String[description.getMimeTypeCount()];
+-        for (int i = 0; i < mimeTypes.length; i++) {
+-            mimeTypes[i] = description.getMimeType(i);
++    @GuardedBy("mLock")
++    boolean hasPrimaryClipLocked(boolean readAllowedForPackage, int intendingUid,
++            int intendingUserId, int intendingDeviceId) {
++        final PayloadReadAccess access = getPayloadReadAccessLocked(readAllowedForPackage,
++                intendingUid, intendingUserId, intendingDeviceId);
++        if (access == PayloadReadAccess.DENIED) {
++            // FreeholdOS: presence is a bit an app can flip at will; the answer is constant.
++            return true;
+         }
+-        final ClipDescription descriptionWithoutLabel = new ClipDescription(null, mimeTypes);
+-        descriptionWithoutLabel.setTimestamp(description.getTimestamp());
+-        // TextView.canPasteAsPlainText() uses this bit to offer Paste as plain text.
+-        descriptionWithoutLabel.setIsStyledText(description.isStyledText());
+-        return descriptionWithoutLabel;
++        final Clipboard clipboard = mService.getClipboardLocked(intendingUserId,
++                intendingDeviceId);
++        return clipboard != null && clipboard.primaryClip != null;
+     }
+ 
+     @GuardedBy("mLock")
+@@ -199,16 +219,17 @@ final class ClipboardAccess {
+             int intendingUserId, int intendingDeviceId) {
+         final PayloadReadAccess access = getPayloadReadAccessLocked(readAllowedForPackage,
+                 intendingUid, intendingUserId, intendingDeviceId);
++        if (access == PayloadReadAccess.DENIED) {
++            // Some apps use this query to decide whether the system toolbar should offer Paste.
++            // FreeholdOS: constant, so that presence carries no message (see
++            // newDeniedClipDescription).
++            return true;
++        }
+         final Clipboard clipboard = mService.getClipboardLocked(intendingUserId,
+                 intendingDeviceId);
+         if (clipboard == null || clipboard.primaryClip == null) {
+             return false;
+         }
+-        if (access == PayloadReadAccess.DENIED) {
+-            // Some apps use this query to decide whether the system toolbar should offer Paste.
+-            // Preserve clip presence without inspecting or exposing its content.
+-            return true;
+-        }
+         final CharSequence text = clipboard.primaryClip.getItemAt(0).getText();
+         return text != null && text.length() > 0;
+     }
+diff --git a/services/core/java/com/android/server/clipboard/ClipboardService.java b/services/core/java/com/android/server/clipboard/ClipboardService.java
+index f89f3b1..1eec110 100644
+--- a/services/core/java/com/android/server/clipboard/ClipboardService.java
++++ b/services/core/java/com/android/server/clipboard/ClipboardService.java
+@@ -801,9 +801,12 @@ public class ClipboardService extends SystemService {
+                     || isDeviceLocked(intendingUserId, deviceId)) {
+                 return false;
+             }
++            final boolean readAllowedForPackage = mAccess.clipboardReadAllowedForPackage(
++                    callingPackage, intendingUid, intendingUserId,
++                    isDefaultIme(intendingUserId, callingPackage));
+             synchronized (mLock) {
+-                Clipboard clipboard = getClipboardLocked(intendingUserId, intendingDeviceId);
+-                return clipboard != null && clipboard.primaryClip != null;
++                return mAccess.hasPrimaryClipLocked(readAllowedForPackage, intendingUid,
++                        intendingUserId, intendingDeviceId);
+             }
+         }
+ 
+@@ -1169,13 +1172,19 @@ public class ClipboardService extends SystemService {
+                     ListenerInfo li = (ListenerInfo)
+                             clipboard.primaryClipListeners.getBroadcastCookie(i);
+ 
++                    // FreeholdOS: a listener hears that a clip changed only if it may read the
++                    // clip. The moment a clip is set is otherwise a message from the app that
++                    // set it to any focused app that listens.
+                     if (clipboardAccessAllowed(
+                             AppOpsManager.OP_READ_CLIPBOARD,
+                             li.mPackageName,
+                             li.mAttributionTag,
+                             li.mUid,
+                             UserHandle.getUserId(li.mUid),
+-                            clipboard.deviceId)) {
++                            clipboard.deviceId)
++                            && mAccess.clipboardReadAllowedForPackage(li.mPackageName, li.mUid,
++                                    UserHandle.getUserId(li.mUid),
++                                    isDefaultIme(UserHandle.getUserId(li.mUid), li.mPackageName))) {
+                         clipboard.primaryClipListeners.getBroadcastItem(i)
+                                 .dispatchPrimaryClipChanged();
+                     }
+-- 
+2.56.0
+

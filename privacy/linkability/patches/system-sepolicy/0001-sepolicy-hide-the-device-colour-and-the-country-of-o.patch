@@ -1,0 +1,63 @@
+From ca1e161e7132d12a8a63b14518bdbc74bb4ba5f4 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 04:18:02 +0200
+Subject: [PATCH] sepolicy: hide the device colour and the country of origin
+ from third-party apps
+
+ro.boot.hardware.color and ro.boot.hardware.coo get their own type. Every
+domain except the apps and the app zygotes reads it, and so do the three
+platform app domains that use the values: SystemUI (platform_app), the
+launcher (priv_app) and Settings (system_app).
+---
+ private/domain.te         | 5 +++++
+ private/property.te       | 3 +++
+ private/property_contexts | 3 ++-
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/private/domain.te b/private/domain.te
+index a44c6df..ee2d5a3 100644
+--- a/private/domain.te
++++ b/private/domain.te
+@@ -520,6 +520,11 @@ get_prop(domain, bootloader_prop)
+ # FreeholdOS (ADR-167): every domain except the apps and the app zygotes, which run app code
+ # and are not appdomain; an app can tell devices apart by these.
+ get_prop({ domain -appdomain -app_zygote -native_app_zygote }, unit_boot_prop)
++# FreeholdOS (ADR-173): the device colour and the country of origin. SystemUI (platform_app) themes
++# on the colour, the launcher (priv_app) and the wallpaper code pick the default wallpaper by it,
++# Settings (system_app) shows the regulatory label by the country. No other app reads them.
++get_prop({ domain -appdomain -app_zygote -native_app_zygote }, batch_trait_prop)
++get_prop({ platform_app priv_app system_app }, batch_trait_prop)
+ get_prop(domain, build_odm_prop)
+ get_prop(domain, build_prop)
+ get_prop(domain, build_vendor_prop)
+diff --git a/private/property.te b/private/property.te
+index a389663..279ee58 100644
+--- a/private/property.te
++++ b/private/property.te
+@@ -115,6 +115,9 @@ system_restricted_prop(statsd_atoms_list_version_prop)
+ system_restricted_prop(trusty_coverage_prop)
+ # FreeholdOS (ADR-167): ro.boot.* values that identify a unit or a production batch.
+ system_restricted_prop(unit_boot_prop)
++# FreeholdOS (ADR-173): ro.boot.* values that take few values (device colour, country of origin)
++# but that three platform apps read; see domain.te.
++system_restricted_prop(batch_trait_prop)
+ system_restricted_prop(pcc_audit_mode_client_prop)
+ system_restricted_prop(dumpstate_last_id_prop)
+ 
+diff --git a/private/property_contexts b/private/property_contexts
+index 046bd63..6da70c6 100644
+--- a/private/property_contexts
++++ b/private/property_contexts
+@@ -1096,7 +1096,8 @@ ro.boot.boottime           u:object_r:bootloader_prop:s0 exact string
+ ro.boot.console            u:object_r:bootloader_prop:s0 exact string
+ ro.boot.ddr_size           u:object_r:bootloader_prop:s0 exact string
+ ro.boot.hardware           u:object_r:bootloader_prop:s0 exact string
+-ro.boot.hardware.color     u:object_r:bootloader_prop:s0 exact string
++ro.boot.hardware.color     u:object_r:batch_trait_prop:s0 exact string
++ro.boot.hardware.coo       u:object_r:batch_trait_prop:s0 exact string
+ ro.boot.hardware.sku       u:object_r:bootloader_prop:s0 exact string
+ ro.boot.keymaster          u:object_r:bootloader_prop:s0 exact string
+ ro.boot.mode               u:object_r:bootloader_prop:s0 exact string
+-- 
+2.56.0
+

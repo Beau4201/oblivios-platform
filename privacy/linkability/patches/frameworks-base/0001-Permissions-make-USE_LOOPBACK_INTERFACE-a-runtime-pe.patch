@@ -1,0 +1,41 @@
+From 80252909a4e75c705b2f34404363e8e48fe426bb Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 04:17:40 +0200
+Subject: [PATCH 1/5] Permissions: make USE_LOOPBACK_INTERFACE a runtime
+ permission
+
+The permission was normal, so every app that declared it got it at
+install and two colluding apps could both declare it. As a dangerous
+permission in the undefined group (like ACCESS_LOCAL_NETWORK) it is
+granted by the user, per app. The loopback check in the network stack
+lets a pair of apps through when either side holds it.
+---
+ core/res/AndroidManifest.xml | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
+index 0401d67..5a88775 100644
+--- a/core/res/AndroidManifest.xml
++++ b/core/res/AndroidManifest.xml
+@@ -3919,12 +3919,16 @@
+     <!-- Required to be able to interact with other applications via IP packets on the loopback
+         interface.
+         @FlaggedApi(android.permission.flags.Flags.FLAG_FULL_LOOPBACK_PROTECTIONS_ENABLED)
+-        <p>Protection level: normal -->
++        FreeholdOS: dangerous, so that the user and not the manifest decides whether an app may use
++        the loopback interface with other apps. An app that is not granted it can still reach
++        itself and the system.
++        <p>Protection level: dangerous -->
+     <permission
+         android:name="android.permission.USE_LOOPBACK_INTERFACE"
++        android:permissionGroup="android.permission-group.UNDEFINED"
+         android:description="@string/permdesc_use_loopback_interface"
+         android:label="@string/permlab_use_loopback_interface"
+-        android:protectionLevel="normal"
++        android:protectionLevel="dangerous"
+         android:featureFlag="android.permission.flags.use_loopback_interface_permission_enabled" />
+ 
+     <!-- @SystemApi @hide Required to be able to interact with other applications via IP packets on
+-- 
+2.56.0
+
