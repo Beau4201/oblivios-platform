@@ -39,10 +39,10 @@ On the build server, with no build running and the trees clean, after `privacy/i
     cd packages/providers/MediaProvider && git switch -c freeholdos-2026100600 && git am <path>/privacy/linkability/patches/packages-providers-mediaprovider/0001-*.patch
     cd system/sepolicy && git am <path>/privacy/linkability/patches/system-sepolicy/0001-*.patch
 
-## Verification so far (host only)
+## Verification
 
-- `test/run-settings-test.sh` and `test/mutate-settings.py` against `SettingsHardening.java`: `ok`, and 10 of 10 mutants killed.
+- `test/run-settings-test.sh` and `test/mutate-settings.py` against `SettingsHardening.java`: `ok`, and 15 of 15 mutants killed.
 - Type check of the Java files against the classes of the `out-lynx` build with `javac -XDshould-stop.ifError=FLOW` (the class path lacks some generated classes, so the baseline has errors too): the errors of the patched files equal the errors of the baseline files, and in each file a deliberately broken symbol is reported (controls: `VibratorInfo`, `ClipboardAccess`, `VibratorManagerService`, `SettingsProvider`, `BpfNetMaps`).
 - `netd.c` compiled with the clang of the tree and the flags of the Soong rule (`--target=bpf -O2 -Wall -Werror -Wextra`), plain and with `-DBPF_USE_FUNCS` (the `netd@funcs.o` module, a symlink to the same file): exit 0 for baseline and patched, exit 1 for a mutant.
 - `AndroidManifest.xml` and `config_ext.xml` parse as XML.
-- Not run: the sepolicy compile, the module build, the BPF load on a kernel, and every device behaviour.
+- Done after these host checks: the sepolicy compile and the module build (`LNK-011`), the image `2026101802` (`IMG-009`) and its device rows (`LNK-006` to `LNK-012`, `IMG-010`); the matrix says what was not shown.

@@ -3,7 +3,7 @@
 Ten patches that close channels through which two apps of one user link themselves to one device or fingerprint it
 (ADR-174, amended by ADR-175). The design is `docs/superpowers/specs/2026-10-18-linkability-kills-design.md` and the plan
 `docs/superpowers/plans/2026-10-18-linkability-batches-3-6.md` in `freeholdos-foundation`. Landed on the build server
-and module-built (2026-10-18); no image carries them yet. `SOURCE.md` holds the base revisions, the reason for each
+and module-built (2026-10-18); the `lynx` image `2026101802` carries them (`IMG-009`, `IMG-010`). `SOURCE.md` holds the base revisions, the reason for each
 patch and the checks.
 
 | Patch | Project | Effect |
