@@ -1,0 +1,37 @@
+From f3d7430e8d38fdeb0897c377c56f04cbaf0bb21a Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 03:18:23 +0200
+Subject: [PATCH] Wifi: do not derive the link-local IPv6 address from the MAC
+
+With MAC randomisation ClientModeImpl asked for EUI-64 link-local
+addresses, which embed the random MAC. LinkProperties hands that address
+to every app with ACCESS_NETWORK_STATE while WifiInfo redacts the MAC, so
+the address gives the MAC away. Use the default of ProvisioningConfiguration,
+the stable privacy mode, which does not embed it.
+---
+ service/java/com/android/server/wifi/ClientModeImpl.java | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/service/java/com/android/server/wifi/ClientModeImpl.java b/service/java/com/android/server/wifi/ClientModeImpl.java
+index 26d376950c..71a439775b 100644
+--- a/service/java/com/android/server/wifi/ClientModeImpl.java
++++ b/service/java/com/android/server/wifi/ClientModeImpl.java
+@@ -8708,10 +8708,11 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
+                         .withCreatorUid(config.creatorUid)
+                         .withLayer2Information(layer2Info)
+                         .withDhcpOptions(convertToInternalDhcpOptions(options));
+-        if (isUsingMacRandomization) {
+-            // Use EUI64 address generation for link-local IPv6 addresses.
+-            prov.withRandomMacAddress();
+-        }
++        // FreeholdOS: the link-local IPv6 address is never derived from the interface MAC. With MAC
++        // randomisation the EUI-64 form is the random MAC itself, which is stable per network, and
++        // LinkProperties hands that address to every app that holds ACCESS_NETWORK_STATE, while
++        // WifiInfo redacts the same MAC. The default of ProvisioningConfiguration is the stable
++        // privacy mode, which does not embed the MAC.
+         if (mContext.getResources().getBoolean(R.bool.config_wifiEnableApfOnNonPrimarySta)
+                 || isPrimary()) {
+             // unclear if the native layer will return the correct non-capabilities if APF is
+-- 
+2.39.5
+
