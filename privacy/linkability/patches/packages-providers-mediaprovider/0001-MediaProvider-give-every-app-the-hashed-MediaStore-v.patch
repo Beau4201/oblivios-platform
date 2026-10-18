@@ -1,0 +1,44 @@
+From 4485642a68bb956b7d91dc5b83acaf062e7fc757 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 07:22:02 +0200
+Subject: [PATCH] MediaProvider: give every app the hashed MediaStore version
+
+The version lockdown applied only to apps that target API 36 or higher.
+An app that targets an older API got the database version and the random
+uuid of the media database, equal for every app and stable until the
+database is reset, so two such apps could tell they share a device. The
+lockdown is now on for every caller; the value is a hash of the uuid and
+the uid, different per app.
+---
+ src/com/android/providers/media/MediaProvider.java | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/src/com/android/providers/media/MediaProvider.java b/src/com/android/providers/media/MediaProvider.java
+index f259f9c..24f5db4 100644
+--- a/src/com/android/providers/media/MediaProvider.java
++++ b/src/com/android/providers/media/MediaProvider.java
+@@ -147,7 +147,6 @@ import static com.android.providers.media.PickerUriResolver.PICKER_TRANSCODED_SE
+ import static com.android.providers.media.PickerUriResolver.getMediaUri;
+ import static com.android.providers.media.flags.Flags.enableSpecialFormatColumn;
+ import static com.android.providers.media.flags.Flags.indexMediaLatitudeLongitude;
+-import static com.android.providers.media.flags.Flags.versionLockdown;
+ import static com.android.providers.media.localsearch.MediaProcessingStatus.FILE_ID_COLUMN;
+ import static com.android.providers.media.localsearch.MediaProcessingStatus.MEDIA_PROCESSING_STATUS_TABLE;
+ import static com.android.providers.media.localsearch.ProcessingUtils.isDefaultSearchMediaServiceSupported;
+@@ -8283,8 +8282,11 @@ public class MediaProvider extends ContentProvider {
+ 
+     @VisibleForTesting
+     boolean shouldLockdownMediaStoreVersion() {
+-        return versionLockdown() && CompatChanges.isChangeEnabled(
+-                LOCKDOWN_MEDIASTORE_VERSION, mCallingIdentity.get().uid);
++        // FreeholdOS: always on. Upstream applies the lockdown only to apps that target API 36 or
++        // higher, so an app that targets an older API read the raw version and the random uuid of
++        // the media database, the same value for every app on the device and stable until the
++        // database is reset: a device identifier. Every app now gets a hash that differs per app.
++        return true;
+     }
+ 
+     @NotNull
+-- 
+2.56.0
+

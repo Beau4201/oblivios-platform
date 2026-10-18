@@ -6,10 +6,15 @@ import os, subprocess, sys, tempfile
 src = open(sys.argv[1]).read()
 here = os.path.dirname(os.path.abspath(__file__))
 mutants = {
-    "allow device_name": ('"show_ime_with_hard_keyboard");', '"show_ime_with_hard_keyboard", "device_name");'),
+    "allow device_name": ('"accessibility_captioning_font_scale");', '"accessibility_captioning_font_scale", "device_name");'),
     "drop font_scale": ('"font_scale", ', ''),
-    "drop user_rotation": ('"accelerometer_rotation", "user_rotation", "show_ime_with_hard_keyboard")', '"accelerometer_rotation", "user_rotation")'),
-    "drop show_ime": ('"user_rotation", "show_ime_with_hard_keyboard")', '"user_rotation")'),
+    "drop user_rotation": ('"accelerometer_rotation", "user_rotation", "show_ime_with_hard_keyboard",', '"accelerometer_rotation", "show_ime_with_hard_keyboard",'),
+    "drop show_ime": ('"user_rotation", "show_ime_with_hard_keyboard",', '"user_rotation",'),
+    "drop device_provisioned": ('"device_provisioned", "user_setup_complete",', '"user_setup_complete",'),
+    "drop user_setup_complete": ('"device_provisioned", "user_setup_complete",', '"device_provisioned",'),
+    "drop tts_default_synth": ('"tts_default_synth", "tts_default_locale",', '"tts_default_locale",'),
+    "drop key_repeat_delay": ('"key_repeat_timeout", "key_repeat_delay",', '"key_repeat_timeout",'),
+    "drop caption typeface": ('"accessibility_captioning_typeface", "accessibility_captioning_font_scale");', '"accessibility_captioning_font_scale");'),
     "prefix match": ("ALLOWED_FOR_APPS.contains(name)", "ALLOWED_FOR_APPS.stream().anyMatch(name::startsWith)"),
     "case fold": ("ALLOWED_FOR_APPS.contains(name)", "ALLOWED_FOR_APPS.contains(name.toLowerCase())"),
     "allow null": ("return name != null && ALLOWED_FOR_APPS.contains(name);", "return name == null || ALLOWED_FOR_APPS.contains(name);"),

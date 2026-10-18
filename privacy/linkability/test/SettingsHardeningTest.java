@@ -1,8 +1,9 @@
 package com.android.providers.settings;
 
 /**
- * Host check of SettingsHardening: the allowlist is exactly the 15 keys of the design and nothing
- * near them passes. Run by run-settings-test.sh (javac and java, no Android).
+ * Host check of SettingsHardening: the allowlist is exactly the keys below (the 15 of the design
+ * plus the in-process readers that the whole-branch review found) and nothing near them passes.
+ * Run by run-settings-test.sh (javac and java, no Android).
  */
 public final class SettingsHardeningTest {
     private static void check(boolean condition, String what) {
@@ -16,7 +17,22 @@ public final class SettingsHardeningTest {
                 "transition_animation_scale", "window_animation_scale", "android_id",
                 "long_press_timeout", "multi_press_timeout", "speak_password", "show_password",
                 "font_scale", "time_12_24", "date_format", "accelerometer_rotation",
-                "user_rotation", "show_ime_with_hard_keyboard"};
+                "user_rotation", "show_ime_with_hard_keyboard",
+                // read by TextView and PhoneFallbackEventHandler in the app process; 1 after setup
+                "device_provisioned", "user_setup_complete",
+                // TtsEngines and TextToSpeechService: the engine, locale, rate and pitch of the user
+                "tts_default_synth", "tts_default_locale", "tts_default_rate", "tts_default_pitch",
+                // TextKeyListener, ShowSecretsSetting, ViewConfiguration
+                "auto_caps", "auto_replace", "auto_punctuate", "show_password_touch",
+                "show_password_physical", "key_repeat_timeout", "key_repeat_delay",
+                "accessibility_text_cursor_blink_interval_ms",
+                // CaptioningManager: how the app draws the captions of the user
+                "accessibility_captioning_enabled", "accessibility_captioning_locale",
+                "accessibility_captioning_easy_reader_enabled", "accessibility_captioning_preset",
+                "accessibility_captioning_background_color",
+                "accessibility_captioning_foreground_color", "accessibility_captioning_edge_type",
+                "accessibility_captioning_edge_color", "accessibility_captioning_window_color",
+                "accessibility_captioning_typeface", "accessibility_captioning_font_scale"};
         for (String key : allowed) {
             check(SettingsHardening.isAllowedForApps(key), "allowed: " + key);
         }

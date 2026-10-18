@@ -1,6 +1,6 @@
-# Source record: linkability closures (ADR-173, batches 3 to 6)
+# Source record: linkability closures (ADR-174 and ADR-175, batches 3 to 6)
 
-Design: `docs/superpowers/specs/2026-10-18-linkability-kills-design.md` and plan `docs/superpowers/plans/2026-10-18-linkability-batches-3-6.md` in `freeholdos-foundation`. Authored 2026-10-18 in the disposable repositories under `.worktrees/linkability-2`; nothing is landed on the build server and nothing is built.
+Design: `docs/superpowers/specs/2026-10-18-linkability-kills-design.md` and plan `docs/superpowers/plans/2026-10-18-linkability-batches-3-6.md` in `freeholdos-foundation`. Patches 0001 to 0005 of `frameworks-base`, `packages-modules-connectivity/0001` and `system-sepolicy/0001` were authored 2026-10-18 in the disposable repositories under `.worktrees/linkability-2`; `frameworks-base/0006`, `0007` and `packages-providers-mediaprovider/0001` after the whole-branch review, under `.worktrees/linkability-3` and `linkability-3-mp`. All ten are landed on the build server (branch `freeholdos-2026100600` in each project) and module-built (`LNK-011`); no image carries them.
 
 ## Base
 
@@ -11,6 +11,8 @@ Files read read-only from the build server on 2026-10-18, trees clean:
 | `packages/modules/Connectivity` (detached at the tag) | `6ab5be47d4` | `bpf/progs/netd.c`, `service/src/com/android/server/BpfNetMaps.java` | `de72e5403190` to `03125ea0316b`; `426a356526bb` to `2ac530ebc250` |
 | `frameworks/base` (branch `freeholdos-2026100600`) | `e9f0c1e67143` | `core/res/AndroidManifest.xml`, `core/res/res/values/config_ext.xml`, `core/java/android/os/VibratorInfo.java`, the clipboard service and access classes, `VibratorManagerService.java`, `SettingsProvider.java` and the new `SettingsHardening.java` | `0401d67967bb` to `5a88775335b3`; `bd323af7a017` to `f4455547f3be`; `8e10dd750652` to `acf7bd8a8929`; `e98788442b79` to `0d5353fa32e2` and `f89f3b16d97d` to `1eec110f5d98`; `3ac6a03f6a77` to `caf32300391f`; `1fbd8bccb698` to `07aa020df254`; new file `c848deda3ff7` |
 | `system/sepolicy` (branch `freeholdos-2026100600`, after `privacy/identity-surface` `0002`) | `fa4586a64` | `private/property.te`, `private/property_contexts`, `private/domain.te` | `a38966397c5e` to `279ee5887df0`; `046bd635cc82` to `6da70c6697bb`; `a44c6df6f433` to `ee2d5a3dd043` |
+| `frameworks/base`, review fixes (after the five commits above, `f6e5f89482b9`) | `f6e5f89482b9` | `SettingsHardening.java`, `ClipboardService.java` | `c848deda3ff7` to `66a2d00650cc`; `1eec110f5d98` to `b35778abb95d` |
+| `packages/providers/MediaProvider` (detached at the tag, new branch) | `db0779586e` | `src/com/android/providers/media/MediaProvider.java` | `f259f9c572ce` to `24f5db481012` |
 
 ## Patches
 
@@ -22,8 +24,11 @@ Files read read-only from the build server on 2026-10-18, trees clean:
 | `frameworks-base/0003`, `0005` | `SettingsProvider`: an ordinary app reads only the settings it needs | 262 settings are readable by every app and are together a fingerprint, with `boot_count` and `device_name` among them. An app that is not a system app, platform-signed or test-only sees 15 keys and every other key reads as unset. `freeholdos_settings_open` = 1 switches it off; `freeholdos_settings_real_packages` names packages that read the real values. |
 | `frameworks-base/0004` | Vibrator: give apps a rounded calibration of the motor | The resonant frequency, the Q factor and the acceleration curve are measured per unit. An app gets 10 Hz and 0.5 steps and no curve; the system gets the measured values. The curve-less `FrequencyProfile` logs `Invalid frequency profile received from HAL` once per app call (the constructor treats missing arrays as invalid); the resonant frequency is kept. |
 | `system-sepolicy/0001` | hide the device colour and the country of origin from third-party apps | `ro.boot.hardware.color` and `.coo` get the type `batch_trait_prop`, readable by every domain except the apps and the app zygotes, and by `platform_app` (SystemUI), `priv_app` (launcher) and `system_app` (Settings). Apply after `privacy/identity-surface` `system-sepolicy/0002`. |
+| `frameworks-base/0006` | `SettingsProvider`: let apps read the settings the framework reads in-process | The first reader search missed `device_provisioned`, `user_setup_complete`, the speech engine keys, typing aids and caption style keys that the framework reads in the app process; hidden, every app lost Share and the smart-selection actions and ignored the speech engine of the user. 25 keys added (40 in all, ADR-175). |
+| `frameworks-base/0007` | Clipboard: let the owner and a paste-grant holder hear a clip change | The listener condition of `0002` used the persistent read switch alone, off by default, so the app that set a clip and an app with a paste grant stopped hearing changes. A listener now hears a change unless `getPayloadReadAccessLocked` is `DENIED`. |
+| `packages-providers-mediaprovider/0001` | MediaProvider: give every app the hashed MediaStore version | The lockdown that replaces the raw database uuid by a per-app hash was a compat change enabled from API 36, so an app that targets an older API read a device-wide identifier. It is on for every caller. |
 
-Conflict surface on a new upstream release: the `same_profile` branch of `uids_have_loopback_permissions`; the `USE_LOOPBACK_INTERFACE` block of `core/res/AndroidManifest.xml`; `setting_default_allow_clipboard_read`; `getPrimaryClipDescriptionLocked`, `hasClipboardTextLocked` and `sendClipChangedBroadcast`; the getters and bulk loops of `SettingsProvider`; `getVibratorInfo`; the `unit_boot_prop` lines of `domain.te` and `property.te`.
+Conflict surface on a new upstream release: `shouldLockdownMediaStoreVersion` and the `sendClipChangedBroadcast` listener condition (clipboard); the `same_profile` branch of `uids_have_loopback_permissions`; the `USE_LOOPBACK_INTERFACE` block of `core/res/AndroidManifest.xml`; `setting_default_allow_clipboard_read`; `getPrimaryClipDescriptionLocked`, `hasClipboardTextLocked` and `sendClipChangedBroadcast`; the getters and bulk loops of `SettingsProvider`; `getVibratorInfo`; the `unit_boot_prop` lines of `domain.te` and `property.te`.
 
 ## Apply
 
@@ -31,6 +36,7 @@ On the build server, with no build running and the trees clean, after `privacy/i
 
     cd packages/modules/Connectivity && git switch -c freeholdos-2026100600 && git am <path>/privacy/linkability/patches/packages-modules-connectivity/0001-*.patch
     cd frameworks/base && git am <path>/privacy/linkability/patches/frameworks-base/000*.patch
+    cd packages/providers/MediaProvider && git switch -c freeholdos-2026100600 && git am <path>/privacy/linkability/patches/packages-providers-mediaprovider/0001-*.patch
     cd system/sepolicy && git am <path>/privacy/linkability/patches/system-sepolicy/0001-*.patch
 
 ## Verification so far (host only)
