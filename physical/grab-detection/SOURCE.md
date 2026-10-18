@@ -23,7 +23,7 @@ Authored in the disposable repositories `.worktrees/grab-detection-fwb` and `.wo
 | `frameworks-base/0006` | keep exceptions off the handler thread, log untouched peaks, cancel the timer if the keyguard does not show | Follows the review: `lockNow()` only posts the lock, and an exception on the service thread would take `system_server` down. |
 | `frameworks-base/0007` | `@hide` tags on their own line, one message text for every credential type | Matches the neighbouring keys; the stock lockdown text names the PIN only. |
 | `frameworks-base/0008` | pass the settings to `BouncerMessageInteractor` in the SystemUI test fixture | `0004` added the `globalSettings` constructor argument; the Kosmos fixture builds the class with named arguments and no longer compiled. Test code only, not part of the product build. |
-| `frameworks-base/0009` | lock at once on a hard impact, with or without touch | The pull rule needs touch, a release and continued movement; the owner's grabs without touch, or after which the thief stands still, never met it (ADR-176, `Proposed`). Adds the key `grab_impact_peak_dms2` and one route in `GrabDetector`; not landed. |
+| `frameworks-base/0009` | lock at once on a hard impact, with or without touch | The pull rule needs touch, a release and continued movement; the owner's grabs without touch, or after which the thief stands still, never met it (ADR-176, `Proposed`). Adds the key `grab_impact_peak_dms2` and one route in `GrabDetector`. |
 | `packages-apps-Settings/0001` | switch for grab detection | The mode needs an owner-visible control. |
 
 Conflict surface on a new upstream release: the `Settings.Global` block after `AUTO_REBOOT_TIMEOUT`, `ExtSettings` after `AUTO_REBOOT_TIMEOUT`, the `StartSensorNotification` block of `SystemServer`, `KeyguardServiceDelegate.onShowingStateChanged`, the user-lockdown branch of `BouncerMessageInteractor`, and the first `Preference` after `auto_reboot` in `exploit_protection_settings.xml`.
@@ -49,6 +49,7 @@ On the build server 2026-10-15 with `git am`, trees clean and no build running, 
 | `frameworks-base/0006` | `c5569e8b39d7` |
 | `frameworks-base/0007` | `42a79c600313` |
 | `frameworks-base/0008` | `2e4c21be56a4` (2026-10-15, on top of the rename commit `e6a271d588f8`, branch `freeholdos-2026100600`) |
+| `frameworks-base/0009` | `3b0677c8531a` (2026-10-18, branch `freeholdos-2026100600`, trees clean, no build running; the blobs differ from the worktree because the server tree holds later commits in the same files) |
 | `packages-apps-Settings/0001` | `f70f1e9fb78` |
 
 The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packages/apps/Settings`) equals the blob id in the worktree at its tip.
@@ -56,7 +57,7 @@ The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packa
 ## Verification
 
 - Host: `test/run.sh` and `test/mutate.py`, 26 of 26 mutants killed (2026-10-15).
-- Host, with `0009` (worktree `.worktrees/grab-detection-fwb`, branch `impact-route`, tip `3a56f88`): `all passed`, 35 of 35 mutants killed (2026-10-18). `0009` is not yet landed on the build server, not built and not replayed from the exported patches.
+- Host, with `0009` (worktree `.worktrees/grab-detection-fwb`, branch `impact-route`, tip `3a56f88`): `all passed`, 35 of 35 mutants killed (2026-10-18). The same test and mutants also pass on `GrabDetector.java` read from the build server after `git am` (2026-10-18). Module build `m -j6 -k services SystemUI Settings` for `lynx-cur-userdebug` with `0009` landed: exit 0, 42:30, no `FAILED:` or `error:` line (`GRB-002`); no image, no device check (`GRB-018`).
 - Replay: the seven `frameworks-base` patches and the `Settings` patch applied to the baseline reproduce the worktree trees (2026-10-15).
 - Not run: a device check (`GRB-003` to `GRB-017`).
 - Build: `m -j6 -k services SystemUI Settings` for `lynx-cur-userdebug` passed on the landed trees (2026-10-15, exit 0, no `FAILED:` or `error:` line; `GRB-002`). Module outputs only, no image.
