@@ -1,0 +1,32 @@
+From 35b54c20e030d7f55051d2152de661494549af73 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 19:55:56 +0200
+Subject: [PATCH] Connectivity: allow the OEM network preference on phones
+
+setOemNetworkPreference() threw on every device without FEATURE_AUTOMOTIVE for
+the production preferences, so the per-uid network selection of
+OemNetworkPreferences could not be used on a phone. Drop that gate and keep the
+CONTROL_OEM_PAID_NETWORK_PREFERENCE check; the test preferences and the
+validation are unchanged.
+---
+ service/src/com/android/server/ConnectivityService.java | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/service/src/com/android/server/ConnectivityService.java b/service/src/com/android/server/ConnectivityService.java
+index 2503979890..3c1f27867d 100644
+--- a/service/src/com/android/server/ConnectivityService.java
++++ b/service/src/com/android/server/ConnectivityService.java
+@@ -15984,7 +15984,9 @@ public class ConnectivityService extends IConnectivityManager.Stub
+         if (isValidTestOemNetworkPreference(preference)) {
+             enforceManageTestNetworksPermission();
+         } else {
+-            enforceAutomotiveDevice();
++            // FreeholdOS: the automotive-only gate is dropped. The per-app network preference is what
++            // routes each app to its own network on a phone (ADR-178); the permission check stays, so only
++            // the platform component that holds CONTROL_OEM_PAID_NETWORK_PREFERENCE can set it.
+             enforceOemNetworkPreferencesPermission();
+             validateOemNetworkPreferences(preference);
+         }
+-- 
+2.39.5
+
