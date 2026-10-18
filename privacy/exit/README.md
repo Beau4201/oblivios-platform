@@ -1,6 +1,6 @@
 # exit
 
-One patch for the per-app network exit of Strangers (ADR-178, proposed). The design is
+One patch for the per-app network exit of Compartments (ADR-178, proposed). The design is
 `docs/superpowers/specs/2026-10-18-network-exit-design.md` in `freeholdos-foundation`. Landed on the build server
 2026-10-18; no image carries it yet. `SOURCE.md` holds the base revision and the reason.
 
