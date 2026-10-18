@@ -90,6 +90,21 @@ public final class GrabDetectorTest {
         return decisions;
     }
 
+    /** The number of decisions the detector gives for a scenario. */
+    private static int countDecisions(GrabDetector d, Scenario s, long endMs) {
+        int n = 0;
+        for (long t = 0; t <= endMs; t += STEP_MS) {
+            for (Map.Entry<Long, Boolean> e : s.touch.subMap(t - STEP_MS, false, t, true)
+                    .entrySet()) {
+                d.onTouch(e.getKey(), e.getValue());
+            }
+            if (d.onAccel(t, 0f, 0f, G + (float) s.dev.applyAsDouble(t)) != null) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     public static void main(String[] args) {
         // a pull out of the fingers that keeps moving triggers, and says why
         Scenario s = snatch();
@@ -256,6 +271,61 @@ public final class GrabDetectorTest {
                 .dev(t -> t == 1000 ? 25 : t < 1000 ? 0.2 : 4).run(new GrabDetector(P), 4000);
         check("a release followed by a new touch does not count",
                 d != null && !d.trigger && !d.released);
+
+        // an impact triggers at once: no touch, and the phone stands still afterwards (the thief
+        // grabs it and stops)
+        Params imp = new Params(15f, 400, 150, 200, 800, 1.5f, 2000, 30f);
+        s = new Scenario().dev(t -> t == 1000 ? 40 : 0.1);
+        d = s.run(new GrabDetector(imp), 4000);
+        check("an impact without touch triggers at the peak",
+                d != null && d.trigger && s.decidedAtMs == 1000);
+        check("an impact says it is an impact", d != null && d.impact && !d.touched);
+        check("an impact reports its peak", d != null && Math.abs(d.peak - 40f) < 0.01f);
+
+        // with a finger on the screen the impact decides once, and the pull rule that started
+        // on the same peak does not decide a second time
+        Scenario touchedImpact = new Scenario().touch(500, true).touch(1000, true)
+                .touch(1020, false).dev(t -> t == 1000 ? 40 : 4);
+        d = touchedImpact.run(new GrabDetector(imp), 4000);
+        check("an impact with touch is marked touched", d != null && d.impact && d.touched);
+        check("an impact with touch decides once",
+                countDecisions(new GrabDetector(imp), touchedImpact, 4000) == 1);
+
+        // an impact that arrives while a pull candidate is pending ends that candidate: one
+        // decision, not a second one when the cool-down is over
+        Scenario inside = new Scenario().touch(500, true).touch(1000, true)
+                .dev(t -> t == 1000 ? 20 : t == 1200 ? 40 : 4);
+        d = inside.run(new GrabDetector(imp), 5000);
+        check("an impact inside a pending candidate decides", d != null && d.impact && d.trigger);
+        check("an impact ends the pending candidate",
+                countDecisions(new GrabDetector(imp), inside, 5000) == 1);
+
+        // the comparison is >=: exactly at the threshold triggers, just below is the pull rule
+        float zImp = G + 30f;
+        Params impEdge = new Params(15f, 400, 150, 200, 800, 1.5f, 2000, devOf(zImp));
+        d = new Scenario().dev(t -> t == 1000 ? devOf(zImp) : 0.1).run(new GrabDetector(impEdge), 4000);
+        check("an impact exactly at the threshold triggers", d != null && d.impact && d.trigger);
+        d = new Scenario().dev(t -> t == 1000 ? 29.9 : 0.1).run(new GrabDetector(imp), 4000);
+        check("a peak just below the impact threshold does not trigger",
+                d != null && !d.impact && !d.trigger);
+
+        // a threshold of zero turns the route off: a hard peak is only reported
+        d = new Scenario().dev(t -> t == 1000 ? 200 : 0.1).run(new GrabDetector(P), 4000);
+        check("without an impact threshold a hard peak does not trigger",
+                d != null && !d.impact && !d.trigger);
+
+        // the cool-down holds for impacts: a second one inside it is ignored, one after it is not
+        check("a second impact inside the cool-down is ignored", countDecisions(
+                new GrabDetector(imp), new Scenario().dev(t -> (t == 1000 || t == 2100) ? 40 : 0.1),
+                5000) == 1);
+        check("an impact after the cool-down triggers again", countDecisions(
+                new GrabDetector(imp), new Scenario().dev(t -> (t == 1000 || t == 3100) ? 40 : 0.1),
+                5000) == 2);
+
+        // the pull rule is untouched: a snatch that keeps moving still triggers, with no impact
+        d = snatch().run(new GrabDetector(imp), 4000);
+        check("the pull rule still triggers with the impact route on",
+                d != null && d.trigger && !d.impact);
 
         System.out.println(failures == 0 ? "all passed" : failures + " FAILED");
         System.exit(failures == 0 ? 0 : 1);

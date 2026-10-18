@@ -1,0 +1,156 @@
+From 3a56f886706deb1b8841c218bbe52204ef546a22 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 17:58:07 +0200
+Subject: [PATCH] grab: lock at once on a hard impact, with or without touch
+
+A thief who grabs the phone and stands still, or whose grab leaves no touch on the screen, never meets the pull rule: it needs touch, a release and continued movement. A hard acceleration peak while the phone is in use now triggers on its own (default 30 m/s^2, tunable, 0 turns it off). A drop or a hard set-down locks the phone too; that is accepted.
+---
+ .../android/ext/settings/ExtSettings.java     |  5 ++++
+ core/java/android/provider/Settings.java      |  7 +++++
+ .../server/grab/GrabDetectionService.java     | 17 +++++++----
+ .../com/android/server/grab/GrabDetector.java | 29 +++++++++++++++++++
+ 4 files changed, 52 insertions(+), 6 deletions(-)
+
+diff --git a/core/java/android/ext/settings/ExtSettings.java b/core/java/android/ext/settings/ExtSettings.java
+index 1af4f3c..ed6c50a 100644
+--- a/core/java/android/ext/settings/ExtSettings.java
++++ b/core/java/android/ext/settings/ExtSettings.java
+@@ -64,6 +64,11 @@ public class ExtSettings {
+     public static final IntSetting GRAB_SUSTAIN_ENERGY = new IntSetting(
+             Setting.Scope.GLOBAL, Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2, 15);
+ 
++    // 30 m/s^2: above the hardest handling peak measured on lynx on 2026-10-18 (27.0), below the
++    // grabs with a hand on the screen (31 to 124) and a drop on a bed (33 to 114)
++    public static final IntSetting GRAB_IMPACT_PEAK = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_IMPACT_PEAK_DMS2, 300);
++
+     public static final BoolSetting SCREENSHOT_TIMESTAMP_EXIF = new BoolSetting(
+             Setting.Scope.PER_USER, Settings.Secure.SCREENSHOT_TIMESTAMP_EXIF, false);
+ 
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index e9d6cb9..01baab5 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -14502,6 +14502,13 @@ public final class Settings {
+          */
+         public static final String GRAB_SUSTAIN_ENERGY_DMS2 = "grab_sustain_energy_dms2";
+ 
++        /**
++         * Deviation of the acceleration from gravity that locks the phone at once, with or without
++         * touch and whatever the phone does afterwards, in 0.1 m/s^2; 0 turns it off
++         * @hide
++         */
++        public static final String GRAB_IMPACT_PEAK_DMS2 = "grab_impact_peak_dms2";
++
+         /**
+          * 1 from a grab lock until the next unlock; read by the message above the PIN entry
+          * @hide
+diff --git a/services/core/java/com/android/server/grab/GrabDetectionService.java b/services/core/java/com/android/server/grab/GrabDetectionService.java
+index fa53392..6157280 100644
+--- a/services/core/java/com/android/server/grab/GrabDetectionService.java
++++ b/services/core/java/com/android/server/grab/GrabDetectionService.java
+@@ -140,7 +140,7 @@ public class GrabDetectionService extends SystemService {
+                 Settings.Global.GRAB_DETECTION_MODE, Settings.Global.GRAB_PEAK_DMS2,
+                 Settings.Global.GRAB_TOUCH_WINDOW_MS, Settings.Global.GRAB_TOUCH_LOSS_MS,
+                 Settings.Global.GRAB_SETTLE_MS, Settings.Global.GRAB_SUSTAIN_MS,
+-                Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2}) {
++                Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2, Settings.Global.GRAB_IMPACT_PEAK_DMS2}) {
+             ctx.getContentResolver().registerContentObserver(
+                     Settings.Global.getUriFor(key), false, observer);
+         }
+@@ -196,7 +196,8 @@ public class GrabDetectionService extends SystemService {
+                 ExtSettings.GRAB_SETTLE_MS.get(c),
+                 ExtSettings.GRAB_SUSTAIN_MS.get(c),
+                 ExtSettings.GRAB_SUSTAIN_ENERGY.get(c) / 10f,
+-                COOLDOWN_MS));
++                COOLDOWN_MS,
++                ExtSettings.GRAB_IMPACT_PEAK.get(c) / 10f));
+         if (!mSensorManager.registerListener(mSensorListener, mAccelerometer,
+                 SensorManager.SENSOR_DELAY_GAME, mHandler)) {
+             Slog.w(TAG, "accelerometer not registered, not armed");
+@@ -270,14 +271,18 @@ public class GrabDetectionService extends SystemService {
+         final int mode = ExtSettings.GRAB_DETECTION_MODE.get(getContext());
+         // the shadow log: sensor magnitudes and intervals only, no coordinates, no location;
+         // values in m/s^2, the settings keys take tenths of them
+-        if (!x.touched) {
++        if (x.impact) {
++            Slog.i(TAG, String.format(Locale.ROOT, "impact peak=%.1f touched=%b mode=%d",
++                    x.peak, x.touched, mode));
++        } else if (!x.touched) {
+             Slog.i(TAG, String.format(Locale.ROOT, "peak without touch peak=%.1f mode=%d",
+                     x.peak, mode));
+             return;
++        } else {
++            Slog.i(TAG, String.format(Locale.ROOT, "candidate trigger=%b peak=%.1f released=%b "
++                    + "releaseDeltaMs=%d energy=%.2f mode=%d",
++                    x.trigger, x.peak, x.released, x.releaseDeltaMs, x.energy, mode));
+         }
+-        Slog.i(TAG, String.format(Locale.ROOT,
+-                "candidate trigger=%b peak=%.1f released=%b releaseDeltaMs=%d energy=%.2f mode=%d",
+-                x.trigger, x.peak, x.released, x.releaseDeltaMs, x.energy, mode));
+         if (x.trigger && mode == ExtSettings.GRAB_DETECTION_ACTIVE) {
+             try {
+                 lockAndArmRestart();
+diff --git a/services/core/java/com/android/server/grab/GrabDetector.java b/services/core/java/com/android/server/grab/GrabDetector.java
+index 1495c25..9f6d1a1 100644
+--- a/services/core/java/com/android/server/grab/GrabDetector.java
++++ b/services/core/java/com/android/server/grab/GrabDetector.java
+@@ -40,9 +40,21 @@ public final class GrabDetector {
+         public final float sustainEnergy;
+         /** After a decision, new peaks are ignored for this long. */
+         public final long cooldownMs;
++        /**
++         * Deviation from gravity that triggers at once, with or without touch and whatever the
++         * phone does afterwards. Zero or less turns this route off.
++         */
++        public final float impactPeak;
+ 
+         public Params(float peak, long touchWindowMs, long touchLossMs, long settleMs,
+                 long sustainMs, float sustainEnergy, long cooldownMs) {
++            this(peak, touchWindowMs, touchLossMs, settleMs, sustainMs, sustainEnergy, cooldownMs,
++                    0f);
++        }
++
++        public Params(float peak, long touchWindowMs, long touchLossMs, long settleMs,
++                long sustainMs, float sustainEnergy, long cooldownMs, float impactPeak) {
++            this.impactPeak = impactPeak;
+             this.peak = peak;
+             this.touchWindowMs = touchWindowMs;
+             this.touchLossMs = touchLossMs;
+@@ -65,9 +77,17 @@ public final class GrabDetector {
+         public final boolean released;
+         public final long releaseDeltaMs;
+         public final float energy;
++        /** True when the verdict came from {@code impactPeak} alone, not from the pull rule. */
++        public final boolean impact;
+ 
+         Decision(boolean trigger, boolean touched, float peak, boolean released,
+                 long releaseDeltaMs, float energy) {
++            this(trigger, touched, peak, released, releaseDeltaMs, energy, false);
++        }
++
++        Decision(boolean trigger, boolean touched, float peak, boolean released,
++                long releaseDeltaMs, float energy, boolean impact) {
++            this.impact = impact;
+             this.trigger = trigger;
+             this.touched = touched;
+             this.peak = peak;
+@@ -142,6 +162,15 @@ public final class GrabDetector {
+         final double dev = Math.abs(
+                 Math.sqrt((double) x * x + (double) y * y + (double) z * z) - (double) GRAVITY);
+ 
++        // A hard impact while the phone is in use triggers at once. A grab that ends with the
++        // thief standing still, or without a finger on the screen, never meets the pull rule below
++        // (measured on lynx, 2026-10-18); locking after a drop or a hard set-down is accepted.
++        if (mParams.impactPeak > 0 && dev >= mParams.impactPeak) {
++            mPending = false;
++            mIgnoreUntilMs = tMs + mParams.cooldownMs;
++            return new Decision(true, touchedRecently(tMs), (float) dev, false, 0, 0f, true);
++        }
++
+         if (!mPending) {
+             if (dev < mParams.peak) {
+                 return null;
+-- 
+2.56.0
+
