@@ -1,6 +1,6 @@
 # Source record: linkability closures (ADR-174 and ADR-175, batches 3 to 6)
 
-Design: `docs/superpowers/specs/2026-10-18-linkability-kills-design.md` and plan `docs/superpowers/plans/2026-10-18-linkability-batches-3-6.md` in `freeholdos-foundation`. Patches 0001 to 0005 of `frameworks-base`, `packages-modules-connectivity/0001` and `system-sepolicy/0001` were authored 2026-10-18 in the disposable repositories under `.worktrees/linkability-2`; `frameworks-base/0006`, `0007` and `packages-providers-mediaprovider/0001` after the whole-branch review, under `.worktrees/linkability-3` and `linkability-3-mp`. All ten are landed on the build server (branch `freeholdos-2026100600` in each project) and module-built (`LNK-011`); no image carries them.
+Design: `docs/superpowers/specs/2026-10-18-linkability-kills-design.md` in `freeholdos-foundation`. Patches 0001 to 0005 of `frameworks-base`, `packages-modules-connectivity/0001` and `system-sepolicy/0001` were authored 2026-10-18 in the disposable repositories under `.worktrees/linkability-2`; `frameworks-base/0006`, `0007` and `packages-providers-mediaprovider/0001` after the whole-branch review, under `.worktrees/linkability-3` and `linkability-3-mp`. All ten are landed on the build server (branch `freeholdos-2026100600` in each project) and module-built (`LNK-011`); no image carries them.
 
 ## Base
 
