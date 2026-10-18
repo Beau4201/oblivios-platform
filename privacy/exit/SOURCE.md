@@ -18,7 +18,7 @@ Conflict surface on a new upstream release: `setOemNetworkPreference` (the `else
 
 ## Checks
 
-`NET-001a` (current image, test preference) passed; `NET-001b` (production preference on an image with this patch) is `NOT_RUN`. Module build: not run yet.
+`NET-001a` (current image, test preference) passed; `NET-001b` (production preference on an image with this patch) is `NOT_RUN`. Module build: `build-exit-modules.sh` (`m -j6 -k com.android.tethering`) passed 2026-10-18 (`EXIT_MODULES_EXIT_CODE:0`, 03:39, no `FAILED:` line); `javap -c -p` of the built `service-connectivity-pre-jarjar.jar` shows no call to `enforceAutomotiveDevice`, and the permission checks of `setOemNetworkPreference` unchanged.
 
 ## Apply
 
