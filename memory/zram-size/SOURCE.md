@@ -26,6 +26,15 @@ pin of `lynx` and `stallion` was updated to `c0fa4e99` (copies kept as
 | `0001` | raise the zram swap capacity to 100% of RAM | `config/device/common/sysprop-inclusion.yml` (two lines removed), `config/mk/google_devices/common/device-common.mk` (one property and a comment) | The stock value is `mmd.zram.size=50%`. Secure app spawning makes every app process about 43 MB larger and not shareable, so the swap fills about 30 s after unlock and lmkd kills apps. lmkd counts free swap below 10% of the total as low, so only 90% of the capacity is usable. With the same load 80% was below that line 55% of the time and 100% never, at the same physical zram (see Verification). |
 | `0002` | exclude the stock zram size by key | `config/device/common/sysprop-exclusion.yml` (two entries added) | Dropping the value from the inclusion list (`0001`) is not enough: adevtool includes an entry that is on neither list. `generate-all` on tag 2026100600 with `0001` alone put `mmd.zram.size=50%` back into `product.prop`, a second value that fails `post_process_props.py`. |
 
+| `0003` | give the vendor zram size property its 100% default | `config/mk/google_devices/common/device-common.mk` (one property, comments) | The `stallion` vendor image runs `setprop mmd.zram.size ${persist.vendor.zram_swap_size_v2:-50%}` in `init.zumapro.board.rc` (trigger `load_persist_props_action`, after `build.prop`), which overwrote `0001`'s 100%: `stallion` `2026101405` read `SwapTotal` 3749052 kB of 7498116 kB (2026-10-18, `build.prop` of that image holds `mmd.zram.size=100%` on line 184). The `lynx` vendor image has no such line. Setting the property that script reads makes it yield 100%. A value stored in `/data/property` would still win. |
+
+`0003` was authored on `b3c9caf4` (`freeholdos-2026100600`, clean tree, `device-common.mk` blob
+`37fb8c91` on the build server and in the disposable repository before the edit; `0071a92b` after)
+and is not landed. `git am` of it on a copy of that blob gives `0071a92b`. Once landed, the pin of
+every built device needs the update described below. After a `stallion` build,
+`grep '^persist.vendor.zram_swap_size_v2' <product-out>/product/etc/build.prop` must print
+`persist.vendor.zram_swap_size_v2=100%`, and on the device `SwapTotal` must be about `MemTotal`.
+
 The exported `0001` is the squash of two landed commits: the 80% commit `ccc1d8db` and the 100%
 commit `c0fa4e99` that rewrote its value. Applied to the same base, the two give the same tree
 as the one patch (checked on 2026-10-13 in a disposable repository seeded from the build

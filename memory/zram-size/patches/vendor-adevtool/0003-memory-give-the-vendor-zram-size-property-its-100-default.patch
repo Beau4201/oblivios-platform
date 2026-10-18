@@ -1,0 +1,53 @@
+From 3fbc3a783cf3e415a28649cf32cc28cc93ca537d Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sun, 18 Oct 2026 15:53:51 +0200
+Subject: [PATCH] memory: give the vendor zram size property its 100% default
+
+On stallion the vendor init script init.zumapro.board.rc runs
+"setprop mmd.zram.size ${persist.vendor.zram_swap_size_v2:-50%}" in
+load_persist_props_action, after build.prop is loaded. It overwrote
+mmd.zram.size=100%, so the 2026101405 image ran with a swap of 50% of RAM
+(SwapTotal 3749052 kB of 7498116 kB, swap full, zram physical 0.85 GB).
+
+Set the property that script reads to 100% as well, so the script itself
+yields 100%. lynx has no such script and keeps using mmd.zram.size.
+
+Also drop a comment sentence about the flash writeback ceiling that the
+measurements contradict.
+---
+ config/mk/google_devices/common/device-common.mk | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
+index 37fb8c9..0071a92 100644
+--- a/config/mk/google_devices/common/device-common.mk
++++ b/config/mk/google_devices/common/device-common.mk
+@@ -96,9 +96,8 @@ PRODUCT_PACKAGES_DEBUG += \
+ # Secure app spawning makes every app process about 43 MB larger and not shareable with
+ # the zygote, so with 50% the swap is full about 30 s after unlock and lmkd kills apps.
+ # zram is compressed RAM that is used only when filled (about 4.5x measured), so the
+-# raise costs no memory until it is needed. The flash writeback ceiling does not grow
+-# with it: mmd's idle writeback limit scales with used/total zram and is capped by
+-# mmd.zram.writeback.max_bytes and device_size. The stock value is dropped from
++# raise costs no memory until it is needed. Whether the larger swap writes more to flash
++# is not measured (MEM-005). The stock value is dropped from
+ # sysprop-inclusion.yml because a second assignment with a different value fails
+ # post_process_props.py. Kept in the common file like Guardian and AirPods.
+ # 100% and not 80%: lmkd treats free swap below 10% of the total as low, which is 90% of the
+@@ -106,6 +105,13 @@ PRODUCT_PACKAGES_DEBUG += \
+ # 55% of the time and 100% never, at the same physical zram (docs/research/
+ # stallion-memory-pressure-investigation.md, "Zram capacity").
+ PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%
++# The stallion vendor image (init.zumapro.board.rc, trigger load_persist_props_action) runs
++# "setprop mmd.zram.size ${persist.vendor.zram_swap_size_v2:-50%}" after build.prop is loaded,
++# so the line above alone leaves that device at 50% (SwapTotal 3749052 kB of 7498116 kB measured
++# on 2026101405). Giving the persist property its default makes the vendor script produce 100%
++# itself. The lynx vendor image has no such script, so there the line above is what counts.
++# A value already stored in /data/property would win over this default.
++PRODUCT_PRODUCT_PROPERTIES += persist.vendor.zram_swap_size_v2=100%
+ 
+ # FreeholdOS Data Map (ADR-157): the read-only classifier file that the Data Map service reads from
+ # /system/etc/datamap. The module is defined in vendor/freeholdos/datamap. Kept in the common file like
+-- 
+2.56.0
+
