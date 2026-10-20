@@ -1,0 +1,90 @@
+From 3a3e6af27a5352eb32d15765e568084c02dbe52b Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Tue, 20 Oct 2026 16:11:27 +0200
+Subject: [PATCH] freeholdos: treat a refused bind of a device settings
+ provider as a failed bind
+
+DeviceSettingServiceConnection.getService called Context.bindService without a guard. When the caller's uid may not bind the provider, ActivityManager answers "not exported from uid" and bindService throws SecurityException ("Not allowed to bind to service"). The exception left the coroutine uncaught and ended the process of the caller.
+
+The AirPods provider is declared unexported (only Settings, uid 1000, binds it), but SystemUI's volume panel asks the same provider for the listening mode of the current audio device (setting id 1001, DEVICE_SETTING_ID_ANC) through metadata key 25, with AirPods connected. The panel now finds no setting for the device and shows none, as for any device without a provider. The provider stays unexported and keeps its caller check.
+
+One robolectric test: a bind that throws SecurityException gives a null config.
+---
+ .../DeviceSettingServiceConnection.kt         | 25 +++++++++++++------
+ .../repository/DeviceSettingRepositoryTest.kt | 17 +++++++++++++
+ 2 files changed, 34 insertions(+), 8 deletions(-)
+
+diff --git a/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingServiceConnection.kt b/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingServiceConnection.kt
+index 10631399c87c..b881a3448069 100644
+--- a/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingServiceConnection.kt
++++ b/packages/SettingsLib/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingServiceConnection.kt
+@@ -425,14 +425,23 @@ class DeviceSettingServiceConnection(
+                         }
+                     }
+                 Log.i(TAG, "Try to bind service for $intent")
+-                if (
+-                    !context.bindService(
+-                        intent,
+-                        Context.BIND_AUTO_CREATE,
+-                        { launch { it.run() } },
+-                        serviceConnection,
+-                    )
+-                ) {
++                // freeholdos: bindService throws when this uid may not bind the provider (an
++                // unexported service of another uid, which is how the AirPods provider is
++                // declared). The exception ended the SystemUI process from the volume panel. It
++                // is a failed bind, the same as a false return.
++                val bound =
++                    try {
++                        context.bindService(
++                            intent,
++                            Context.BIND_AUTO_CREATE,
++                            { launch { it.run() } },
++                            serviceConnection,
++                        )
++                    } catch (e: SecurityException) {
++                        Log.w(TAG, "Not allowed to bind service $intent", e)
++                        false
++                    }
++                if (!bound) {
+                     Log.w(TAG, "Fail to bind service $intent")
+                     launch { send(ServiceConnectionStatus.Failed) }
+                 }
+diff --git a/packages/SettingsLib/tests/robotests/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepositoryTest.kt b/packages/SettingsLib/tests/robotests/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepositoryTest.kt
+index e6062d85b6c7..cfdebe4a108f 100644
+--- a/packages/SettingsLib/tests/robotests/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepositoryTest.kt
++++ b/packages/SettingsLib/tests/robotests/src/com/android/settingslib/bluetooth/devicesettings/data/repository/DeviceSettingRepositoryTest.kt
+@@ -69,6 +69,7 @@ import org.mockito.ArgumentMatchers.anyInt
+ import org.mockito.ArgumentMatchers.anyString
+ import org.mockito.Mock
+ import org.mockito.Mockito.doReturn
++import org.mockito.Mockito.doThrow
+ import org.mockito.Mockito.verify
+ import org.mockito.Mockito.`when`
+ import org.mockito.junit.MockitoJUnit
+@@ -255,6 +256,22 @@ class DeviceSettingRepositoryTest {
+         }
+     }
+ 
++    @Test
++    fun getDeviceSettingsConfig_bindingServiceNotAllowed_returnNull() {
++        // freeholdos: a provider that this uid may not bind (an unexported service of another
++        // uid) fails the bind with a SecurityException, which must not reach the caller.
++        testScope.runTest {
++            setUpConfigService(true, DEVICE_SETTING_CONFIG)
++            doThrow(SecurityException("Not allowed to bind to service"))
++                .`when`(context)
++                .bindService(any(), anyInt(), any(), any())
++
++            val config = underTest.getDeviceSettingsConfig(cachedDevice)
++
++            assertThat(config).isNull()
++        }
++    }
++
+     @Test
+     fun getDeviceSetting_actionSwitchPreference_success() {
+         testScope.runTest {
+-- 
+2.39.5
+
