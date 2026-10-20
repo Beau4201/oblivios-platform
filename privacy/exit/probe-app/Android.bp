@@ -11,8 +11,11 @@ android_app {
     name: "ExitProbe",
     manifest: "AndroidManifest.xml",
     srcs: ["src/**/*.java"],
-    // TestNetworkManager and NetworkAgent are in the module-lib stubs of Connectivity.
+    // TestNetworkManager and NetworkAgent are in the module-lib stubs of Connectivity; "module_current" alone does not put
+    // android.net.* on the class path (the first module build failed with 46 "cannot find symbol" errors), the library
+    // does and resolves to its module-lib stubs for this sdk_version.
     sdk_version: "module_current",
+    libs: ["framework-connectivity"],
     certificate: "platform",
     privileged: true,
     required: ["privapp-permissions-org.freeholdos.exitprobe.xml"],

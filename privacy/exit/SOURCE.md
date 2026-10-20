@@ -19,7 +19,7 @@ Conflict surface on a new upstream release: `setOemNetworkPreference` (the `else
 ## Probe app and image wiring (NET-001b, ADR-184)
 
 The app is new code, not a patch: `probe-app/` is deployed to `vendor/freeholdos/exit/probe-app/` on the build server
-(a new repository, branch `freeholdos-2026100600`, commit `bd9ed81`; `Android.bp`, `AndroidManifest.xml`, the allow-list
+(a new repository, branch `freeholdos-2026100600`, commits `bd9ed81` and `9d05bd1`, the latter adds `libs: ["framework-connectivity"]` after the first module build failed without it; `Android.bp`, `AndroidManifest.xml`, the allow-list
 and `src/`, without `tests/` and `tools/`). `sha256sum` of the six deployed files equals the package, checked on
 2026-10-20.
 
