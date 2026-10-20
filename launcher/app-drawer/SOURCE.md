@@ -40,6 +40,18 @@ server. The table lists the twelve landed commits under their landed numbers.
 
 The constants and the one behaviour change in upstream files carry a `sovereignos:` comment saying why.
 
+### Exported `0003`: load the apps of the drawer with the theme icon (ADR-183, 2026-10-20)
+
+Landed as `284a195693` on branch `freeholdos-2026100600` of `packages/apps/Launcher3` (on `50a25f741f`), authored in a
+disposable repository that held only the three touched files, `git am` exit 0, the three files sha256-identical to the
+authoring copy; the exported file was regenerated from the server history. Files: `AllAppsList.java` (`add`,
+`updatePackage`), `LoaderTask.java` (the icon requests of `loadAllApps`) and `LoaderTaskTest.kt` (one new test).
+Why it diverges from upstream: the drawer draws themed icons (`0001`) but upstream loads its apps without the theme
+icon, so a view drew the app's own colours until `verifyHighRes` reloaded the themed icon in the background; under load that
+showed as a flash on random apps. Checks: `javac` of the two files against the tree's classes gives the same 26
+errors as the baseline (missing class path entries) and none new, and a planted unknown symbol in each file is
+reported; the new test is not run (it needs the multivalent test build). Not measured: the launcher's heap after load (`DRW-017`).
+
 ## Rebase notes
 
 The upstream lines the patches touch: `BubbleTextView.shouldUseTheme`; the

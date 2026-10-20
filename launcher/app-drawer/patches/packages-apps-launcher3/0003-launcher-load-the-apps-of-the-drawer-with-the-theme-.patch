@@ -1,0 +1,127 @@
+From 284a1956939a832976ee5ea60d87845d51cb378f Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Tue, 20 Oct 2026 16:09:56 +0200
+Subject: [PATCH] launcher: load the apps of the drawer with the theme icon
+
+The drawer draws themed icons (BubbleTextView.shouldUseTheme), but AllAppsList and the bulk load of LoaderTask asked the icon cache for the default lookup, which has no theme icon. Every view then drew the app's own colours first and verifyHighRes reloaded the themed icon in the background. Under load (full swap, many processes) that reload arrives late and the own colours show for a moment on random apps.
+
+The apps are now loaded with DESKTOP_ICON_FLAG, as the workspace is, so a view binds the themed icon at once and verifyHighRes finds nothing to reload. One unit test: the icon request of an app is high res and carries the theme icon.
+---
+ .../android/launcher3/model/AllAppsList.java  | 10 ++++++---
+ .../android/launcher3/model/LoaderTask.java   |  9 ++++----
+ .../android/launcher3/model/LoaderTaskTest.kt | 22 +++++++++++++++++++
+ 3 files changed, 34 insertions(+), 7 deletions(-)
+
+diff --git a/src/com/android/launcher3/model/AllAppsList.java b/src/com/android/launcher3/model/AllAppsList.java
+index da4c0ff0e9..7ce15222bf 100644
+--- a/src/com/android/launcher3/model/AllAppsList.java
++++ b/src/com/android/launcher3/model/AllAppsList.java
+@@ -16,7 +16,7 @@
+ 
+ package com.android.launcher3.model;
+ 
+-import static com.android.launcher3.icons.cache.CacheLookupFlag.DEFAULT_LOOKUP_FLAG;
++import static com.android.launcher3.LauncherSettings.Favorites.DESKTOP_ICON_FLAG;
+ import static com.android.launcher3.model.data.AppInfo.COMPONENT_KEY_COMPARATOR;
+ import static com.android.launcher3.model.data.AppInfo.EMPTY_ARRAY;
+ 
+@@ -163,7 +163,11 @@ public class AllAppsList {
+             return;
+         }
+         if (loadIcon) {
+-            mIconCache.getTitleAndIcon(info, activityInfo, DEFAULT_LOOKUP_FLAG);
++            // freeholdos: the drawer draws themed icons (BubbleTextView.shouldUseTheme), so
++            // its apps are loaded with the theme icon from the start. Without it each view
++            // drew the app's own colours until the background reload of verifyHighRes
++            // arrived, which showed up under load.
++            mIconCache.getTitleAndIcon(info, activityInfo, DESKTOP_ICON_FLAG);
+             info.sectionName = mIndex.computeSectionName(info.title);
+         } else {
+             info.title = "";
+@@ -283,7 +287,7 @@ public class AllAppsList {
+                     }
+                 } else {
+                     appInfo.intent = AppInfo.makeLaunchIntent(lai);
+-                    mIconCache.getTitleAndIcon(appInfo, lai, DEFAULT_LOOKUP_FLAG);
++                    mIconCache.getTitleAndIcon(appInfo, lai, DESKTOP_ICON_FLAG);
+                     appInfo.sectionName = mIndex.computeSectionName(appInfo.title);
+                     AppInfo.updateRuntimeFlagsForActivityTarget(appInfo, lai,
+                             userCache.getUserInfo(user), apiWrapper, pmHelper, automationRepo);
+diff --git a/src/com/android/launcher3/model/LoaderTask.java b/src/com/android/launcher3/model/LoaderTask.java
+index f5dddb74a0..0a411f7a21 100644
+--- a/src/com/android/launcher3/model/LoaderTask.java
++++ b/src/com/android/launcher3/model/LoaderTask.java
+@@ -17,8 +17,8 @@
+ package com.android.launcher3.model;
+ 
+ import static com.android.launcher3.LauncherPrefs.IS_FIRST_LOAD_AFTER_RESTORE;
++import static com.android.launcher3.LauncherSettings.Favorites.DESKTOP_ICON_FLAG;
+ import static com.android.launcher3.icons.CacheableShortcutInfo.convertShortcutsToCacheableShortcuts;
+-import static com.android.launcher3.icons.cache.CacheLookupFlag.DEFAULT_LOOKUP_FLAG;
+ import static com.android.launcher3.model.FirstScreenBroadcastHelper.DISABLE_INSTALLED_APPS_BROADCAST;
+ import static com.android.launcher3.model.ModelUtils.WIDGET_FILTER;
+ import static com.android.launcher3.model.ModelUtils.currentScreenContentFilter;
+@@ -755,14 +755,14 @@ public class LoaderTask implements Runnable {
+                         activityInfo,
+                         workspaceIconRequest.get().iconBlob,
+                         workspaceIconRequest.get().isBlobFullBleed,
+-                        DEFAULT_LOOKUP_FLAG.withUseLowRes(false)
++                        DESKTOP_ICON_FLAG.withUseLowRes(false)
+                 );
+                 if (!iconRequestInfo.loadIconFromDbBlob(mContext)) {
+                     Log.d(TAG, "AppInfo Icon failed to load from blob, using cache.");
+                     mIconCache.getTitleAndIcon(
+                             appInfo,
+                             iconRequestInfo.launcherActivityInfo,
+-                            DEFAULT_LOOKUP_FLAG
++                            DESKTOP_ICON_FLAG
+                     );
+                 }
+                 return iconRequestInfo;
+@@ -773,8 +773,9 @@ public class LoaderTask implements Runnable {
+                         + ", isArchived: " + activityInfo.getApplicationInfo().isArchived);
+             }
+         }
++        // freeholdos: with the theme icon, as in AllAppsList.add: the drawer draws themed icons.
+         return new IconRequestInfo<>(appInfo, activityInfo,
+-                DEFAULT_LOOKUP_FLAG.withUseLowRes(false));
++                DESKTOP_ICON_FLAG.withUseLowRes(false));
+     }
+ 
+     private List<ShortcutInfo> loadDeepShortcuts() {
+diff --git a/tests/multivalentTests/src/com/android/launcher3/model/LoaderTaskTest.kt b/tests/multivalentTests/src/com/android/launcher3/model/LoaderTaskTest.kt
+index 793e1ea5b2..d09e7c818c 100644
+--- a/tests/multivalentTests/src/com/android/launcher3/model/LoaderTaskTest.kt
++++ b/tests/multivalentTests/src/com/android/launcher3/model/LoaderTaskTest.kt
+@@ -522,6 +522,28 @@ class LoaderTaskTest {
+         assertThat(actualIconRequest.itemInfo).isEqualTo(expectedAppInfo)
+     }
+ 
++    @Test
++    fun `AllApps icons are requested high res and with the theme icon`() {
++        // freeholdos: the drawer draws themed icons, so its apps must not start without them.
++        // Given
++        val activityInfo: LauncherActivityInfo = mock()
++        val applicationInfo: ApplicationInfo = mock<ApplicationInfo>().apply { isArchived = false }
++        whenever(activityInfo.applicationInfo).thenReturn(applicationInfo)
++        val appInfo = AppInfo().apply { componentName = ComponentName("package", "class") }
++        // When
++        val loader = testComponent.getLoaderTaskFactory().newLoaderTask("test", launcherBinder)
++        val actualIconRequest =
++            loader.getAppInfoIconRequestInfo(
++                appInfo,
++                activityInfo,
++                emptyList(),
++                /* isRestoreFromBackup */ false,
++            )
++        // Then
++        assertThat(actualIconRequest.lookupFlag.hasThemeIcon()).isTrue()
++        assertThat(actualIconRequest.lookupFlag.useLowRes()).isFalse()
++    }
++
+     @Test
+     @EnableFlags(Flags.FLAG_RESTORE_ARCHIVED_APP_ICONS_FROM_DB)
+     fun `When flag on and restore then unarchived AllApps icons not loaded from db`() {
+-- 
+2.39.5
+

@@ -7,10 +7,10 @@ the internal record "app drawer" (not published) and ADR-141 in the decision log
 
 ## Layout
 
-- `patches/packages-apps-launcher3/` — ten patches on Launcher3: `0001` themed
-  icons in the drawer, `0002` the grouping logic and its unit test, `0003` the
-  group items, container view, opened card and adapter wiring, `0004` the fixes
-  after the first device round, `0005` the rebinding of a group on every update, `0006` the System group, `0007` the background load of a missing themed icon, `0008` the opened group in the dark theme and with a large font, `0009` the icon cells sized by their label, `0010` the code review fixes.
+- `patches/packages-apps-launcher3/` — three exported patches on Launcher3: `0001` themed
+  icons in the drawer and the grouping logic with its unit test, `0002` the group items, container view,
+  opened card, adapter wiring and every later fix (the squashed landed `0003` to `0012`, see `SOURCE.md`), `0003` the
+  drawer apps loaded with the theme icon from the start (ADR-183).
 - `SOURCE.md` — base commit, what each patch changes and why it diverges from
   upstream, rebase notes and the verification so far.
 
@@ -22,7 +22,7 @@ On the pinned base named in `SOURCE.md`:
 git -C packages/apps/Launcher3 am <path to this directory>/patches/packages-apps-launcher3/*.patch
 ```
 
-No patch of this package is applied without ADR-141, which names all ten (ADR-141, ADR-142).
+No patch of this package is applied without ADR-141 (ADR-141, ADR-142, ADR-155; `0003`: ADR-183).
 Never `git am` onto a build-server branch while a build runs.
 
 ## Scope
