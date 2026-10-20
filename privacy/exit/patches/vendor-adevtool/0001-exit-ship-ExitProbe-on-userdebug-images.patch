@@ -1,0 +1,24 @@
+From 3bb8b2e2119143dd11e8558b662e5bdf9f154684 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Tue, 20 Oct 2026 20:37:10 +0200
+Subject: [PATCH] exit: ship ExitProbe on userdebug images via device-common.mk
+
+---
+ config/mk/google_devices/common/device-common.mk | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
+index 37fb8c9..e9b9850 100644
+--- a/config/mk/google_devices/common/device-common.mk
++++ b/config/mk/google_devices/common/device-common.mk
+@@ -122,3 +122,10 @@ PRODUCT_PACKAGES += \
+ # READ_DATA_MAP; DataMapApp pulls in its privapp-permissions and sysconfig files itself ("required").
+ PRODUCT_PACKAGES += \
+     DataMapApp
++
++# FreeholdOS exit service (ADR-184, NET-001b): the throwaway probe that registers a network with
++# NET_CAPABILITY_OEM_PRIVATE and selects it for one package. PRODUCT_PACKAGES_DEBUG is installed for userdebug and
++# eng builds only, never for user builds, and check-required-packages.sh refuses the probe in a user build. The module
++# is defined in vendor/freeholdos/exit; it pulls in its privapp allow-list through "required".
++PRODUCT_PACKAGES_DEBUG += \
++    ExitProbe
