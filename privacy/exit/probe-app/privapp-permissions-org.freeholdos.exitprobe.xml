@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<permissions>
+    <privapp-permissions package="org.freeholdos.exitprobe">
+        <permission name="android.permission.NETWORK_FACTORY"/>
+        <permission name="android.permission.CONTROL_OEM_PAID_NETWORK_PREFERENCE"/>
+        <permission name="android.permission.MANAGE_TEST_NETWORKS"/>
+    </privapp-permissions>
+</permissions>

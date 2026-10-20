@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- ADR-184, NET-001b. Userdebug-only and throwaway: one service, no activity, no INTERNET permission. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.freeholdos.exitprobe">
+
+    <uses-permission android:name="android.permission.NETWORK_FACTORY" />
+    <uses-permission android:name="android.permission.CONTROL_OEM_PAID_NETWORK_PREFERENCE" />
+    <uses-permission android:name="android.permission.MANAGE_TEST_NETWORKS" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:label="Exit probe"
+        android:allowBackup="false">
+        <!-- Started from the shell (am start-foreground-service). The shell is not the app's uid, so the service
+             is exported; MANAGE_TEST_NETWORKS keeps every caller except the shell and the system out. -->
+        <service
+            android:name=".ExitProbeService"
+            android:exported="true"
+            android:permission="android.permission.MANAGE_TEST_NETWORKS"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Userdebug probe that registers a test network and sets an OEM network preference" />
+        </service>
+    </application>
+</manifest>

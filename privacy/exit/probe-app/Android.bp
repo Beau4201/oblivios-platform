@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: Apache-2.0
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// ADR-184, NET-001b. Userdebug-only and throwaway: the probe rides PRODUCT_PACKAGES_DEBUG (patch 0001 of
+// vendor-adevtool) and is on the FORBIDDEN list of check-required-packages.sh for user builds, as the AirPods
+// harness (ADR-120). It is platform-signed because NETWORK_FACTORY and CONTROL_OEM_PAID_NETWORK_PREFERENCE are
+// signature permissions; the exit app of milestone 4 replaces it.
+android_app {
+    name: "ExitProbe",
+    manifest: "AndroidManifest.xml",
+    srcs: ["src/**/*.java"],
+    // TestNetworkManager and NetworkAgent are in the module-lib stubs of Connectivity.
+    sdk_version: "module_current",
+    certificate: "platform",
+    privileged: true,
+    required: ["privapp-permissions-org.freeholdos.exitprobe.xml"],
+}
+
+prebuilt_etc {
+    name: "privapp-permissions-org.freeholdos.exitprobe.xml",
+    src: "privapp-permissions-org.freeholdos.exitprobe.xml",
+    sub_dir: "permissions",
+}
