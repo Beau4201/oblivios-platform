@@ -37,12 +37,6 @@ import java.util.concurrent.TimeUnit;
 final class AndroidPlatform implements PlatformApi {
     private static final String TAG = "Exit";
     private static final int PREFERENCE_TIMEOUT_SECONDS = 10;
-    /** The tun addresses and the daemon's DNS listener: constants of the rule language ({@code routes/spec.rs}). */
-    private static final byte[] TUN_V4 = {(byte) 169, (byte) 254, 42, 127};
-    private static final int TUN_V4_PREFIX = 24;
-    private static final byte[] TUN_V6 = {(byte) 0xfd, 0x66, 0x72, 0x65, 0x65, 0x68, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2};
-    private static final int TUN_V6_PREFIX = 64;
-    private static final byte[] DNS_V4 = {(byte) 169, (byte) 254, 42, 53};
 
     private final Context ctx;
     private final ConnectivityManager cm;
@@ -122,11 +116,11 @@ final class AndroidPlatform implements PlatformApi {
         LinkProperties lp = new LinkProperties();
         try {
             lp.setInterfaceName(iface);
-            lp.addLinkAddress(new LinkAddress(InetAddress.getByAddress(TUN_V4), TUN_V4_PREFIX));
-            lp.addLinkAddress(new LinkAddress(InetAddress.getByAddress(TUN_V6), TUN_V6_PREFIX));
+            lp.addLinkAddress(new LinkAddress(InetAddress.getByAddress(TunNet.V4), TunNet.V4_PREFIX));
+            lp.addLinkAddress(new LinkAddress(InetAddress.getByAddress(TunNet.V6), TunNet.V6_PREFIX));
             lp.addRoute(new RouteInfo(new IpPrefix(InetAddress.getByAddress(new byte[4]), 0), null, iface, RouteInfo.RTN_UNICAST));
             lp.addRoute(new RouteInfo(new IpPrefix(InetAddress.getByAddress(new byte[16]), 0), null, iface, RouteInfo.RTN_UNICAST));
-            lp.addDnsServer(InetAddress.getByAddress(DNS_V4));
+            lp.addDnsServer(InetAddress.getByAddress(TunNet.DNS_V4));
         } catch (java.net.UnknownHostException e) {
             throw new IOException("bad constant address", e);
         }

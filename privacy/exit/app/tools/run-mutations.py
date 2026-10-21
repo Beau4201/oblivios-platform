@@ -20,7 +20,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 J = "src/org/freeholdos/exit/"
-U, C, K, P, L, D, X, DC, RC, LK, PRE, CN = (J + n + ".java" for n in ("UidRanges", "Choices", "Consent", "Policy", "Ladder", "ControlCodec", "ExitController", "DaemonClient", "RouteClient", "Link", "Presenter", "CompanyNames"))
+U, C, K, P, L, D, X, DC, RC, LK, PRE, CN, TN = (J + n + ".java" for n in ("UidRanges", "Choices", "Consent", "Policy", "Ladder", "ControlCodec", "ExitController", "DaemonClient", "RouteClient", "Link", "Presenter", "CompanyNames", "TunNet"))
 
 # (name, file, old, new)
 MUTATIONS = [
@@ -190,6 +190,10 @@ MUTATIONS = [
     ("names: the header is not checked", CN, "!\"exit-mask-list\\t1\".equals(lines[0])", "false"),
     ("names: the last row of an id wins", CN, "c.names.putIfAbsent(id,", "c.names.put(id,"),
     ("names: control characters are kept", CN, ".replaceAll(\"\\\\p{Cntrl}\", \"\")", ""),
+    ("tun: the v4 address", TN, "42, 127};", "42, 126};"),
+    ("tun: the v4 prefix", TN, "V4_PREFIX = 24;", "V4_PREFIX = 25;"),
+    ("tun: the v6 address", TN, "0, 0, 0, 0, 0, 0, 0, 2};", "0, 0, 0, 0, 0, 0, 0, 3};"),
+    ("tun: the dns address", TN, "42, 53};", "42, 54};"),
     # DaemonClient, RouteClient, Link
     ("client: the sequence number does not wrap", DC, "seq = seq % 255 + 1; // 1..255\n        return seq;\n    }\n\n    @Override\n    public String connect()", "seq = seq + 1;\n        return seq;\n    }\n\n    @Override\n    public String connect()"),
     ("client: the sequence number wraps late", DC, "seq = seq % 255 + 1; // 1..255\n        return seq;\n    }\n\n    @Override\n    public String connect()", "seq = seq % 256 + 1;\n        return seq;\n    }\n\n    @Override\n    public String connect()"),

@@ -14,6 +14,7 @@ import org.freeholdos.exit.CompanyNames;
 import org.freeholdos.exit.Ladder;
 import org.freeholdos.exit.Policy;
 import org.freeholdos.exit.Presenter;
+import org.freeholdos.exit.TunNet;
 import org.freeholdos.exit.UidRanges;
 
 /** Host checks of the pure Java of the exit app (no Android class). Exits 1 on the first failure. */
@@ -533,6 +534,10 @@ public final class HostChecks {
         Arrays.fill(longName, 6, longName.length, (byte) 'a');
         refuses(true, longName, "a 16-byte interface name");
         refuses(false, new byte[] {0, 0, 0, 3, (byte) 0x81, 1, 1}, "a helper Ready with a trailing byte");
+        // The addresses of the tunnel are those the route helper writes (the Rust tests check the same lines).
+        check(Arrays.equals(v.get("const.tun_v4"), concat(TunNet.V4, new byte[] {(byte) TunNet.V4_PREFIX})), "tun v4 address");
+        check(Arrays.equals(v.get("const.tun_v6"), concat(TunNet.V6, new byte[] {(byte) TunNet.V6_PREFIX})), "tun v6 address");
+        check(Arrays.equals(v.get("const.dns_v4"), TunNet.DNS_V4), "dns address");
         // The client may not emit what the other side refuses.
         for (Runnable bad : new Runnable[] {
                 () -> ControlCodec.getState(256), () -> ControlCodec.getState(-1),
@@ -550,6 +555,12 @@ public final class HostChecks {
         System.arraycopy(v.get("from_daemon.ack"), 0, two, v.get("from_daemon.ack").length, v.get("from_daemon.ack").length);
         r = ControlCodec.decodeDaemon(two, two.length);
         check(r != null && r.used == two.length / 2, "the first of two frames");
+    }
+
+    private static byte[] concat(byte[] a, byte[] b) {
+        byte[] r = Arrays.copyOf(a, a.length + b.length);
+        System.arraycopy(b, 0, r, a.length, b.length);
+        return r;
     }
 
     private static List<int[]> Collections129() {
