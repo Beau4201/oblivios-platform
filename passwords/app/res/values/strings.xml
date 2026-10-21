@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- English only; every text of the app is a string resource that follows the system language. Translations follow later. -->
+<resources>
+    <string name="pm_app_name">Passwords</string>
+
+    <!-- Navigation and bars -->
+    <string name="pm_nav_passwords">Passwords</string>
+    <string name="pm_nav_checkup">Checkup</string>
+    <string name="pm_nav_settings">Settings</string>
+    <string name="pm_search_hint">Search passwords</string>
+    <plurals name="pm_search_results">
+        <item quantity="one">%d result. Matches the site, the username and the notes of an entry.</item>
+        <item quantity="other">%d results. Matches the site, the username and the notes of an entry.</item>
+    </plurals>
+    <string name="pm_cancel">Cancel</string>
+    <string name="pm_save">Save</string>
+    <string name="pm_cd_back">Back</string>
+    <string name="pm_cd_close">Close</string>
+    <string name="pm_cd_clear">Clear</string>
+    <string name="pm_cd_more">More options</string>
+    <string name="pm_cd_edit">Edit</string>
+    <string name="pm_cd_copy">Copy</string>
+    <string name="pm_cd_show">Show password</string>
+    <string name="pm_cd_hide">Hide password</string>
+    <string name="pm_cd_generate">Generate a password</string>
+    <string name="pm_cd_open_site">Open website</string>
+    <string name="pm_cd_needs_attention">Needs attention</string>
+
+    <!-- First start and locked -->
+    <string name="pm_first_title">Create your vault</string>
+    <string name="pm_first_body_1">Your passwords stay on this phone, encrypted. There is no account and nothing is synced.</string>
+    <string name="pm_first_body_2">The only way to move them is to export a file and import it on another phone.</string>
+    <string name="pm_first_create">Create a passphrase</string>
+    <string name="pm_first_import">Import from a file</string>
+    <string name="pm_locked_title">Vault locked</string>
+    <string name="pm_locked_body">Unlock to see your passwords.</string>
+    <string name="pm_unlock">Unlock</string>
+    <string name="pm_prompt_title">Unlock Passwords</string>
+    <string name="pm_prompt_subtitle_open">Confirm it is you to open your vault.</string>
+    <string name="pm_prompt_subtitle_fill">Confirm it is you to fill in your login.</string>
+    <string name="pm_use_passphrase">Use passphrase</string>
+
+    <!-- List -->
+    <plurals name="pm_checkup_card_title">
+        <item quantity="one">%d password needs attention</item>
+        <item quantity="other">%d passwords need attention</item>
+    </plurals>
+    <string name="pm_checkup_card_sub">Reused or weak</string>
+    <string name="pm_new_password">New password</string>
+    <string name="pm_empty_title">No passwords yet</string>
+    <string name="pm_empty_body">Add one with New password, or import a file in Settings.</string>
+
+    <!-- Detail and edit -->
+    <string name="pm_field_username">Username</string>
+    <string name="pm_field_password">Password</string>
+    <string name="pm_field_website">Website</string>
+    <string name="pm_field_notes">Notes</string>
+    <string name="pm_optional">Optional</string>
+    <string name="pm_reused_title">Reused password</string>
+    <string name="pm_reused_body">The same password is used for %1$s. If one site leaks it, both accounts are open.</string>
+    <string name="pm_review_in_checkup">Review in Checkup</string>
+    <string name="pm_detail_security">Security</string>
+    <string name="pm_changed">Changed</string>
+    <string name="pm_changed_value">%1$s, %2$s</string>
+    <string name="pm_history">Password history</string>
+    <plurals name="pm_history_count">
+        <item quantity="one">%d earlier password</item>
+        <item quantity="other">%d earlier passwords</item>
+    </plurals>
+    <string name="pm_detail_autofill">Autofill</string>
+    <string name="pm_fills_in">Fills in</string>
+    <string name="pm_last_filled">Last filled</string>
+    <string name="pm_never_filled">Never</string>
+    <string name="pm_offer_chip">Offer above the keyboard</string>
+    <string name="pm_offer_chip_sub">Show this login in the strip</string>
+    <string name="pm_detail_notes">Notes</string>
+    <string name="pm_created_edited">Created %1$s · Edited %2$s</string>
+    <string name="pm_delete">Delete password</string>
+    <string name="pm_delete_confirm_title">Delete this password?</string>
+    <string name="pm_delete_confirm_body">It is removed from this phone. An export file you made earlier still has it.</string>
+    <string name="pm_copied_password">Password copied</string>
+    <string name="pm_strength_weak">Weak</string>
+    <string name="pm_strength_fair">Fair</string>
+    <string name="pm_strength_good">Good</string>
+    <string name="pm_strength_strong">Strong</string>
+    <string name="pm_edit_title">Edit password</string>
+    <string name="pm_logo_builtin">Logo from the built-in set</string>
+    <string name="pm_generated_here">Generated on this phone.</string>
+
+    <!-- Checkup -->
+    <plurals name="pm_checkup_summary">
+        <item quantity="one">%d password needs attention</item>
+        <item quantity="other">%d passwords need attention</item>
+    </plurals>
+    <string name="pm_checkup_none">Nothing needs attention</string>
+    <string name="pm_checkup_offline">Checked on this phone just now. Nothing is sent anywhere.</string>
+    <string name="pm_checkup_reused">Reused</string>
+    <string name="pm_checkup_weak">Weak</string>
+    <string name="pm_checkup_reused_with">Same password as %1$s</string>
+    <string name="pm_checkup_weak_short">Fewer than 8 characters</string>
+    <string name="pm_checkup_weak_common">Found on a list of common passwords</string>
+    <string name="pm_checkup_weak_pattern">Follows a simple pattern</string>
+    <string name="pm_checkup_no_breach">Checking against known data breaches needs the internet, which this app never uses.</string>
+
+    <!-- Settings -->
+    <string name="pm_settings_title">Settings</string>
+    <string name="pm_settings_security">Security</string>
+    <string name="pm_settings_biometrics">Unlock with biometrics</string>
+    <string name="pm_settings_biometrics_sub">Passphrase is always the fallback</string>
+    <string name="pm_settings_autolock">Lock vault automatically</string>
+    <string name="pm_settings_autolock_sub">After 1 minute in the background</string>
+    <string name="pm_settings_autofill">Autofill</string>
+    <string name="pm_settings_service">Autofill service</string>
+    <string name="pm_settings_service_active">Passwords is the active service</string>
+    <string name="pm_settings_service_inactive">Passwords is not the active service</string>
+    <string name="pm_settings_suggestions">Suggestions above the keyboard</string>
+    <string name="pm_settings_suggestions_sub">Shown when you tap a login field</string>
+    <string name="pm_settings_data">Data</string>
+    <string name="pm_settings_export">Export vault</string>
+    <plurals name="pm_settings_export_sub">
+        <item quantity="one">%d password is not in your last export</item>
+        <item quantity="other">%d passwords are not in your last export</item>
+    </plurals>
+    <string name="pm_settings_export_never">You have not made an export yet</string>
+    <string name="pm_settings_import">Import from file</string>
+
+    <!-- Export -->
+    <string name="pm_export_title">Export vault</string>
+    <plurals name="pm_export_body_1">
+        <item quantity="one">Creates one encrypted file with your password. You choose where it is saved.</item>
+        <item quantity="other">Creates one encrypted file with all %d passwords. You choose where it is saved.</item>
+    </plurals>
+    <string name="pm_export_body_2">Passwords you add or change later are not in the file. If you lose this phone, they are lost with it. Export again after changes.</string>
+    <string name="pm_export_passphrase">Export passphrase</string>
+    <string name="pm_export_warning">Anyone with the file and this passphrase can read your passwords. Keep them apart.</string>
+    <string name="pm_export">Export</string>
+
+    <!-- Autofill -->
+    <string name="pm_chip_generic">Fill in saved login</string>
+</resources>

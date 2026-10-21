@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Dark roles of the framework palette, read from docs/design/password-manager-2026-10-20.html (freeholdos-foundation). -->
+<resources>
+    <color name="pm_bg">#17191F</color>
+    <color name="pm_row">#292C34</color>
+    <color name="pm_bar">#23262E</color>
+    <color name="pm_highest">#1D1F26</color>
+    <color name="pm_on">#E4E5F0</color>
+    <color name="pm_on_variant">#A9AAB5</color>
+    <color name="pm_outline">#73757F</color>
+    <color name="pm_outline_variant">#454850</color>
+    <color name="pm_primary">#B8C6EE</color>
+    <color name="pm_on_primary">#323F60</color>
+    <color name="pm_secondary">#C0C6DC</color>
+    <color name="pm_on_secondary">#394052</color>
+    <color name="pm_secondary_container">#353B4D</color>
+    <color name="pm_on_secondary_container">#B8BFD5</color>
+    <color name="pm_error">#F2B8B5</color>
+    <color name="pm_inverse">#E4E5F0</color>
+    <color name="pm_on_inverse">#2F3036</color>
+</resources>

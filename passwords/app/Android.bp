@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: Apache-2.0
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// ADR-185. Not platform-signed and not platform_apis: the app uses only the system SDK. No network permission
+// (tools/check-static.sh). The Compose libraries are added with the screens (Task 14); the services and the defaults
+// with Tasks 13 and 16.
+android_app {
+    name: "PasswordsApp",
+    manifest: "AndroidManifest.xml",
+    resource_dirs: ["res"],
+    srcs: ["src/main/kotlin/**/*.kt"],
+    sdk_version: "system_current",
+    jni_libs: ["libvault_core"],
+    optimize: {
+        enabled: false,
+    },
+}

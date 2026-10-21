@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  Passwords app (ADR-185). It declares no network permission and no radio permission (check-static.sh fails the build
+  otherwise), is not backed up, and keeps every component in its own process. The autofill service and the credential
+  provider service are added with Task 13.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.freeholdos.passwords">
+
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/pm_data_extraction_rules"
+        android:icon="@drawable/ic_key_filled"
+        android:label="@string/pm_app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Passwords">
+
+        <activity
+            android:name="org.freeholdos.passwords.MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

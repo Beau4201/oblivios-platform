@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Edge to edge: the bars are transparent and the content draws under them. Dynamic colour is off on purpose. -->
+<resources>
+    <style name="Theme.Passwords" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowBackground">@color/pm_bg</item>
+        <item name="android:colorBackground">@color/pm_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>
