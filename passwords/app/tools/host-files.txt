@@ -1,0 +1,2 @@
+# Pure Kotlin sources (no Android class) that run-host-checks.sh compiles for the host checks; paths below src/main/kotlin.
+org/freeholdos/passwords/keys/KeyGateway.kt
