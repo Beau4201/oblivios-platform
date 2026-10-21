@@ -46,5 +46,24 @@
                 android:name="android.autofill"
                 android:resource="@xml/pm_autofill_service" />
         </service>
+
+        <activity
+            android:name="org.freeholdos.passwords.fill.CredentialAuthActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/Theme.Passwords.Transparent" />
+
+        <service
+            android:name="org.freeholdos.passwords.fill.PasswordsCredentialProviderService"
+            android:exported="true"
+            android:label="@string/pm_app_name"
+            android:permission="android.permission.BIND_CREDENTIAL_PROVIDER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.credentials.CredentialProviderService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.credentials.provider"
+                android:resource="@xml/pm_credential_provider" />
+        </service>
     </application>
 </manifest>

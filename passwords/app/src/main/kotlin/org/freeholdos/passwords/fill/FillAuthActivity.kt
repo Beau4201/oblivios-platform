@@ -11,9 +11,6 @@ import android.widget.RemoteViews
 import org.freeholdos.passwords.PasswordsApplication
 import org.freeholdos.passwords.R
 import org.freeholdos.passwords.SecureActivity
-import org.freeholdos.passwords.lock.BiometricOutcome
-import org.freeholdos.passwords.lock.LockState
-import org.freeholdos.passwords.lock.PassphraseOutcome
 
 /**
  * The step between a tap on the locked entry and the fill: it opens the vault (the system biometric prompt, with the
@@ -25,41 +22,8 @@ class FillAuthActivity : SecureActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        when (val state = app.session.state) {
-            is LockState.Unlocked -> answer()
-            LockState.SecretLost -> PassphraseDialog.showSecretLost(this) { cancel() }
-            is LockState.NeedsPassphrase -> askPassphrase(null)
-            LockState.Locked -> if (app.session.biometricsEnabled()) {
-                app.session.biometricUnlock(this, forFill = true, done = ::afterBiometric)
-            } else {
-                askPassphrase(null)
-            }
-        }
+        UnlockFlow.run(this, app.session, forFill = true, onOpened = ::answer, onCancel = ::cancel)
     }
-
-    private fun afterBiometric(outcome: BiometricOutcome) {
-        when (outcome) {
-            BiometricOutcome.Opened -> answer()
-            BiometricOutcome.Cancelled -> cancel()
-            else -> askPassphrase(null)
-        }
-    }
-
-    private fun askPassphrase(error: CharSequence?) {
-        PassphraseDialog.show(this, forFill = true, error = error, onCancel = ::cancel) { chars ->
-            val outcome = app.session.unlockWithPassphrase(chars)
-            chars.fill('\u0000')
-            when (outcome) {
-                PassphraseOutcome.Opened -> answer()
-                is PassphraseOutcome.Wrong -> askPassphrase(getString(R.string.pm_passphrase_wrong))
-                is PassphraseOutcome.Throttled -> askPassphrase(resources.getQuantityString(R.plurals.pm_passphrase_wait, secondsOf(outcome.waitMs), secondsOf(outcome.waitMs)))
-                PassphraseOutcome.SecretLost -> PassphraseDialog.showSecretLost(this) { cancel() }
-                is PassphraseOutcome.Failed -> cancel()
-            }
-        }
-    }
-
-    private fun secondsOf(ms: Long): Int = ((ms + 999) / 1000).toInt().coerceAtLeast(1)
 
     @Suppress("DEPRECATION")
     private fun answer() {
