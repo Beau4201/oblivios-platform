@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: Apache-2.0
+package org.freeholdos.passwords.hosttest
+
+import org.freeholdos.passwords.core.Code
+import org.freeholdos.passwords.core.CreatedVault
+import org.freeholdos.passwords.core.Reply
+import org.freeholdos.passwords.core.handleOrCode
+
+fun main() {
+    replyStatusAndPayload()
+    anEmptyOrMissingReplyIsAnInternalError()
+    createdVaultParsing()
+    handlesAndCodes()
+    Check.done("ReplyTest")
+}
+
+private fun replyStatusAndPayload() {
+    val ok = Reply.of(byteArrayOf(0, 1, 2, 3))
+    Check.that("status 0 is ok", ok.ok && ok.status == 0)
+    Check.bytes("the payload follows the status byte", byteArrayOf(1, 2, 3), ok.payload())
+    val bare = Reply.of(byteArrayOf(0))
+    Check.that("ok with an empty payload", bare.ok && bare.payload().isEmpty())
+    val bad = Reply.of(byteArrayOf(Code.BAD_CREDENTIALS.toByte()))
+    Check.that("a non-zero status is an error", !bad.ok && bad.status == Code.BAD_CREDENTIALS)
+    Check.that("an error reply has no payload", bad.payload().isEmpty())
+    Check.that("an error reply with trailing bytes still reports no payload", !Reply.of(byteArrayOf(2, 9, 9)).ok && Reply.of(byteArrayOf(2, 9, 9)).payload().isEmpty())
+}
+
+private fun anEmptyOrMissingReplyIsAnInternalError() {
+    Check.equal("null: the JVM could not allocate the answer", Code.INTERNAL, Reply.of(null).status)
+    Check.equal("empty", Code.INTERNAL, Reply.of(ByteArray(0)).status)
+    Check.that("neither is ok", !Reply.of(null).ok && !Reply.of(ByteArray(0)).ok)
+}
+
+private fun le(n: Int) = byteArrayOf(n.toByte(), (n shr 8).toByte(), (n shr 16).toByte(), (n shr 24).toByte())
+
+private fun createdVaultParsing() {
+    val file = ByteArray(10) { (it + 1).toByte() }
+    val key = ByteArray(32) { (100 + it).toByte() }
+    val good = CreatedVault.parse(le(10) + file + key)
+    Check.that("a well-formed payload parses", good != null)
+    Check.bytes("the file", file, good!!.file)
+    Check.bytes("the key", key, good.vaultKey)
+    Check.that("a payload one byte short is refused", CreatedVault.parse((le(10) + file + key).copyOf(10 + 4 + 31)) == null)
+    Check.that("a payload one byte long is refused", CreatedVault.parse(le(10) + file + key + byteArrayOf(0)) == null)
+    Check.that("a length larger than the data is refused", CreatedVault.parse(le(1_000_000) + file + key) == null)
+    Check.that("a negative length is refused", CreatedVault.parse(le(-1) + file + key) == null)
+    Check.that("less than a header is refused", CreatedVault.parse(ByteArray(3)) == null)
+    Check.that("an empty file is refused", CreatedVault.parse(le(0) + key) == null)
+}
+
+private fun handlesAndCodes() {
+    Check.equal("a positive handle is a handle", 42L, handleOrCode(42L).handle)
+    Check.that("and not an error", handleOrCode(42L).code == Code.OK)
+    Check.equal("a negative number is the code", Code.BAD_CREDENTIALS, handleOrCode(-1L).code)
+    Check.equal("with no handle", 0L, handleOrCode(-1L).handle)
+    Check.equal("code 6", Code.DEAD_HANDLE, handleOrCode(-6L).code)
+    Check.equal("zero never is a handle", Code.INTERNAL, handleOrCode(0L).code)
+}

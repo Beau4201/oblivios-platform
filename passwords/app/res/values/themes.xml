@@ -13,4 +13,11 @@
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
+
+    <!-- FillAuthActivity shows only the system biometric prompt or a dialog over the app that asked. -->
+    <style name="Theme.Passwords.Transparent" parent="Theme.Passwords">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
 </resources>

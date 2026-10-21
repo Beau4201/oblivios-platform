@@ -99,6 +99,12 @@ d="$(fresh)"; mkdir -p "$(KT "$d")/ui"
 printf 'package org.freeholdos.passwords.ui\nfun f() {\n  AlertDialog(onDismissRequest = {}, confirmButton = {}, properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn))\n}\n' > "$(KT "$d")/ui/D.kt"
 expect_pass "static: a Compose dialog with SecureOn" bash "$d/tools/check-static.sh" "$d"
 
+d="$(fresh)"; printf 'package org.freeholdos.passwords\nfun f(a: android.app.Activity) { android.app.AlertDialog.Builder(a).create().show() }\n' > "$(KT "$d")/Dlg.kt"
+expect_fail "static: a framework dialog without FLAG_SECURE" bash "$d/tools/check-static.sh" "$d"
+
+d="$(fresh)"; printf 'package org.freeholdos.passwords\nfun f(a: android.app.Activity) { val d = android.app.AlertDialog.Builder(a).create(); d.window?.setFlags(8192, 8192) // FLAG_SECURE\n d.show() }\n' > "$(KT "$d")/Dlg.kt"
+expect_pass "static: a framework dialog that sets FLAG_SECURE" bash "$d/tools/check-static.sh" "$d"
+
 d="$(fresh)"; printf 'package org.freeholdos.passwords\nfun f() { android.util.Log.d("tag", "x") }\n' > "$(KT "$d")/Logs.kt"
 expect_fail "static: a log call in the app" bash "$d/tools/check-static.sh" "$d"
 

@@ -138,4 +138,16 @@
 
     <!-- Autofill -->
     <string name="pm_chip_generic">Fill in saved login</string>
+    <!-- Autofill service, passphrase prompt and failures -->
+    <string name="pm_ok">OK</string>
+    <string name="pm_passphrase">Passphrase</string>
+    <string name="pm_passphrase_wrong">Wrong passphrase</string>
+    <plurals name="pm_passphrase_wait">
+        <item quantity="one">Try again in %d second</item>
+        <item quantity="other">Try again in %d seconds</item>
+    </plurals>
+    <string name="pm_secret_lost_title">Vault cannot be opened</string>
+    <string name="pm_secret_lost_body">The key that protects this vault on this phone is gone, so even the right passphrase cannot open it. Open Passwords and import your export file.</string>
+    <string name="pm_save_locked">Unlock Passwords to save this login.</string>
+    <string name="pm_save_failed">The login could not be saved.</string>
 </resources>

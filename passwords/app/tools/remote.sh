@@ -6,7 +6,7 @@
 #   remote.sh host-checks [TEST_CLASS...]   |   remote.sh typecheck
 set -o errexit -o nounset -o pipefail
 : "${PWM_BUILD_SSH:?set PWM_BUILD_SSH=user@host}"
-HERE="$(cd "$(dirname "$0")/.." && pwd)"
+HERE="${PWM_SRC:-$(cd "$(dirname "$0")/.." && pwd)}"
 WORK="${PWM_WORK:-/srv/freeholdos/scratch/pwapp}"
 cmd="$1"; shift
 ssh -o BatchMode=yes "$PWM_BUILD_SSH" "mkdir -p $WORK"

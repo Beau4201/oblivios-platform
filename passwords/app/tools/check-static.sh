@@ -44,6 +44,11 @@ if [[ -d "$KT" ]]; then
     fi
   done < <(grep -n -E '\b(Dialog|AlertDialog|BasicAlertDialog|ModalBottomSheet|DropdownMenu|ExposedDropdownMenu|Popup)\(' -r "$KT" --include='*.kt' | grep -v -E '^\S+:[0-9]+:\s*(//|\*)' || true)
 
+  # Framework dialogs are windows of their own too: a file that builds one must set FLAG_SECURE on it.
+  while IFS= read -r f; do
+    grep -q 'FLAG_SECURE' "$f" || fail "$f: builds a dialog (AlertDialog, Dialog, PopupWindow or Toast) without FLAG_SECURE in the same file"
+  done < <(grep -l -E '\b(AlertDialog\.Builder|Dialog\(|PopupWindow\(|Toast\.makeText)' -r "$KT" --include='*.kt' || true)
+
   if grep -n -E '\b(android\.util\.)?Log\.[dviwe]\(|\bprintln\(|\.printStackTrace\(|Timber\.' -r "$KT" --include='*.kt' >&2; then
     fail "a log or print call in the app"
   fi

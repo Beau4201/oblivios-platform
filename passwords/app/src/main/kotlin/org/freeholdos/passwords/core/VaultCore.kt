@@ -23,9 +23,15 @@ object VaultCore {
     external fun unlockWithVaultKey(file: ByteArray, vaultKey: ByteArray): Long
     external fun lock(handle: Long): Int
 
+    /** The 32-byte vault key of an open session, for the biometric wrapper only. Overwrite it at once. */
+    external fun vaultKey(handle: Long): ByteArray?
+
     external fun list(handle: Long): ByteArray?
     external fun search(handle: Long, query: String): ByteArray?
     external fun get(handle: Long, id: ByteArray): ByteArray?
+
+    /** Summaries of the accounts of a site (kind 0: a host) or an app (kind 1: a package name), by the exact rules of the index. */
+    external fun matches(handle: Long, subject: String, kind: Int): ByteArray?
 
     /** The calls that change the vault answer with the new file, which the caller writes with [writeFileAtomic]. */
     external fun addOrEdit(handle: Long, entry: ByteArray): ByteArray?

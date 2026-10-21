@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: Apache-2.0
+package org.freeholdos.passwords.fill
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.text.InputType
+import android.view.View
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
+import org.freeholdos.passwords.R
+
+/**
+ * The passphrase prompt of the autofill step, in plain framework views (the screens of the app itself are Compose, Task
+ * 14). Its window is secure like every window of the app, and it is excluded from autofill so that no service, ours
+ * included, offers to fill the passphrase.
+ */
+object PassphraseDialog {
+    fun show(activity: Activity, forFill: Boolean, error: CharSequence?, onCancel: () -> Unit, onSubmit: (CharArray) -> Unit) {
+        val field = EditText(activity).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            setHint(R.string.pm_passphrase)
+            error?.let { setError(it) }
+        }
+        val dialog = AlertDialog.Builder(activity)
+            .setTitle(R.string.pm_prompt_title)
+            .setMessage(if (forFill) R.string.pm_prompt_subtitle_fill else R.string.pm_prompt_subtitle_open)
+            .setView(field)
+            .setPositiveButton(R.string.pm_unlock) { _, _ ->
+                val text = field.text
+                val chars = CharArray(text.length) { text[it] }
+                text.clear()
+                onSubmit(chars)
+            }
+            .setNegativeButton(R.string.pm_cancel) { _, _ -> onCancel() }
+            .setOnCancelListener { onCancel() }
+            .create()
+        dialog.window?.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        dialog.show()
+    }
+
+    /** The key that protects the vault on this phone is gone: only an import of an export file brings the passwords back. */
+    fun showSecretLost(activity: Activity, onClose: () -> Unit) {
+        val dialog = AlertDialog.Builder(activity)
+            .setTitle(R.string.pm_secret_lost_title)
+            .setMessage(R.string.pm_secret_lost_body)
+            .setPositiveButton(R.string.pm_ok) { _, _ -> onClose() }
+            .setOnCancelListener { onClose() }
+            .create()
+        dialog.window?.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        dialog.show()
+    }
+}

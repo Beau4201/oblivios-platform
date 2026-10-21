@@ -17,8 +17,9 @@ mapfile -t TESTS < <(find "$APP/tests/host" -name '*.kt' | sort)
 for f in "${PURE[@]}"; do test -f "$f" || { echo "listed but missing: $f" >&2; exit 2; }; done
 "$J" -cp "$K/kotlin-compiler.jar:$K/kotlin-stdlib.jar:$K/kotlin-reflect.jar:$K/trove4j.jar:$K/annotations-13.0.jar" \
   org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -jvm-target 17 -Werror -cp "$K/kotlin-stdlib.jar" \
-  -d "$OUT" "${PURE[@]}" "${TESTS[@]}" 2>&1 | grep -v '^$' || true
-ls "$OUT" >/dev/null
+  -d "$OUT" "${PURE[@]}" "${TESTS[@]}" > "$OUT.compile.log" 2>&1 || true
+grep -v '^$' "$OUT.compile.log" || true
+if grep -q -E '(^|: )(error|exception):' "$OUT.compile.log"; then echo "COMPILE ERROR" >&2; exit 3; fi
 classes=("$@")
 if [[ ${#classes[@]} -eq 0 ]]; then
   while IFS= read -r f; do
