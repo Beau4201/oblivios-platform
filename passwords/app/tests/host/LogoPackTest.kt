@@ -3,7 +3,7 @@ package org.freeholdos.passwords.hosttest
 
 import org.freeholdos.passwords.ui.LogoPack
 
-private val DOMAINS = "github.com\tgithub\ncodeberg.org\tcodeberg\nbbc.co.uk\tbbc\nbroken.example\tmissing\n"
+private val DOMAINS = "com\tgithub\nuk\tbbc\ngithub.com\tgithub\ncodeberg.org\tcodeberg\nbbc.co.uk\tbbc\nbroken.example\tmissing\n"
 private val ICONS = "github\tM0 0h24v24H0z\tGitHub\ncodeberg\tM1 1h2v2H1z\tCodeberg\nbbc\tM2 2h2v2H2z\tBBC\n"
 
 fun main() {
@@ -27,6 +27,7 @@ private fun lookAlikesAndOddInput(p: LogoPack) {
     for (h in listOf("github.com.evil.example", "evilgithub.com", "githubb.com", "co.uk", "com", "uk", "", ".", "gіthub.com", "github.co", "192.0.2.1", "[::1]", "github.com/x", "git hub.com")) {
         Check.that("no logo for '$h'", p.pathFor(h) == null)
     }
+    Check.that("a row for a bare suffix is never used", p.pathFor("evil.com") == null && p.pathFor("anything.co.uk") == null)
     Check.that("a row whose icon is missing from the pack gives nothing", p.pathFor("broken.example") == null)
 }
 

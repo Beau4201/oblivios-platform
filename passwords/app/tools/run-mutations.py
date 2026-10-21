@@ -28,6 +28,7 @@ F = K + "fill/FieldClassifier.kt"
 L = K + "fill/FillPlanner.kt"
 W = K + "core/Wire.kt"
 Y = K + "core/Reply.kt"
+O = K + "ui/LogoPack.kt"
 S = "src/main/kotlin/org/freeholdos/passwords/lock/LockState.kt"
 
 # (name, file, old, new)
@@ -159,6 +160,14 @@ MUTATIONS = [
     ("reply: a payload shorter than its length is accepted", Y, "length != (payload.size - 4 - KEY_BYTES).toLong()", "length < (payload.size - 4 - KEY_BYTES).toLong()"),
     ("reply: zero is a handle", Y, "value > 0 -> HandleOrCode(value, Code.OK)", "value >= 0 -> HandleOrCode(value, Code.OK)"),
     ("reply: a negative number is not an error", Y, "value < 0 -> HandleOrCode(0, (-value).toInt())", "value < -1000 -> HandleOrCode(0, (-value).toInt())"),
+    # LogoPack.kt
+    ("logo: a bracketed host is looked up", O, '        if (h.startsWith("[")) return null\n', ""),
+    ("logo: a port is kept", O, "            1 -> h = h.substringBefore(':')", "            1 -> Unit"),
+    ("logo: a trailing dot is kept", O, '        h = h.removeSuffix(".")\n', ""),
+    ("logo: the bare suffix is looked up", O, "for (i in 0..labels.size - 2) {", "for (i in 0..labels.size - 1) {"),
+    ("logo: an empty label is allowed", O, "if (labels.size < 2 || labels.any { it.isEmpty() }) return null", "if (labels.size < 2) return null"),
+    ("logo: case matters", O, "var h = host.lowercase()", "var h = host"),
+    ("logo: domain rows of three columns accepted", O, "if (c.size == 2 && c[0].isNotEmpty() && c[1].isNotEmpty() && !line.startsWith(\"#\"))", "if (c.size >= 2 && c[0].isNotEmpty() && c[1].isNotEmpty() && !line.startsWith(\"#\"))"),
 ]
 
 
