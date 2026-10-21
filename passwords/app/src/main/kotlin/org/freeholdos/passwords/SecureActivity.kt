@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.freeholdos.passwords
 
-import android.app.Activity
 import android.os.Bundle
+import androidx.activity.ComponentActivity
 import android.view.WindowManager
 
 /**
@@ -10,7 +10,7 @@ import android.view.WindowManager
  * screen. It is set before the content exists, so not even the first frame can be captured. Separate windows (dialogs,
  * sheets, menus) do not inherit it; check-static.sh makes each of them say so.
  */
-abstract class SecureActivity : Activity() {
+abstract class SecureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         super.onCreate(savedInstanceState)

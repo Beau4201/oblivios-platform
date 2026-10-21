@@ -22,7 +22,12 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-P = "src/main/kotlin/org/freeholdos/passwords/lock/LockPolicy.kt"
+K = "src/main/kotlin/org/freeholdos/passwords/"
+P = K + "lock/LockPolicy.kt"
+F = K + "fill/FieldClassifier.kt"
+L = K + "fill/FillPlanner.kt"
+W = K + "core/Wire.kt"
+Y = K + "core/Reply.kt"
 S = "src/main/kotlin/org/freeholdos/passwords/lock/LockState.kt"
 
 # (name, file, old, new)
@@ -85,6 +90,76 @@ MUTATIONS = [
     ("tick: fires again and again", P, "        if (!backgroundDue()) return null\n        backgroundedAtMs = -1L\n        return stateAtStart()", "        if (!backgroundDue()) return null\n        return stateAtStart()"),
     ("device lock: the timer is not cleared", P, "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n", "    fun onDeviceLocked(): LockState {\n"),
     ("device lock: does not report the state", P, "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n        return stateAtStart()", "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n        return LockState.Locked"),
+
+    # FieldClassifier.kt
+    ("classify: username hints ignored", F, "h in USERNAME_HINTS -> return FieldRole.Username", "h in USERNAME_HINTS -> return FieldRole.Other"),
+    ("classify: password hints ignored", F, "h in PASSWORD_HINTS -> return FieldRole.Password", "h in PASSWORD_HINTS -> return FieldRole.Other"),
+    ("classify: credit hints no longer block", F, 'h.startsWith("credit") || h in setOf(', "h in setOf("),
+    ("classify: search hint no longer blocks", F, 'setOf("search", "phone", "creditcardnumber"', 'setOf("phone", "creditcardnumber"'),
+    ("classify: phone hint no longer blocks", F, 'setOf("search", "phone", "creditcardnumber"', 'setOf("search", "creditcardnumber"'),
+    ("classify: hints compared with case", F, "hints.map { it.lowercase() }", "hints"),
+    ("classify: camel case not split", F, 'val spaced = id.replace(Regex("([a-z0-9])([A-Z])"), "$1 $2")', "val spaced = id"),
+    ("classify: text password variation 0x80", F, "variation in setOf(0x80, 0x90, 0xe0)", "variation in setOf(0x90, 0xe0)"),
+    ("classify: visible password variation 0x90", F, "variation in setOf(0x80, 0x90, 0xe0)", "variation in setOf(0x80, 0xe0)"),
+    ("classify: web password variation 0xe0", F, "variation in setOf(0x80, 0x90, 0xe0)", "variation in setOf(0x80, 0x90)"),
+    ("classify: number password variation", F, "klass == InputTypes.CLASS_NUMBER && variation == 0x10", "klass == InputTypes.CLASS_NUMBER && variation == 0x11"),
+    ("classify: the class of a password type ignored", F, "(klass == InputTypes.CLASS_TEXT && variation in setOf(0x80, 0x90, 0xe0))", "(variation in setOf(0x80, 0x90, 0xe0))"),
+    ("classify: password types ignored", F, "if (passwordType) return FieldRole.Password", "if (false) return FieldRole.Password"),
+    ("classify: search words ignored", F, "if (words.any { it in NOT_LOGIN_TOKENS }) return FieldRole.Other", "if (false) return FieldRole.Other"),
+    ("classify: search words before password types", F, "    if (passwordType) return FieldRole.Password\n    if (words.any { it in NOT_LOGIN_TOKENS }) return FieldRole.Other\n", "    if (words.any { it in NOT_LOGIN_TOKENS }) return FieldRole.Other\n    if (passwordType) return FieldRole.Password\n"),
+    ("classify: email type 0x20 ignored", F, "variation in setOf(0x20, 0xd0)", "variation in setOf(0xd0)"),
+    ("classify: web email type ignored", F, "variation in setOf(0x20, 0xd0)", "variation in setOf(0x20)"),
+    ("classify: email types ignored", F, "if (emailType) return FieldRole.Username", "if (false) return FieldRole.Username"),
+    ("classify: user words before password words", F, "        words.any { it in PASSWORD_TOKENS } -> FieldRole.Password\n        words.any { it in USER_TOKENS } -> FieldRole.Username\n", "        words.any { it in USER_TOKENS } -> FieldRole.Username\n        words.any { it in PASSWORD_TOKENS } -> FieldRole.Password\n"),
+    ("classify: q is not a search word", F, '"search", "query", "q", "find"', '"search", "query", "find"'),
+    ("classify: uid is not a user word", F, '"account", "accountid", "uid")', '"account", "accountid")'),
+    ("classify: passcode is not a password word", F, '"passphrase", "passcode")', '"passphrase")'),
+    # FillPlanner.kt
+    ("plan: a username-only form gets nothing", L, "if (users.isEmpty() && passwords.isEmpty()) return FillPlan.None", "if (users.isEmpty() || passwords.isEmpty()) return FillPlan.None"),
+    ("plan: locked and open swapped", L, "if (state !is LockState.Unlocked) {", "if (state is LockState.Unlocked) {"),
+    ("plan: locked offers authentication without an account", L, "return if (lookup.hasAccount(webDomain, packageName)) FillPlan.Authenticate(", "return if (true) FillPlan.Authenticate("),
+    ("plan: authentication covers every field", L, "FillPlan.Authenticate(fields.filter { it.role != FieldRole.Other }.map { it.key })", "FillPlan.Authenticate(fields.map { it.key })"),
+    ("plan: open without accounts offers an empty list", L, "    if (accounts.isEmpty()) return FillPlan.None\n", ""),
+    ("plan: a blank username gets an empty label", L, "it.username.ifEmpty { null }", "it.username"),
+    ("plan: username fields are password fields", L, "val users = fields.filter { it.role == FieldRole.Username }", "val users = fields.filter { it.role == FieldRole.Password }"),
+    ("save: the first password is taken", L, "values.lastOrNull { it.first == FieldRole.Password && it.second.isNotEmpty() }", "values.firstOrNull { it.first == FieldRole.Password && it.second.isNotEmpty() }"),
+    ("save: an empty password counts", L, "it.first == FieldRole.Password && it.second.isNotEmpty() }", "it.first == FieldRole.Password }"),
+    ("save: the last username is taken", L, "values.firstOrNull { it.first == FieldRole.Username }", "values.lastOrNull { it.first == FieldRole.Username }"),
+    ("save: wipe clears nothing", L, "fun wipe() = password.fill('\\u0000')", "fun wipe() = Unit"),
+    ("save: toString shows the password", L, 'override fun toString() = "SaveCandidate(username ${username.length} chars, password hidden)"', 'override fun toString() = "SaveCandidate($username, ${String(password)})"'),
+    # Wire.kt
+    ("wire: field limit one lower", W, "const val MAX_FIELD = 64 * 1024", "const val MAX_FIELD = 64 * 1024 - 1"),
+    ("wire: field limit one higher", W, "const val MAX_FIELD = 64 * 1024", "const val MAX_FIELD = 64 * 1024 + 1"),
+    ("wire: field limit not checked", W, "            if (len > MAX_FIELD) return null\n", ""),
+    ("wire: list limit one lower", W, "private const val MAX_LIST = 256", "private const val MAX_LIST = 255"),
+    ("wire: list limit one higher", W, "private const val MAX_LIST = 256", "private const val MAX_LIST = 257"),
+    ("wire: history limit one lower", W, "private const val MAX_HISTORY = 10", "private const val MAX_HISTORY = 9"),
+    ("wire: history limit one higher", W, "private const val MAX_HISTORY = 10", "private const val MAX_HISTORY = 11"),
+    ("wire: history limit not checked", W, "        if (n > MAX_HISTORY) return null\n", ""),
+    ("wire: an unknown last-fill flag in an entry", W, "else -> return null }\n        val n = r.u8() ?: return null", "else -> null }\n        val n = r.u8() ?: return null"),
+    ("wire: an unknown last-fill flag in a summary", W, "else -> return null }\n            out.add(Summary(", "else -> null }\n            out.add(Summary("),
+    ("wire: trailing bytes after an entry", W, "        if (!r.finished()) return null\n        return Entry(", "        return Entry("),
+    ("wire: trailing bytes after a list", W, "return if (r.finished()) out else null", "return out"),
+    ("wire: trailing bytes after a checkup", W, "return if (r.finished()) Checkup(reused, weak) else null", "return Checkup(reused, weak)"),
+    ("wire: reason numbers swapped", W, "TOO_SHORT(0), COMMON(1), PATTERN(2);", "TOO_SHORT(1), COMMON(0), PATTERN(2);"),
+    ("wire: malformed UTF-8 replaced", W, ".onMalformedInput(CodingErrorAction.REPORT)", ".onMalformedInput(CodingErrorAction.REPLACE)"),
+    ("wire: equality ignores the domains", W, "domains == other.domains && ", ""),
+    ("wire: equality ignores the notes", W, "notes == other.notes && ", ""),
+    ("wire: equality ignores the history", W, "editedMs == other.editedMs && lastFilledMs == other.lastFilledMs && history == other.history", "editedMs == other.editedMs && lastFilledMs == other.lastFilledMs"),
+    ("wire: equality ignores the last fill", W, "editedMs == other.editedMs && lastFilledMs == other.lastFilledMs && history == other.history", "editedMs == other.editedMs && history == other.history"),
+    ("wire: equality ignores the password", W, "password.contentEquals(other.password) && notes == other.notes", "notes == other.notes"),
+    ("wire: toString shows the password", W, 'override fun toString() = "Entry($title, ${username.length} chars of username, password hidden)"', 'override fun toString() = "Entry($title, ${String(password)})"'),
+    ("wire: wipe leaves the password", W, "    fun wipe() {\n        password.fill('\\u0000')\n        history.forEach(HistoryItem::wipe)\n    }", "    fun wipe() {\n        history.forEach(HistoryItem::wipe)\n    }"),
+    ("wire: wipe leaves the history", W, "    fun wipe() {\n        password.fill('\\u0000')\n        history.forEach(HistoryItem::wipe)\n    }", "    fun wipe() {\n        password.fill('\\u0000')\n    }"),
+    # Reply.kt
+    ("reply: unsigned status", Y, "Reply(raw[0].toInt() and 0xff, raw)", "Reply(raw[0].toInt(), raw)"),
+    ("reply: an error carries a payload", Y, "fun payload(): ByteArray = if (ok) raw.copyOfRange(1, raw.size) else ByteArray(0)", "fun payload(): ByteArray = raw.copyOfRange(1, raw.size)"),
+    ("reply: internal code", Y, "const val INTERNAL = 255", "const val INTERNAL = 254"),
+    ("reply: an empty file is accepted", Y, "if (length < 1 || length != (payload.size - 4 - KEY_BYTES).toLong()) return null", "if (length != (payload.size - 4 - KEY_BYTES).toLong()) return null"),
+    ("reply: a payload longer than its length is accepted", Y, "length != (payload.size - 4 - KEY_BYTES).toLong()", "length > (payload.size - 4 - KEY_BYTES).toLong()"),
+    ("reply: a payload shorter than its length is accepted", Y, "length != (payload.size - 4 - KEY_BYTES).toLong()", "length < (payload.size - 4 - KEY_BYTES).toLong()"),
+    ("reply: zero is a handle", Y, "value > 0 -> HandleOrCode(value, Code.OK)", "value >= 0 -> HandleOrCode(value, Code.OK)"),
+    ("reply: a negative number is not an error", Y, "value < 0 -> HandleOrCode(0, (-value).toInt())", "value < -1000 -> HandleOrCode(0, (-value).toInt())"),
 ]
 
 
@@ -93,7 +168,7 @@ def killed(output: str, rc: int) -> str:
         return "survived"
     if "COMPILE ERROR" in output:
         return "does-not-compile"
-    if "AssertionError" in output or "FAILED" in output:
+    if "AssertionError" in output or "FAILED" in output or "Exception in thread" in output:
         return "killed"
     return "inconclusive"
 

@@ -113,6 +113,16 @@ class LockPolicy(private val clock: Clock, private val store: PolicyStore, priva
         return stateAtStart()
     }
 
+    /** The vault was deleted: nothing of the old one is remembered (counts, times, the boot count). */
+    fun forget() {
+        backgroundedAtMs = -1L
+        store.lastPassphraseMs = 0L
+        store.bootCount = -1
+        store.biometricFailures = 0
+        store.passphraseFailures = 0
+        store.lastPassphraseFailureMs = 0L
+    }
+
     fun onDeviceLocked(): LockState {
         backgroundedAtMs = -1L
         return stateAtStart()

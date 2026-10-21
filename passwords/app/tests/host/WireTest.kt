@@ -32,6 +32,8 @@ fun main() {
     summaries()
     checkup()
     hostileInput()
+    limits()
+    equalityAndPrinting()
     Check.done("WireTest")
 }
 
@@ -93,4 +95,36 @@ private fun hostileInput() {
     val badUtf8 = entry.copyOf().also { it[16 + 4] = 0xff.toByte() }
     Check.that("invalid UTF-8 in a field is refused", Wire.decode(badUtf8) == null)
     Check.that("a field length beyond the limit is refused", Wire.decode(entry.copyOf().also { it[16 + 3] = 0x7f }) == null)
+}
+
+private fun limits() {
+    fun withTitle(n: Int) = Wire.encode(golden().copy(title = "a".repeat(n)))
+    Check.that("a title of exactly 64 KiB decodes", Wire.decode(withTitle(65_536)) != null)
+    Check.that("one byte more is refused", Wire.decode(withTitle(65_537)) == null)
+    fun withDomains(n: Int) = Wire.encode(golden().copy(domains = List(n) { "d$it.example" }))
+    Check.that("256 domains decode", Wire.decode(withDomains(256)) != null)
+    Check.that("257 are refused", Wire.decode(withDomains(257)) == null)
+    fun withPackages(n: Int) = Wire.encode(golden().copy(packages = List(n) { "p.$it" }))
+    Check.that("256 packages decode", Wire.decode(withPackages(256)) != null)
+    Check.that("257 are refused", Wire.decode(withPackages(257)) == null)
+    fun withHistory(n: Int) = Wire.encode(golden().copy(history = List(n) { HistoryItem("h$it".toCharArray(), it.toLong()) }))
+    Check.that("ten history items decode", Wire.decode(withHistory(10)) != null)
+    Check.that("eleven are refused", Wire.decode(withHistory(11)) == null)
+    Check.that("an unknown last-fill flag is refused", Wire.decode(unhex(GOLDEN_ENTRY).also { it[it.size - 25] = 2 }) == null)
+}
+
+private fun equalityAndPrinting() {
+    val g = golden()
+    Check.equal("an entry equals its own copy", g, g.copy())
+    val others = listOf(
+        g.copy(id = ByteArray(16)), g.copy(title = "x"), g.copy(domains = emptyList()), g.copy(packages = emptyList()),
+        g.copy(username = "x"), g.copy(password = "x".toCharArray()), g.copy(notes = "x"), g.copy(createdMs = 9),
+        g.copy(editedMs = 9), g.copy(lastFilledMs = null), g.copy(history = emptyList()),
+        g.copy(history = listOf(HistoryItem("old".toCharArray(), 5L))), g.copy(history = listOf(HistoryItem("new".toCharArray(), 4L))),
+    )
+    others.forEachIndexed { i, o -> Check.that("variant $i is not equal", g != o) }
+    Check.that("the password never appears in toString", !g.toString().contains("pw-"))
+    val w = g.copy(password = "secret".toCharArray(), history = listOf(HistoryItem("older".toCharArray(), 1)))
+    w.wipe()
+    Check.that("wipe clears the password and the history", w.password.all { it == '\u0000' } && w.history[0].password.all { it == '\u0000' })
 }

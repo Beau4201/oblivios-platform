@@ -105,6 +105,9 @@ expect_fail "static: a framework dialog without FLAG_SECURE" bash "$d/tools/chec
 d="$(fresh)"; printf 'package org.freeholdos.passwords\nfun f(a: android.app.Activity) { val d = android.app.AlertDialog.Builder(a).create(); d.window?.setFlags(8192, 8192) // FLAG_SECURE\n d.show() }\n' > "$(KT "$d")/Dlg.kt"
 expect_pass "static: a framework dialog that sets FLAG_SECURE" bash "$d/tools/check-static.sh" "$d"
 
+d="$(fresh)"; mkdir -p "$(KT "$d")/ui"; printf 'package org.freeholdos.passwords.ui\nfun f() { val s = rememberSaveable { 1 } }\n' > "$(KT "$d")/ui/Saved.kt"
+expect_fail "static: rememberSaveable in a screen" bash "$d/tools/check-static.sh" "$d"
+
 d="$(fresh)"; printf 'package org.freeholdos.passwords\nfun f() { android.util.Log.d("tag", "x") }\n' > "$(KT "$d")/Logs.kt"
 expect_fail "static: a log call in the app" bash "$d/tools/check-static.sh" "$d"
 

@@ -170,6 +170,56 @@ class SessionManager(
         }
     }
 
+    /** Checks a passphrase without changing the state (to confirm the user before a password is shown). */
+    fun verifyPassphrase(passphrase: CharArray): PassphraseOutcome {
+        val wait = policy.passphraseWaitMs()
+        if (wait > 0) return PassphraseOutcome.Throttled(wait)
+        val hw = gateway.hardwareSecret() ?: return PassphraseOutcome.SecretLost
+        val file = files.readVault()
+        if (file == null) {
+            hw.fill(0)
+            return PassphraseOutcome.Failed(Code.IO)
+        }
+        val pass = utf8(passphrase)
+        val r = handleOrCode(VaultCore.unlockWithPassphrase(file, pass, hw))
+        pass.fill(0)
+        hw.fill(0)
+        return when (r.code) {
+            Code.OK -> {
+                VaultCore.lock(r.handle)
+                PassphraseOutcome.Opened
+            }
+            Code.BAD_CREDENTIALS -> {
+                policy.onPassphraseFailed()
+                PassphraseOutcome.Wrong(policy.passphraseWaitMs())
+            }
+            else -> PassphraseOutcome.Failed(r.code)
+        }
+    }
+
+    /** A fresh strong-biometric authentication, no key involved: the eye of the detail screen asks for it. */
+    fun confirmWithBiometrics(activity: Activity, done: (Boolean) -> Unit) {
+        val finished = AtomicBoolean(false)
+        fun finish(ok: Boolean) { if (finished.compareAndSet(false, true)) done(ok) }
+        val p = prompt(activity, false) { finish(false) }
+        p.authenticate(CancellationSignal(), activity.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = finish(true)
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) = finish(false)
+        })
+    }
+
+    /**
+     * Deletes a vault that cannot be opened (its hardware secret is gone) so that a new one can be made. Only on the
+     * user's request: this is the one place that removes a vault file.
+     */
+    fun deleteUnopenableVault() {
+        if (state != LockState.SecretLost) return
+        files.deleteAll()
+        gateway.deleteBiometricKey()
+        policy.forget()
+        publish(policy.stateAtStart())
+    }
+
     /** After a passphrase unlock a biometric key that the system invalidated is removed, so the switch can be turned on again. */
     private fun dropInvalidatedBiometrics() {
         if (files.hasBiometricWrapper() && !gateway.biometricsStillValid()) disableBiometrics()

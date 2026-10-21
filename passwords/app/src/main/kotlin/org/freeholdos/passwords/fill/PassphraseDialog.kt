@@ -16,17 +16,21 @@ import org.freeholdos.passwords.R
  * included, offers to fill the passphrase.
  */
 object PassphraseDialog {
-    fun show(activity: Activity, forFill: Boolean, error: CharSequence?, onCancel: () -> Unit, onSubmit: (CharArray) -> Unit) {
+    fun show(
+        activity: Activity, forFill: Boolean, error: CharSequence?, onCancel: () -> Unit,
+        titleRes: Int = R.string.pm_prompt_title, messageRes: Int? = null, hintRes: Int = R.string.pm_passphrase,
+        onSubmit: (CharArray) -> Unit,
+    ) {
         val field = EditText(activity).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
             importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-            setHint(R.string.pm_passphrase)
+            setHint(hintRes)
             error?.let { setError(it) }
         }
         val dialog = AlertDialog.Builder(activity)
-            .setTitle(R.string.pm_prompt_title)
-            .setMessage(if (forFill) R.string.pm_prompt_subtitle_fill else R.string.pm_prompt_subtitle_open)
+            .setTitle(titleRes)
+            .setMessage(messageRes ?: if (forFill) R.string.pm_prompt_subtitle_fill else R.string.pm_prompt_subtitle_open)
             .setView(field)
             .setPositiveButton(R.string.pm_unlock) { _, _ ->
                 val text = field.text

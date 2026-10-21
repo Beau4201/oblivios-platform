@@ -14,11 +14,32 @@ ARTIFACTS=(
   biometric/biometric
   core/core
   annotation/annotation-jvm
-  lifecycle/lifecycle-common
-  lifecycle/lifecycle-runtime
+  collection/collection-jvm
+  lifecycle/lifecycle-common-jvm
+  lifecycle/lifecycle-runtime-android
+  lifecycle/lifecycle-runtime-compose-android
+  lifecycle/lifecycle-viewmodel-android
   fragment/fragment
   activity/activity
-  savedstate/savedstate
+  activity/activity-compose
+  navigationevent/navigationevent-android
+  navigationevent/navigationevent-compose-android
+  savedstate/savedstate-android
+  compose/runtime/runtime-android
+  compose/runtime/runtime-saveable-android
+  compose/runtime/runtime-annotation-android
+  compose/ui/ui-android
+  compose/ui/ui-geometry-android
+  compose/ui/ui-graphics-android
+  compose/ui/ui-text-android
+  compose/ui/ui-unit-android
+  compose/ui/ui-util-android
+  compose/foundation/foundation-android
+  compose/foundation/foundation-layout-android
+  compose/animation/animation-android
+  compose/animation/animation-core-android
+  compose/material3/material3-android
+  compose/material/material-ripple-android
 )
 cp_out=""
 for a in "${ARTIFACTS[@]}"; do
@@ -33,4 +54,4 @@ for a in "${ARTIFACTS[@]}"; do
     cp_out="$cp_out:$dir/$ver/$base-$ver.jar"
   fi
 done
-echo "${cp_out#:}"
+echo "${cp_out#:}:$T/external/kotlinc/lib/kotlinx-coroutines-core-jvm.jar"

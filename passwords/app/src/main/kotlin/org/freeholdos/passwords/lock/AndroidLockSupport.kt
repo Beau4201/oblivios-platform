@@ -55,6 +55,7 @@ class AndroidEnvironment(
 class VaultFiles(dir: File) {
     private val vault = File(dir, "vault.fhpf")
     private val bio = File(dir, "vault.bio")
+    private val index = File(dir, "domains.idx")
 
     fun hasVault(): Boolean = vault.isFile
     fun hasBiometricWrapper(): Boolean = bio.isFile
@@ -64,6 +65,13 @@ class VaultFiles(dir: File) {
     fun writeVault(bytes: ByteArray): Boolean = VaultCore.writeFileAtomic(vault.path, bytes) == 0
     fun writeBiometricWrapper(bytes: ByteArray): Boolean = VaultCore.writeFileAtomic(bio.path, bytes) == 0
     fun deleteBiometricWrapper() { bio.delete() }
+
+    /** Removes the vault, its biometric wrapper and the index. Only for a vault that can no longer be opened, on request. */
+    fun deleteAll() {
+        vault.delete()
+        bio.delete()
+        index.delete()
+    }
 
     private fun read(f: File): ByteArray? {
         if (!f.isFile) return null

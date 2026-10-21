@@ -49,6 +49,11 @@ if [[ -d "$KT" ]]; then
     grep -q 'FLAG_SECURE' "$f" || fail "$f: builds a dialog (AlertDialog, Dialog, PopupWindow or Toast) without FLAG_SECURE in the same file"
   done < <(grep -l -E '\b(AlertDialog\.Builder|Dialog\(|PopupWindow\(|Toast\.makeText)' -r "$KT" --include='*.kt' || true)
 
+  # Saved state is the way a secret would reach disk or another process; the screens keep theirs in memory only.
+  if grep -n -E '\brememberSaveable\b|\bSavedStateHandle\b' -r "$KT" --include='*.kt' | grep -v -E ':[0-9]+:\s*(//|\*|/\*)' >&2; then
+    fail "a screen saves state (rememberSaveable, SavedStateHandle or a bundle put in onSaveInstanceState)"
+  fi
+
   if grep -n -E '\b(android\.util\.)?Log\.[dviwe]\(|\bprintln\(|\.printStackTrace\(|Timber\.' -r "$KT" --include='*.kt' >&2; then
     fail "a log or print call in the app"
   fi

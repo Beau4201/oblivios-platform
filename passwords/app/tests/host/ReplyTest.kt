@@ -11,6 +11,7 @@ fun main() {
     anEmptyOrMissingReplyIsAnInternalError()
     createdVaultParsing()
     handlesAndCodes()
+    theCodesAreTheWireContract()
     Check.done("ReplyTest")
 }
 
@@ -56,4 +57,14 @@ private fun handlesAndCodes() {
     Check.equal("with no handle", 0L, handleOrCode(-1L).handle)
     Check.equal("code 6", Code.DEAD_HANDLE, handleOrCode(-6L).code)
     Check.equal("zero never is a handle", Code.INTERNAL, handleOrCode(0L).code)
+}
+
+private fun theCodesAreTheWireContract() {
+    Check.equal(
+        "the numbers of vault-core/src/api.rs, never changed",
+        listOf(0, 1, 2, 3, 4, 5, 6, 7, 255),
+        listOf(Code.OK, Code.BAD_CREDENTIALS, Code.CORRUPT, Code.UNSUPPORTED_VERSION, Code.TOO_LARGE, Code.IO, Code.DEAD_HANDLE, Code.BAD_ARGUMENT, Code.INTERNAL),
+    )
+    Check.equal("a status byte above 127 is read as unsigned", 128, Reply.of(byteArrayOf(0x80.toByte())).status)
+    Check.equal("0xff", 255, Reply.of(byteArrayOf(-1)).status)
 }

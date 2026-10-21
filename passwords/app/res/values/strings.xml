@@ -52,6 +52,7 @@
     <string name="pm_empty_body">Add one with New password, or import a file in Settings.</string>
 
     <!-- Detail and edit -->
+    <string name="pm_field_name">Name</string>
     <string name="pm_field_username">Username</string>
     <string name="pm_field_password">Password</string>
     <string name="pm_field_website">Website</string>
@@ -150,4 +151,37 @@
     <string name="pm_secret_lost_body">The key that protects this vault on this phone is gone, so even the right passphrase cannot open it. Open Passwords and import your export file.</string>
     <string name="pm_save_locked">Unlock Passwords to save this login.</string>
     <string name="pm_save_failed">The login could not be saved.</string>
+    <!-- Locked screen -->
+    <string name="pm_reason_restart">The phone restarted. Enter your passphrase.</string>
+    <string name="pm_reason_biometrics">Your biometrics changed. Enter your passphrase.</string>
+    <string name="pm_reason_failures">Too many failed attempts. Enter your passphrase.</string>
+    <string name="pm_reason_expired">It has been a week. Enter your passphrase.</string>
+    <string name="pm_secret_lost_new">Create a new vault</string>
+    <string name="pm_secret_lost_confirm">This deletes the vault that cannot be opened. An export file you made is not touched.</string>
+
+    <!-- Create the vault -->
+    <string name="pm_create_title">Choose a passphrase</string>
+    <string name="pm_create_body">You need it after a restart and once a week. There is no recovery: if you forget it, only an export file can bring your passwords back.</string>
+    <string name="pm_create_repeat">Repeat the passphrase</string>
+    <string name="pm_create_mismatch">The passphrases do not match.</string>
+    <string name="pm_create_weak">Choose a longer or less common passphrase.</string>
+    <string name="pm_create_button">Create vault</string>
+
+    <!-- Detail, edit, import and export results -->
+    <string name="pm_copied_username">Username copied</string>
+    <string name="pm_edit_too_long">Something you entered is too long.</string>
+    <string name="pm_confirm_passphrase_title">Confirm it is you</string>
+    <string name="pm_confirm_reveal">Enter your passphrase to show or copy this password.</string>
+    <plurals name="pm_import_done">
+        <item quantity="one">%d password imported</item>
+        <item quantity="other">%d passwords imported</item>
+    </plurals>
+    <string name="pm_import_passphrase">Passphrase of the export file</string>
+    <string name="pm_import_failed">The file could not be imported. Check the passphrase.</string>
+    <string name="pm_export_done">Export saved</string>
+    <string name="pm_export_failed">The export could not be saved.</string>
+    <string name="pm_export_passphrase_short">Use at least 8 characters.</string>
+    <string name="pm_delete_confirm_yes">Delete</string>
+    <string name="pm_open_autofill_settings">Open settings</string>
+    <string name="pm_never_exported_hint">Export once to have a copy outside this phone.</string>
 </resources>

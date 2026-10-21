@@ -42,6 +42,7 @@ fun main() {
     multiStepAndNewPasswordForms()
     everyLockedStateAsksForAuthentication()
     saveCandidates()
+    everyTokenOfTheLists()
     Check.done("FillTest")
 }
 
@@ -54,6 +55,10 @@ private fun hintsWinOverHeuristics() {
     Check.equal("emailAddress is a username", FieldRole.Username, classify(listOf("emailAddress"), InputTypes.TEXT, null))
     Check.equal("a card number hint is not a login field, whatever the id says", FieldRole.Other, classify(listOf("creditCardNumber"), InputTypes.TEXT, "user_card"))
     Check.equal("an unknown hint falls through to the heuristics", FieldRole.Password, classify(listOf("x-custom"), InputTypes.TEXT_PASSWORD, null))
+    for (h in listOf("search", "phone", "smsOTPCode", "postalAddress", "creditCardNumber", "creditCardSecurityCode")) {
+        Check.equal("hint $h is not a login field", FieldRole.Other, classify(listOf(h), InputTypes.TEXT, "username"))
+    }
+    Check.equal("hints are compared without case", FieldRole.Username, classify(listOf("USERNAME"), InputTypes.TEXT, null))
     Check.equal("the first hint that means something wins", FieldRole.Username, classify(listOf("x-custom", "username", "password"), InputTypes.TEXT, null))
 }
 
@@ -64,6 +69,8 @@ private fun aSearchBoxIsNotALoginField() {
     Check.equal("a promo code", FieldRole.Other, classifyId("promoCode"))
     Check.equal("a phone number", FieldRole.Other, classifyId("login_phone"))
     Check.equal("a one-time code", FieldRole.Other, classifyId("otp"))
+    Check.equal("a password input type is a password even in a field called search", FieldRole.Password, classifyId("search", InputTypes.TEXT_PASSWORD))
+    Check.equal("an id with both words is a password", FieldRole.Password, classifyId("user_password"))
     Check.equal("a search box with an email input type", FieldRole.Other, classifyId("search", InputTypes.TEXT_EMAIL))
 }
 
@@ -150,10 +157,26 @@ private fun saveCandidates() {
     Check.that("the password never appears in toString", !c.toString().contains("hunter2"))
     Check.that("no password, no candidate", SaveCandidate.of(listOf(FieldRole.Username to "anna")) == null)
     Check.that("an empty password is no candidate", SaveCandidate.of(listOf(FieldRole.Password to "")) == null)
+    Check.equal("the first username field is the username", "a", SaveCandidate.of(listOf(FieldRole.Username to "a", FieldRole.Username to "b", FieldRole.Password to "p"))!!.username)
     Check.that("a username is optional", SaveCandidate.of(listOf(FieldRole.Password to "pw"))!!.username == "")
     Check.that("fields of the wrong kind are ignored", SaveCandidate.of(listOf(FieldRole.Other to "x", FieldRole.Password to "pw"))!!.username == "")
     val last = SaveCandidate.of(listOf(FieldRole.Password to "old", FieldRole.Password to "new"))!!
     Check.equal("the last non-empty password field is the one submitted", "new", String(last.password))
     c!!.wipe()
     Check.that("wipe clears the password", c.password.all { it == '\u0000' })
+}
+
+private fun everyTokenOfTheLists() {
+    for (t in listOf("user", "username", "userid", "uname", "login", "loginid", "email", "mail", "emailaddress", "account", "accountid", "uid")) {
+        Check.equal("id $t is a username", FieldRole.Username, classifyId(t))
+    }
+    for (t in listOf("pass", "password", "passwd", "pwd", "passphrase", "passcode")) {
+        Check.equal("id $t is a password", FieldRole.Password, classifyId(t))
+    }
+    for (t in listOf("search", "query", "q", "find", "filter", "coupon", "promo", "zip", "postal", "phone", "tel", "mobile", "otp", "captcha", "address", "city", "country", "comment", "message", "title", "subject")) {
+        Check.equal("id user_$t is not a login field", FieldRole.Other, classifyId("user_$t"))
+    }
+    Check.equal("a number class with another variation is not a password", FieldRole.Other, classifyId(null, InputTypes.CLASS_NUMBER or 0x20))
+    Check.equal("a text class with another variation is not a password", FieldRole.Other, classifyId(null, InputTypes.CLASS_TEXT or 0x40))
+    Check.equal("text password variation without the text class is not a password", FieldRole.Other, classifyId(null, 0x80))
 }

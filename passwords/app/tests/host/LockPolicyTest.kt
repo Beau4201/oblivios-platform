@@ -66,6 +66,7 @@ fun main() {
     unlockingFromTheBackgroundStartsTheMinuteThen()
     anUnlockInTheForegroundDropsAStaleTimer()
     passphraseFailuresStartOverAfterASuccess()
+    forgettingStartsOver()
     Check.done("LockPolicyTest")
 }
 
@@ -284,4 +285,19 @@ private fun passphraseFailuresStartOverAfterASuccess() {
     Check.equal("the count is back to zero", 0, w.store.passphraseFailures)
     w.policy.onPassphraseFailed()
     Check.equal("so the next failure is the first", 0L, w.policy.passphraseWaitMs())
+}
+
+private fun forgettingStartsOver() {
+    val w = World()
+    w.unlockWithPassphrase()
+    repeat(3) { w.policy.onBiometricFailed() }
+    repeat(5) { w.policy.onPassphraseFailed() }
+    w.policy.forget()
+    Check.equal("a forgotten vault has no passphrase unlock on this boot", LockState.NeedsPassphrase(Reason.Restart), w.policy.stateAtStart())
+    Check.equal("no wait", 0L, w.policy.passphraseWaitMs())
+    Check.equal("no biometric failures", 0, w.store.biometricFailures)
+    Check.equal("no passphrase failures", 0, w.store.passphraseFailures)
+    Check.equal("no passphrase time", 0L, w.store.lastPassphraseMs)
+    Check.equal("no boot count", -1, w.store.bootCount)
+    Check.equal("no failure time", 0L, w.store.lastPassphraseFailureMs)
 }
