@@ -19,9 +19,9 @@ Conflict surface on a new upstream release: `setOemNetworkPreference` (the `else
 ## Probe app and image wiring (NET-001b, ADR-184)
 
 The app is new code, not a patch: `probe-app/` is deployed to `vendor/freeholdos/exit/probe-app/` on the build server
-(a new repository, branch `freeholdos-2026100600`, commits `bd9ed81` and `9d05bd1`, the latter adds `libs: ["framework-connectivity"]` after the first module build failed without it; `Android.bp`, `AndroidManifest.xml`, the allow-list
+(a new repository, branch `freeholdos-2026100600`; commits `bd9ed81`, `9d05bd1` and `dddefdf`; the last two fix the first module build, which failed with 46 `cannot find symbol` errors because `module_current` alone does not put `android.net.*` on the class path, and then because Soong refuses a direct dependency on the `java_sdk_library`: `libs` names `framework-connectivity.stubs.module_lib`; `Android.bp`, `AndroidManifest.xml`, the allow-list
 and `src/`, without `tests/` and `tools/`). `sha256sum` of the six deployed files equals the package, checked on
-2026-10-20.
+2026-10-20 (the first commit; `Android.bp` of the last one equals the package, `sha256sum` checked 2026-10-21).
 
 | Patch | Project and branch | Subject | Why it diverges from upstream |
 | --- | --- | --- | --- |
@@ -33,6 +33,8 @@ blob `37fb8c9` equalled the server's before). Landing moves the `vendor/adevtool
 Conflict surface: the last lines of `device-common.mk`.
 
 ## Checks
+
+`ExitProbe` module build 2026-10-21 (`build-exit-probe-module.sh`, `m -j6 -k ExitProbe`, `OFFICIAL_BUILD=true`): `build completed successfully (07:42 (mm:ss))`, `EXIT_PROBE_MODULE_EXIT_CODE:0`; `unzip -l` of `out-lynx/target/product/lynx/system/priv-app/ExitProbe/ExitProbe.apk` (24799 bytes) shows `classes.dex` and `AndroidManifest.xml`, and `aapt2 dump permissions` lists the seven declared permissions (`NETWORK_FACTORY`, `CONTROL_OEM_PAID_NETWORK_PREFERENCE`, `MANAGE_TEST_NETWORKS`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS`); `privapp-permissions-org.freeholdos.exitprobe.xml` is in `system/etc/permissions`. The pins of `lynx` and `stallion` name `vendor/adevtool` `fe4c53c7` (the previous files are kept as `adevtool-version-check.mk.pre-exit-probe`).
 
 `NET-001a` (current image, test preference) passed; `NET-001b` (production preference on an image with this patch) is `NOT_RUN`. Module build: `build-exit-modules.sh` (`m -j6 -k com.android.tethering`) passed 2026-10-18 (`EXIT_MODULES_EXIT_CODE:0`, 03:39, no `FAILED:` line); `javap -c -p` of the built `service-connectivity-pre-jarjar.jar` shows no call to `enforceAutomotiveDevice`, and the permission checks of `setOemNetworkPreference` unchanged.
 
