@@ -250,6 +250,9 @@ class AppController(val activity: SecureActivity) {
         confirmUser { ok -> if (ok) revealed = true }
     }
 
+    /** Runs [then] after a fresh strong biometric (or the passphrase): for anything that would show a stored password. */
+    fun confirmThen(then: () -> Unit) = confirmUser { ok -> if (ok) then() }
+
     private fun confirmUser(done: (Boolean) -> Unit) {
         if (hasBiometrics()) {
             session.confirmWithBiometrics(activity, done)
