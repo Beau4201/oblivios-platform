@@ -2,7 +2,7 @@
 
 The per-app network exit of Compartments (ADR-178, ADR-184). The design is
 `docs/superpowers/specs/2026-10-18-network-exit-design.md` in `freeholdos-foundation`. One platform patch landed on
-the build server 2026-10-18; no image carries it yet. `SOURCE.md` holds the base revisions and the reasons.
+the build server 2026-10-18; the `lynx` image `2026102101` carries it and the probe app (`IMG-011`, `IMG-012`), and `NET-001b` passed there. No image carries the daemon. `SOURCE.md` holds the base revisions and the reasons.
 
 | Part | Project | Effect |
 | --- | --- | --- |

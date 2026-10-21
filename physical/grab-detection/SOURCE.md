@@ -57,7 +57,7 @@ The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packa
 ## Verification
 
 - Host: `test/run.sh` and `test/mutate.py`, 26 of 26 mutants killed (2026-10-15).
-- Host, with `0009` (worktree `.worktrees/grab-detection-fwb`, branch `impact-route`, tip `3a56f88`): `all passed`, 35 of 35 mutants killed (2026-10-18). The same test and mutants also pass on `GrabDetector.java` read from the build server after `git am` (2026-10-18). Module build `m -j6 -k services SystemUI Settings` for `lynx-cur-userdebug` with `0009` landed: exit 0, 42:30, no `FAILED:` or `error:` line (`GRB-002`); no image, no device check (`GRB-018`).
+- Host, with `0009` (worktree `.worktrees/grab-detection-fwb`, branch `impact-route`, tip `3a56f88`): `all passed`, 35 of 35 mutants killed (2026-10-18). The same test and mutants also pass on `GrabDetector.java` read from the build server after `git am` (2026-10-18). Module build `m -j6 -k services SystemUI Settings` for `lynx-cur-userdebug` with `0009` landed: exit 0, 42:30, no `FAILED:` or `error:` line (`GRB-002`); the patch is in the `lynx` image `2026102101` since 2026-10-21 (`IMG-011`, `IMG-012`), with no device check yet (`GRB-018`).
 - Replay: the seven `frameworks-base` patches and the `Settings` patch applied to the baseline reproduce the worktree trees (2026-10-15).
 - Not run: a device check (`GRB-003` to `GRB-017`).
 - Build: `m -j6 -k services SystemUI Settings` for `lynx-cur-userdebug` passed on the landed trees (2026-10-15, exit 0, no `FAILED:` or `error:` line; `GRB-002`). Module outputs only, no image.
