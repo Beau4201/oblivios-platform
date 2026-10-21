@@ -9,7 +9,7 @@ of this list, not a surviving mutant.
 
     PWM_BUILD_SSH=user@host tools/run-mutations.py [--check-applies] [NAME_FILTER]
 
-Left out on purpose: the `length < 1` clause of CreatedVault.parse (the size check before it already refuses a payload with an empty file); the cap in passphraseThrottleMs (`minOf(consecutiveFailures - 4, 20)` to a larger bound gives the
+Left out on purpose: the bracket test of LogoPack.pathFor (a bracketed host has colons or characters outside the host alphabet, which are refused anyway); the `length < 1` clause of CreatedVault.parse (the size check before it already refuses a payload with an empty file); the cap in passphraseThrottleMs (`minOf(consecutiveFailures - 4, 20)` to a larger bound gives the
 same values after the min with five minutes), the `<= 3` of the same function (`< 3` also gives 0 for three failures, because
 1000 shifted left by 63 is 0), the reset of lastPassphraseFailureMs on a passphrase unlock (the reset count already ends
 the wait), and the `lastPassphraseMs == 0` test of stateAtStart (a vault that never
@@ -161,7 +161,6 @@ MUTATIONS = [
     ("reply: zero is a handle", Y, "value > 0 -> HandleOrCode(value, Code.OK)", "value >= 0 -> HandleOrCode(value, Code.OK)"),
     ("reply: a negative number is not an error", Y, "value < 0 -> HandleOrCode(0, (-value).toInt())", "value < -1000 -> HandleOrCode(0, (-value).toInt())"),
     # LogoPack.kt
-    ("logo: a bracketed host is looked up", O, '        if (h.startsWith("[")) return null\n', ""),
     ("logo: a port is kept", O, "            1 -> h = h.substringBefore(':')", "            1 -> Unit"),
     ("logo: a trailing dot is kept", O, '        h = h.removeSuffix(".")\n', ""),
     ("logo: the bare suffix is looked up", O, "for (i in 0..labels.size - 2) {", "for (i in 0..labels.size - 1) {"),

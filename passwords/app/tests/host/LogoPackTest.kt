@@ -24,7 +24,7 @@ private fun exactAndSubdomains(p: LogoPack) {
 }
 
 private fun lookAlikesAndOddInput(p: LogoPack) {
-    for (h in listOf("github.com.evil.example", "evilgithub.com", "githubb.com", "co.uk", "com", "uk", "", ".", "gіthub.com", "github.co", "192.0.2.1", "[::1]", "github.com/x", "git hub.com")) {
+    for (h in listOf("github.com.evil.example", "evilgithub.com", "githubb.com", "co.uk", "com", "uk", "", ".", "gіthub.com", "github.co", "192.0.2.1", "[::1]", "github.com/x", "git hub.com", "login..github.com", ".github.com", "github..com")) {
         Check.that("no logo for '$h'", p.pathFor(h) == null)
     }
     Check.that("a row for a bare suffix is never used", p.pathFor("evil.com") == null && p.pathFor("anything.co.uk") == null)
@@ -32,9 +32,10 @@ private fun lookAlikesAndOddInput(p: LogoPack) {
 }
 
 private fun parsing() {
-    val messy = LogoPack.parse("\n#comment\nnotab\nx.com\n\ngood.org\tgood\n too\tmany\tcolumns\n", "good\tM9 9h1v1H9z\tGood\nbad line\n")
+    val messy = LogoPack.parse("\n#comment\nnotab\nx.com\n\ngood.org\tgood\nthree.org\tgood\textra\n too\tmany\tcolumns\n", "good\tM9 9h1v1H9z\tGood\nbad line\n")
     Check.equal("good rows survive junk around them", "M9 9h1v1H9z", messy.pathFor("good.org"))
     Check.that("junk rows give nothing", messy.pathFor("x.com") == null && messy.pathFor("too") == null)
+    Check.that("a domain row with a third column is junk", messy.pathFor("three.org") == null)
     Check.that("an empty pack finds nothing", LogoPack.parse("", "").pathFor("github.com") == null)
     Check.that("a pack with a thousand rows loads", LogoPack.parse((0 until 1000).joinToString("\n") { "d$it.example\ts$it" }, (0 until 1000).joinToString("\n") { "s$it\tM0 0\tT$it" }).pathFor("d999.example") == "M0 0")
 }
