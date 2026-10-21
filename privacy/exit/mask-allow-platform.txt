@@ -1,0 +1,160 @@
+# Dedicated advertising and measurement hosts of owners that also run ordinary services (ADR-186).
+#
+# The classifier files whole domains under one category: google.com, facebook.com, bing.com, android.com, adobe.com and
+# scene7.com are all "advertising" or "analytics" in it, and masking them would route sign-in, push, image delivery and
+# connectivity checks through Tor. The generator therefore protects every masked-category domain of an owner that also
+# runs a core, cdn, social or identity service, unless it is named here. Only hosts whose single purpose is advertising
+# or measurement belong in this file. One line each: a domain, a tab, the reason. `prefix:` matches every classifier
+# domain that starts with the text. Read by the owner at the review of Task 21; a regression found by the device sweep
+# (MSK-002c) moves a host to the denylist.
+
+# --- Google: advertising and measurement networks. Left out on purpose: android.com, agnss.goog, 1e100.net, g.co, oo.gl,
+# --- withgoogle.com, news.google.com, feedburner.com, dai.google.com (video ad stitching inside a stream), googlecommerce.com,
+# --- the google.<country> domains, fcm.googleapis.com (push), firebase.com, firebase.google.com, firebase.googleapis.com,
+# --- firebaseapp.com, firebaseappcheck, firebasedynamiclinks, firebaseinappmessaging, firebaseinstallations,
+# --- firebaseperusertopics, firebaseremoteconfig (apps need these to work), googleapis.cn, gstatic.cn, googlezip.net,
+# --- googleweblight.in, googledownloads.cn, googlecode.com.
+prefix:adservice.google.	Google ad serving, one host per country
+2mdn.net	Google ad creative delivery
+a.admob.com	AdMob
+mm.admob.com	AdMob
+mmv.admob.com	AdMob
+p.admob.com	AdMob
+admeld.com	Google ad exchange
+adsensecustomsearchads.com	AdSense for search
+adtrafficquality.google	Google ad traffic quality
+channelintelligence.com	Google shopping ads
+dmtry.com	Google ad measurement
+doubleclick.com	DoubleClick
+doubleclick.net	DoubleClick
+doubleclickbygoogle.com	DoubleClick
+googleadservices.com	Google Ads conversion tracking
+googleoptimize.com	Google Optimize experiments
+googlesyndication.com	AdSense network
+googlesyndication-cn.com	AdSense network
+googletraveladservices.com	Google travel ads
+google-analytics.com	Google Analytics
+ssl-google-analytics.l.google.com	Google Analytics
+www-googletagmanager.l.google.com	Google Tag Manager
+invitemedia.com	Google DV360
+mmismm.com	Google ad measurement
+syndicatedsearch.goog	AdSense for search
+app-analytics-services.com	Google app analytics
+app-measurement.com	Google app measurement
+beacons-google.com	Google beacons
+crashlytics.com	crash reporting
+firebaselogging.googleapis.com	Firebase logging only
+firebaselogging-pa.googleapis.com	Firebase logging only
+
+# --- Verizon Media (AOL, Yahoo): ad technology. Left out: aol.com, aolcdn.com, complex.com, verizonmedia.com, vidible.tv,
+# --- gravity.com, grvcdn.com, isp.netscape.com, snacktv.de, np.lexity.com, ov.yahoo.co.jp.
+adap.tv	video ad server
+adrevolver.com	ad network
+adsdk.com	ad SDK
+adsonar.com	ad network
+adtech.de	ad server
+adtechus.com	ad server
+advertising.com	ad network
+alephd.com	ad exchange
+analytics.yahoo.com	Yahoo analytics
+atwola.com	ad server
+bluelithium.com	ad network
+btrll.com	ad network
+convertro.com	attribution
+jumptap.com	mobile ad network
+luminate.com	ad network
+nexage.com	mobile ad exchange
+overture.com	search ads
+pictela.net	ad creative
+pixazza.com	ad network
+pr-bh.ybp.yahoo.com	Yahoo bid partner
+sphere.com	ad network
+surphace.com	ad network
+tacoda.net	behavioural ads
+yads.yahoo.com	Yahoo ads
+yieldmanager.com	ad exchange
+sre-perim.com	measurement
+txmblr.com	Tumblr measurement
+
+# --- Microsoft: advertising, session analytics and crash reporting. Left out: bing.com, bing.net, analytics.live.com.
+247realmedia.com	ad network
+adnxs.com	Xandr ad exchange
+adnxs.net	Xandr ad exchange
+alenty.com	ad network
+bat.r.msn.com	Bing Ads UET tag
+bizographics.com	LinkedIn ad targeting
+mlnadvertising.com	ad network
+oaserve.com	ad server
+realmedia.com	ad server
+realmediadigital.com	ad server
+snap.licdn.com	LinkedIn Insight tag
+ads.linkedin.com	LinkedIn ads
+hockeyapp.net	crash reporting
+clarity.ms	Clarity session analytics
+a.clarity.ms	Clarity
+b.clarity.ms	Clarity
+c.clarity.ms	Clarity
+d.clarity.ms	Clarity
+e.clarity.ms	Clarity
+f.clarity.ms	Clarity
+g.clarity.ms	Clarity
+h.clarity.ms	Clarity
+i.clarity.ms	Clarity
+j.clarity.ms	Clarity
+log.clarity.ms	Clarity
+www.clarity.ms	Clarity
+
+# --- Adobe: marketing analytics. Left out: adobe.com, imageg.net and scene7.com (image delivery), storify.com, the
+# --- cloudfront hosts.
+2o7.net	Adobe Analytics
+adobedc.net	Adobe Experience Platform edge
+adobedtm.com	Adobe tag manager
+adobetag.com	Adobe tag
+demdex.net	Adobe Audience Manager
+everestjs.net	Adobe ad cloud
+everesttech.net	Adobe ad cloud
+hitbox.com	Adobe analytics
+nedstat.com	Adobe analytics
+omtrdc.net	Adobe analytics
+sitestat.com	Adobe analytics
+
+# --- Amazon: advertising and measurement. Left out: advertising.amazon.com, alexa.com, elasticbeanstalk.com, cloudfront.
+amazon-adsystem.com	Amazon ads
+assoc-amazon.ca	Amazon affiliate tracking
+assoc-amazon.co.uk	Amazon affiliate tracking
+assoc-amazon.com	Amazon affiliate tracking
+assoc-amazon.de	Amazon affiliate tracking
+assoc-amazon.fr	Amazon affiliate tracking
+assoc-amazon.jp	Amazon affiliate tracking
+alexametrics.com	Alexa measurement
+serving-sys.com	Sizmek ad server
+sizmek.com	Sizmek ad server
+
+# --- Other owners that also run ordinary services.
+1rx.io	RhythmOne ad network
+addesktop.com	RhythmOne ad network
+burstbeacon.com	RhythmOne ad network
+burstnet.com	RhythmOne ad network
+gwallet.com	RhythmOne ad network
+r1-cdn.net	RhythmOne ad creative delivery
+pixel.wp.com	WordPress.com stats pixel
+stats.wp.com	WordPress.com stats
+pubmine.com	WordPress.com ad network
+adbureau.net	Meta ad network
+atdmt.com	Meta ad server
+atlassbx.com	Meta ad measurement
+ads-twitter.com	X ads pixel
+analytics.twitter.com	X analytics
+mopub.com	X mobile ads
+tellapart.com	X ad retargeting
+go-mpulse.net	Akamai real-user measurement
+mpstat.us	Akamai real-user measurement
+cquotient.com	Salesforce commerce analytics
+krxd.net	Salesforce DMP
+tongji.baidu.com	Baidu analytics
+trafficfacts.com	GoDaddy analytics
+ad.mail.ru	VK ads
+ct.pinterest.com	Pinterest conversion tag
+digitru.st	IAB ad verification
+e.qq.com	Tencent ads
+fastly-insights.com	Fastly real-user measurement

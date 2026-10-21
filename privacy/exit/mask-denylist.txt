@@ -1,0 +1,45 @@
+# Domains that are never masked, although the classifier files them as advertising, analytics or attribution (ADR-186).
+#
+# A masked name goes through Tor: slower, from a different address, and refused when Tor is down. That is acceptable for a
+# beacon and not for anything the app needs to work or that treats a changed address as an attack. This list names the
+# second kind: sign-in and identity, bot and fraud detection, payment, push delivery, video players and the media sites
+# that the classifier files under analytics. One line each: a domain, a tab, the reason. A name under the domain is
+# protected too. Read by the owner at the review of Task 21; the device sweep (MSK-002c) adds hosts that regress.
+
+auth0.com	sign-in service
+datadome.co	bot protection: a changed address is treated as an attack
+siftscience.com	fraud detection
+trustev.com	fraud detection
+forter.com	fraud detection
+signifyd.com	fraud detection
+cdn-scripts.signifyd.com	fraud detection
+fqsecure.com	security service
+cybersource.com	payment processing
+app.paykickstart.com	checkout
+bigcommerce.com	commerce platform
+shopifysvc.com	commerce platform
+v.shopify.com	commerce platform
+stats.shopify.com	commerce platform
+urbanairship.com	push delivery
+cleverpush.com	push delivery
+foxpush.com	push delivery
+cdn.foxpush.net	push delivery
+cdn.pushnews.eu	push delivery
+tracker.wigzopush.com	push delivery
+wistia.com	video hosting
+wistia.net	video hosting
+flowplayer.org	video player
+player.pepsia.com	video player
+eplayer.clipsyndicate.com	video player
+streamrail.com	video player
+streamrail.net	video player
+videoplaza.tv	video player
+smartstream.tv	video player
+kweb.videostep.com	video player
+videoadex.com	video player
+turner.com	media site
+widgets.bankrate.com	finance widgets
+myfonts.net	font delivery
+geoplugin.net	location lookup
+tiaa-cref.org	bank
+pointificsecure.com	security service
