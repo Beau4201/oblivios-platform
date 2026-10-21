@@ -26,6 +26,8 @@ class FakeKeyGateway : KeyGateway {
     var hardwareSecretsCreated = 0
         private set
 
+    override fun hasHardwareSecret(): Boolean = hw != null
+
     override fun hardwareSecret(): ByteArray? = hw?.copyOf()
 
     override fun createHardwareSecret(): ByteArray {

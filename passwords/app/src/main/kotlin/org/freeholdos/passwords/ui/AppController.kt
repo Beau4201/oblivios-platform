@@ -288,11 +288,18 @@ class AppController(val activity: SecureActivity) {
     }
 
     fun save(entry: Entry): Boolean {
+        val id = entry.id.copyOf()
         val r = repo.save(entry)
         entry.wipe()
         return when (r) {
             SaveResult.Saved -> {
                 refresh()
+                // The detail screen under the edit screen must show what was saved, not what was there before.
+                if (current?.id?.contentEquals(id) == true) {
+                    current?.wipe()
+                    current = repo.get(id)
+                    revealed = false
+                }
                 true
             }
             SaveResult.Locked -> false

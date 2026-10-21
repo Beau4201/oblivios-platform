@@ -21,6 +21,9 @@ class BiometricKeyInvalidated : Exception()
  *    invalidated by a change of the enrolled biometrics. The screen-lock credential is never an alternative.
  */
 interface KeyGateway {
+    /** Whether the hardware key exists, without using it (no secure-hardware operation). */
+    fun hasHardwareSecret(): Boolean
+
     /** The 32-byte output of the non-exportable HMAC key, or `null` when that key does not exist (any more). */
     fun hardwareSecret(): ByteArray?
 

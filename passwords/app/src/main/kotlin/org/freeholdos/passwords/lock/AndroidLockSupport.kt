@@ -42,11 +42,7 @@ class AndroidEnvironment(
 ) : Environment {
     override fun bootCount(): Int = Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -2)
 
-    override fun hardwareSecretPresent(): Boolean {
-        val s = gateway.hardwareSecret() ?: return false
-        s.fill(0)
-        return true
-    }
+    override fun hardwareSecretPresent(): Boolean = gateway.hasHardwareSecret()
 
     override fun biometricsValid(): Boolean = !files.hasBiometricWrapper() || gateway.biometricsStillValid()
 }

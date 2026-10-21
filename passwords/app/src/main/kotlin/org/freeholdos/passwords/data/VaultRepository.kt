@@ -108,9 +108,7 @@ class DomainIndexStore(dir: File, private val gateway: KeyGateway) {
     private var cached: ByteArray? = null
 
     fun rebuild(handle: Long) {
-        val key = gateway.indexKey()
-        val reply = Reply.of(VaultCore.indexBuild(handle, key))
-        key.fill(0)
+        val reply = Reply.of(VaultCore.indexBuild(handle, indexKey()))
         if (!reply.ok) return
         val bytes = reply.payload()
         cached = bytes
@@ -120,13 +118,19 @@ class DomainIndexStore(dir: File, private val gateway: KeyGateway) {
     /** Does an account exist for this site or, without a host, this app? Answers without the vault key. */
     fun hasAccount(webDomain: String?, packageName: String): Boolean {
         val bytes = cached ?: Reply.of(VaultCore.readFileBounded(file.path)).let { if (it.ok) it.payload() else null }?.also { cached = it } ?: return false
-        val key = gateway.indexKey()
-        return try {
-            if (webDomain != null) VaultCore.indexContains(bytes, key, webDomain, 0) else VaultCore.indexContains(bytes, key, packageName, 1)
-        } finally {
-            key.fill(0)
-        }
+        val key = indexKey()
+        return if (webDomain != null) VaultCore.indexContains(bytes, key, webDomain, 0) else VaultCore.indexContains(bytes, key, packageName, 1)
     }
+
+    /**
+     * The key stays in memory for the life of the process: reading it from the secure hardware takes tens of milliseconds
+     * and the autofill service asks on every focus. Code in this process can use the Keystore key anyway (residual 2 of
+     * spec 4.1), so the copy adds no reach.
+     */
+    @Volatile
+    private var key: ByteArray? = null
+
+    private fun indexKey(): ByteArray = key ?: gateway.indexKey().also { key = it }
 }
 
 /** The lock state of the process as the services see it. */

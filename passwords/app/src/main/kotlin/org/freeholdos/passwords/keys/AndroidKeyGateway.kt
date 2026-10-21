@@ -25,6 +25,8 @@ import javax.crypto.spec.GCMParameterSpec
 class AndroidKeyGateway : KeyGateway {
     private val store: KeyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
 
+    override fun hasHardwareSecret(): Boolean = store.containsAlias(HW_ALIAS)
+
     override fun hardwareSecret(): ByteArray? = if (store.containsAlias(HW_ALIAS)) hmac(HW_ALIAS, HW_LABEL) else null
 
     override fun createHardwareSecret(): ByteArray {
