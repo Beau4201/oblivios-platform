@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: Apache-2.0
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// ADR-184, ADR-186. The exit app of Compartments. Platform-signed because NETWORK_FACTORY, CONTROL_OEM_PAID_NETWORK_PREFERENCE
+// and INTERACT_ACROSS_USERS_FULL are signature permissions, privileged for QUERY_USERS, persistent so that the apps on Tor are
+// closed from the first moment of a boot. No INTERNET permission. The probe app (ExitProbe) is the throwaway ancestor.
+android_app {
+    name: "ExitApp",
+    manifest: "AndroidManifest.xml",
+    srcs: ["src/**/*.java"],
+    resource_dirs: ["res"],
+    // NetworkAgent, NetworkProvider and OemNetworkPreferences are in the module-lib stubs of Connectivity; "module_current"
+    // alone does not put android.net.* on the class path (the probe's first module build failed on it).
+    sdk_version: "module_current",
+    libs: ["framework-connectivity.stubs.module_lib"],
+    certificate: "platform",
+    privileged: true,
+    required: [
+        "privapp-permissions-org.freeholdos.exit.xml",
+        "default-permissions-org.freeholdos.exit.xml",
+    ],
+}
+
+prebuilt_etc {
+    name: "privapp-permissions-org.freeholdos.exit.xml",
+    src: "privapp-permissions-org.freeholdos.exit.xml",
+    sub_dir: "permissions",
+}
+
+// POST_NOTIFICATIONS is a runtime permission: a system app gets it from the default-permission policy, not from the
+// privapp list.
+prebuilt_etc {
+    name: "default-permissions-org.freeholdos.exit.xml",
+    src: "default-permissions-org.freeholdos.exit.xml",
+    sub_dir: "default-permissions",
+}

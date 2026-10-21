@@ -1,0 +1,582 @@
+// SPDX-License-Identifier: Apache-2.0
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.freeholdos.exit.Choices;
+import org.freeholdos.exit.Consent;
+import org.freeholdos.exit.ControlCodec;
+import org.freeholdos.exit.CompanyNames;
+import org.freeholdos.exit.Ladder;
+import org.freeholdos.exit.Policy;
+import org.freeholdos.exit.Presenter;
+import org.freeholdos.exit.UidRanges;
+
+/** Host checks of the pure Java of the exit app (no Android class). Exits 1 on the first failure. */
+public final class HostChecks {
+    private static void check(boolean ok, String what) {
+        if (!ok) {
+            System.out.println("FAIL: " + what);
+            System.exit(1);
+        }
+    }
+
+    private static String str(List<int[]> ranges) {
+        StringBuilder b = new StringBuilder();
+        for (int[] r : ranges) {
+            b.append('[').append(r[0]).append('-').append(r[1]).append(']');
+        }
+        return b.toString();
+    }
+
+    private static String str(List<Policy.Cls> classes, boolean kinds) {
+        StringBuilder b = new StringBuilder();
+        for (Policy.Cls c : classes) {
+            b.append(c.kind.name().charAt(0)).append('[').append(c.start).append('-').append(c.end).append(']');
+        }
+        return b.toString();
+    }
+
+    private static void throwsIae(Runnable r, String what) {
+        try {
+            r.run();
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        check(false, what + " must throw");
+    }
+
+    // ---- UidRanges ------------------------------------------------------------------------------------------------
+
+    static void uidRanges() {
+        check(Arrays.equals(UidRanges.forUser(0), new int[] {10000, 19999}), "user 0 range");
+        check(Arrays.equals(UidRanges.forUser(10), new int[] {1010000, 1019999}), "user 10 range");
+        check(Arrays.equals(UidRanges.forUser(21474), new int[] {2147410000, 2147419999}), "largest user");
+        throwsIae(() -> UidRanges.forUser(-1), "negative user");
+        throwsIae(() -> UidRanges.forUser(21475), "user past int range");
+
+        check(str(UidRanges.coalesce(new int[] {})).equals(""), "no uids");
+        check(str(UidRanges.coalesce(new int[] {10005})).equals("[10005-10005]"), "one uid");
+        check(str(UidRanges.coalesce(new int[] {10003, 10001, 10002})).equals("[10001-10003]"), "adjacent uids, unsorted");
+        check(str(UidRanges.coalesce(new int[] {10001, 10001, 10002})).equals("[10001-10002]"), "duplicates are one");
+        check(str(UidRanges.coalesce(new int[] {10001, 10003})).equals("[10001-10001][10003-10003]"), "a gap stays");
+        int[] input = {10003, 10001};
+        UidRanges.coalesce(input);
+        check(input[0] == 10003, "the input array is not sorted in place");
+
+        List<int[]> all = Arrays.asList(new int[] {10000, 19999});
+        check(str(UidRanges.subtract(all, Arrays.asList(new int[] {10500, 10600}))).equals("[10000-10499][10601-19999]"), "cut from the middle");
+        check(str(UidRanges.subtract(all, Arrays.asList(new int[] {10000, 10000}))).equals("[10001-19999]"), "cut at the start");
+        check(str(UidRanges.subtract(all, Arrays.asList(new int[] {19999, 19999}))).equals("[10000-19998]"), "cut at the end");
+        check(str(UidRanges.subtract(all, Arrays.asList(new int[] {10000, 19999}))).equals(""), "cut all");
+        check(str(UidRanges.subtract(all, Arrays.asList(new int[] {0, 30000}))).equals(""), "cut more than all");
+        check(str(UidRanges.subtract(all, Arrays.asList(new int[] {20000, 30000}))).equals("[10000-19999]"), "cut outside");
+        check(str(UidRanges.subtract(all, Arrays.asList(new int[] {10100, 10100}, new int[] {10102, 10103}))).equals("[10000-10099][10101-10101][10104-19999]"), "two cuts");
+        check(str(UidRanges.subtract(Arrays.asList(new int[] {10000, 10010}, new int[] {20000, 20010}), Arrays.asList(new int[] {10005, 20005}))).equals("[10000-10004][20006-20010]"), "a cut across two ranges");
+        check(str(UidRanges.subtract(Arrays.asList(new int[] {2147410000, 2147419999}), Arrays.asList(new int[] {2147419999, 2147419999}))).equals("[2147410000-2147419998]"), "no int overflow at the top");
+    }
+
+    // ---- Choices --------------------------------------------------------------------------------------------------
+
+    static void choices() {
+        Choices c = new Choices();
+        check(c.choiceOf("org.example.app") == Choices.Choice.DIRECT, "default is Direct");
+        check(c.set("org.example.app", Choices.Choice.TOR), "set Tor");
+        check(c.choiceOf("org.example.app") == Choices.Choice.TOR, "Tor taken");
+        check(c.setShowsAddress("org.example.app", 7, true) && c.setShowsAddress("org.example.app", 300, true), "show taken");
+        check(Arrays.equals(c.shownCompanies("org.example.app"), new int[] {7, 300}), "companies sorted");
+        check(c.showsAddress("org.example.app", 7) && !c.showsAddress("org.example.app", 8), "showsAddress");
+        check(!c.setShowsAddress("org.example.app", 0, true) && !c.setShowsAddress("org.example.app", 65536, true), "company range");
+        check(!c.set("not a package", Choices.Choice.TOR) && !c.set("single", Choices.Choice.TOR) && !c.set("1a.b", Choices.Choice.TOR), "bad names refused");
+        check(!c.set(null, Choices.Choice.TOR), "null name refused");
+
+        Choices back = Choices.parse(c.serialize());
+        check(!back.damaged(), "a written file reads clean");
+        check(back.serialize().equals(c.serialize()), "round trip");
+        check(back.choiceOf("org.example.app") == Choices.Choice.TOR && back.showsAddress("org.example.app", 300), "round trip content");
+
+        c.set("org.example.app", Choices.Choice.DIRECT);
+        check(c.choiceOf("org.example.app") == Choices.Choice.DIRECT, "back to Direct");
+        c.setShowsAddress("org.example.app", 7, false);
+        c.setShowsAddress("org.example.app", 300, false);
+        check(c.packagesWithOverrides().isEmpty(), "no overrides left");
+
+        // Nothing there yet is not damage; anything unreadable is, and gives the defaults.
+        check(!Choices.parse("").damaged() && !Choices.parse(null).damaged(), "no file is not damage");
+        for (String junk : new String[] {"garbage", "exit-choices\t2\ntor\torg.a.b\n", "\u0000\u0001", "exit-choices 1\n", "tor\torg.a.b\n"}) {
+            Choices j = Choices.parse(junk);
+            check(j.damaged() && j.torApps().isEmpty(), "junk is damage with defaults: " + junk.length());
+        }
+        Choices part = Choices.parse(Choices.HEADER + "\ntor\torg.good.app\ntor\tbad name\nshow\torg.good.app\tx\nshow\torg.good.app\t7\nunknown\tx\n");
+        check(part.damaged(), "a bad line is damage");
+        check(part.choiceOf("org.good.app") == Choices.Choice.TOR && part.showsAddress("org.good.app", 7), "the good lines are kept");
+
+        // Bounds.
+        Choices full = new Choices();
+        for (int i = 0; i < Choices.MAX_TOR_APPS; i++) {
+            check(full.set("org.app.p" + i, Choices.Choice.TOR), "tor app " + i);
+        }
+        check(!full.set("org.app.extra", Choices.Choice.TOR), "the 49th Tor app is refused");
+        check(full.set("org.app.p0", Choices.Choice.TOR), "an app already on Tor can be set again");
+        check(full.set("org.app.extra", Choices.Choice.DIRECT), "Direct is always taken");
+        Choices shown = new Choices();
+        for (int i = 0; i < Choices.MAX_SHOWN; i++) {
+            check(shown.setShowsAddress("org.app.p" + (i / 200), 1 + i % 200, true), "show " + i);
+        }
+        check(!shown.setShowsAddress("org.app.other", 1, true), "the table of shown addresses is bounded");
+        check(shown.setShowsAddress("org.app.p0", 1, true), "an existing entry can be set again");
+        StringBuilder big = new StringBuilder(Choices.HEADER).append('\n');
+        while (big.length() <= Choices.MAX_FILE_CHARS) {
+            big.append("tor\torg.a.b\n");
+        }
+        check(Choices.parse(big.toString()).damaged(), "a file over the size limit is damaged");
+        check(!Choices.validPackage("a.b.") && !Choices.validPackage("a..b") && !Choices.validPackage("a.b-c") && Choices.validPackage("a.b_c9"), "package grammar");
+        check(!Choices.validPackage("a." + "x".repeat(260)) && Choices.validPackage("a." + "x".repeat(253)), "package length 255");
+        check(!Choices.validPackage("a." + "x".repeat(254)), "package length 256 is refused");
+        check(Choices.MAX_TOR_APPS == 48 && Choices.MAX_SHOWN == 256 && Choices.MAX_FILE_CHARS == 65536, "the limits of Choices");
+    }
+
+    // ---- Consent --------------------------------------------------------------------------------------------------
+
+    static void consent() {
+        for (Consent c : Consent.values()) {
+            check(Consent.parse(c.serialize()) == c, "consent round trip " + c);
+        }
+        for (String junk : new String[] {null, "", "ON", "OFF", "Off", "yes", "true", "1", "on ", "onn"}) {
+            check(Consent.parse(junk) == Consent.UNSET, "unreadable consent is UNSET: " + junk);
+        }
+    }
+
+    // ---- Policy ---------------------------------------------------------------------------------------------------
+
+    private static Policy.App app(String pkg, int uid) {
+        return new Policy.App(pkg, uid);
+    }
+
+    private static Choices tor(String... pkgs) {
+        Choices c = new Choices();
+        for (String p : pkgs) {
+            check(c.set(p, Choices.Choice.TOR), "tor " + p);
+        }
+        return c;
+    }
+
+    static void policy() {
+        List<Policy.App> apps = Arrays.asList(
+                app("org.a.one", 10100), app("org.a.two", 10101), app("org.a.three", 10200),
+                app("org.freeholdos.exit", 10050), app("app.seamlessupdate.client", 10060));
+        int[] users = {0};
+
+        // No consent: nothing masked, no steering. Tor does not wait for the consent: it is the user's own choice.
+        Policy.Out out = Policy.compute(tor("org.a.one"), apps, users, Consent.UNSET, false, false);
+        check(str(out.classes, true).equals("E[10050-10050]E[10060-10060]T[10100-10100]"), "no consent: Tor and Exempt only: " + str(out.classes, true));
+        check(out.steer.isEmpty(), "no consent: no steering");
+        check(str(out.guard).equals("[10100-10100]"), "no consent: the Tor guard stays");
+        check(out.oemPrefs.size() == 1 && out.oemPrefs.get("org.a.one") == Policy.OEM_PRIVATE_ONLY && Policy.OEM_PRIVATE_ONLY == 4, "preference for the Tor app");
+        for (Consent c : new Consent[] {Consent.OFF}) {
+            check(Policy.compute(tor(), apps, users, c, false, false).steer.isEmpty(), "consent OFF: no steering");
+        }
+
+        // Consent ON, two Tor apps: Tor (two ranges, adjacent uids join), Masked is the user range minus them and the
+        // exempt apps, Exempt are the exit app and the updater.
+        out = Policy.compute(tor("org.a.one", "org.a.two", "org.a.three"), apps, users, Consent.ON, false, false);
+        check(str(out.classes, true).equals(
+                "M[10000-10049]E[10050-10050]M[10051-10059]E[10060-10060]M[10061-10099]T[10100-10101]M[10102-10199]T[10200-10200]M[10201-19999]"),
+                "classes: " + str(out.classes, true));
+        check(str(out.guard).equals("[10100-10101][10200-10200]"), "guard: " + str(out.guard));
+        check(str(out.steer).equals("[10000-10049][10051-10059][10061-10099][10102-10199][10201-19999]"), "steer: " + str(out.steer));
+        // Sorted and disjoint, as the daemon requires.
+        int next = 10000;
+        for (Policy.Cls c : out.classes) {
+            check(c.start >= next && c.start <= c.end, "sorted and disjoint at " + c.start);
+            next = c.end + 1;
+        }
+
+        // The exit app and the updater are never Tor or Masked, even when chosen.
+        out = Policy.compute(tor("org.freeholdos.exit", "app.seamlessupdate.client"), apps, users, Consent.ON, false, false);
+        check(out.guard.isEmpty() && out.oemPrefs.isEmpty(), "exempt apps are never Tor");
+        for (Policy.Cls c : out.classes) {
+            if (c.kind == Policy.Kind.MASKED) {
+                check(!(c.start <= 10050 && 10050 <= c.end) && !(c.start <= 10060 && 10060 <= c.end), "exempt uid is never masked");
+            }
+        }
+
+        // A package that shares its uid with the exit app (a shared user id) is exempt, whatever else is chosen for it.
+        List<Policy.App> shared = Arrays.asList(app("org.freeholdos.exit", 10050), app("org.shared.tor", 10050), app("org.a.one", 10100));
+        out = Policy.compute(tor("org.shared.tor", "org.a.one"), shared, users, Consent.ON, false, false);
+        check(str(out.guard).equals("[10100-10100]"), "a shared uid with an exempt app is never Tor: " + str(out.guard));
+
+        // A package installed later extends the Tor range only when chosen; the masked range already covers its uid.
+        List<Policy.App> later = new ArrayList<>(apps);
+        later.add(app("org.a.new", 10102));
+        Policy.Out before = Policy.compute(tor("org.a.one"), later, users, Consent.ON, false, false);
+        check(str(before.guard).equals("[10100-10100]"), "an unchosen new package is not Tor");
+        Policy.Out chosen = Policy.compute(tor("org.a.one", "org.a.new"), later, users, Consent.ON, false, false);
+        check(str(chosen.guard).equals("[10100-10100][10102-10102]"), "a chosen new package is Tor: " + str(chosen.guard));
+
+        // Several users: each has its own app range, and a package on Tor is Tor in every user where it is installed.
+        List<Policy.App> two = Arrays.asList(app("org.a.one", 10100), app("org.a.one", 1010100), app("org.freeholdos.exit", 10050), app("org.freeholdos.exit", 1010050));
+        out = Policy.compute(tor("org.a.one"), two, new int[] {10, 0}, Consent.ON, false, false);
+        check(str(out.guard).equals("[10100-10100][1010100-1010100]"), "Tor in both users: " + str(out.guard));
+        check(str(out.steer).equals("[10000-10049][10051-10099][10101-19999][1010000-1010049][1010051-1010099][1010101-1019999]"), "masked in both users: " + str(out.steer));
+        out = Policy.compute(tor("org.a.one"), two, new int[] {0, 0, 10}, Consent.ON, false, false);
+        check(str(out.steer).equals("[10000-10049][10051-10099][10101-19999][1010000-1010049][1010051-1010099][1010101-1019999]"), "a repeated user is one");
+
+        // A package with a system uid has no place in the table.
+        out = Policy.compute(tor("org.sys.app", "org.hi.app"), Arrays.asList(app("org.sys.app", 1000), app("org.neg.app", -5), app("org.hi.app", 20000)),
+                users, Consent.ON, false, false);
+        check(out.guard.isEmpty() && out.oemPrefs.isEmpty(), "a system uid and a uid above the app ids are never in a range");
+        check(out.classes.size() == 1 && out.classes.get(0).start == 10000 && out.classes.get(0).end == 19999, "the whole range is masked");
+
+        // Warnings.
+        out = Policy.compute(tor(), apps, users, Consent.ON, true, true);
+        check(out.warnings.contains(Policy.Warning.VPN_ACTIVE) && out.warnings.contains(Policy.Warning.PRIVATE_DNS_LIMITED), "both warnings");
+        out = Policy.compute(tor(), apps, users, Consent.UNSET, true, true);
+        check(out.warnings.contains(Policy.Warning.VPN_ACTIVE) && !out.warnings.contains(Policy.Warning.PRIVATE_DNS_LIMITED), "the DNS limit matters only for the masked tier");
+        out = Policy.compute(tor(), apps, users, Consent.ON, false, false);
+        check(out.warnings.isEmpty(), "no warning without a reason");
+
+        // Limits of the daemon (256 classes) and the helper (128 ranges per list).
+        List<Policy.App> many = new ArrayList<>();
+        Choices manyTor = new Choices();
+        for (int i = 0; i < 48; i++) {
+            many.add(app("org.m.p" + i, 10100 + 2 * i)); // every second uid: no two ranges join
+            manyTor.set("org.m.p" + i, Choices.Choice.TOR);
+        }
+        out = Policy.compute(manyTor, many, users, Consent.ON, false, false);
+        check(out.guard.size() == 48 && !out.warnings.contains(Policy.Warning.MASK_TIER_OFF_TOO_MANY_APPS), "48 Tor apps fit");
+        check(out.classes.size() <= Policy.MAX_CLASSES && out.steer.size() <= Policy.MAX_RANGES, "within the limits");
+        // Three users with 48 non-adjacent Tor apps each: 144 guard ranges, past 128.
+        List<Policy.App> three = new ArrayList<>();
+        for (int u = 0; u < 3; u++) {
+            for (int i = 0; i < 48; i++) {
+                three.add(app("org.m.p" + i, u * 100000 + 10100 + 2 * i));
+            }
+        }
+        out = Policy.compute(manyTor, three, new int[] {0, 1, 2}, Consent.ON, false, false);
+        check(out.warnings.contains(Policy.Warning.TOO_MANY_TOR_APPS), "144 guard ranges raise the warning");
+        check(out.guard.size() == Policy.MAX_RANGES, "the guard is cut at 128");
+        check(out.steer.isEmpty() && out.warnings.contains(Policy.Warning.MASK_TIER_OFF_TOO_MANY_APPS), "and the masked tier goes off");
+        // The table the daemon gets is within its limit.
+        check(out.classes.size() <= Policy.MAX_CLASSES, "classes within limit");
+        // The steer limit is 128 ranges. Three users, every app in each: 42 Tor apps give 126 guard ranges and 129 masked
+        // ranges (one more than each Tor uid, plus the stretch above the last in each user): the masked tier goes off. With
+        // two apps in two users only, 125 guard ranges give 128 masked ranges: it stays on.
+        Choices edge = new Choices();
+        List<Policy.App> edgeApps = new ArrayList<>();
+        for (int i = 0; i < 42; i++) {
+            edge.set("org.e.p" + i, Choices.Choice.TOR);
+            for (int u = 0; u < 3; u++) {
+                edgeApps.add(app("org.e.p" + i, u * 100000 + 10100 + 2 * i));
+            }
+        }
+        out = Policy.compute(edge, edgeApps, new int[] {0, 1, 2}, Consent.ON, false, false);
+        check(out.guard.size() == 126 && out.steer.isEmpty() && out.warnings.contains(Policy.Warning.MASK_TIER_OFF_TOO_MANY_APPS), "129 masked ranges: off");
+        edgeApps.remove(edgeApps.size() - 1);
+        edgeApps.remove(edgeApps.size() - 1);
+        edgeApps.remove(edgeApps.size() - 1);
+        edgeApps.add(app("org.e.p41", 10100 + 82));
+        edgeApps.add(app("org.e.p41", 100000 + 10100 + 82));
+        out = Policy.compute(edge, edgeApps, new int[] {0, 1, 2}, Consent.ON, false, false);
+        check(out.guard.size() == 125 && out.steer.size() == 128 && out.warnings.isEmpty(), "128 masked ranges: on: guard=" + out.guard.size() + " steer=" + out.steer.size());
+
+        // 48 Tor apps in two users: 96 guard ranges and 98 masked ranges, both inside the limits, so the tier stays on.
+        Choices c2 = new Choices();
+        List<Policy.App> holes = new ArrayList<>();
+        for (int i = 0; i < 48; i++) {
+            c2.set("org.h.p" + i, Choices.Choice.TOR);
+            holes.add(app("org.h.p" + i, 10100 + 2 * i));
+            holes.add(app("org.h.p" + i, 100000 + 10100 + 2 * i));
+        }
+        out = Policy.compute(c2, holes, new int[] {0, 1}, Consent.ON, false, false);
+        check(out.guard.size() == 96 && out.steer.size() == 98 && out.warnings.isEmpty() && out.classes.size() == 194,
+                "guard=" + out.guard.size() + " steer=" + out.steer.size() + " classes=" + out.classes.size());
+    }
+
+    // ---- Ladder ---------------------------------------------------------------------------------------------------
+
+    static void ladder() {
+        Ladder l = new Ladder();
+        check(l.shouldNotify(10100, 7, 1000), "the first report notifies");
+        check(!l.shouldNotify(10100, 7, 2000), "the second inside the window does not");
+        check(l.shouldNotify(10100, 8, 2000), "another company does");
+        check(l.shouldNotify(10101, 7, 2000), "another app does");
+        check(!l.shouldNotify(10100, 7, 1000 + Ladder.WINDOW_MS), "exactly at the end of the window it is still the same window");
+        check(l.shouldNotify(10100, 7, 1000 + Ladder.WINDOW_MS + 1), "after the window it notifies again");
+        check(!l.shouldNotify(10100, 7, 1000 + Ladder.WINDOW_MS + 2), "and the new window holds");
+        check(l.size() == 3, "keys of an old window are forgotten: " + l.size());
+        check(Ladder.WINDOW_MS == 600000 && Ladder.MAX_KEYS == 4096, "the numbers of ladder.rs");
+        // A flood of keys cannot grow the table, and the oldest key goes first.
+        Ladder f = new Ladder();
+        for (int i = 0; i < Ladder.MAX_KEYS; i++) {
+            check(f.shouldNotify(10000 + i, 1, i), "key " + i);
+        }
+        check(f.size() == Ladder.MAX_KEYS, "full");
+        check(f.shouldNotify(99999, 1, 5000), "a new key at the limit notifies");
+        check(f.size() == Ladder.MAX_KEYS, "still bounded");
+        check(f.shouldNotify(10000, 1, 5001), "the oldest key was evicted, so it notifies again");
+        check(!f.shouldNotify(10001 + 1, 1, 5002), "a younger key is still held");
+    }
+
+    // ---- Presenter and CompanyNames -------------------------------------------------------------------------------
+
+    static void presenter() {
+        List<Presenter.Listed> apps = Arrays.asList(
+                new Presenter.Listed("org.z.zeta", "Zeta", 10102), new Presenter.Listed("org.a.also", "alpha", 10103), new Presenter.Listed("org.a.alpha", "alpha", 10100),
+                new Presenter.Listed("org.b.beta", "Beta Reader", 10101), new Presenter.Listed("org.freeholdos.exit", "Compartments", 10050),
+                new Presenter.Listed("app.seamlessupdate.client", "Updater", 10060)
+        );
+        Choices c = new Choices();
+        List<Presenter.AppRow> rows = Presenter.appRows(c, apps, "");
+        StringBuilder order = new StringBuilder();
+        for (Presenter.AppRow r : rows) {
+            order.append(r.pkg).append(r.tor ? "+" : "").append(' ');
+        }
+        check(order.toString().equals("org.a.alpha org.a.also org.b.beta org.z.zeta "), "sorted by label, then package, without the exempt apps: " + order);
+        check(Presenter.appRows(c, apps, "ALPH").size() == 2, "search by label in any case");
+        check(Presenter.appRows(c, apps, "  org.b ").size() == 1, "search by package, trimmed");
+        check(Presenter.appRows(c, apps, "READER").size() == 1, "search by a word of the label that has capitals");
+        check(Presenter.appRows(c, apps, "nothing").isEmpty() && Presenter.appRows(c, apps, null).size() == 4, "no match, null query");
+        check(Presenter.appRows(c, apps, "compart").isEmpty(), "the exit app is not listed");
+
+        // A tap on an app row, then the policy: the app is Tor and its uid is in the guard.
+        check(Presenter.toggled(c, "org.a.alpha") == Choices.Choice.TOR, "first tap: Tor");
+        c.set("org.a.alpha", Presenter.toggled(c, "org.a.alpha"));
+        check(Presenter.toggled(c, "org.a.alpha") == Choices.Choice.DIRECT, "second tap: Direct");
+        check(Presenter.appRows(c, apps, "").get(0).tor, "the row shows Tor");
+        List<Policy.App> installed = new ArrayList<>();
+        for (Presenter.Listed l : apps) {
+            installed.add(new Policy.App(l.pkg, l.uid));
+        }
+        Policy.Out out = Policy.compute(c, installed, new int[] {0}, Consent.ON, false, false);
+        check(str(out.guard).equals("[10100-10100]") && out.oemPrefs.containsKey("org.a.alpha"), "selecting Tor gives the expected policy: " + str(out.guard));
+
+        // The hosts that see the address.
+        CompanyNames names = CompanyNames.parse("exit-mask-list\t1\nads.example.com\t7\tExample Ads\nx.example\t0\tprotected\nbad\tx\tN\nlong.example\t9\t" + "n".repeat(65) + "\ny.example\t300\tTwo\tcolumns\ne.example\t11\t\nbig.example\t70000\tBig\nd.example\t4\tFirst\nd2.example\t4\tSecond\n");
+        check("Example Ads".equals(names.nameOf(7)) && names.nameOf(0) == null && names.nameOf(9) == null && names.nameOf(11) == null && names.nameOf(70000) == null && "First".equals(names.nameOf(4)) && names.size() == 2, "company names: " + names.size());
+        check(CompanyNames.parse("a.example\t7\tName\n").size() == 0 && CompanyNames.parse("not a header\na.example\t7\tName\n").size() == 0,
+                "rows without the header are not read");
+        check(CompanyNames.parse("not a list\n").size() == 0 && CompanyNames.parse(null).size() == 0, "not a list: no names");
+        check(CompanyNames.parse("exit-mask-list\t1\na.example\t70000\tBig\nb.example\t5\tA\u0001B\n").nameOf(5).equals("AB"), "control characters are dropped, ids past 16 bits are not names");
+        c.setShowsAddress("org.b.beta", 7, true);
+        c.setShowsAddress("org.b.beta", 8, true);
+        c.setShowsAddress("org.a.alpha", 7, true);
+        List<Presenter.OverrideRow> o = Presenter.overrideRows(c, names);
+        check(o.size() == 3 && o.get(0).pkg.equals("org.a.alpha") && o.get(0).company == 7 && "Example Ads".equals(o.get(0).companyName)
+                && o.get(2).company == 8 && o.get(2).companyName == null, "override rows sorted by package and company");
+        check(Presenter.overrideRows(new Choices(), names).isEmpty(), "no overrides");
+    }
+
+    // ---- ControlCodec ---------------------------------------------------------------------------------------------
+
+    private static Map<String, byte[]> vectors() throws Exception {
+        String path = System.getProperty("vectors");
+        check(path != null, "-Dvectors=<file> is required");
+        Map<String, byte[]> m = new HashMap<>();
+        for (String line : Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8)) {
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+            String[] f = line.split("\t");
+            check(f.length == 2 && f[1].length() % 2 == 0, "vector line: " + line);
+            byte[] b = new byte[f[1].length() / 2];
+            for (int i = 0; i < b.length; i++) {
+                b[i] = (byte) Integer.parseInt(f[1].substring(2 * i, 2 * i + 2), 16);
+            }
+            check(m.put(f[0], b) == null, "vector twice: " + f[0]);
+        }
+        return m;
+    }
+
+    private static void same(Map<String, byte[]> v, String name, byte[] built) {
+        check(Arrays.equals(v.get(name), built), "vector " + name);
+    }
+
+    private static ControlCodec.Reply daemon(Map<String, byte[]> v, String name) throws Exception {
+        byte[] b = v.get(name);
+        ControlCodec.Reply r = ControlCodec.decodeDaemon(b, b.length);
+        check(r != null && r.used == b.length, "decoded whole: " + name);
+        for (int cut = 0; cut < b.length; cut++) {
+            check(ControlCodec.decodeDaemon(b, cut) == null, "a frame cut at " + cut + " is incomplete: " + name);
+        }
+        return r;
+    }
+
+    private static ControlCodec.Reply route(Map<String, byte[]> v, String name) throws Exception {
+        byte[] b = v.get(name);
+        ControlCodec.Reply r = ControlCodec.decodeRoute(b, b.length);
+        check(r != null && r.used == b.length, "decoded whole: " + name);
+        for (int cut = 0; cut < b.length; cut++) {
+            check(ControlCodec.decodeRoute(b, cut) == null, "a frame cut at " + cut + " is incomplete: " + name);
+        }
+        return r;
+    }
+
+    private static void refuses(boolean daemon, byte[] frame, String what) {
+        try {
+            if (daemon) {
+                ControlCodec.decodeDaemon(frame, frame.length);
+            } else {
+                ControlCodec.decodeRoute(frame, frame.length);
+            }
+        } catch (ControlCodec.CodecException e) {
+            return;
+        }
+        check(false, "must refuse " + what);
+    }
+
+    static void codec() throws Exception {
+        Map<String, byte[]> v = vectors();
+        List<Policy.Cls> classes = Arrays.asList(
+                new Policy.Cls(10000, 10000, Policy.Kind.TOR), new Policy.Cls(10001, 10230, Policy.Kind.MASKED),
+                new Policy.Cls(10231, 10231, Policy.Kind.EXEMPT));
+        same(v, "to_daemon.hello", ControlCodec.hello());
+        same(v, "to_daemon.set_memory_max", ControlCodec.setMemoryMax(7, 64L * 1024 * 1024));
+        same(v, "to_daemon.refresh_app", ControlCodec.refreshApp(3, 10123));
+        same(v, "to_daemon.refresh_all", ControlCodec.refreshAll(4));
+        same(v, "to_daemon.shutdown", ControlCodec.shutdown(5));
+        same(v, "to_daemon.get_state", ControlCodec.getState(9));
+        same(v, "to_daemon.set_policy", ControlCodec.setPolicy(1, classes));
+        same(v, "to_daemon.set_overrides", ControlCodec.setOverrides(2, 10123, new int[] {7, 300}));
+        same(v, "route.hello", ControlCodec.routeHello());
+        same(v, "route.apply", ControlCodec.routeApply(5, "exit0", 0x01020304L,
+                Arrays.asList(new int[] {10000, 10230}), Arrays.asList(new int[] {10231, 10231})));
+        same(v, "route.clear", ControlCodec.routeClear(3));
+        same(v, "route.get_applied", ControlCodec.routeGetApplied(4));
+
+        ControlCodec.Reply r = daemon(v, "from_daemon.ready");
+        check(r.type == ControlCodec.Type.READY && r.version == 2 && "exit0".equals(r.iface), "ready");
+        r = daemon(v, "from_daemon.state_up");
+        check(r.type == ControlCodec.Type.STATE && r.state == ControlCodec.STATE_UP, "state");
+        r = daemon(v, "from_daemon.failures");
+        check(r.type == ControlCodec.Type.FAILURES && r.uid == 10123 && r.company == 7 && r.count == 3, "failures");
+        r = daemon(v, "from_daemon.ack");
+        check(r.type == ControlCodec.Type.ACK && r.seq == 9, "ack");
+        r = daemon(v, "from_daemon.error");
+        check(r.type == ControlCodec.Type.ERROR && r.seq == 2 && r.code == ControlCodec.ERR_TOO_MANY, "error");
+        r = route(v, "route_reply.ready");
+        check(r.type == ControlCodec.Type.READY && r.version == 1 && r.iface == null, "route ready");
+        r = route(v, "route_reply.applied");
+        check(r.type == ControlCodec.Type.APPLIED && r.seq == 9 && r.rules == 0x0102, "applied");
+        r = route(v, "route_reply.error");
+        check(r.type == ControlCodec.Type.ERROR && r.seq == 9 && r.code == ControlCodec.ERR_FAILED, "route error");
+
+        // The numbers that the vectors do not reach.
+        check(ControlCodec.DAEMON_PROTOCOL == 2 && ControlCodec.ROUTE_PROTOCOL == 1 && ControlCodec.MAX_FRAME == 4096 && ControlCodec.IFNAME_MAX == 15,
+                "the numbers of the protocols");
+        check(ControlCodec.STATE_BOOTSTRAPPING == 0 && ControlCodec.STATE_UP == 1 && ControlCodec.STATE_FAILED == 2, "state values");
+        check(ControlCodec.ERR_BAD_VALUE == 1 && ControlCodec.ERR_TOO_MANY == 2 && ControlCodec.ERR_BUSY == 3
+                && ControlCodec.ERR_UNSUPPORTED == 4 && ControlCodec.ERR_FAILED == 5, "error code values");
+        // Every state and every error code is read, and the name of an interface may use every character it may use.
+        for (int s = 0; s <= 2; s++) {
+            r = ControlCodec.decodeDaemon(new byte[] {0, 0, 0, 2, (byte) 0x82, (byte) s}, 6);
+            check(r != null && r.state == s, "state " + s);
+        }
+        for (int code = 1; code <= 5; code++) {
+            r = ControlCodec.decodeDaemon(new byte[] {0, 0, 0, 3, (byte) 0x85, 4, (byte) code}, 7);
+            check(r != null && r.code == code && r.seq == 4, "error code " + code);
+        }
+        byte[] name = "Ab_c-d.e9".getBytes(StandardCharsets.US_ASCII);
+        byte[] ready = new byte[4 + 2 + name.length];
+        ready[3] = (byte) (2 + name.length);
+        ready[4] = (byte) 0x81;
+        ready[5] = 2;
+        System.arraycopy(name, 0, ready, 6, name.length);
+        r = ControlCodec.decodeDaemon(ready, ready.length);
+        check(r != null && "Ab_c-d.e9".equals(r.iface), "an interface name with upper case, underscore, dash, dot and digit");
+        for (String bad : new String[] {".", "..", "a b", "a/b", "a:b", "aé"}) {
+            byte[] n = bad.getBytes(StandardCharsets.ISO_8859_1);
+            byte[] f = new byte[4 + 2 + n.length];
+            f[3] = (byte) (2 + n.length);
+            f[4] = (byte) 0x81;
+            f[5] = 2;
+            System.arraycopy(n, 0, f, 6, n.length);
+            refuses(true, f, "the interface name " + bad.length());
+        }
+        // A frame that claims exactly the largest size is waited for; one byte more is refused at once.
+        check(ControlCodec.decodeDaemon(new byte[] {0, 0, 0x10, 0, (byte) 0x84, 1}, 6) == null, "4096 claimed: incomplete");
+        refuses(true, new byte[] {0, 0, 0x10, 1, (byte) 0x84, 1}, "4097 claimed");
+        // The limits are inclusive: 256 classes, 32 companies and 128 ranges are written.
+        List<Policy.Cls> max = new ArrayList<>();
+        for (int i = 0; i < 256; i++) {
+            max.add(new Policy.Cls(10000 + 2 * i, 10000 + 2 * i, Policy.Kind.TOR));
+        }
+        check(ControlCodec.setPolicy(1, max).length == 4 + 1 + 2 + 256 * 9, "256 classes");
+        check(ControlCodec.setOverrides(1, 1, new int[32]).length == 4 + 1 + 1 + 4 + 1 + 64, "32 companies");
+        List<int[]> r128 = Collections129();
+        r128.remove(128);
+        check(ControlCodec.routeApply(1, "exit0", 0, r128, r128).length == 4 + 1 + 1 + 1 + 5 + 4 + 2 * (1 + 128 * 8), "128 ranges in each list");
+        check(ControlCodec.routeApply(1, "fifteen_chars_x", 0, new ArrayList<int[]>(), new ArrayList<int[]>()).length > 0, "a 15-byte name");
+
+        // Replies of the other protocol and malformed frames are refused, never read as something else.
+        refuses(true, v.get("route_reply.applied"), "an Applied from the daemon");
+        refuses(false, v.get("from_daemon.state_up"), "a State from the helper");
+        refuses(false, v.get("from_daemon.failures"), "Failures from the helper");
+        refuses(true, new byte[] {0, 0, 0, 0}, "an empty frame");
+        refuses(true, new byte[] {0, 0, 0x10, 1, (byte) 0x84}, "a frame past MAX_FRAME");
+        refuses(true, new byte[] {0, 0, 0, 2, 0x7f, 1}, "an unknown tag");
+        refuses(true, new byte[] {0, 0, 0, 3, (byte) 0x84, 9, 9}, "an Ack with a trailing byte");
+        refuses(true, new byte[] {0, 0, 0, 1, (byte) 0x84}, "an Ack without a sequence number");
+        refuses(true, new byte[] {0, 0, 0, 2, (byte) 0x82, 3}, "a state of 3");
+        refuses(true, new byte[] {0, 0, 0, 3, (byte) 0x85, 1, 0}, "error code 0");
+        refuses(true, new byte[] {0, 0, 0, 3, (byte) 0x85, 1, 6}, "error code 6");
+        refuses(true, new byte[] {0, 0, 0, 2, (byte) 0x81, 2}, "a Ready without an interface name");
+        refuses(true, new byte[] {0, 0, 0, 4, (byte) 0x81, 2, '.', '.'}, "a Ready with the name ..");
+        refuses(true, new byte[] {0, 0, 0, 4, (byte) 0x81, 2, 'a', ' '}, "a Ready with a space in the name");
+        byte[] longName = new byte[4 + 1 + 1 + 16];
+        longName[3] = 18;
+        longName[4] = (byte) 0x81;
+        Arrays.fill(longName, 6, longName.length, (byte) 'a');
+        refuses(true, longName, "a 16-byte interface name");
+        refuses(false, new byte[] {0, 0, 0, 3, (byte) 0x81, 1, 1}, "a helper Ready with a trailing byte");
+        // The client may not emit what the other side refuses.
+        for (Runnable bad : new Runnable[] {
+                () -> ControlCodec.getState(256), () -> ControlCodec.getState(-1),
+                () -> ControlCodec.setOverrides(1, 1, new int[33]),
+                () -> ControlCodec.routeApply(1, "", 0, new ArrayList<int[]>(), new ArrayList<int[]>()),
+                () -> ControlCodec.routeApply(1, "sixteen_chars_xx", 0, new ArrayList<int[]>(), new ArrayList<int[]>()),
+                () -> ControlCodec.routeApply(1, "exit0", 0, Collections129(), new ArrayList<int[]>()),
+                () -> ControlCodec.routeApply(1, "exit0", 0, new ArrayList<int[]>(), Collections129()),
+                () -> ControlCodec.setPolicy(1, Collections257())}) {
+            throwsIae(bad, "an out-of-limit request");
+        }
+        // Two frames in one buffer: the first is read and its length says where the second begins.
+        byte[] two = new byte[v.get("from_daemon.ack").length * 2];
+        System.arraycopy(v.get("from_daemon.ack"), 0, two, 0, v.get("from_daemon.ack").length);
+        System.arraycopy(v.get("from_daemon.ack"), 0, two, v.get("from_daemon.ack").length, v.get("from_daemon.ack").length);
+        r = ControlCodec.decodeDaemon(two, two.length);
+        check(r != null && r.used == two.length / 2, "the first of two frames");
+    }
+
+    private static List<int[]> Collections129() {
+        List<int[]> l = new ArrayList<>();
+        for (int i = 0; i < 129; i++) {
+            l.add(new int[] {10000 + 2 * i, 10000 + 2 * i});
+        }
+        return l;
+    }
+
+    private static List<Policy.Cls> Collections257() {
+        List<Policy.Cls> l = new ArrayList<>();
+        for (int i = 0; i < 257; i++) {
+            l.add(new Policy.Cls(10000 + 2 * i, 10000 + 2 * i, Policy.Kind.TOR));
+        }
+        return l;
+    }
+
+    public static void main(String[] args) throws Exception {
+        uidRanges();
+        choices();
+        consent();
+        policy();
+        ladder();
+        presenter();
+        codec();
+        org.freeholdos.exit.ControllerChecks.run();
+        System.out.println("exit app host checks passed");
+    }
+}

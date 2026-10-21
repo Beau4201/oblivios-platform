@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+# The services of Compartments (ADR-184, ADR-186): the exit daemon and the route helper, one executable in two domains.
+
+on post-fs-data
+    mkdir /data/misc/exitd 0700 2961 2961
+    mkdir /data/misc/exitd/state 0700 2961 2961
+    mkdir /data/misc/exitd/cache 0700 2961 2961
+
+# The exit daemon: Arti and the packet layer. It runs from boot with a Tor client that has contacted nobody and starts it
+# when the exit app first sends a table with a Tor or masked class. The uid is in the OEM range [assumption: unused on the
+# device, checked by NET-009]. It has NET_ADMIN for the tun and sock_diag and nothing else. Not oneshot: init starts it again
+# after an exit, a panic (the Android standard library of the tree aborts) or the shutdown that ends the Tor client.
+# The control socket is world-connectable on purpose: the SELinux policy lets only exit_app connect and the daemon reads the
+# peer's SELinux context before it reads a byte. memcg.limit_in_bytes is the hard limit of D-K (160 MiB; the Arti quota is
+# 64 MiB) [assumption: memcg is mounted and the kill and restart are seen in NET-009's limit row].
+service exitd /system/bin/exitd --state-dir /data/misc/exitd/state --cache-dir /data/misc/exitd/cache --memory-max 67108864 --control-fd-env ANDROID_SOCKET_exitd --peer-context exit_app --mask-list /system/etc/freeholdos/exit-mask-list.tsv
+    class main
+    user 2961
+    group 2961
+    capabilities NET_ADMIN
+    socket exitd stream+listen 0666 2961 2961
+    memcg.limit_in_bytes 167772160
+
+# The route helper: the only writer of policy rules and routes, in the closed language of routes/spec.rs. NET_ADMIN, one
+# NETLINK_ROUTE socket, no internet, no file. Its label is named here because it shares the executable with the daemon.
+service exitd_route /system/bin/exitd --routes --control-fd-env ANDROID_SOCKET_exitd_route --peer-context exit_app
+    class main
+    user 2962
+    group 2962
+    capabilities NET_ADMIN
+    seclabel u:r:exitd_route:s0
+    socket exitd_route stream+listen 0666 2962 2962

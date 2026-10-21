@@ -1,0 +1,32 @@
+From ffbe0e1da96b86000a4d437a61126b834cdafe82 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Wed, 21 Oct 2026 22:57:38 +0200
+Subject: [PATCH] exit: ship the exit service on every Pixel target
+
+Adds exitd and ExitApp to PRODUCT_PACKAGES in device-common.mk, the file that already ships the other FreeholdOS modules to
+every Pixel target. exitd requires exit.rc (the init definitions of the daemon and the route helper) and the mask list; ExitApp
+requires its privapp-permissions and default-permissions files. ExitProbe stays on PRODUCT_PACKAGES_DEBUG: the throwaway
+probe of NET-001b.
+---
+ config/mk/google_devices/common/device-common.mk | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
+index e9b9850..fe45615 100644
+--- a/config/mk/google_devices/common/device-common.mk
++++ b/config/mk/google_devices/common/device-common.mk
+@@ -129,3 +129,11 @@ PRODUCT_PACKAGES += \
+ # is defined in vendor/freeholdos/exit; it pulls in its privapp allow-list through "required".
+ PRODUCT_PACKAGES_DEBUG += \
+     ExitProbe
++
++# FreeholdOS Compartments (ADR-184, ADR-186): the exit service, on every Pixel target. exitd is the daemon and, started with
++# --routes, the route helper; it pulls in its init definition and the mask list through "required". ExitApp is the privileged
++# app that owns the policy and has the Settings entry; it pulls in its privapp-permissions and default-permissions files.
++# check-required-packages.sh requires all four files in the product output.
++PRODUCT_PACKAGES += \
++    exitd \
++    ExitApp
+-- 
+2.56.0
+

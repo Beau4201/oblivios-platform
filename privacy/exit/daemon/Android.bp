@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: Apache-2.0
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// The exit daemon and the route helper of Compartments (ADR-184, ADR-186): one executable, started by exit.rc in two
+// domains. Built outside the tree from freeholdos-services/exit-daemon (SOURCE.md holds the commit, the toolchain and the
+// hash; check-prebuilt.sh compares the file with it). arm64 only: lynx and stallion are the only targets.
+cc_prebuilt_binary {
+    name: "exitd",
+    stl: "none",
+    strip: {
+        none: true,
+    },
+    compile_multilib: "64",
+    arch: {
+        arm64: {
+            srcs: ["arm64/exitd"],
+        },
+        arm: {
+            enabled: false,
+        },
+        x86: {
+            enabled: false,
+        },
+        x86_64: {
+            enabled: false,
+        },
+        riscv64: {
+            enabled: false,
+        },
+    },
+    required: [
+        "exit.rc",
+        "exit-mask-list.tsv",
+    ],
+}
+
+// The init definitions of the two services.
+prebuilt_etc {
+    name: "exit.rc",
+    src: "exit.rc",
+    sub_dir: "init",
+}
+
+// The hosts the masked tier hides the address from (ADR-181), made from the Data Map classifier by
+// ../tools/make-mask-list.py; SOURCE.md holds the hashes of the inputs.
+prebuilt_etc {
+    name: "exit-mask-list.tsv",
+    src: "exit-mask-list.tsv",
+    sub_dir: "freeholdos",
+}

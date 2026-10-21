@@ -1,0 +1,197 @@
+From a2e07f709987604649fd01932245687aa41ad5c1 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Wed, 21 Oct 2026 22:40:33 +0200
+Subject: [PATCH] sepolicy: add the domains of the Compartments exit service
+
+The exit daemon (exitd), the route helper (exitd_route, the same binary with --routes) and the exit app (exit_app) of ADR-184
+and ADR-186.
+
+exitd creates the tun interface (TUNSETIFF and TUNGETIFF only), finds the owner uid of a flow with sock_diag, has ordinary tcp
+and udp sockets and keeps the Tor state under /data/misc/exitd. It has no NETLINK_ROUTE write and no netfilter socket; a
+neverallow keeps it so.
+
+exitd_route has one NETLINK_ROUTE socket with net_admin and the nlmsg types of the closed rule language (rules, routes, the
+tun address and link), and no inet socket of any kind. It transitions from init through domain_trans only: its service
+definition names its label, and the type_transition of the daemon stays the default for exitd_exec.
+
+exit_app is a platform-signed privileged app domain like logviewer_app. It connects to the two sockets of init; a neverallow
+lets no other domain connect to them. The socket modes in the init definition are the only discretionary control, the peer
+check of the services reads the SELinux context of the connecting socket.
+
+No neverallow of the tree is changed.
+---
+ contexts/file_contexts_test_data |  5 +++++
+ private/exit_app.te              | 17 ++++++++++++++
+ private/exitd.te                 | 38 ++++++++++++++++++++++++++++++++
+ private/exitd_route.te           | 31 ++++++++++++++++++++++++++
+ private/file_contexts            |  4 ++++
+ private/seapp_contexts           |  1 +
+ 6 files changed, 96 insertions(+)
+ create mode 100644 private/exit_app.te
+ create mode 100644 private/exitd.te
+ create mode 100644 private/exitd_route.te
+
+diff --git a/contexts/file_contexts_test_data b/contexts/file_contexts_test_data
+index a00bd98..8c744c6 100644
+--- a/contexts/file_contexts_test_data
++++ b/contexts/file_contexts_test_data
+@@ -192,6 +192,11 @@
+ /dev/socket/aconfigd_mainline                                     aconfigd_mainline_socket
+ /dev/socket/aconfigd_system                                       aconfigd_socket
+ /dev/socket/dnsproxyd                                             dnsproxyd_socket
++/dev/socket/exitd                                                 exitd_socket
++/dev/socket/exitd_route                                           exitd_route_socket
++/system/bin/exitd                                                 exitd_exec
++/data/misc/exitd                                                  exitd_data_file
++/data/misc/exitd/test                                             exitd_data_file
+ /dev/socket/dumpstate                                             dumpstate_socket
+ /dev/socket/fwmarkd                                               fwmarkd_socket
+ /dev/socket/lmkd                                                  lmkd_socket
+diff --git a/private/exit_app.te b/private/exit_app.te
+new file mode 100644
+index 0000000..280d068
+--- /dev/null
++++ b/private/exit_app.te
+@@ -0,0 +1,17 @@
++# SPDX-License-Identifier: Apache-2.0
++# The exit app of Compartments (ADR-184, ADR-186): a platform-signed, privileged app that owns the policy. It registers a
++# network for the daemon's tun, sets the network preference of the apps on Tor, and drives the daemon and the route helper
++# over their sockets. It has no INTERNET permission, no netlink socket and no tun access. An app domain like logviewer_app.
++type exit_app, domain;
++typeattribute exit_app coredomain;
++
++app_domain(exit_app)
++untrusted_app_domain(exit_app)
++
++# The control sockets of the two services, created by init.
++unix_socket_connect(exit_app, exitd, exitd)
++unix_socket_connect(exit_app, exitd_route, exitd_route)
++
++# Only the exit app may connect to them: no other app domain, privileged apps and the shell included.
++neverallow { domain -exit_app } exitd:unix_stream_socket connectto;
++neverallow { domain -exit_app } exitd_route:unix_stream_socket connectto;
+diff --git a/private/exitd.te b/private/exitd.te
+new file mode 100644
+index 0000000..043e58e
+--- /dev/null
++++ b/private/exitd.te
+@@ -0,0 +1,38 @@
++# SPDX-License-Identifier: Apache-2.0
++# The exit daemon of Compartments (ADR-184, ADR-186): Arti, the Tor client, and a user-space packet layer, in Rust. It
++# creates the tun interface, finds the owner uid of a flow with sock_diag, talks to the Tor network over ordinary sockets
++# and answers the DNS questions of the masked apps. It writes no route and no rule: the route helper (exitd_route) does,
++# and it has no inet socket. The exit app is its only peer.
++type exitd, domain;
++typeattribute exitd coredomain;
++type exitd_exec, system_file_type, exec_type, file_type;
++type exitd_socket, file_type, coredomain_socket;
++type exitd_data_file, file_type, data_file_type, core_data_file_type;
++
++init_daemon_domain(exitd)
++# Ordinary tcp and udp sockets to the Tor network and the upstream resolver.
++net_domain(exitd)
++
++# The tun interface: create it and carry packets, nothing else of the ioctls.
++allow exitd tun_device:chr_file rw_file_perms;
++allowxperm exitd tun_device:chr_file ioctl { TUNGETIFF TUNSETIFF };
++allow exitd self:capability net_admin;
++
++# sock_diag, to find the uid that owns a flow (the same rules as network_stack has for its tcp lookups).
++allow exitd self:netlink_tcpdiag_socket create_socket_perms_no_ioctl;
++# For kernel < 6.13
++allow exitd self:netlink_tcpdiag_socket { nlmsg_read nlmsg_write };
++# For kernel >= 6.13
++allow exitd self:netlink_tcpdiag_socket nlmsg;
++
++# The Tor state and the directory cache.
++allow exitd exitd_data_file:dir create_dir_perms;
++allow exitd exitd_data_file:file create_file_perms;
++
++# The daemon reads the peer's SELinux context to check that it is the exit app.
++allow exitd self:unix_stream_socket getopt;
++
++# What the daemon must never be able to do: change routing (it has the NETLINK_ROUTE socket of every network domain, which can
++# read, and not nlmsg_write) or touch the packet filter.
++neverallow exitd self:netlink_route_socket { nlmsg_write nlmsg_readpriv };
++neverallow exitd self:netlink_netfilter_socket *;
+diff --git a/private/exitd_route.te b/private/exitd_route.te
+new file mode 100644
+index 0000000..5c0b930
+--- /dev/null
++++ b/private/exitd_route.te
+@@ -0,0 +1,31 @@
++# SPDX-License-Identifier: Apache-2.0
++# The route helper of Compartments (ADR-186): `exitd --routes`, the same binary as the exit daemon in its own domain. It
++# is the only part of the exit service that writes policy rules and routes, and it can write only the closed language of
++# routes/spec.rs: no inet socket, no file, no other domain. The exit app is its only peer.
++type exitd_route, domain;
++typeattribute exitd_route coredomain;
++type exitd_route_socket, file_type, coredomain_socket;
++
++# init starts it with `seclabel u:r:exitd_route:s0` from the same executable as the daemon; the transition has no
++# type_transition of its own, so the daemon's remains the default for exitd_exec.
++domain_trans(init, exitd_exec, exitd_route)
++
++# One NETLINK_ROUTE socket, to add the tun address, bring the link up, and write the rules and the default routes.
++allow exitd_route self:capability net_admin;
++allow exitd_route self:netlink_route_socket create_socket_perms_no_ioctl;
++# For kernel < 6.13
++allow exitd_route self:netlink_route_socket { nlmsg_read nlmsg_write };
++# For kernel >= 6.13
++allow exitd_route self:netlink_route_socket nlmsg;
++allowxperm exitd_route self:netlink_route_socket nlmsg {
++  RTM_NEWRULE RTM_DELRULE RTM_GETRULE
++  RTM_NEWROUTE RTM_DELROUTE RTM_GETROUTE
++  RTM_NEWADDR RTM_NEWLINK RTM_GETLINK
++};
++
++# It reads the peer's SELinux context before it reads a byte.
++allow exitd_route self:unix_stream_socket getopt;
++
++# No internet of any kind, and no file but its own binary.
++neverallow exitd_route self:{ tcp_socket udp_socket rawip_socket packet_socket } *;
++neverallow exitd_route self:netlink_tcpdiag_socket *;
+diff --git a/private/file_contexts b/private/file_contexts
+index 1e9cfe9..149fcb4 100644
+--- a/private/file_contexts
++++ b/private/file_contexts
+@@ -158,6 +158,8 @@
+ /dev/socket/aconfigd_mainline	u:object_r:aconfigd_mainline_socket:s0
+ /dev/socket/aconfigd_system	u:object_r:aconfigd_socket:s0
+ /dev/socket/dnsproxyd	u:object_r:dnsproxyd_socket:s0
++/dev/socket/exitd	u:object_r:exitd_socket:s0
++/dev/socket/exitd_route	u:object_r:exitd_route_socket:s0
+ /dev/socket/dumpstate	u:object_r:dumpstate_socket:s0
+ /dev/socket/fwmarkd	u:object_r:fwmarkd_socket:s0
+ /dev/socket/lmkd        u:object_r:lmkd_socket:s0
+@@ -295,6 +297,7 @@
+ /system/bin/netutils-wrapper-1\.0    u:object_r:netutils_wrapper_exec:s0
+ /system/bin/vold	u:object_r:vold_exec:s0
+ /system/bin/netd	u:object_r:netd_exec:s0
++/system/bin/exitd	u:object_r:exitd_exec:s0
+ /system/bin/ot-ctl      u:object_r:ot_ctl_exec:s0
+ /system/bin/audioserver	u:object_r:audioserver_exec:s0
+ /system/bin/mediadrmserver	u:object_r:mediadrmserver_exec:s0
+@@ -716,6 +719,7 @@
+ /data/misc/logd(/.*)?           u:object_r:misc_logd_file:s0
+ /data/misc/media(/.*)?          u:object_r:media_data_file:s0
+ /data/misc/net(/.*)?            u:object_r:net_data_file:s0
++/data/misc/exitd(/.*)?          u:object_r:exitd_data_file:s0
+ /data/misc/network_watchlist(/.*)? u:object_r:network_watchlist_data_file:s0
+ /data/misc/telephonyconfig(/.*)? u:object_r:radio_data_file:s0
+ /data/misc/nfc/logs(/.*)?       u:object_r:nfc_logs_data_file:s0
+diff --git a/private/seapp_contexts b/private/seapp_contexts
+index 8d0fe3d..af49d4e 100644
+--- a/private/seapp_contexts
++++ b/private/seapp_contexts
+@@ -194,6 +194,7 @@ user=_app isPrivApp=true domain=priv_app_36 type=privapp_data_file levelFrom=use
+ user=_app seinfo=media isPrivApp=true name=com.android.providers.media.module domain=mediaprovider_app type=privapp_data_file levelFrom=all
+ user=_app seinfo=media isPrivApp=true name=com.android.providers.media.module:* domain=mediaprovider_app type=privapp_data_file levelFrom=all
+ user=_app seinfo=platform isPrivApp=true name=com.android.permissioncontroller domain=permissioncontroller_app type=privapp_data_file levelFrom=all
++user=_app seinfo=platform isPrivApp=true name=org.freeholdos.exit domain=exit_app type=app_data_file levelFrom=all
+ user=_app isPrivApp=true name=com.android.rkpdapp domain=rkpdapp type=privapp_data_file levelFrom=all
+ user=_app isPrivApp=true name=app.grapheneos.logviewer domain=logviewer_app type=app_data_file levelFrom=all
+ user=_app isPrivApp=true name=org.freeholdos.datamap domain=datamap_app type=app_data_file levelFrom=all
+-- 
+2.56.0
+

@@ -43,3 +43,28 @@ Conflict surface: the last lines of `device-common.mk`.
 On the build server, with no build running and the tree clean, after `privacy/linkability` is applied:
 
     cd packages/modules/Connectivity && git am <path>/privacy/exit/patches/packages-modules-connectivity/0001-*.patch
+
+## Exit service (ADR-184, ADR-186)
+
+The daemon is built from `freeholdos-services/exit-daemon` (`daemon/SOURCE.md` holds the commit, the toolchain and the hashes); the app and the
+policy are new code and patches. They were authored in disposable repositories (`.worktrees/exit-sepolicy`,
+`.worktrees/exit-adevtool2`) from read-only copies of the touched files and landed on the build server with `git am` on
+2026-10-21; `vendor/freeholdos/exit` got `daemon/` and `app/` in one commit.
+
+| Project | Base | Landed as | Subject |
+| --- | --- | --- | --- |
+| `system/sepolicy` (`freeholdos-2026100600`) | `9344ac271` | `4d297ef48` | sepolicy: add the domains of the Compartments exit service (`private/exitd.te`, `exitd_route.te`, `exit_app.te`, contexts; the blobs of the three context files equalled the server's before) |
+| `system/sepolicy` | `4d297ef48` | `38f19ca1f` | sepolicy: make the neverallows of the exit service hold in the combined policy |
+| `vendor/adevtool` (`freeholdos-2026100600`) | `fe4c53c7` (blob of `device-common.mk` `e9b98507`) | `e4aca756` (blob `fe456150`) | exit: ship the exit service on every Pixel target (`PRODUCT_PACKAGES += exitd ExitApp`) |
+| `vendor/freeholdos/exit` (`freeholdos-2026100600`) | `cb444ef` | `569e0c8` | the daemon prebuilt, its init definition and mask list, and the exit app |
+
+Landing the adevtool patch moved its pin: `vendor/google_devices/{lynx,stallion}/adevtool-version-check.mk` name `e4aca7568bc7…`
+now (the previous files are kept as `adevtool-version-check.mk.pre-exit-service`).
+
+The Settings entry: the category key of "Network &amp; internet" is `com.android.settings.category.ia.wireless`
+`[verified-in-source: frameworks/base/packages/SettingsLib/src/com/android/settingslib/drawer/CategoryKey.java:27]`, not the
+`ia.network` that the plan named; the meta-data names are those of `TileUtils.java` (`com.android.settings.title`, `.summary`,
+`.icon`, `.order`) and the action is `com.android.settings.action.IA_SETTINGS`.
+
+Conflict surface on a new upstream release: the end of `private/seapp_contexts`, `private/file_contexts` and
+`contexts/file_contexts_test_data` (one or two lines each); the last lines of `device-common.mk`.

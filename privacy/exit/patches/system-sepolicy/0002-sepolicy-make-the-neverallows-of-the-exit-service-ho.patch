@@ -1,0 +1,46 @@
+From 5803458bbb84cb399671b922afed341b2be5a6b8 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Wed, 21 Oct 2026 23:44:32 +0200
+Subject: [PATCH] sepolicy: make the neverallows of the exit service hold in
+ the combined policy
+
+The Pixel board configuration sets SELINUX_IGNORE_NEVERALLOWS, so the compile of the device policy does not check neverallow
+rules; the first policy of the exit service was read with sesearch and two of its neverallows did not hold: every network
+domain except the untrusted apps has nlmsg_readpriv on its own NETLINK_ROUTE socket (a generic rule), and every domain may
+connect to its own socket. The daemon's rule keeps only nlmsg_write, the socket rules name the service itself.
+---
+ private/exit_app.te | 5 +++--
+ private/exitd.te    | 6 +++---
+ 2 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/private/exit_app.te b/private/exit_app.te
+index 280d068..2fcd08a 100644
+--- a/private/exit_app.te
++++ b/private/exit_app.te
+@@ -13,5 +13,6 @@ unix_socket_connect(exit_app, exitd, exitd)
+ unix_socket_connect(exit_app, exitd_route, exitd_route)
+ 
+ # Only the exit app may connect to them: no other app domain, privileged apps and the shell included.
+-neverallow { domain -exit_app } exitd:unix_stream_socket connectto;
+-neverallow { domain -exit_app } exitd_route:unix_stream_socket connectto;
++# (A service may use its own socket: every domain has connectto on itself.)
++neverallow { domain -exit_app -exitd } exitd:unix_stream_socket connectto;
++neverallow { domain -exit_app -exitd_route } exitd_route:unix_stream_socket connectto;
+diff --git a/private/exitd.te b/private/exitd.te
+index 043e58e..fe66f79 100644
+--- a/private/exitd.te
++++ b/private/exitd.te
+@@ -32,7 +32,7 @@ allow exitd exitd_data_file:file create_file_perms;
+ # The daemon reads the peer's SELinux context to check that it is the exit app.
+ allow exitd self:unix_stream_socket getopt;
+ 
+-# What the daemon must never be able to do: change routing (it has the NETLINK_ROUTE socket of every network domain, which can
+-# read, and not nlmsg_write) or touch the packet filter.
+-neverallow exitd self:netlink_route_socket { nlmsg_write nlmsg_readpriv };
++# What the daemon must never be able to do: change routing (it has the NETLINK_ROUTE socket of every network domain, which
++# reads) or touch the packet filter.
++neverallow exitd self:netlink_route_socket nlmsg_write;
+ neverallow exitd self:netlink_netfilter_socket *;
+-- 
+2.56.0
+
