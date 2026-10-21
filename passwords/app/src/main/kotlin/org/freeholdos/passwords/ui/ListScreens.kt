@@ -69,7 +69,7 @@ fun PasswordsScreen(c: AppController) {
             } else {
                 LazyColumn(Modifier.weight(1f)) {
                     items(c.entries, key = { hexOf(it.id) }) { s ->
-                        EntryRow(s.title, subtitleOf(s), c.needsAttention(s.id), { c.openEntry(hexOf(s.id)) })
+                        EntryRow(s.title, subtitleOf(s), c.needsAttention(s.id), { c.openEntry(hexOf(s.id)) }, domains = s.domains, packages = s.packages)
                     }
                     item { Spacer(Modifier.height(88.dp)) }
                 }

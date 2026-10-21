@@ -55,7 +55,7 @@ fun DetailScreen(c: AppController, idHex: String) {
         if (e == null) return@Column
         Column(Modifier.weight(1f).background(pw.bg).verticalScroll(scroll)) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                LogoTile(e.title, 64.dp)
+                LogoTile(e.title, 64.dp, logo = rememberLogo(e.domains, e.packages))
                 Spacer(Modifier.height(12.dp))
                 Text(e.title, color = pw.on, style = MaterialTheme.typography.titleLarge)
                 (e.domains.firstOrNull() ?: e.packages.firstOrNull())?.let { Text(it, color = pw.onVariant, style = MaterialTheme.typography.bodyMedium) }

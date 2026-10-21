@@ -9,6 +9,14 @@
 
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
+    <!-- The icons of the apps an entry is linked to (apps that have a launcher entry); no broad package permission. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name="org.freeholdos.passwords.PasswordsApplication"
         android:allowBackup="false"

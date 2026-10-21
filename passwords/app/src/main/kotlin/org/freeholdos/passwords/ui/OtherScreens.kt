@@ -57,7 +57,7 @@ fun CheckupScreen(c: AppController) {
                     items(group.size) { i ->
                         val s = c.entries.firstOrNull { it.id.contentEquals(group[i]) } ?: return@items
                         val others = titles.filterIndexed { j, _ -> j != i }.joinToString(", ")
-                        EntryRow(s.title, stringResource(R.string.pm_checkup_reused_with, others), false, { c.openEntry(hexOf(s.id)) }, chevron = true)
+                        EntryRow(s.title, stringResource(R.string.pm_checkup_reused_with, others), false, { c.openEntry(hexOf(s.id)) }, chevron = true, domains = s.domains, packages = s.packages)
                     }
                 }
             }
@@ -71,7 +71,7 @@ fun CheckupScreen(c: AppController) {
                         WeakReason.COMMON -> R.string.pm_checkup_weak_common
                         WeakReason.PATTERN -> R.string.pm_checkup_weak_pattern
                     }
-                    EntryRow(s.title, stringResource(text), false, { c.openEntry(hexOf(s.id)) }, chevron = true)
+                    EntryRow(s.title, stringResource(text), false, { c.openEntry(hexOf(s.id)) }, chevron = true, domains = s.domains, packages = s.packages)
                 }
             }
             item { SectionText(stringResource(R.string.pm_checkup_no_breach), Modifier.padding(top = 16.dp, start = 0.dp)) }

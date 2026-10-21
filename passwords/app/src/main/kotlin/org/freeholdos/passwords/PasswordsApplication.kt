@@ -18,6 +18,7 @@ import org.freeholdos.passwords.lock.LockPolicy
 import org.freeholdos.passwords.lock.PrefsPolicyStore
 import org.freeholdos.passwords.lock.SessionManager
 import org.freeholdos.passwords.lock.VaultFiles
+import org.freeholdos.passwords.ui.LogoSource
 
 /**
  * Builds the one [SessionManager] of the process, also when the process starts for the autofill service and no screen
@@ -30,6 +31,7 @@ class PasswordsApplication : Application() {
         private set
     lateinit var repository: VaultRepository
         private set
+    val logos: LogoSource by lazy { LogoSource(this) }
 
     override fun onCreate() {
         super.onCreate()

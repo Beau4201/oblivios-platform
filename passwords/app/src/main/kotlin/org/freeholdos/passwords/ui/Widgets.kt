@@ -108,12 +108,15 @@ fun TextFieldState.chars(): CharArray = text.let { t -> CharArray(t.length) { t[
 
 /** Two-line list row: the logo, the title, the username, an optional mark and chevron. */
 @Composable
-fun EntryRow(name: String, subtitle: String, attention: Boolean, onClick: () -> Unit, chevron: Boolean = false, highlight: String? = null) {
+fun EntryRow(
+    name: String, subtitle: String, attention: Boolean, onClick: () -> Unit, chevron: Boolean = false,
+    domains: List<String> = emptyList(), packages: List<String> = emptyList(),
+) {
     Row(
         Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LogoTile(name, 40.dp)
+        LogoTile(name, 40.dp, logo = rememberLogo(domains, packages))
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(name, color = pw.on, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)

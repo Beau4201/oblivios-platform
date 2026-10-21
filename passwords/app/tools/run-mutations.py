@@ -9,7 +9,7 @@ of this list, not a surviving mutant.
 
     PWM_BUILD_SSH=user@host tools/run-mutations.py [--check-applies] [NAME_FILTER]
 
-Left out on purpose: the cap in passphraseThrottleMs (`minOf(consecutiveFailures - 4, 20)` to a larger bound gives the
+Left out on purpose: the `length < 1` clause of CreatedVault.parse (the size check before it already refuses a payload with an empty file); the cap in passphraseThrottleMs (`minOf(consecutiveFailures - 4, 20)` to a larger bound gives the
 same values after the min with five minutes), the `<= 3` of the same function (`< 3` also gives 0 for three failures, because
 1000 shifted left by 63 is 0), the reset of lastPassphraseFailureMs on a passphrase unlock (the reset count already ends
 the wait), and the `lastPassphraseMs == 0` test of stateAtStart (a vault that never
@@ -155,7 +155,6 @@ MUTATIONS = [
     ("reply: unsigned status", Y, "Reply(raw[0].toInt() and 0xff, raw)", "Reply(raw[0].toInt(), raw)"),
     ("reply: an error carries a payload", Y, "fun payload(): ByteArray = if (ok) raw.copyOfRange(1, raw.size) else ByteArray(0)", "fun payload(): ByteArray = raw.copyOfRange(1, raw.size)"),
     ("reply: internal code", Y, "const val INTERNAL = 255", "const val INTERNAL = 254"),
-    ("reply: an empty file is accepted", Y, "if (length < 1 || length != (payload.size - 4 - KEY_BYTES).toLong()) return null", "if (length != (payload.size - 4 - KEY_BYTES).toLong()) return null"),
     ("reply: a payload longer than its length is accepted", Y, "length != (payload.size - 4 - KEY_BYTES).toLong()", "length > (payload.size - 4 - KEY_BYTES).toLong()"),
     ("reply: a payload shorter than its length is accepted", Y, "length != (payload.size - 4 - KEY_BYTES).toLong()", "length < (payload.size - 4 - KEY_BYTES).toLong()"),
     ("reply: zero is a handle", Y, "value > 0 -> HandleOrCode(value, Code.OK)", "value >= 0 -> HandleOrCode(value, Code.OK)"),

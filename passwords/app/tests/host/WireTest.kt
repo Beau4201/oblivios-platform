@@ -110,6 +110,12 @@ private fun limits() {
     fun withHistory(n: Int) = Wire.encode(golden().copy(history = List(n) { HistoryItem("h$it".toCharArray(), it.toLong()) }))
     Check.that("ten history items decode", Wire.decode(withHistory(10)) != null)
     Check.that("eleven are refused", Wire.decode(withHistory(11)) == null)
+    // A lax reader would accept this: flag 2 with nothing after it is a well-formed entry in every other way.
+    val noFill = Wire.encode(golden().copy(lastFilledMs = null, history = emptyList()))
+    Check.that("the entry with no last fill decodes", Wire.decode(noFill) != null)
+    Check.that("flag 2 where 0 or 1 belongs is refused", Wire.decode(noFill.copyOf().also { it[it.size - 2] = 2 }) == null)
+    Check.that("a list with a byte too many is refused", Wire.decodeSummaries(unhex(GOLDEN_LIST) + byteArrayOf(0)) == null)
+    Check.that("a checkup with a byte too many is refused", Wire.decodeCheckup(unhex(GOLDEN_CHECKUP) + byteArrayOf(0)) == null)
     Check.that("an unknown last-fill flag is refused", Wire.decode(unhex(GOLDEN_ENTRY).also { it[it.size - 25] = 2 }) == null)
 }
 

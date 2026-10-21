@@ -33,7 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -66,16 +66,22 @@ fun IconAction(res: Int, description: String, onClick: () -> Unit, modifier: Mod
 
 /** The site logo on a neutral tile: the real logo when there is one, else the generated pattern of the name. */
 @Composable
-fun LogoTile(name: String, size: Dp, modifier: Modifier = Modifier, logo: ImageBitmap? = null) {
+fun LogoTile(name: String, size: Dp, modifier: Modifier = Modifier, logo: Logo? = null) {
     val c = pw
     val p = patternFor(name)
     val (tile, cells) = if (c.dark) PatternColors.dark(p.hueIndex) else PatternColors.light(p.hueIndex)
     val shape = RoundedCornerShape(12.dp)
-    Box(modifier.size(size).clip(shape).background(Color(tile)).border(1.dp, c.outlineVariant, shape), contentAlignment = Alignment.Center) {
-        if (logo != null) {
-            androidx.compose.foundation.Image(bitmap = logo, contentDescription = null, modifier = Modifier.size(size * 0.6f))
-        } else {
-            Canvas(Modifier.size(size * 0.6f)) {
+    val neutral = logo != null
+    Box(
+        modifier.size(size).clip(shape).background(if (neutral) c.highest else Color(tile)).border(1.dp, c.outlineVariant, shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        when (logo) {
+            is Logo.Image -> androidx.compose.foundation.Image(bitmap = logo.image, contentDescription = null, modifier = Modifier.size(size * 0.7f))
+            is Logo.Shape -> Canvas(Modifier.size(size * 0.6f)) {
+                scale(this.size.width / 24f, pivot = Offset.Zero) { drawPath(logo.path, c.on) }
+            }
+            null -> Canvas(Modifier.size(size * 0.6f)) {
                 val cell = this.size.width / 5f
                 p.rows.forEachIndexed { y, row ->
                     row.forEachIndexed { x, ch ->

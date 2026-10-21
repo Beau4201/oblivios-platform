@@ -10,6 +10,9 @@ android_app {
     name: "PasswordsApp",
     manifest: "AndroidManifest.xml",
     resource_dirs: ["res"],
+    // The logo pack (logos/domains.tsv, logos/icons.tsv) is built by passwords/logos/build-pack.py; without it the app
+    // shows the generated patterns only.
+    asset_dirs: ["assets"],
     srcs: ["src/main/kotlin/**/*.kt"],
     sdk_version: "system_current",
     jni_libs: ["libvault_core"],
