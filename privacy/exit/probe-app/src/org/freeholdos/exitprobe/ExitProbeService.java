@@ -61,6 +61,7 @@ public final class ExitProbeService extends Service {
     private static final String TEST_NETWORK_SERVICE = "test_network";
     private static final int ALARM_GRACE_SECONDS = 10;
     private static final int PREFERENCE_TIMEOUT_SECONDS = 10;
+    private static final int RETRY_SECONDS = 30;
     private static final byte[] TUN_ADDRESS = {10, (byte) 255, 0, 2};
     private static final int TUN_PREFIX = 24;
 
@@ -87,9 +88,19 @@ public final class ExitProbeService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // A start-foreground-service call must reach startForeground within seconds, whatever the action is.
-        startForeground();
         String action = intent == null ? null : intent.getAction();
+        // A start-foreground-service call must reach startForeground within seconds, whatever the action is. The alarm
+        // backstop starts this service from a killed process, where the system refuses a foreground start
+        // (AlarmManagerService delivers an inexact alarm with FOREGROUND_SERVICE_NOT_ALLOWED): CLEAR does not need it.
+        try {
+            startForeground();
+        } catch (RuntimeException e) {
+            result("no foreground: " + e.getClass().getSimpleName());
+            if (ACTION_RUN.equals(action)) {
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+        }
         if (ACTION_RUN.equals(action)) {
             Map<String, String> extras = extrasOf(intent);
             handler.post(() -> run(extras));
@@ -272,7 +283,8 @@ public final class ExitProbeService extends Service {
     }
 
     private PendingIntent clearIntent() {
-        return PendingIntent.getForegroundService(this, 0,
+        // getService, not getForegroundService: the alarm may fire when the process is dead and not allowed to go foreground.
+        return PendingIntent.getService(this, 0,
                 new Intent(this, ExitProbeService.class).setAction(ACTION_CLEAR),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
@@ -288,12 +300,14 @@ public final class ExitProbeService extends Service {
      */
     private void cleanup(boolean stopService) {
         handler.removeCallbacksAndMessages(null);
-        getSystemService(AlarmManager.class).cancel(clearIntent());
         try {
             apply(new OemNetworkPreferences.Builder().build());
             result("pref=empty");
+            // The backstop goes only once the preference is known to be empty.
+            getSystemService(AlarmManager.class).cancel(clearIntent());
         } catch (Throwable t) {
             result("pref-clear-failed " + t);
+            armAlarm(RETRY_SECONDS);
         }
         stopReading = true;
         try {

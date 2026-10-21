@@ -3,7 +3,8 @@ package org.freeholdos.exitprobe;
 
 /**
  * One log line for a packet read from the tun of the probe. Pure Java, never throws: a buffer it cannot read as
- * IPv4 or IPv6 is reported as unparsed. Addresses and ports are of the test network only (10.255.0.0/24).
+ * IPv4 or IPv6 is reported as unparsed. The line holds the destination the selected app opened: acceptable for a throwaway
+ * userdebug probe, and the reason it must never reach a user build.
  */
 public final class PacketSummary {
     private static final int IPV4_MIN = 20;
