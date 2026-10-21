@@ -131,7 +131,7 @@ final class ExitRuntime {
                     notifier.postConsent();
                 }
             }
-        }, new IntentFilter(Intent.ACTION_USER_UNLOCKED), null, handler);
+        }, new IntentFilter(Intent.ACTION_USER_UNLOCKED), null, handler, Context.RECEIVER_NOT_EXPORTED);
         if (store.consent() == Consent.UNSET && ctx.getSystemService(UserManager.class).isUserUnlocked()) {
             notifier.postConsent();
         }
@@ -154,11 +154,11 @@ final class ExitRuntime {
         pkgs.addAction(Intent.ACTION_PACKAGE_REMOVED);
         pkgs.addAction(Intent.ACTION_PACKAGE_REPLACED);
         pkgs.addDataScheme("package");
-        ctx.registerReceiver(changed, pkgs, null, handler);
+        ctx.registerReceiver(changed, pkgs, null, handler, Context.RECEIVER_NOT_EXPORTED);
         IntentFilter users = new IntentFilter();
         users.addAction(Intent.ACTION_USER_ADDED);
         users.addAction(Intent.ACTION_USER_REMOVED);
-        ctx.registerReceiver(changed, users, null, handler);
+        ctx.registerReceiver(changed, users, null, handler, Context.RECEIVER_NOT_EXPORTED);
         ctx.getSystemService(ConnectivityManager.class).registerDefaultNetworkCallback(
                 new ConnectivityManager.NetworkCallback() {
                     @Override

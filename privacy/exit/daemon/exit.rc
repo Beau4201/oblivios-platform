@@ -12,7 +12,8 @@ on post-fs-data
 # after an exit, a panic (the Android standard library of the tree aborts) or the shutdown that ends the Tor client.
 # The control socket is world-connectable on purpose: the SELinux policy lets only exit_app connect and the daemon reads the
 # peer's SELinux context before it reads a byte. memcg.limit_in_bytes is the hard limit of D-K (160 MiB; the Arti quota is
-# 64 MiB) [assumption: memcg is mounted and the kill and restart are seen in NET-009's limit row].
+# 64 MiB) [assumption: memcg is mounted and the kill and restart are seen in NET-009's limit row]. stdio_to_kmsg sends the
+# few fixed lines that the services print (never a name or a destination) to the kernel log, where userdebug builds keep them.
 service exitd /system/bin/exitd --state-dir /data/misc/exitd/state --cache-dir /data/misc/exitd/cache --memory-max 67108864 --control-fd-env ANDROID_SOCKET_exitd --peer-context exit_app --mask-list /system/etc/freeholdos/exit-mask-list.tsv
     class main
     user 2961
@@ -20,6 +21,7 @@ service exitd /system/bin/exitd --state-dir /data/misc/exitd/state --cache-dir /
     capabilities NET_ADMIN
     socket exitd stream+listen 0666 2961 2961
     memcg.limit_in_bytes 167772160
+    stdio_to_kmsg
 
 # The route helper: the only writer of policy rules and routes, in the closed language of routes/spec.rs. NET_ADMIN, one
 # NETLINK_ROUTE socket, no internet, no file. Its label is named here because it shares the executable with the daemon.
@@ -30,3 +32,4 @@ service exitd_route /system/bin/exitd --routes --control-fd-env ANDROID_SOCKET_e
     capabilities NET_ADMIN
     seclabel u:r:exitd_route:s0
     socket exitd_route stream+listen 0666 2962 2962
+    stdio_to_kmsg
