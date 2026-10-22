@@ -2,8 +2,11 @@
 package org.freeholdos.datamap;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.view.Gravity;
@@ -14,6 +17,7 @@ import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Toast;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
 
@@ -24,11 +28,14 @@ import com.android.internal.datamap.IDataMapService;
 import org.freeholdos.datamap.model.AtlasData;
 import org.freeholdos.datamap.model.AtlasState;
 import org.freeholdos.datamap.model.CompanyList;
+import org.freeholdos.datamap.model.ExportTsv;
 import org.freeholdos.datamap.model.LandData;
 import org.freeholdos.datamap.model.MapModel;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -597,6 +604,54 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
     @Override
     public void setServerHistory(boolean enabled) {
         call(s -> s.setServerHistory(enabled));
+    }
+
+    private static final int REQ_EXPORT = 1;
+
+    /** ADR-189: the dialog first; the file only after the user has confirmed it and chosen a place in the picker. */
+    @Override
+    public void askExport() {
+        showOverlay(Overlays.dialog(mW, mContent, getString(R.string.export_title), getString(R.string.export_text),
+                getString(R.string.cancel), getString(R.string.export_action), () -> {
+                    Intent pick = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                            .setType("text/tab-separated-values")
+                            .putExtra(Intent.EXTRA_TITLE, ExportTsv.fileName(System.currentTimeMillis()));
+                    try {
+                        startActivityForResult(pick, REQ_EXPORT);
+                    } catch (ActivityNotFoundException e) {
+                        Toast.makeText(this, R.string.export_failed, Toast.LENGTH_SHORT).show();
+                    }
+                }));
+    }
+
+    /**
+     * The snapshot is read now, not before the dialog and not kept across the picker: the file holds what the service
+     * returns at the moment the user's choice comes back, and the activity keeps nothing if it is recreated meanwhile.
+     */
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != REQ_EXPORT || result != RESULT_OK || data == null || data.getData() == null) {
+            return;
+        }
+        final Uri uri = data.getData();
+        execute(() -> {
+            IDataMapService s = mService;
+            boolean ok = false;
+            if (s != null) {
+                try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
+                    String text = ExportTsv.encode(SnapshotMapper.toInput(s.getSnapshot(mApps.installedPackages())));
+                    if (out != null) {
+                        out.write(text.getBytes(StandardCharsets.UTF_8));
+                        ok = true;
+                    }
+                } catch (IOException | RemoteException | RuntimeException e) {
+                    // reported below
+                }
+            }
+            final int message = ok ? R.string.export_done : R.string.export_failed;
+            runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_SHORT).show());
+        });
     }
 
     @Override

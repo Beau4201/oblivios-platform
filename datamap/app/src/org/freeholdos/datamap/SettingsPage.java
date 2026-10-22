@@ -26,6 +26,8 @@ final class SettingsPage {
 
         void setServerHistory(boolean enabled);
 
+        void askExport();
+
         void askDelete();
     }
 
@@ -162,6 +164,8 @@ final class SettingsPage {
         // Your data
         col.addView(w.h3(ctx.getString(R.string.settings_your_data)));
         Widgets.Card mine = w.card();
+        mine.add(w.row(tile(R.drawable.ic_export, false), ctx.getString(R.string.settings_export),
+                new Object[] {ctx.getString(R.string.settings_export_summary)}, w.chevron(), true, v -> actions.askExport()));
         Widgets.Row delete = w.row(tile(R.drawable.ic_trash, true), ctx.getString(R.string.settings_delete),
                 new Object[] {ctx.getString(R.string.settings_delete_summary)}, w.chevron(), true,
                 v -> actions.askDelete());

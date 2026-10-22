@@ -94,6 +94,8 @@
     <string name="settings_server_history_summary">Where services were hosted, in the summary</string>
     <string name="settings_keep_for">Keep for</string>
     <string name="settings_your_data">Your data</string>
+    <string name="settings_export">Export the services your apps contact</string>
+    <string name="settings_export_summary">A file you save where you choose</string>
     <string name="settings_delete">Delete everything collected</string>
     <string name="settings_delete_summary">History and counts, from this phone only</string>
     <string name="settings_about">About Atlas</string>
@@ -110,6 +112,11 @@
 
     <string name="delete_title">Delete everything collected?</string>
     <string name="delete_text">The history and the counts on this phone are removed. This cannot be undone.</string>
+    <string name="export_title">Export the services your apps contact?</string>
+    <string name="export_text">The file lists, for each app, the services it contacted, how often and when. It leaves Atlas: the place you choose can keep it, and so can any app that reads it.</string>
+    <string name="export_action">Export</string>
+    <string name="export_done">File saved</string>
+    <string name="export_failed">The file could not be saved</string>
     <string name="cancel">Cancel</string>
     <string name="delete">Delete</string>
 
