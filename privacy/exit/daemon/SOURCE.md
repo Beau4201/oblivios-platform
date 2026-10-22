@@ -24,13 +24,13 @@ the new commit, hash and size, and the comparison of two builds is repeated.
 | Item | Value |
 | --- | --- |
 | Made by | `../tools/make-mask-list.py` from the three inputs below; the output is deterministic (two runs compared) |
-| Mask list SHA-256 | `205037a09ad6e7af4d98425d506c583ed2b60d8d2648695bdced3b83706b97b9` |
-| Rows | 3698, of which 3062 masked and 636 protected |
+| Mask list SHA-256 | `791345bfea0e111b45f383b16c7c740c4b46baf86ca6b124c156bbb4581f3c5c` |
+| Rows | 3699, of which 2823 masked and 876 protected |
 | Classifier | `../../datamap/classifier/classifier.tsv`, SHA-256 `210d617f1918420cda4dc1cd66a86b7f7ddf911eeba14863632a337d3257e570` |
-| Deny list | `../mask-denylist.txt`, SHA-256 `63817000ede374866ded5b1afc31aac578ebf01a1f1f57f70a010872c9ea0a6b` |
-| Allow list | `../mask-allow-platform.txt`, SHA-256 `3c23fe1647a53905d37e68347e981666af4314c991b789240ed93e075cc20eb2` |
+| Deny list | `../mask-denylist.txt`, SHA-256 `bff2211e7be432de21e47717e1feca8108a81b0db0c5c4596fa0d06de02ee2d6` |
+| Allow list | `../mask-allow-platform.txt`, SHA-256 `cc92550852864446d1be64c40b6d9d01eb6d0a68d8745c7d5ae2f2cb23653994` |
 
-The deny list and the allow list are hand-written and are read by the owner before an image (Task 21 of the close-out plan).
+The deny list and the allow list are hand-written and are read by the owner before an image (Task 21 of the close-out plan). On 2026-10-22 (ADR-188) the deny list grew from 37 to 277 domains after every masked row was read: sites and services that the classifier files whole (marketplaces, portals, business suites, device services), video ad servers, affiliate redirects, content delivery hosts and video sites. A protected parent keeps its tracker subdomains masked (the longest match wins).
 The daemon loaded this file in the host test run of 2026-10-21 (status 1 at the configuration, not 2 at the list).
 
 ## exit.rc

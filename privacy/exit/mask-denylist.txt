@@ -43,3 +43,251 @@ myfonts.net	font delivery
 geoplugin.net	location lookup
 tiaa-cref.org	bank
 pointificsecure.com	security service
+
+# --- Added 2026-10-22 (ADR-188) after reading every masked row. The classifier files whole domains, so it lists sites and
+# --- services (a marketplace, a portal, a CRM suite) under advertising, and the hosts that a page or a player waits for:
+# --- video ad servers (a player waits for the ad decision before the content starts, and Tor adds a round trip to each step of
+# --- a chain of redirects), affiliate redirects (a click goes through them), content delivery hosts and adult and video
+# --- sites. A parent here is protected and its tracker subdomains stay masked (the longest match wins), so only the part
+# --- that the user sees is left alone. The speed guard (guard.rs) catches what this list does not; the device sweep and the
+# --- owner's own traffic grow it further (MSK-002c).
+ebay-us.com	marketplace
+ebay.com	marketplace
+ebay.de	marketplace
+ebayclassifiedsgroup.com	marketplace
+ebaycommercenetwork.com	marketplace
+ebaydesc.com	marketplace
+ebayimg.com	marketplace
+ebaystatic.com	marketplace
+indeed.com	marketplace
+mercadolivre.com.br	marketplace
+mlstatic.com	marketplace
+monster.com	marketplace
+pof.com	marketplace
+rakuten.co.jp	marketplace
+taobao.com	marketplace
+yellowpages.com	marketplace
+barra.brasil.gov.br	portal and mail
+digitalgov.gov	portal and mail
+dmm.co.jp	portal and mail
+freenet.de	portal and mail
+freent.de	portal and mail
+hsoub.com	portal and mail
+naver.com	portal and mail
+naver.net	portal and mail
+orange.fr	portal and mail
+rambler.ru	portal and mail
+sina.com.cn	portal and mail
+storage-yahoo.jp	portal and mail
+tarafdari.com	portal and mail
+ui-portal.de	portal and mail
+weather.com	portal and mail
+wp.pl	portal and mail
+wpimg.pl	portal and mail
+ya.ru	portal and mail
+yahoo.co.jp	portal and mail
+yahoo.com	portal and mail
+yahoo.net	portal and mail
+yahooapis.com	portal and mail
+yahooapis.jp	portal and mail
+yahoodns.net	portal and mail
+yahooinc.com	portal and mail
+yandex.by	portal and mail
+yandex.com	portal and mail
+yandex.com.tr	portal and mail
+yandex.fr	portal and mail
+yandex.kz	portal and mail
+yandex.net	portal and mail
+yandex.ru	portal and mail
+yastatic.net	portal and mail
+yimg.com	portal and mail
+yimg.jp	portal and mail
+at.ua	messenger and games
+do.am	messenger and games
+flipboard.com	messenger and games
+king.com	messenger and games
+kinja-img.com	messenger and games
+kinja-static.com	messenger and games
+kinja.com	messenger and games
+lflipboard.com	messenger and games
+line-apps.com	messenger and games
+line-scdn.net	messenger and games
+line.me	messenger and games
+strava.com	messenger and games
+tumblr.com	messenger and games
+typepad.com	messenger and games
+ucoz.net	messenger and games
+weebly.com	messenger and games
+xing.com	messenger and games
+arcpublishing.com	publisher
+art19.com	publisher
+persgroep.net	publisher
+purch.com	publisher
+rcsmediagroup.it	publisher
+rea-group.com	publisher
+realestate.com.au	publisher
+reastatic.net	publisher
+reedbusiness.net	publisher
+ringier.ch	publisher
+sanoma.fi	publisher
+styria-digital.com	publisher
+warnermedia.com	publisher
+ziffdavis.com	publisher
+ziffdavisinternational.com	publisher
+ziffprod.com	publisher
+ziffstatic.com	publisher
+apester.com	business software
+aweber.com	business software
+bitrix.de	business software
+bitrix.info	business software
+bitrix.ru	business software
+bitrix24.com	business software
+bitrix24.com.br	business software
+embed.ly	business software
+embedly.com	business software
+hubspot.com	business software
+imageshack.host	business software
+infusionsoft.com	business software
+isolarcloud.com	business software
+keap.com	business software
+klaviyo.com	business software
+list-manage.com	business software
+mailchimp.com	business software
+qualtrics.com	business software
+readme.com	business software
+readme.io	business software
+sas.com	business software
+segment.com	business software
+segment.io	business software
+services.sheerid.com	business software
+similarweb.com	business software
+sumo.com	business software
+thinglink.com	business software
+vcita.com	business software
+widget.raisenow.com	business software
+findmymobile.samsung.com	device service
+heytapdl.com	device service
+heytapmobi.com	device service
+heytapmobile.com	device service
+oppomobile.com	device service
+samsung-omc.com	device service
+samsungapps.com	device service
+samsungcloud.tv	device service
+samsungdm.com	device service
+samsungdmroute.com	device service
+samsungdms.net	device service
+samsungmobile.com	device service
+secmobilesvc.com	device service
+tizenservice.com	device service
+cardinalcommerce.com	payment authentication
+areyouahuman.com	captcha
+cmp.quantcast.com	sign-in and consent
+contentpass.de	sign-in and consent
+contentpass.net	sign-in and consent
+gigya.com	sign-in and consent
+online-metrix.net	device fingerprint for banks
+clickbank.net	checkout
+adap.tv	video ad server inside players
+adotube.com	video ad server inside players
+adswizz.com	video ad server inside players
+brainient.com	video ad server inside players
+connatix.com	video ad server inside players
+digiteka.net	video ad server inside players
+extend.tv	video ad server inside players
+fwmrm.net	video ad server inside players
+hiro.tv	video ad server inside players
+innovid.com	video ad server inside players
+invodo.com	video ad server inside players
+lkqd.net	video ad server inside players
+ngtv.io	video ad server inside players
+ora.tv	video ad server inside players
+pladform.com	video ad server inside players
+smartclip.net	video ad server inside players
+spotx.tv	video ad server inside players
+spotxcdn.com	video ad server inside players
+spotxchange.com	video ad server inside players
+springserve.com	video ad server inside players
+stickyadstv.com	video ad server inside players
+sundaysky.com	video ad server inside players
+teads.tv	video ad server inside players
+tidaltv.com	video ad server inside players
+tubemogul.com	video ad server inside players
+ultimedia.com	video ad server inside players
+vdopia.com	video ad server inside players
+videonow.ru	video ad server inside players
+videostat.com	video ad server inside players
+vidigital.ru	video ad server inside players
+vindicosuite.com	video ad server inside players
+vuroll.in	video ad server inside players
+yoc-adserver.com	video ad server inside players
+yume.com	video ad server inside players
+yumenetworks.com	video ad server inside players
+adultfriendfinder.com	video and adult sites and their CDNs
+awempire.com	video and adult sites and their CDNs
+cams.com	video and adult sites and their CDNs
+js.letvcdn.com	video and adult sites and their CDNs
+livejasmin.com	video and adult sites and their CDNs
+mofos.com	video and adult sites and their CDNs
+phncdn.com	video and adult sites and their CDNs
+pornhub.com	video and adult sites and their CDNs
+streamray.com	video and adult sites and their CDNs
+xhamster.com	video and adult sites and their CDNs
+xhamsterlive.com	video and adult sites and their CDNs
+xhamsterpremium.com	video and adult sites and their CDNs
+xhcdn.com	video and adult sites and their CDNs
+youporn.com	video and adult sites and their CDNs
+ypncdn.com	video and adult sites and their CDNs
+agcdn.com	content delivery
+appboycdn.com	content delivery
+aticdn.net	content delivery
+brcdn.com	content delivery
+cdn-cs.com	content delivery
+cdnma.com	content delivery
+cdnmaster.com	content delivery
+dd-cdn.multiscreensite.com	content delivery
+dditscdn.com	content delivery
+hwcdn.net	content delivery
+imgfarm.com	content delivery
+lightboxcdn.com	content delivery
+mokonocdn.com	content delivery
+mxcdn.net	content delivery
+s.tcimg.com	content delivery
+staticimgfarm.com	content delivery
+staticstuff.net	content delivery
+tcimg.com	content delivery
+adf.ly	page the user opens
+adfoc.us	page the user opens
+adj.st	page the user opens
+app.link	page the user opens
+bypass.jp	page the user opens
+coinurl.com	page the user opens
+cpx.to	page the user opens
+iljmp.com	page the user opens
+ity.im	page the user opens
+linkbucks.com	page the user opens
+anrdoezrs.net	affiliate redirect the user clicks
+avantlink.com	affiliate redirect the user clicks
+awin1.com	affiliate redirect the user clicks
+awltovhc.com	affiliate redirect the user clicks
+digidip.net	affiliate redirect the user clicks
+dwin1.com	affiliate redirect the user clicks
+emjcd.com	affiliate redirect the user clicks
+ftjcfx.com	affiliate redirect the user clicks
+gopjn.com	affiliate redirect the user clicks
+lduhtrp.net	affiliate redirect the user clicks
+linksynergy.com	affiliate redirect the user clicks
+pjatr.com	affiliate redirect the user clicks
+pjtra.com	affiliate redirect the user clicks
+pntra.com	affiliate redirect the user clicks
+pntrac.com	affiliate redirect the user clicks
+pntrs.com	affiliate redirect the user clicks
+redirectingat.com	affiliate redirect the user clicks
+s2d6.com	affiliate redirect the user clicks
+shareasale.com	affiliate redirect the user clicks
+skimlinks.com	affiliate redirect the user clicks
+tkqlhce.com	affiliate redirect the user clicks
+tradedoubler.com	affiliate redirect the user clicks
+viglink.com	affiliate redirect the user clicks
+zanox-affiliate.de	affiliate redirect the user clicks
+zanox.com	affiliate redirect the user clicks
+zanox.ws	affiliate redirect the user clicks

@@ -48,7 +48,6 @@ firebaselogging-pa.googleapis.com	Firebase logging only
 
 # --- Verizon Media (AOL, Yahoo): ad technology. Left out: aol.com, aolcdn.com, complex.com, verizonmedia.com, vidible.tv,
 # --- gravity.com, grvcdn.com, isp.netscape.com, snacktv.de, np.lexity.com, ov.yahoo.co.jp.
-adap.tv	video ad server
 adrevolver.com	ad network
 adsdk.com	ad SDK
 adsonar.com	ad network
