@@ -14,6 +14,7 @@ final class DaemonClient implements DaemonApi {
     private final Link link;
     private int seq;
     private final List<Failure> pending = new ArrayList<>();
+    private final List<Promotion> pendingPromotions = new ArrayList<>();
 
     DaemonClient(Link.Connector connector) {
         this.link = new Link(connector, true);
@@ -29,6 +30,7 @@ final class DaemonClient implements DaemonApi {
         link.open();
         seq = 0;
         pending.clear();
+        pendingPromotions.clear();
         link.send(ControlCodec.hello());
         ControlCodec.Reply r = link.next();
         if (r.type == ControlCodec.Type.ERROR) {
@@ -55,12 +57,19 @@ final class DaemonClient implements DaemonApi {
     }
 
     @Override
+    public void release(long uid, int company) throws IOException {
+        int s = nextSeq();
+        link.send(ControlCodec.release(s, uid, company));
+        awaitAck(s);
+    }
+
+    @Override
     public Poll poll() throws IOException {
         int s = nextSeq();
         link.send(ControlCodec.getState(s));
         ControlCodec.Reply r;
-        while ((r = link.next()).type == ControlCodec.Type.FAILURES) {
-            pending.add(new Failure(r.uid, r.company, r.count));
+        while (queue(r = link.next())) {
+            // a report that arrived late, before the state
         }
         if (r.type != ControlCodec.Type.STATE) {
             throw refused(r);
@@ -69,14 +78,28 @@ final class DaemonClient implements DaemonApi {
         // The reports that follow the state were written right after it; take what has arrived, the rest comes with the next call.
         while (link.ready()) {
             r = link.next();
-            if (r.type != ControlCodec.Type.FAILURES) {
+            if (!queue(r)) {
                 throw refused(r);
             }
-            pending.add(new Failure(r.uid, r.company, r.count));
         }
         List<Failure> out = new ArrayList<>(pending);
         pending.clear();
-        return new Poll(state, out);
+        List<Promotion> promoted = new ArrayList<>(pendingPromotions);
+        pendingPromotions.clear();
+        return new Poll(state, out, promoted);
+    }
+
+    /** Keeps a failure report or a promotion that rides on a reply; false for any other reply. */
+    private boolean queue(ControlCodec.Reply r) {
+        if (r.type == ControlCodec.Type.FAILURES) {
+            pending.add(new Failure(r.uid, r.company, r.count));
+            return true;
+        }
+        if (r.type == ControlCodec.Type.PROMOTED) {
+            pendingPromotions.add(new Promotion(r.uid, r.company, r.fresh));
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -89,8 +112,7 @@ final class DaemonClient implements DaemonApi {
     private void awaitAck(int s) throws IOException {
         while (true) {
             ControlCodec.Reply r = link.next();
-            if (r.type == ControlCodec.Type.FAILURES) {
-                pending.add(new Failure(r.uid, r.company, r.count));
+            if (queue(r)) {
                 continue;
             }
             if (r.type == ControlCodec.Type.ACK && r.seq == s) {

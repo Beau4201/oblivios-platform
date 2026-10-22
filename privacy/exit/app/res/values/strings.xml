@@ -12,6 +12,9 @@
     <string name="notif_action_show">Show my address</string>
     <string name="notif_action_keep">Keep hiding</string>
     <string name="notif_unknown_company">a hidden host</string>
+    <string name="notif_promo_title">%1$s: %2$s sends a lot of data</string>
+    <string name="notif_promo_text">Tor would slow it down, so %2$s sees your address for this app for 30 minutes.</string>
+    <string name="notif_action_rehide">Hide again</string>
     <string name="notif_consent_text">Choose whether advertising and analytics hosts see your address.</string>
 
     <string name="settings_summary">Hide your address, or use Tor for an app</string>
@@ -24,25 +27,37 @@
     <string name="status_error">Last error: %1$s</string>
 
     <string name="warn_vpn">A VPN is on. It takes the place of Tor and of the hidden address.</string>
-    <string name="warn_dns">Private DNS is on. Hidden addresses work less well with it.</string>
+    <string name="warn_dns">Private DNS is on. Advertising and analytics hosts may still see your address.</string>
     <string name="warn_too_many">Too many apps are set to Tor. Set some back to Direct.</string>
     <string name="warn_masks_off">Too many apps for hidden addresses. Advertising and analytics hosts see your address until you set some apps back to Direct.</string>
+    <string name="warn_too_many_open">Too many apps are set to never hidden. The surplus is hidden like the other apps.</string>
     <string name="warn_damaged">Your choices could not be read completely. Check which apps are set to Tor.</string>
 
     <string name="consent_title">Hide your address from advertising and analytics hosts</string>
-    <string name="consent_text">Connections to advertising and analytics hosts go through the Tor network, so those hosts do not see your address and cannot use it to tell that two apps are the same person. Your network can see that this phone uses Tor. Pages load more slowly through Tor. Everything else stays direct. Nothing is hidden until you continue.</string>
+    <string name="consent_text">Connections to advertising, analytics, attribution and crash-reporting hosts go through the Tor network, so those hosts do not see your address and cannot use it to tell that two apps are the same person. Your network can see that this phone uses Tor. Tor is slower, so a host that sends an app a lot of data is shown your address for 30 minutes and you are told. An app may load slowly or not at all when a host cannot be reached; you are asked then. Everything else stays direct. Nothing is hidden until you continue.</string>
     <string name="consent_switch">Hide my address from these hosts</string>
     <string name="consent_confirm">Continue</string>
     <string name="masked_title">Hide my address from advertising and analytics hosts</string>
     <string name="masked_summary">Connections to these hosts use Tor. Everything else stays direct.</string>
 
+    <string name="promoted_title">Shown for now</string>
+    <string name="promoted_summary">These hosts send an app a lot of data, so they see its address for 30 minutes.</string>
+    <string name="promoted_unknown_app">An app</string>
+
     <string name="apps_title">Apps</string>
-    <string name="apps_summary">%1$d use Tor. The others connect directly.</string>
+    <string name="apps_summary">%1$d use Tor, %2$d are never hidden. The others connect directly.</string>
     <string name="apps_search_hint">Search apps</string>
     <string name="app_tor_hint">Exit: Tor</string>
-    <string name="app_direct_hint">Direct</string>
-    <string name="app_tor_switch">Use Tor for %1$s</string>
+    <string name="app_direct_hint">Direct, hosts hidden</string>
+    <string name="app_open_hint">Direct, never hidden</string>
+    <string name="mode_cancel">Cancel</string>
+    <string name="app_mode_title">Network for %1$s</string>
+    <string name="app_mode_row">%1$s: %2$s</string>
+    <string name="app_mode_direct">Direct, hide advertising and analytics hosts</string>
+    <string name="app_mode_tor">Tor for everything</string>
+    <string name="app_mode_open">Direct, never hide anything</string>
     <string name="apps_limit">Tor is limited to %1$d apps.</string>
+    <string name="apps_open_limit">Never hidden is limited to %1$d apps.</string>
 
     <string name="overrides_title">Hosts that see your address</string>
     <string name="overrides_summary">%1$d chosen</string>

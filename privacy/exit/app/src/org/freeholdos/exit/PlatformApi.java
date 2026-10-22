@@ -31,6 +31,9 @@ public interface PlatformApi {
     /** The ladder says an app has trouble with a company's hosts: tell the user once (the caller already deduplicates). */
     void notifyFailure(long uid, int company);
 
+    /** The speed guard passes a company on to an app (ADR-188): tell the user once, with the action "Hide again". */
+    void notifyPromotion(long uid, int company);
+
     /** The state for the screens and the status line. */
     void publish(Status status);
 }

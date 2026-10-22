@@ -180,6 +180,16 @@ final class AndroidPlatform implements PlatformApi {
     }
 
     @Override
+    public void notifyPromotion(long uid, int company) {
+        for (Policy.App a : installedApps()) {
+            if (a.uid == uid) {
+                notifier.postPromotion(a.pkg, uid, company);
+                return;
+            }
+        }
+    }
+
+    @Override
     public void publish(Status status) {
         sink.accept(status);
     }

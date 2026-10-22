@@ -31,11 +31,14 @@ public final class Presenter {
         public final String pkg;
         public final String label;
         public final boolean tor;
+        /** What the app is set to: Direct (trackers hidden), Tor or Open (never hidden). */
+        public final Choices.Choice choice;
 
-        AppRow(String pkg, String label, boolean tor) {
+        AppRow(String pkg, String label, Choices.Choice choice) {
             this.pkg = pkg;
             this.label = label;
-            this.tor = tor;
+            this.tor = choice == Choices.Choice.TOR;
+            this.choice = choice;
         }
     }
 
@@ -66,7 +69,7 @@ public final class Presenter {
             if (!q.isEmpty() && !a.label.toLowerCase(Locale.ROOT).contains(q) && !a.pkg.toLowerCase(Locale.ROOT).contains(q)) {
                 continue;
             }
-            rows.add(new AppRow(a.pkg, a.label, choices.choiceOf(a.pkg) == Choices.Choice.TOR));
+            rows.add(new AppRow(a.pkg, a.label, choices.choiceOf(a.pkg)));
         }
         Collections.sort(rows, (x, y) -> {
             int c = x.label.compareToIgnoreCase(y.label);
@@ -75,9 +78,9 @@ public final class Presenter {
         return rows;
     }
 
-    /** The choice that a tap on an app row makes: the other one. */
-    public static Choices.Choice toggled(Choices choices, String pkg) {
-        return choices.choiceOf(pkg) == Choices.Choice.TOR ? Choices.Choice.DIRECT : Choices.Choice.TOR;
+    /** The choices a tap on an app row offers, in the order of the dialog. */
+    public static Choices.Choice[] options() {
+        return new Choices.Choice[] {Choices.Choice.DIRECT, Choices.Choice.TOR, Choices.Choice.OPEN};
     }
 
     /** Every (app, company) pair with "show my address", sorted by package and company. */

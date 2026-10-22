@@ -29,6 +29,11 @@ public final class ExitController {
     public static final long[] BACKOFF_MS = {1000, 2000, 4000, 8000, 16000, 30000};
     /** How often the daemon is asked for its state and the failure reports. */
     public static final long POLL_MS = 5000;
+    /**
+     * A promotion that the daemon has not listed for this long is over. The daemon lists every active promotion on each
+     * reply, but a frame can arrive with the next reply, so a promotion is dropped only after two polls without it.
+     */
+    public static final long PROMOTION_STALE_MS = 2 * POLL_MS;
 
     private final DaemonApi daemon;
     private final RouteApi route;
@@ -53,6 +58,9 @@ public final class ExitController {
     private Policy.Out applied;
     private Map<String, Integer> appliedPrefs;
     private final Map<Long, String> sentOverrides = new HashMap<>();
+    /** The companies the daemon passes on to an app for now: (uid, company) to the time it was last listed. */
+    private final java.util.TreeMap<Status.Promoted, Long> promoted = new java.util.TreeMap<>(
+            (a, b) -> a.uid != b.uid ? Long.compare(a.uid, b.uid) : Integer.compare(a.company, b.company));
 
     public ExitController(DaemonApi daemon, RouteApi route, PlatformApi platform, Store store, Ladder ladder) {
         this.daemon = daemon;
@@ -63,7 +71,25 @@ public final class ExitController {
     }
 
     public Status status() {
-        return new Status(phase, daemonState, applied == null ? Collections.<Policy.Warning>emptySet() : applied.warnings, lastError);
+        return new Status(phase, daemonState, applied == null ? Collections.<Policy.Warning>emptySet() : applied.warnings, lastError,
+                new java.util.ArrayList<>(promoted.keySet()));
+    }
+
+    /**
+     * "Hide again": the user wants a company hidden from an app again. The daemon ends the promotion and keeps the company
+     * hidden for that app until it restarts. A daemon that cannot be reached has forgotten every promotion already.
+     */
+    public void release(long uid, int company, long nowMs) {
+        promoted.remove(new Status.Promoted(uid, company));
+        if (phase == Status.Phase.RUNNING) {
+            try {
+                daemon.release(uid, company);
+            } catch (IOException | RuntimeException e) {
+                lost(nowMs, e);
+                return;
+            }
+        }
+        publish();
     }
 
     private static boolean needsDaemon(Choices choices, Consent consent) {
@@ -96,6 +122,13 @@ public final class ExitController {
                             platform.notifyFailure(f.uid, f.company);
                         }
                     }
+                    for (DaemonApi.Promotion q : p.promotions) {
+                        promoted.put(new Status.Promoted(q.uid, q.company), nowMs);
+                        if (q.fresh) {
+                            platform.notifyPromotion(q.uid, q.company);
+                        }
+                    }
+                    promoted.values().removeIf(seen -> nowMs - seen >= PROMOTION_STALE_MS);
                     publish();
                 } catch (IOException | RuntimeException e) {
                     lost(nowMs, e);
@@ -182,6 +215,7 @@ public final class ExitController {
         daemonState = -1;
         applied = null;
         sentOverrides.clear();
+        promoted.clear();
         attempts = 0;
         publish();
     }
@@ -276,6 +310,8 @@ public final class ExitController {
         daemon.close();
         route.close();
         daemonState = -1;
+        // A daemon that starts again has forgotten its promotions (they live in its memory only).
+        promoted.clear();
         phase = ranBefore ? Status.Phase.PAUSED : Status.Phase.CONNECTING;
         attempts++;
         nextAttemptMs = nowMs + BACKOFF_MS[Math.min(attempts, BACKOFF_MS.length) - 1];

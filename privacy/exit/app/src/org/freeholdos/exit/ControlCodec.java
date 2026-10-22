@@ -6,14 +6,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * The Java twin of the two control protocols: the daemon's ({@code control.rs}, version 2) and the route helper's
+ * The Java twin of the two control protocols: the daemon's ({@code control.rs}, version 3) and the route helper's
  * ({@code routes/proto.rs}, version 1). A frame is a u32 big-endian length of tag plus payload, the tag byte, the
  * payload. The golden vectors in {@code tests/vectors.txt} are loaded by the Rust tests as well, so that the two codecs
  * cannot drift. A decoder checks the claimed length first and never allocates from it. Pure Java.
  */
 public final class ControlCodec {
     public static final int MAX_FRAME = 4096;
-    public static final int DAEMON_PROTOCOL = 2;
+    public static final int DAEMON_PROTOCOL = 3;
     public static final int ROUTE_PROTOCOL = 1;
     public static final int IFNAME_MAX = 15;
 
@@ -25,6 +25,7 @@ public final class ControlCodec {
     private static final int TAG_GET_STATE = 0x06;
     private static final int TAG_SET_POLICY = 0x07;
     private static final int TAG_SET_OVERRIDES = 0x08;
+    private static final int TAG_RELEASE = 0x09;
     private static final int TAG_ROUTE_APPLY = 0x02;
     private static final int TAG_ROUTE_CLEAR = 0x03;
     private static final int TAG_ROUTE_GET_APPLIED = 0x04;
@@ -33,6 +34,7 @@ public final class ControlCodec {
     private static final int TAG_FAILURES = 0x83;
     private static final int TAG_ACK = 0x84;
     private static final int TAG_ERROR = 0x85;
+    /** 0x86 is a Promoted from the daemon and an Applied from the route helper: the two protocols are decoded apart. */
     private static final int TAG_APPLIED = 0x86;
 
     private ControlCodec() {}
@@ -46,7 +48,7 @@ public final class ControlCodec {
         }
     }
 
-    public enum Type { READY, STATE, FAILURES, ACK, ERROR, APPLIED }
+    public enum Type { READY, STATE, FAILURES, PROMOTED, ACK, ERROR, APPLIED }
 
     /** The daemon states of {@code DaemonState}. */
     public static final int STATE_BOOTSTRAPPING = 0;
@@ -72,11 +74,19 @@ public final class ControlCodec {
         public final int company;
         public final long count;
         public final int rules;
+        /** For {@link Type#PROMOTED}: true the first time the daemon reports the promotion. */
+        public final boolean fresh;
         /** Bytes of the buffer this reply used. */
         public final int used;
 
         Reply(Type type, int version, String iface, int state, int seq, int code, long uid, int company, long count,
                 int rules, int used) {
+            this(type, version, iface, state, seq, code, uid, company, count, rules, false, used);
+        }
+
+        Reply(Type type, int version, String iface, int state, int seq, int code, long uid, int company, long count,
+                int rules, boolean fresh, int used) {
+            this.fresh = fresh;
             this.type = type;
             this.version = version;
             this.iface = iface;
@@ -188,6 +198,19 @@ public final class ControlCodec {
             putU16(o, c);
         }
         return frame(TAG_SET_OVERRIDES, o.toByteArray());
+    }
+
+    /** "Hide again": ends the speed guard's promotion of {@code company} for {@code uid} (ADR-188). */
+    public static byte[] release(int seq, long uid, int company) {
+        seq(seq);
+        if (company < 1 || company > 0xffff) {
+            throw new IllegalArgumentException("company id is 1 to 65535");
+        }
+        ByteArrayOutputStream o = new ByteArrayOutputStream();
+        o.write(seq);
+        putU32(o, uid);
+        putU16(o, company);
+        return frame(TAG_RELEASE, o.toByteArray());
     }
 
     public static byte[] routeHello() {
@@ -325,7 +348,14 @@ public final class ControlCodec {
             }
             case TAG_APPLIED:
                 if (daemon) {
-                    throw new CodecException("unknown tag");
+                    // A Promoted: the speed guard passes a company on to an app (ADR-188).
+                    exact(n, 7);
+                    int fresh = buf[p + 6] & 0xff;
+                    if (fresh > 1) {
+                        throw new CodecException("bad fresh flag");
+                    }
+                    return new Reply(Type.PROMOTED, 0, null, 0, 0, 0, u32(buf, p),
+                            ((buf[p + 4] & 0xff) << 8) | (buf[p + 5] & 0xff), 0, 0, fresh == 1, end);
                 }
                 exact(n, 3);
                 return new Reply(Type.APPLIED, 0, null, 0, buf[p] & 0xff, 0, 0, 0, 0,

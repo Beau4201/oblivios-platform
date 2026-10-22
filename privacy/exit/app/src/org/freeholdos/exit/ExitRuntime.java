@@ -217,6 +217,18 @@ final class ExitRuntime {
         });
     }
 
+    /** "Hide again": the user wants a company hidden from an app again (the speed guard had passed it on). */
+    void release(long uid, int company) {
+        Handler h = handler;
+        if (h == null) {
+            return;
+        }
+        h.post(() -> {
+            controller.release(uid, company, SystemClock.elapsedRealtime());
+            publishSnapshot();
+        });
+    }
+
     void setConsent(Consent c) {
         post(() -> {
             try {

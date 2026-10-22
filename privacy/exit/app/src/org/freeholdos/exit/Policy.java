@@ -17,7 +17,8 @@ import java.util.TreeSet;
  * <ul>
  *   <li>Tor: the uids of the apps the user set to Tor, in every user where the package is installed.
  *   <li>Exempt: the exit app itself and the updater (the Tor client could not start, or the device could not be updated,
- *       if they were routed through Tor), whatever the choices say.
+ *       if they were routed through Tor), whatever the choices say, and the apps the user set to {@link Choices.Choice#OPEN}
+ *       (never masked, ADR-188).
  *   <li>Masked: every other app uid of every user, installed or not (a package installed later is masked from its first
  *       packet), but only once the user's consent is ON.
  * </ul>
@@ -31,6 +32,8 @@ public final class Policy {
     /** The limits of the daemon's class table and of the route helper's lists (control.rs MAX_CLASSES, spec.rs MAX_RANGES). */
     public static final int MAX_CLASSES = 256;
     public static final int MAX_RANGES = 128;
+    /** The most Exempt ranges: the two system packages and the open apps, so that the three lists fit the daemon's 256. */
+    public static final int MAX_EXEMPT_RANGES = 64;
 
     private Policy() {}
 
@@ -79,7 +82,9 @@ public final class Policy {
          * preference but no class in the daemon and no guard rule, so it has no network at all (the daemon refuses a flow of a
          * uid without a class). The app shows it and asks to set some apps back to Direct.
          */
-        TOO_MANY_TOR_APPS
+        TOO_MANY_TOR_APPS,
+        /** More open uid ranges than the table holds: the surplus is masked like any other app. The app says so. */
+        TOO_MANY_OPEN_APPS
     }
 
     public static final class Out {
@@ -113,6 +118,7 @@ public final class Policy {
 
         List<Integer> torUids = new ArrayList<>();
         List<Integer> exemptUids = new ArrayList<>();
+        List<Integer> openUids = new ArrayList<>();
         Map<String, Integer> prefs = new LinkedHashMap<>();
         for (App a : installed) {
             // A package with a system uid (below the app ids) has no place in a table that the daemon and the helper accept.
@@ -125,12 +131,22 @@ public final class Policy {
             } else if (choices.choiceOf(a.pkg) == Choices.Choice.TOR) {
                 torUids.add(a.uid);
                 prefs.put(a.pkg, OEM_PRIVATE_ONLY);
+            } else if (choices.choiceOf(a.pkg) == Choices.Choice.OPEN) {
+                openUids.add(a.uid);
             }
         }
         List<int[]> tor = UidRanges.coalesce(toArray(torUids));
         List<int[]> exempt = UidRanges.coalesce(toArray(exemptUids));
         // The exit app and the updater are never Tor, even where the choices say so.
         tor = UidRanges.subtract(tor, exempt);
+        // An open app is Exempt too, unless it shares its uid with a system package or with an app on Tor (Tor wins: a
+        // shared uid cannot be both, and the app on Tor is the user's stronger choice).
+        List<int[]> open = UidRanges.subtract(UidRanges.subtract(UidRanges.coalesce(toArray(openUids)), exempt), tor);
+        int room = Math.max(0, MAX_EXEMPT_RANGES - exempt.size());
+        if (open.size() > room) {
+            open = new ArrayList<>(open.subList(0, room));
+            warnings.add(Warning.TOO_MANY_OPEN_APPS);
+        }
 
         if (tor.size() > MAX_RANGES) {
             tor = new ArrayList<>(tor.subList(0, MAX_RANGES));
@@ -143,10 +159,10 @@ public final class Policy {
             for (int user : sortedUnique(users)) {
                 all.add(UidRanges.forUser(user));
             }
-            masked = UidRanges.subtract(UidRanges.subtract(all, tor), exempt);
-            // The class table cannot overflow once the steer list fits: masked <= tor + exempt + users, so with masked <= 128
-            // the three lists together are at most 127 + 128 = 255 entries, inside the daemon's 256.
-            if (masked.size() > MAX_RANGES) {
+            masked = UidRanges.subtract(UidRanges.subtract(UidRanges.subtract(all, tor), exempt), open);
+            // The class table has at most 128 Tor ranges, 64 Exempt ranges (the system packages and the open apps) and the
+            // masked ranges; the masked tier is off when the steer list or the whole table would not fit.
+            if (masked.size() > MAX_RANGES || tor.size() + exempt.size() + open.size() + masked.size() > MAX_CLASSES) {
                 masked = new ArrayList<>();
                 warnings.add(Warning.MASK_TIER_OFF_TOO_MANY_APPS);
             }
@@ -160,6 +176,9 @@ public final class Policy {
             classes.add(new Cls(r[0], r[1], Kind.MASKED));
         }
         for (int[] r : exempt) {
+            classes.add(new Cls(r[0], r[1], Kind.EXEMPT));
+        }
+        for (int[] r : open) {
             classes.add(new Cls(r[0], r[1], Kind.EXEMPT));
         }
         classes.sort((x, y) -> Integer.compare(x.start, y.start));

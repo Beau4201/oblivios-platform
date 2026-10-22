@@ -138,7 +138,44 @@ public final class HostChecks {
         check(!Choices.validPackage("a.b.") && !Choices.validPackage("a..b") && !Choices.validPackage("a.b-c") && Choices.validPackage("a.b_c9"), "package grammar");
         check(!Choices.validPackage("a." + "x".repeat(260)) && Choices.validPackage("a." + "x".repeat(253)), "package length 255");
         check(!Choices.validPackage("a." + "x".repeat(254)), "package length 256 is refused");
-        check(Choices.MAX_TOR_APPS == 48 && Choices.MAX_SHOWN == 256 && Choices.MAX_FILE_CHARS == 65536, "the limits of Choices");
+        check(Choices.MAX_TOR_APPS == 48 && Choices.MAX_OPEN_APPS == 24 && Choices.MAX_SHOWN == 256 && Choices.MAX_FILE_CHARS == 65536, "the limits of Choices");
+
+        // The third stand: never masked (ADR-188). One app has one stand.
+        Choices o = new Choices();
+        check(o.set("org.o.app", Choices.Choice.OPEN) && o.choiceOf("org.o.app") == Choices.Choice.OPEN && o.openApps().contains("org.o.app"), "set Open");
+        check(o.torApps().isEmpty(), "an open app is not on Tor");
+        check(o.set("org.o.app", Choices.Choice.TOR) && o.choiceOf("org.o.app") == Choices.Choice.TOR && o.openApps().isEmpty(), "Open to Tor leaves the open list");
+        check(o.set("org.o.app", Choices.Choice.OPEN) && o.torApps().isEmpty() && o.choiceOf("org.o.app") == Choices.Choice.OPEN, "Tor to Open leaves the Tor list");
+        check(o.set("org.o.app", Choices.Choice.DIRECT) && o.choiceOf("org.o.app") == Choices.Choice.DIRECT && o.openApps().isEmpty(), "back to Direct");
+        check(!o.set("bad name", Choices.Choice.OPEN) && !o.accepts("bad name", Choices.Choice.OPEN) && !o.accepts(null, Choices.Choice.DIRECT), "bad names are refused for Open too");
+        Choices openFull = new Choices();
+        for (int i = 0; i < Choices.MAX_OPEN_APPS; i++) {
+            check(openFull.set("org.open.p" + i, Choices.Choice.OPEN), "open app " + i);
+        }
+        check(!openFull.set("org.open.extra", Choices.Choice.OPEN) && !openFull.accepts("org.open.extra", Choices.Choice.OPEN), "the 25th open app is refused");
+        check(openFull.openApps().size() == 24 && openFull.choiceOf("org.open.extra") == Choices.Choice.DIRECT, "and changes nothing");
+        check(openFull.set("org.open.p0", Choices.Choice.OPEN) && openFull.accepts("org.open.p0", Choices.Choice.OPEN), "an open app can be set again");
+        check(openFull.set("org.open.extra", Choices.Choice.TOR) && openFull.set("org.open.extra", Choices.Choice.DIRECT), "the full open list does not stop Tor or Direct");
+        check(openFull.accepts("org.open.extra", Choices.Choice.DIRECT) && openFull.accepts("org.open.extra", Choices.Choice.TOR), "accepts agrees");
+        // A refused move leaves the old stand: the 49th Tor app that is Open stays Open.
+        Choices torFull = new Choices();
+        for (int i = 0; i < Choices.MAX_TOR_APPS; i++) {
+            torFull.set("org.t.p" + i, Choices.Choice.TOR);
+        }
+        torFull.set("org.t.open", Choices.Choice.OPEN);
+        check(!torFull.set("org.t.open", Choices.Choice.TOR) && torFull.choiceOf("org.t.open") == Choices.Choice.OPEN, "a refused move keeps the old stand");
+        Choices oback = Choices.parse(openFull.serialize());
+        check(!oback.damaged() && oback.serialize().equals(openFull.serialize()) && oback.openApps().size() == 24, "open lines round trip");
+        check(Choices.parse(Choices.HEADER + "\ntor\torg.a.b\nopen\torg.a.b\n").damaged(), "an app on a tor line and an open line is damage");
+        check(Choices.parse(Choices.HEADER + "\nopen\torg.a.b\ntor\torg.a.b\n").damaged(), "and the other way round");
+        check(!Choices.parse(Choices.HEADER + "\nopen\torg.a.b\nopen\torg.a.b\n").damaged(), "the same open line twice is one open app");
+        check(Choices.parse(Choices.HEADER + "\nopen\tbad name\n").damaged(), "a bad package on an open line is damage");
+        StringBuilder many = new StringBuilder(Choices.HEADER).append('\n');
+        for (int i = 0; i <= Choices.MAX_OPEN_APPS; i++) {
+            many.append("open\torg.p.p").append(i).append('\n');
+        }
+        Choices pm = Choices.parse(many.toString());
+        check(pm.damaged() && pm.openApps().size() == 24, "a file with 25 open apps is damaged and keeps 24");
     }
 
     // ---- Consent --------------------------------------------------------------------------------------------------
@@ -298,6 +335,157 @@ public final class HostChecks {
                 "guard=" + out.guard.size() + " steer=" + out.steer.size() + " classes=" + out.classes.size());
     }
 
+    static void policyOpen() {
+        List<Policy.App> apps = Arrays.asList(
+                app("org.a.one", 10100), app("org.a.two", 10101), app("org.a.three", 10200),
+                app("org.freeholdos.exit", 10050), app("app.seamlessupdate.client", 10060));
+        int[] users = {0};
+        Choices c = new Choices();
+        c.set("org.a.two", Choices.Choice.OPEN);
+        Policy.Out out = Policy.compute(c, apps, users, Consent.ON, false, false);
+        check(str(out.classes, true).equals("M[10000-10049]E[10050-10050]M[10051-10059]E[10060-10060]M[10061-10100]E[10101-10101]M[10102-19999]"),
+                "an open app is Exempt: " + str(out.classes, true));
+        check(str(out.steer).equals("[10000-10049][10051-10059][10061-10100][10102-19999]"), "and is not steered: " + str(out.steer));
+        check(out.guard.isEmpty() && out.oemPrefs.isEmpty() && out.warnings.isEmpty(), "no Tor, no warning");
+        // Without the consent nothing is masked, and an open app is still Exempt (the daemon does nothing for it).
+        out = Policy.compute(c, apps, users, Consent.UNSET, false, false);
+        check(str(out.classes, true).equals("E[10050-10050]E[10060-10060]E[10101-10101]") && out.steer.isEmpty(), "no consent: Exempt only: " + str(out.classes, true));
+        // Tor, Open and Direct together; the table is sorted and disjoint.
+        c.set("org.a.one", Choices.Choice.TOR);
+        out = Policy.compute(c, apps, users, Consent.ON, false, false);
+        check(str(out.classes, true).equals("M[10000-10049]E[10050-10050]M[10051-10059]E[10060-10060]M[10061-10099]T[10100-10100]E[10101-10101]M[10102-19999]"),
+                "Tor, Open and Masked: " + str(out.classes, true));
+        int next = 10000;
+        for (Policy.Cls k : out.classes) {
+            check(k.start >= next && k.start <= k.end, "sorted and disjoint at " + k.start);
+            next = k.end + 1;
+        }
+        // An open app that shares its uid with the exit app or with an app on Tor does not change that uid.
+        List<Policy.App> shared = Arrays.asList(app("org.freeholdos.exit", 10050), app("org.shared.open", 10050), app("org.b.tor", 10100), app("org.shared.open2", 10100));
+        Choices s2 = new Choices();
+        s2.set("org.shared.open", Choices.Choice.OPEN);
+        s2.set("org.shared.open2", Choices.Choice.OPEN);
+        s2.set("org.b.tor", Choices.Choice.TOR);
+        out = Policy.compute(s2, shared, users, Consent.ON, false, false);
+        check(str(out.guard).equals("[10100-10100]") && out.classes.stream().filter(k -> k.kind == Policy.Kind.EXEMPT).count() == 1, "a shared uid keeps its stronger stand: " + str(out.classes, true));
+        // Several users: each user's open app is Exempt in its own range.
+        List<Policy.App> two = Arrays.asList(app("org.a.one", 10100), app("org.a.one", 1010100));
+        Choices o2 = new Choices();
+        o2.set("org.a.one", Choices.Choice.OPEN);
+        out = Policy.compute(o2, two, new int[] {0, 10}, Consent.ON, false, false);
+        check(str(out.classes, true).equals("M[10000-10099]E[10100-10100]M[10101-19999]M[1010000-1010099]E[1010100-1010100]M[1010101-1019999]"), "open in both users: " + str(out.classes, true));
+        // The limits: the open ranges are cut at the room that the system packages leave, and the table stays inside 256.
+        Choices lots = new Choices();
+        List<Policy.App> lotsApps = new ArrayList<>();
+        lotsApps.add(app("org.freeholdos.exit", 10050));
+        for (int u = 0; u < 3; u++) {
+            for (int i = 0; i < 24; i++) {
+                lots.set("org.l.p" + i, Choices.Choice.OPEN);
+                lotsApps.add(app("org.l.p" + i, u * 100000 + 10100 + 2 * i));
+            }
+        }
+        out = Policy.compute(lots, lotsApps, new int[] {0, 1, 2}, Consent.ON, false, false);
+        int exemptRanges = 0;
+        for (Policy.Cls k : out.classes) {
+            if (k.kind == Policy.Kind.EXEMPT) {
+                exemptRanges++;
+            }
+        }
+        check(Policy.MAX_EXEMPT_RANGES == 64 && exemptRanges == 64, "72 open ranges are cut at 64 together with the system packages: " + exemptRanges);
+        check(out.warnings.contains(Policy.Warning.TOO_MANY_OPEN_APPS), "and the app says so");
+        check(out.classes.size() <= Policy.MAX_CLASSES, "inside the daemon's table: " + out.classes.size());
+        // 24 open apps in one user fit without a warning.
+        Choices fit = new Choices();
+        List<Policy.App> fitApps = new ArrayList<>();
+        for (int i = 0; i < 24; i++) {
+            fit.set("org.f.p" + i, Choices.Choice.OPEN);
+            fitApps.add(app("org.f.p" + i, 10100 + 2 * i));
+        }
+        out = Policy.compute(fit, fitApps, new int[] {0}, Consent.ON, false, false);
+        check(!out.warnings.contains(Policy.Warning.TOO_MANY_OPEN_APPS), "24 open apps in one user: no warning");
+        // The worst case together: 48 Tor apps, 24 open apps, three users. The masked tier goes off before the table overflows.
+        Choices worst = new Choices();
+        List<Policy.App> worstApps = new ArrayList<>();
+        for (int u = 0; u < 3; u++) {
+            for (int i = 0; i < 48; i++) {
+                worst.set("org.w.t" + i, Choices.Choice.TOR);
+                worstApps.add(app("org.w.t" + i, u * 100000 + 10100 + 2 * i));
+            }
+            for (int i = 0; i < 24; i++) {
+                worst.set("org.w.o" + i, Choices.Choice.OPEN);
+                worstApps.add(app("org.w.o" + i, u * 100000 + 11100 + 2 * i));
+            }
+        }
+        out = Policy.compute(worst, worstApps, new int[] {0, 1, 2}, Consent.ON, false, false);
+        check(out.classes.size() <= Policy.MAX_CLASSES && out.steer.size() <= Policy.MAX_RANGES, "the worst case fits the daemon: " + out.classes.size());
+        // A table that would be 257 long turns the masked tier off instead of being refused by the daemon.
+        Choices edge = new Choices();
+        List<Policy.App> edgeApps = new ArrayList<>();
+        for (int i = 0; i < 48; i++) {
+            edge.set("org.x.t" + i, Choices.Choice.TOR);
+            for (int u = 0; u < 2; u++) {
+                edgeApps.add(app("org.x.t" + i, u * 100000 + 10100 + 4 * i));
+            }
+        }
+        for (int i = 0; i < 24; i++) {
+            edge.set("org.x.o" + i, Choices.Choice.OPEN);
+            for (int u = 0; u < 2; u++) {
+                edgeApps.add(app("org.x.o" + i, u * 100000 + 10102 + 4 * i));
+            }
+        }
+        out = Policy.compute(edge, edgeApps, new int[] {0, 1}, Consent.ON, false, false);
+        check(out.classes.size() <= Policy.MAX_CLASSES, "never more than the daemon accepts: " + out.classes.size());
+
+        // The table limit is reached with 128 Tor ranges, 61 open ranges and 3 system ranges around 69 masked ranges (every Tor
+        // uid, open uid, Tor uid in a row keeps its masked gap): 261 classes, with the steer list inside its own limit.
+        // The masked tier goes off instead of the daemon refusing the table.
+        Choices rows = new Choices();
+        List<Policy.App> rowApps = new ArrayList<>();
+        for (int u = 0; u < 3; u++) {
+            int base = u * 100000;
+            rowApps.add(app("org.freeholdos.exit", base + 10050));
+            for (int k = 0; k < 21; k++) {
+                int x = base + 10100 + 4 * k;
+                rows.set("org.q.t" + (2 * k), Choices.Choice.TOR);
+                rows.set("org.q.t" + (2 * k + 1), Choices.Choice.TOR);
+                rows.set("org.q.o" + k, Choices.Choice.OPEN);
+                rowApps.add(app("org.q.t" + (2 * k), x));
+                rowApps.add(app("org.q.o" + k, x + 1));
+                rowApps.add(app("org.q.t" + (2 * k + 1), x + 2));
+            }
+            rows.set("org.q.t42", Choices.Choice.TOR);
+            rowApps.add(app("org.q.t42", base + 10300));
+        }
+        out = Policy.compute(rows, rowApps, new int[] {0, 1, 2}, Consent.ON, false, false);
+        check(out.warnings.contains(Policy.Warning.TOO_MANY_TOR_APPS) && out.warnings.contains(Policy.Warning.TOO_MANY_OPEN_APPS), "both cuts apply: " + out.warnings);
+        check(out.steer.isEmpty() && out.warnings.contains(Policy.Warning.MASK_TIER_OFF_TOO_MANY_APPS),
+                "the masked tier goes off when the table would be too long: steer=" + out.steer.size() + " classes=" + out.classes.size());
+        check(out.classes.size() <= Policy.MAX_CLASSES, "and the table stays inside the daemon's limit: " + out.classes.size());
+
+        // Exactly one open range more than the room: 63 open ranges fit next to one system range, the 64th is cut and said.
+        Choices cut = new Choices();
+        List<Policy.App> cutApps = new ArrayList<>();
+        cutApps.add(app("org.freeholdos.exit", 10050));
+        for (int u = 0; u < 3; u++) {
+            for (int k = 0; k < 21; k++) {
+                cut.set("org.c.o" + k, Choices.Choice.OPEN);
+                cutApps.add(app("org.c.o" + k, u * 100000 + 10100 + 2 * k));
+            }
+        }
+        out = Policy.compute(cut, cutApps, new int[] {0, 1, 2}, Consent.ON, false, false);
+        check(!out.warnings.contains(Policy.Warning.TOO_MANY_OPEN_APPS), "63 open ranges and one system range fit");
+        cut.set("org.c.extra", Choices.Choice.OPEN);
+        cutApps.add(app("org.c.extra", 10400));
+        out = Policy.compute(cut, cutApps, new int[] {0, 1, 2}, Consent.ON, false, false);
+        int exempts = 0;
+        for (Policy.Cls k : out.classes) {
+            if (k.kind == Policy.Kind.EXEMPT) {
+                exempts++;
+            }
+        }
+        check(out.warnings.contains(Policy.Warning.TOO_MANY_OPEN_APPS) && exempts == Policy.MAX_EXEMPT_RANGES, "the 64th open range is cut and said: " + exempts);
+    }
+
     // ---- Ladder ---------------------------------------------------------------------------------------------------
 
     static void ladder() {
@@ -345,10 +533,13 @@ public final class HostChecks {
         check(Presenter.appRows(c, apps, "compart").isEmpty(), "the exit app is not listed");
 
         // A tap on an app row, then the policy: the app is Tor and its uid is in the guard.
-        check(Presenter.toggled(c, "org.a.alpha") == Choices.Choice.TOR, "first tap: Tor");
-        c.set("org.a.alpha", Presenter.toggled(c, "org.a.alpha"));
-        check(Presenter.toggled(c, "org.a.alpha") == Choices.Choice.DIRECT, "second tap: Direct");
-        check(Presenter.appRows(c, apps, "").get(0).tor, "the row shows Tor");
+        check(Arrays.equals(Presenter.options(), new Choices.Choice[] {Choices.Choice.DIRECT, Choices.Choice.TOR, Choices.Choice.OPEN}), "the three choices of the dialog");
+        check(Presenter.appRows(c, apps, "").get(0).choice == Choices.Choice.DIRECT && !Presenter.appRows(c, apps, "").get(0).tor, "the row starts at Direct");
+        c.set("org.a.alpha", Choices.Choice.TOR);
+        check(Presenter.appRows(c, apps, "").get(0).tor && Presenter.appRows(c, apps, "").get(0).choice == Choices.Choice.TOR, "the row shows Tor");
+        c.set("org.b.beta", Choices.Choice.OPEN);
+        check(Presenter.appRows(c, apps, "beta").get(0).choice == Choices.Choice.OPEN && !Presenter.appRows(c, apps, "beta").get(0).tor, "the row shows Open");
+        c.set("org.b.beta", Choices.Choice.DIRECT);
         List<Policy.App> installed = new ArrayList<>();
         for (Presenter.Listed l : apps) {
             installed.add(new Policy.App(l.pkg, l.uid));
@@ -443,6 +634,7 @@ public final class HostChecks {
         same(v, "to_daemon.get_state", ControlCodec.getState(9));
         same(v, "to_daemon.set_policy", ControlCodec.setPolicy(1, classes));
         same(v, "to_daemon.set_overrides", ControlCodec.setOverrides(2, 10123, new int[] {7, 300}));
+        same(v, "to_daemon.release", ControlCodec.release(11, 10123, 300));
         same(v, "route.hello", ControlCodec.routeHello());
         same(v, "route.apply", ControlCodec.routeApply(5, "exit0", 0x01020304L,
                 Arrays.asList(new int[] {10000, 10230}), Arrays.asList(new int[] {10231, 10231})));
@@ -450,11 +642,24 @@ public final class HostChecks {
         same(v, "route.get_applied", ControlCodec.routeGetApplied(4));
 
         ControlCodec.Reply r = daemon(v, "from_daemon.ready");
-        check(r.type == ControlCodec.Type.READY && r.version == 2 && "exit0".equals(r.iface), "ready");
+        check(r.type == ControlCodec.Type.READY && r.version == 3 && "exit0".equals(r.iface), "ready");
         r = daemon(v, "from_daemon.state_up");
         check(r.type == ControlCodec.Type.STATE && r.state == ControlCodec.STATE_UP, "state");
         r = daemon(v, "from_daemon.failures");
         check(r.type == ControlCodec.Type.FAILURES && r.uid == 10123 && r.company == 7 && r.count == 3, "failures");
+        r = daemon(v, "from_daemon.promoted");
+        check(r.type == ControlCodec.Type.PROMOTED && r.uid == 10123 && r.company == 7 && r.fresh, "promoted");
+        // The fresh flag is zero or one; a promotion of a company above 255 keeps both bytes of its id.
+        r = ControlCodec.decodeDaemon(new byte[] {0, 0, 0, 8, (byte) 0x86, 0, 0, 0x27, (byte) 0xf7, 1, 0x2c, 0}, 12);
+        check(r != null && r.type == ControlCodec.Type.PROMOTED && r.company == 300 && !r.fresh && r.uid == 10231, "promoted, not fresh, company 300");
+        refuses(true, new byte[] {0, 0, 0, 8, (byte) 0x86, 0, 0, 0, 1, 0, 7, 2}, "a fresh flag of 2");
+        refuses(true, new byte[] {0, 0, 0, 7, (byte) 0x86, 0, 0, 0, 1, 0, 7}, "a Promoted without the flag");
+        refuses(true, new byte[] {0, 0, 0, 9, (byte) 0x86, 0, 0, 0, 1, 0, 7, 1, 1}, "a Promoted with a trailing byte");
+        refuses(false, v.get("from_daemon.promoted"), "a Promoted from the helper");
+        throwsIae(() -> ControlCodec.release(1, 10123, 0), "a release of company 0");
+        throwsIae(() -> ControlCodec.release(1, 10123, 65536), "a release of company 65536");
+        throwsIae(() -> ControlCodec.release(256, 10123, 7), "a release with a sequence number of two bytes");
+        check(ControlCodec.release(1, 10123, 65535).length == 4 + 1 + 7, "company 65535 is written");
         r = daemon(v, "from_daemon.ack");
         check(r.type == ControlCodec.Type.ACK && r.seq == 9, "ack");
         r = daemon(v, "from_daemon.error");
@@ -467,7 +672,7 @@ public final class HostChecks {
         check(r.type == ControlCodec.Type.ERROR && r.seq == 9 && r.code == ControlCodec.ERR_FAILED, "route error");
 
         // The numbers that the vectors do not reach.
-        check(ControlCodec.DAEMON_PROTOCOL == 2 && ControlCodec.ROUTE_PROTOCOL == 1 && ControlCodec.MAX_FRAME == 4096 && ControlCodec.IFNAME_MAX == 15,
+        check(ControlCodec.DAEMON_PROTOCOL == 3 && ControlCodec.ROUTE_PROTOCOL == 1 && ControlCodec.MAX_FRAME == 4096 && ControlCodec.IFNAME_MAX == 15,
                 "the numbers of the protocols");
         check(ControlCodec.STATE_BOOTSTRAPPING == 0 && ControlCodec.STATE_UP == 1 && ControlCodec.STATE_FAILED == 2, "state values");
         check(ControlCodec.ERR_BAD_VALUE == 1 && ControlCodec.ERR_TOO_MANY == 2 && ControlCodec.ERR_BUSY == 3
@@ -584,6 +789,7 @@ public final class HostChecks {
         choices();
         consent();
         policy();
+        policyOpen();
         ladder();
         presenter();
         codec();

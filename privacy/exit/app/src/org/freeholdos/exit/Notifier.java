@@ -19,7 +19,9 @@ final class Notifier {
     static final String ACTION_SHOW = "org.freeholdos.exit.SHOW_ADDRESS";
     static final String ACTION_KEEP = "org.freeholdos.exit.KEEP_HIDING";
     static final String ACTION_DIRECT = "org.freeholdos.exit.SWITCH_TOR_OFF";
+    static final String ACTION_REHIDE = "org.freeholdos.exit.HIDE_AGAIN";
     static final String EXTRA_PACKAGE = "package";
+    static final String EXTRA_UID = "uid";
     static final String EXTRA_COMPANY = "company";
     private static final int CONSENT_ID = 1;
 
@@ -56,6 +58,31 @@ final class Notifier {
         nm.notify(idOf(pkg, company), b.build());
     }
 
+    /**
+     * The speed guard passes a company on to an app (ADR-188): the app loads a lot from it, which Tor would slow down. One
+     * notification per promotion (the daemon reports each as fresh once), with one action that hides the company again.
+     */
+    void postPromotion(String pkg, long uid, int company) {
+        NotificationManager nm = ctx.getSystemService(NotificationManager.class);
+        nm.createNotificationChannel(new NotificationChannel(CHANNEL, ctx.getString(R.string.notif_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT));
+        String host = names.nameOf(company);
+        if (host == null) {
+            host = ctx.getString(R.string.notif_unknown_company);
+        }
+        Intent i = new Intent(ctx, ActionReceiver.class).setAction(ACTION_REHIDE)
+                .putExtra(EXTRA_PACKAGE, pkg).putExtra(EXTRA_COMPANY, company).putExtra(EXTRA_UID, uid);
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, (pkg + ACTION_REHIDE + company + uid).hashCode(), i,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        nm.notify(promotionId(pkg, company), new Notification.Builder(ctx, CHANNEL)
+                .setSmallIcon(R.drawable.ic_compartments)
+                .setContentTitle(ctx.getString(R.string.notif_promo_title, label(pkg), host))
+                .setContentText(ctx.getString(R.string.notif_promo_text, host))
+                .addAction(new Notification.Action.Builder(null, ctx.getString(R.string.notif_action_rehide), pi).build())
+                .setAutoCancel(true)
+                .build());
+    }
+
     /** The one question of the first start: opens the settings screen, where the consent card is. */
     void postConsent() {
         NotificationManager nm = ctx.getSystemService(NotificationManager.class);
@@ -74,6 +101,15 @@ final class Notifier {
 
     private static int idOf(String pkg, int company) {
         return pkg.hashCode() * 31 + company;
+    }
+
+    private static int promotionId(String pkg, int company) {
+        return idOf(pkg, company) ^ 0x50524f4d;
+    }
+
+    /** Takes the notification of a promotion down once the user has hidden the company again. */
+    static void cancelPromotion(Context ctx, String pkg, int company) {
+        ctx.getSystemService(NotificationManager.class).cancel(promotionId(pkg, company));
     }
 
     /** Takes the notification down once the user has chosen. */

@@ -2,6 +2,7 @@
 package org.freeholdos.exit;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -31,8 +32,9 @@ import java.util.Map;
 
 /**
  * The "Compartments" entry under Network &amp; internet (the {@code IA_SETTINGS} tile of the manifest): the status, the
- * one-time consent, the hidden-address switch, the apps with their Direct/Tor choice, the hosts the user showed an address
- * to, and the warnings. Stock widgets in the platform's Settings theme; the activity only draws what {@link Presenter}
+ * one-time consent, the hidden-address switch, the hosts that the speed guard shows an address to for now (with "Hide
+ * again"), the apps with their stand (trackers hidden, Tor, never hidden), the hosts the user showed an address to, and the
+ * warnings. Stock widgets in the platform's Settings theme; the activity only draws what {@link Presenter}
  * lists and posts each change to {@link ExitRuntime}.
  */
 public final class ExitSettingsActivity extends Activity implements ExitRuntime.Listener {
@@ -185,8 +187,17 @@ public final class ExitSettingsActivity extends Activity implements ExitRuntime.
             content.addView(summary(getString(R.string.masked_summary)));
         }
 
+        if (!s.status.promotions.isEmpty()) {
+            content.addView(heading(getString(R.string.promoted_title)));
+            content.addView(summary(getString(R.string.promoted_summary)));
+            for (Status.Promoted q : s.status.promotions) {
+                content.addView(promotedRow(q));
+            }
+        }
+
         content.addView(heading(getString(R.string.apps_title)));
-        content.addView(row(getString(R.string.apps_title), getString(R.string.apps_summary, s.choices.torApps().size()),
+        content.addView(row(getString(R.string.apps_title),
+                getString(R.string.apps_summary, s.choices.torApps().size(), s.choices.openApps().size()),
                 v -> {
                     page = Page.APPS;
                     render();
@@ -248,29 +259,98 @@ public final class ExitSettingsActivity extends Activity implements ExitRuntime.
             text.addView(label);
             TextView hint = new TextView(this);
             hint.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Small);
-            hint.setText(r.tor ? R.string.app_tor_hint : R.string.app_direct_hint);
+            hint.setText(hintOf(r.choice));
             text.addView(hint);
             line.addView(text, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            Switch sw = new Switch(this);
-            sw.setChecked(r.tor);
-            sw.setContentDescription(getString(R.string.app_tor_switch, r.label));
-            sw.setOnClickListener(v -> choose(r.pkg, sw));
-            line.addView(sw);
-            line.setOnClickListener(v -> sw.performClick());
+            line.setContentDescription(getString(R.string.app_mode_row, r.label, getString(hintOf(r.choice))));
+            line.setOnClickListener(v -> showChoices(r.pkg, r.label));
             appList.addView(line);
         }
     }
 
-    private void choose(String pkg, Switch sw) {
+    private static int hintOf(Choices.Choice c) {
+        switch (c) {
+            case TOR:
+                return R.string.app_tor_hint;
+            case OPEN:
+                return R.string.app_open_hint;
+            default:
+                return R.string.app_direct_hint;
+        }
+    }
+
+    private static int modeText(Choices.Choice c) {
+        switch (c) {
+            case TOR:
+                return R.string.app_mode_tor;
+            case OPEN:
+                return R.string.app_mode_open;
+            default:
+                return R.string.app_mode_direct;
+        }
+    }
+
+    /** One tap on an app opens the three stands; a stand the tables cannot hold says so and changes nothing. */
+    private void showChoices(String pkg, String label) {
         ExitRuntime.Snapshot now = rt.snapshot();
-        Choices.Choice c = Presenter.toggled(now.choices, pkg);
-        if (c == Choices.Choice.TOR && now.choices.torApps().size() >= Choices.MAX_TOR_APPS
-                && now.choices.choiceOf(pkg) != Choices.Choice.TOR) {
-            sw.setChecked(false);
-            Toast.makeText(this, getString(R.string.apps_limit, Choices.MAX_TOR_APPS), Toast.LENGTH_LONG).show();
+        if (now == null) {
+            return;
+        }
+        final Choices.Choice[] options = Presenter.options();
+        CharSequence[] items = new CharSequence[options.length];
+        int checked = 0;
+        for (int i = 0; i < options.length; i++) {
+            items[i] = getString(modeText(options[i]));
+            if (options[i] == now.choices.choiceOf(pkg)) {
+                checked = i;
+            }
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.app_mode_title, label))
+                .setSingleChoiceItems(items, checked, (d, which) -> {
+                    d.dismiss();
+                    choose(pkg, options[which]);
+                })
+                .setNegativeButton(R.string.mode_cancel, null)
+                .show();
+    }
+
+    private void choose(String pkg, Choices.Choice c) {
+        ExitRuntime.Snapshot now = rt.snapshot();
+        if (now != null && !now.choices.accepts(pkg, c)) {
+            int limit = c == Choices.Choice.TOR ? Choices.MAX_TOR_APPS : Choices.MAX_OPEN_APPS;
+            int text = c == Choices.Choice.TOR ? R.string.apps_limit : R.string.apps_open_limit;
+            Toast.makeText(this, getString(text, limit), Toast.LENGTH_LONG).show();
             return;
         }
         rt.setChoice(pkg, c);
+    }
+
+    /** One company that the speed guard shows an address to for now, with the action that hides it again. */
+    private View promotedRow(Status.Promoted q) {
+        String name = names.nameOf(q.company);
+        String company = name != null ? name : getString(R.string.notif_unknown_company);
+        LinearLayout line = new LinearLayout(this);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+        TextView t = new TextView(this);
+        t.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Medium);
+        t.setText(getString(R.string.override_row, labelOfUid(q.uid), company));
+        line.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button hide = new Button(this);
+        hide.setText(R.string.override_remove);
+        hide.setOnClickListener(v -> rt.release(q.uid, q.company));
+        line.addView(hide);
+        return line;
+    }
+
+    private String labelOfUid(long uid) {
+        for (Presenter.Listed l : listed) {
+            if (l.uid == uid) {
+                return l.label;
+            }
+        }
+        return getString(R.string.promoted_unknown_app);
     }
 
     private void renderOverrides(ExitRuntime.Snapshot s) {
@@ -363,6 +443,8 @@ public final class ExitSettingsActivity extends Activity implements ExitRuntime.
                 return R.string.warn_dns;
             case MASK_TIER_OFF_TOO_MANY_APPS:
                 return R.string.warn_masks_off;
+            case TOO_MANY_OPEN_APPS:
+                return R.string.warn_too_many_open;
             default:
                 return R.string.warn_too_many;
         }

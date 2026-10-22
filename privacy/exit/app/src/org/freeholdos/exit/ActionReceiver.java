@@ -19,6 +19,14 @@ public final class ActionReceiver extends BroadcastReceiver {
             return;
         }
         ExitRuntime rt = ExitRuntime.get(context);
+        if (action.equals(Notifier.ACTION_REHIDE)) {
+            Notifier.cancelPromotion(context, pkg, company);
+            long uid = intent.getLongExtra(Notifier.EXTRA_UID, -1);
+            if (uid >= 0 && company > 0) {
+                rt.release(uid, company);
+            }
+            return;
+        }
         Notifier.cancel(context, pkg, company);
         switch (action) {
             case Notifier.ACTION_SHOW:
