@@ -30,9 +30,9 @@ public final class Policy {
     public static final Set<String> EXEMPT_PACKAGES =
             Collections.unmodifiableSet(new TreeSet<>(java.util.Arrays.asList("org.freeholdos.exit", "app.seamlessupdate.client")));
     /** The limits of the daemon's class table and of the route helper's lists (control.rs MAX_CLASSES, spec.rs MAX_RANGES). */
-    public static final int MAX_CLASSES = 256;
+    public static final int MAX_CLASSES = 255; // the count is one byte on the wire: 256 would be written as 0
     public static final int MAX_RANGES = 128;
-    /** The most Exempt ranges: the two system packages and the open apps, so that the three lists fit the daemon's 256. */
+    /** The most Exempt ranges: the two system packages and the open apps, so that the three lists fit the daemon's 255. */
     public static final int MAX_EXEMPT_RANGES = 64;
 
     private Policy() {}

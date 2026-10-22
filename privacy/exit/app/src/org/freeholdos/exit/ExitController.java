@@ -156,14 +156,7 @@ public final class ExitController {
             wanted = true;
             // Deny by default (F11): the apps on Tor lose the default network now, before the daemon is up, and get the Tor
             // network when it exists. The rules follow with the connection.
-            try {
-                Policy.Out out = Policy.compute(choices, platform.installedApps(), platform.users(), store.consent(),
-                        platform.vpnActive(), platform.privateDnsStrict());
-                platform.setOemPreferences(out.oemPrefs);
-                appliedPrefs = out.oemPrefs;
-            } catch (IOException | RuntimeException e) {
-                lastError = e.getClass().getSimpleName();
-            }
+            applyPreferences();
             phase = Status.Phase.CONNECTING;
             attempts = 0;
             nextAttemptMs = nowMs;
@@ -177,6 +170,25 @@ public final class ExitController {
             } catch (IOException | RuntimeException e) {
                 lost(nowMs, e);
             }
+        } else {
+            // The daemon is being reached or is down: a choice made now still closes the app at once (F11). Without this
+            // an app set to Tor while the daemon restarts would stay Direct until the connection succeeds, which may be never.
+            applyPreferences();
+            publish();
+        }
+    }
+
+    /** Sets the platform preference for the current choices when it differs from what is set; the daemon is not needed. */
+    private void applyPreferences() {
+        try {
+            Policy.Out out = Policy.compute(store.choices(), platform.installedApps(), platform.users(), store.consent(),
+                    platform.vpnActive(), platform.privateDnsStrict());
+            if (appliedPrefs == null || !appliedPrefs.equals(out.oemPrefs)) {
+                platform.setOemPreferences(out.oemPrefs);
+                appliedPrefs = out.oemPrefs;
+            }
+        } catch (IOException | RuntimeException e) {
+            lastError = e.getClass().getSimpleName();
         }
     }
 

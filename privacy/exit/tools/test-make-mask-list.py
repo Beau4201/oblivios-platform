@@ -71,6 +71,29 @@ check(list(r) == sorted(r), "sorted")
 # A company's id does not depend on the order of the input.
 shuffled = "\n".join(sorted(CLASSIFIER.splitlines(), reverse=True)) + "\n"
 check(rows(mml.build(shuffled, DENY, ALLOW)) == r, "independent of input order")
+# A company keeps its id for good (review of 2026-10-22: ids by sorted name moved when a company joined, so a stored choice
+# "show my address to company N" would point at another company after an update).
+out1, ids1 = mml.build_with_ids(CLASSIFIER, DENY, ALLOW, "")
+check(out1 == out, "an empty registry gives the ids by sorted name")
+more = CLASSIFIER + "owner\taaa\tAAA First\tAAA\tUS\tNYC\t0\t0\tWD-9\nservice\taaa-ads.example\taaa\tadvertising\tADG\n"
+out2, ids2 = mml.build_with_ids(more, DENY, ALLOW, ids1)
+after = rows(out2)
+check(all(after[d] == r[d] for d in r), "a new company that sorts first moves nobody")
+check(after["aaa-ads.example"][0] == max(i for i, _ in r.values()) + 1, "a new company gets the next free id")
+check(mml.build_with_ids(more, DENY, ALLOW, ids2) == (out2, ids2), "a second run changes nothing")
+gone = more.replace("service\tadnet.example\tadco\tadvertising\tADG\n", "").replace("service\tmetrics.adnet.example\tadco\tanalytics\tADG\n", "")
+out3, ids3 = mml.build_with_ids(gone, DENY, ALLOW, ids2)
+check("adnet.example" not in rows(out3) and rows(out3)["aaa-ads.example"] == after["aaa-ads.example"], "a company can leave")
+check(mml.read_ids(ids3)["o:adco"] == mml.read_ids(ids1)["o:adco"], "a company that left keeps its id reserved")
+newer = gone + "owner\tzzz\tZZZ Last\tZZZ\tUS\tNYC\t0\t0\tWD-10\nservice\tzzz-ads.example\tzzz\tadvertising\tADG\n"
+check(rows(mml.build_with_ids(newer, DENY, ALLOW, ids3)[0])["zzz-ads.example"][0] not in set(mml.read_ids(ids3).values()), "an id is never reused")
+for bad_ids in ["o:a\t0\n", "o:a\t65536\n", "o:a\tx\n", "o:a\t1\no:b\t1\n", "o:a\t1\no:a\t2\n", "o:a\n"]:
+    try:
+        mml.read_ids(bad_ids)
+        check(False, f"registry {bad_ids!r} should be refused")
+    except SystemExit:
+        pass
+check(mml.read_ids("# c\n\no:a\t1\n") == {"o:a": 1}, "comments and blank lines in the registry")
 # A domain that the classifier lists twice is an error, not a quiet choice of one of the two.
 try:
     mml.build(CLASSIFIER + "service\tgoogle.com\tgoogle\tcore\tADG\n", DENY, ALLOW)
@@ -98,7 +121,11 @@ if os.path.exists(real):
     text = open(real, encoding="utf-8").read()
     deny = open(os.path.join(HERE, "..", "mask-denylist.txt"), encoding="utf-8").read()
     allow = open(os.path.join(HERE, "..", "mask-allow-platform.txt"), encoding="utf-8").read()
-    out = mml.build(text, deny, allow)
+    ids_file = os.path.join(HERE, "..", "mask-company-ids.tsv")
+    out, ids_out = mml.build_with_ids(text, deny, allow, open(ids_file, encoding="utf-8").read())
+    check(ids_out == open(ids_file, encoding="utf-8").read(), "the committed company ids are complete for the real classifier")
+    shipped = os.path.join(HERE, "..", "daemon", "exit-mask-list.tsv")
+    check(out == open(shipped, encoding="utf-8").read(), "the shipped mask list is what the generator makes from the real files")
     rr = rows(out)
     masked = {d for d, (i, _) in rr.items() if i > 0}
     check(0 < len(masked) <= 3367, f"masked count {len(masked)}")

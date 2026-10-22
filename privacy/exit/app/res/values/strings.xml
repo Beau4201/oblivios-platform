@@ -34,7 +34,7 @@
     <string name="warn_damaged">Your choices could not be read completely. Check which apps are set to Tor.</string>
 
     <string name="consent_title">Hide your address from advertising and analytics hosts</string>
-    <string name="consent_text">Connections to advertising, analytics, attribution and crash-reporting hosts go through the Tor network, so those hosts do not see your address and cannot use it to tell that two apps are the same person. Your network can see that this phone uses Tor. Tor is slower, so a host that sends an app a lot of data is shown your address for 30 minutes and you are told. An app may load slowly or not at all when a host cannot be reached; you are asked then. Everything else stays direct. Nothing is hidden until you continue.</string>
+    <string name="consent_text">Connections to advertising, analytics, attribution and crash-reporting hosts go through the Tor network, so those hosts do not see your address and cannot use it to tell that two apps are the same person. Your network can see that this phone uses Tor. Tor is slower, so a host that sends an app a lot of data is shown your address for 30 minutes and you are told. An app may load slowly or not at all when a host cannot be reached; you are asked then. Everything else stays direct. It does not cover an app that brings its own encrypted DNS, a connection to a fixed address, or the moments when this service is starting or restarting, when those hosts can see your address. Nothing is hidden until you continue.</string>
     <string name="consent_switch">Hide my address from these hosts</string>
     <string name="consent_confirm">Continue</string>
     <string name="masked_title">Hide my address from advertising and analytics hosts</string>

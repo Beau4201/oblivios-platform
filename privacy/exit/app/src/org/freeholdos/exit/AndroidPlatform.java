@@ -169,23 +169,33 @@ final class AndroidPlatform implements PlatformApi {
         }
     }
 
+    // A notification that cannot be shown must never be taken for a lost daemon: the controller treats an exception from
+    // here like a broken link and drops the Tor network, so the error stops here (the class name only, no host).
     @Override
     public void notifyFailure(long uid, int company) {
-        for (Policy.App a : installedApps()) {
-            if (a.uid == uid) {
-                notifier.post(a.pkg, company);
-                return;
+        try {
+            for (Policy.App a : installedApps()) {
+                if (a.uid == uid) {
+                    notifier.post(a.pkg, company);
+                    return;
+                }
             }
+        } catch (RuntimeException e) {
+            android.util.Log.w("ExitApp", "notification failed: " + e.getClass().getSimpleName());
         }
     }
 
     @Override
     public void notifyPromotion(long uid, int company) {
-        for (Policy.App a : installedApps()) {
-            if (a.uid == uid) {
-                notifier.postPromotion(a.pkg, uid, company);
-                return;
+        try {
+            for (Policy.App a : installedApps()) {
+                if (a.uid == uid) {
+                    notifier.postPromotion(a.pkg, uid, company);
+                    return;
+                }
             }
+        } catch (RuntimeException e) {
+            android.util.Log.w("ExitApp", "notification failed: " + e.getClass().getSimpleName());
         }
     }
 

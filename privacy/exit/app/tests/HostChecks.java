@@ -278,7 +278,7 @@ public final class HostChecks {
         out = Policy.compute(tor(), apps, users, Consent.ON, false, false);
         check(out.warnings.isEmpty(), "no warning without a reason");
 
-        // Limits of the daemon (256 classes) and the helper (128 ranges per list).
+        // Limits of the daemon (255 classes) and the helper (128 ranges per list).
         List<Policy.App> many = new ArrayList<>();
         Choices manyTor = new Choices();
         for (int i = 0; i < 48; i++) {
@@ -706,12 +706,17 @@ public final class HostChecks {
         // A frame that claims exactly the largest size is waited for; one byte more is refused at once.
         check(ControlCodec.decodeDaemon(new byte[] {0, 0, 0x10, 0, (byte) 0x84, 1}, 6) == null, "4096 claimed: incomplete");
         refuses(true, new byte[] {0, 0, 0x10, 1, (byte) 0x84, 1}, "4097 claimed");
-        // The limits are inclusive: 256 classes, 32 companies and 128 ranges are written.
+        // The limits are inclusive: 255 classes, 32 companies and 128 ranges are written.
         List<Policy.Cls> max = new ArrayList<>();
-        for (int i = 0; i < 256; i++) {
+        for (int i = 0; i < 255; i++) {
             max.add(new Policy.Cls(10000 + 2 * i, 10000 + 2 * i, Policy.Kind.TOR));
         }
-        check(ControlCodec.setPolicy(1, max).length == 4 + 1 + 2 + 256 * 9, "256 classes");
+        byte[] full = ControlCodec.setPolicy(1, max);
+        check(full.length == 4 + 1 + 2 + 255 * 9, "255 classes");
+        check(full[6] == (byte) 255, "the count of a full table is 255 and not 0");
+        check(Policy.MAX_CLASSES == 255, "the count is one byte on the wire");
+        max.add(new Policy.Cls(10000 + 2 * 255, 10000 + 2 * 255, Policy.Kind.TOR));
+        throwsIae(() -> ControlCodec.setPolicy(1, max), "256 classes cannot be written");
         check(ControlCodec.setOverrides(1, 1, new int[32]).length == 4 + 1 + 1 + 4 + 1 + 64, "32 companies");
         List<int[]> r128 = Collections129();
         r128.remove(128);

@@ -431,6 +431,47 @@ public final class ControllerChecks {
         check(w.indexOf("status:CONNECTING", mark) >= 0, "back on");
     }
 
+    /** F11: a choice made while the daemon is being reached or is down closes the app at once; it must not wait for the link. */
+    private static void choiceWhileDaemonIsNotRunning() {
+        // CONNECTING: start() was called, nothing connected yet.
+        World w = world();
+        w.controller.start(0);
+        check(w.last.phase == Status.Phase.CONNECTING, "connecting");
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        int mark = w.log.size();
+        w.controller.changed(10);
+        check(w.indexOf("prefs:{org.a.one=4}", mark) >= 0, "Tor in CONNECTING reaches the platform: " + w.log.subList(mark, w.log.size()));
+        check(w.indexOf("daemon.", mark) < 0 && w.indexOf("route.", mark) < 0 && w.indexOf("net.", mark) < 0,
+                "no daemon, helper or network call while it is not running: " + w.log.subList(mark, w.log.size()));
+        check(w.last.phase == Status.Phase.CONNECTING, "still connecting");
+        mark = w.log.size();
+        w.controller.changed(20);
+        check(w.indexOf("prefs", mark) < 0, "the same preference is not set again: " + w.log.subList(mark, w.log.size()));
+
+        // PAUSED: the daemon was running and the poll failed.
+        w = world();
+        w.controller.start(0);
+        w.controller.tick(0);
+        w.failures.put("daemon.poll", 1);
+        w.controller.tick(5000);
+        check(w.last.phase == Status.Phase.PAUSED, "paused");
+        w.choices.set("org.a.two", Choices.Choice.TOR);
+        mark = w.log.size();
+        w.controller.changed(5100);
+        check(w.indexOf("prefs:{org.a.two=4}", mark) >= 0, "Tor in PAUSED reaches the platform: " + w.log.subList(mark, w.log.size()));
+        check(w.indexOf("daemon.", mark) < 0, "the daemon is not touched before the retry");
+        w.choices.set("org.a.two", Choices.Choice.DIRECT);
+        mark = w.log.size();
+        w.controller.changed(5200);
+        check(w.indexOf("prefs:{}", mark) >= 0, "leaving Tor in PAUSED reaches the platform too: " + w.log.subList(mark, w.log.size()));
+        // The reconnect still sends everything.
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        w.controller.changed(5300);
+        mark = w.log.size();
+        w.controller.tick(6000);
+        inOrder(w, mark, "daemon.connect", "route.connect", "net.register", "prefs:{org.a.one=4}", "status:RUNNING");
+    }
+
     private static void failuresAndLadder() {
         World w = world();
         w.choices.set("org.a.one", Choices.Choice.TOR);
@@ -918,6 +959,7 @@ public final class ControllerChecks {
         maskedOnly();
         torOnlyWithoutConsent();
         changesWhileRunning();
+        choiceWhileDaemonIsNotRunning();
         failuresAndLadder();
         promotions();
         refusedRequests();

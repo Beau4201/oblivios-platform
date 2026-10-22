@@ -18,6 +18,29 @@ HEX_COLOR = re.compile(r'"#[0-9a-fA-F]{3,8}"')
 JAVA_COLOR = re.compile(r"Color\.(parseColor|rgb|argb|valueOf)\(|0x[fF][fF][0-9a-fA-F]{6}\b")
 
 
+GET_STRING = re.compile(r"getString\(\s*R\.string\.(\w+)")
+
+
+def count_arguments(text, pos):
+    """The arguments after the resource id of the getString call whose id ends at pos: the commas at depth one."""
+    depth, commas, i = 1, 0, pos
+    while i < len(text) and depth > 0:
+        c = text[i]
+        if c in "\"'":
+            j = i + 1
+            while j < len(text) and text[j] != c:
+                j += 2 if text[j] == "\\" else 1
+            i = j
+        elif c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        elif c == "," and depth == 1:
+            commas += 1
+        i += 1
+    return commas
+
+
 def read(path):
     with open(path, encoding="utf-8") as f:
         return f.read()
@@ -64,6 +87,19 @@ def check(app):
     for path, text in src.items():
         if JAVA_COLOR.search(text):
             problems.append(f"{os.path.relpath(path, app)}: a colour is written into the code")
+
+    # A call that passes fewer arguments than the string has placeholders throws at run time (found in the review of
+    # 2026-10-22: notif_promo_text asked for %2$s and got one argument, and the exception looked like a lost daemon).
+    for path, text in src.items():
+        for m in GET_STRING.finditer(text):
+            name = m.group(1)
+            if name not in strings:
+                continue
+            wanted = max([int(i) for i in re.findall(r"%(\d+)\$", strings[name])] or [0])
+            given = count_arguments(text, m.end())
+            if given != wanted:
+                problems.append(f"{os.path.relpath(path, app)}: getString(R.string.{name}) passes {given} arguments and the "
+                                f"string has {wanted} placeholders")
 
     for n, v in strings.items():
         if n.startswith("notif_") and len(v) > NOTIFICATION_LIMIT:

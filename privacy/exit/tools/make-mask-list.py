@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Makes the mask list of the exit daemon (ADR-181, ADR-186) from the Data Map classifier.
 
-    make-mask-list.py CLASSIFIER.tsv DENYLIST ALLOWLIST OUT.tsv
+    make-mask-list.py CLASSIFIER.tsv DENYLIST ALLOWLIST IDS OUT.tsv
+
+IDS is mask-company-ids.tsv: it is read, and written again with the ids of any new company appended (see read_ids).
 
 The classifier says who runs a domain and which category it has. It is a classification of domains, not a statement that
 the whole domain is only a tracker: google.com, facebook.com and android.com are all `advertising` in it. So the list is
@@ -16,8 +18,9 @@ made with three rules, and every row of the output says which one applies:
 3. Every domain of the DENYLIST, and every domain of the categories core, cdn, social and identity, is *protected* (company
    id 0): no name under it is masked, even when a less specific row would mask it.
 
-Output format: see exit-daemon/src/masklist.rs. The output is deterministic (sorted, company ids by sorted name).
+Output format: see exit-daemon/src/masklist.rs. The output is deterministic (sorted; a company keeps the id that IDS holds, a new company gets the next free id in the order of its name).
 """
+import os
 import re
 import sys
 
@@ -66,7 +69,33 @@ def read_list(text):
     return exact, prefixes
 
 
+def read_ids(text):
+    """Lines `company key<TAB>id`; `#` starts a comment. -> {key: id}. The ids are kept in a committed file so that a company keeps its
+    id across every regeneration (the exit app stores "show my address to company N"; an id that moved would point at another
+    company after an update)."""
+    ids = {}
+    for n, line in enumerate(text.splitlines(), 1):
+        if not line.strip() or line.startswith("#"):
+            continue
+        key, _, num = line.partition("\t")
+        if not key or not num.isdigit() or not 1 <= int(num) <= 65535 or key in ids or int(num) in ids.values():
+            raise SystemExit(f"company ids, line {n}: a key and a unique id of 1 to 65535 are required")
+        ids[key] = int(num)
+    return ids
+
+
+def write_ids(ids):
+    head = ("# Stable company ids of the mask list (make-mask-list.py). A company keeps its id for good: a new company gets the next\n"
+            "# free id, a company that leaves the list keeps its id reserved, and nothing is renumbered. Do not edit by hand.\n")
+    return head + "".join(f"{k}\t{i}\n" for k, i in sorted(ids.items(), key=lambda kv: kv[1]))
+
+
 def build(classifier_text, deny_text, allow_text):
+    return build_with_ids(classifier_text, deny_text, allow_text, "")[0]
+
+
+def build_with_ids(classifier_text, deny_text, allow_text, ids_text):
+    """-> (the mask list, the company ids file to commit)"""
     services, owners = read_classifier(classifier_text)
     deny, deny_prefixes = read_list(deny_text)
     allow, allow_prefixes = read_list(allow_text)
@@ -102,25 +131,33 @@ def build(classifier_text, deny_text, allow_text):
         return n
 
     companies = sorted({k for k in rows.values() if k is not None}, key=lambda k: (name_of(k).lower(), k))
-    if len(companies) > 65535:
-        raise SystemExit("more than 65535 companies")
-    ids = {k: i for i, k in enumerate(companies, 1)}
+    known = read_ids(ids_text)
+    ids = dict(known)
+    for k in companies:  # a new company, in the order of its name, gets the next free id
+        if k not in ids:
+            if max(ids.values(), default=0) >= 65535:
+                raise SystemExit("more than 65535 companies")
+            ids[k] = max(ids.values(), default=0) + 1
     if len(rows) > MAX_ENTRIES:
         raise SystemExit(f"{len(rows)} rows are more than the {MAX_ENTRIES} the daemon accepts")
     out = [HEADER]
     for d in sorted(rows):
         key = rows[d]
         out.append(f"{d}\t{0 if key is None else ids[key]}\t{'protected' if key is None else name_of(key)}")
-    return "\n".join(out) + "\n"
+    return "\n".join(out) + "\n", write_ids(ids)
 
 
 def main(argv):
-    if len(argv) != 5:
+    if len(argv) != 6:
         raise SystemExit(__doc__)
-    cls, deny, allow, out = (open(p, encoding="utf-8").read() if i < 3 else p for i, p in enumerate(argv[1:]))
-    text = build(cls, deny, allow)
+    cls, deny, allow = (open(p, encoding="utf-8").read() for p in argv[1:4])
+    ids_path, out = argv[4], argv[5]
+    ids_text = open(ids_path, encoding="utf-8").read() if os.path.exists(ids_path) else ""
+    text, new_ids = build_with_ids(cls, deny, allow, ids_text)
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
+    with open(ids_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(new_ids)
     masked = sum(1 for line in text.splitlines()[1:] if line.split("\t")[1] != "0")
     print(f"{len(text.splitlines()) - 1} rows, {masked} masked", file=sys.stderr)
 

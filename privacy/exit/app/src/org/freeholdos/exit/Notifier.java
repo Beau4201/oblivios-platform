@@ -40,6 +40,7 @@ final class Notifier {
         String app = label(pkg);
         Notification.Builder b = new Notification.Builder(ctx, CHANNEL)
                 .setSmallIcon(R.drawable.ic_compartments)
+                .setVisibility(Notification.VISIBILITY_PRIVATE) // names an app and a company: not on the lock screen
                 .setAutoCancel(true);
         if (company == 0) {
             b.setContentTitle(ctx.getString(R.string.notif_tor_title, app))
@@ -76,8 +77,9 @@ final class Notifier {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         nm.notify(promotionId(pkg, company), new Notification.Builder(ctx, CHANNEL)
                 .setSmallIcon(R.drawable.ic_compartments)
+                .setVisibility(Notification.VISIBILITY_PRIVATE)
                 .setContentTitle(ctx.getString(R.string.notif_promo_title, label(pkg), host))
-                .setContentText(ctx.getString(R.string.notif_promo_text, host))
+                .setContentText(ctx.getString(R.string.notif_promo_text, label(pkg), host))
                 .addAction(new Notification.Action.Builder(null, ctx.getString(R.string.notif_action_rehide), pi).build())
                 .setAutoCancel(true)
                 .build());

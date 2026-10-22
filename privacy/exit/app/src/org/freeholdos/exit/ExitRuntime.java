@@ -154,7 +154,9 @@ final class ExitRuntime {
         pkgs.addAction(Intent.ACTION_PACKAGE_REMOVED);
         pkgs.addAction(Intent.ACTION_PACKAGE_REPLACED);
         pkgs.addDataScheme("package");
-        ctx.registerReceiver(changed, pkgs, null, handler, Context.RECEIVER_NOT_EXPORTED);
+        // For every user: a plain registration sees the packages of user 0 only, and an app set to Tor that is installed in a
+        // second or a work profile would stay masked, not Tor, until some other event came (review of 2026-10-22, I2).
+        ctx.registerReceiverForAllUsers(changed, pkgs, null, handler, Context.RECEIVER_NOT_EXPORTED);
         IntentFilter users = new IntentFilter();
         users.addAction(Intent.ACTION_USER_ADDED);
         users.addAction(Intent.ACTION_USER_REMOVED);
