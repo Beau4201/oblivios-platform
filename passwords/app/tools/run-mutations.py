@@ -29,6 +29,7 @@ L = K + "fill/FillPlanner.kt"
 W = K + "core/Wire.kt"
 Y = K + "core/Reply.kt"
 O = K + "ui/LogoPack.kt"
+Q = K + "fill/PendingSave.kt"
 S = "src/main/kotlin/org/freeholdos/passwords/lock/LockState.kt"
 
 # (name, file, old, new)
@@ -167,6 +168,17 @@ MUTATIONS = [
     ("logo: an empty label is allowed", O, "if (labels.size < 2 || labels.any { it.isEmpty() }) return null", "if (labels.size < 2) return null"),
     ("logo: case matters", O, "var h = host.lowercase()", "var h = host"),
     ("logo: domain rows of three columns accepted", O, "if (c.size == 2 && c[0].isNotEmpty() && c[1].isNotEmpty() && !line.startsWith(\"#\"))", "if (c.size >= 2 && c[0].isNotEmpty() && c[1].isNotEmpty() && !line.startsWith(\"#\"))"),
+    # PendingSave.kt
+    ("pending: the time to live is ignored", Q, "if (now() > h.deadline) {", "if (false) {"),
+    ("pending: the deadline is one early", Q, "if (now() > h.deadline) {", "if (now() >= h.deadline) {"),
+    ("pending: the deadline is one late", Q, "if (now() > h.deadline) {", "if (now() > h.deadline + 1) {"),
+    ("pending: the deadline is not set from the clock", Q, "now() + ttlMs)", "ttlMs)"),
+    ("pending: an expired login is not wiped", Q, "        if (now() > h.deadline) {\n            h.candidate.wipe()\n", "        if (now() > h.deadline) {\n"),
+    ("pending: take keeps the login", Q, "        val h = held ?: return null\n        held = null\n", "        val h = held ?: return null\n"),
+    ("pending: a replaced login is not wiped", Q, "        held?.candidate?.wipe()\n        held = PendingSave(", "        held = PendingSave("),
+    ("pending: clear does not wipe", Q, "    fun clear() {\n        held?.candidate?.wipe()\n", "    fun clear() {\n"),
+    ("pending: clear keeps the login", Q, "        held?.candidate?.wipe()\n        held = null\n    }\n}", "        held?.candidate?.wipe()\n    }\n}"),
+    ("pending: the text shows the password", Q, 'override fun toString() = "PendingSave(${if (webDomain != null) "site" else "app"}, $candidate)"', 'override fun toString() = "PendingSave(${String(candidate.password)})"'),
 ]
 
 

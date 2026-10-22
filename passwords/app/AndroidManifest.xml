@@ -43,6 +43,12 @@
             android:exported="false"
             android:theme="@style/Theme.Passwords.Transparent" />
 
+        <activity
+            android:name="org.freeholdos.passwords.fill.SaveAuthActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/Theme.Passwords.Transparent" />
+
         <service
             android:name="org.freeholdos.passwords.fill.PasswordsAutofillService"
             android:exported="true"

@@ -13,10 +13,10 @@ build-server trees, as the repository rules require; exported with `git format-p
 
 | Tree | Baseline HEAD | Blob of the modified file at that HEAD | Patch | Why it diverges from upstream |
 | --- | --- | --- | --- | --- |
-| `vendor/adevtool` | `fe4c53c7b8c8` | `config/mk/google_devices/common/device-common.mk` `e9b98507d2ad` | `vendor-adevtool/0001` | `PRODUCT_PACKAGES += PasswordsApp` on every Pixel target, in the common file like Guardian, AirPods and the Data Map. The module is defined in `vendor/freeholdos/passwords`. |
+| `vendor/adevtool` | `e4aca7568bc7` | `config/mk/google_devices/common/device-common.mk` `fe456150e5c6` | `vendor-adevtool/0001` | `PRODUCT_PACKAGES += PasswordsApp` on every Pixel target, in the common file like Guardian, AirPods and the Data Map. The module is defined in `vendor/freeholdos/passwords`. |
 | `frameworks/base` | `3a3e6af27a53` | `core/res/res/values/config.xml` `9124ee97ec80` | `frameworks-base/0001` | Three resource values name the app as default: `config_defaultAutofillService`, `config_enabledCredentialProviderService` and `config_primaryCredentialProviderService` (read in `SettingsProvider.java` and `AutofillManagerServiceImpl.java` of the same tree). |
 
-Both patches were checked with `git apply --check` against the live trees on 2026-10-21; nothing was changed there.
+Both patches were checked with `git apply --check` against the live trees on 2026-10-22; nothing was changed there. The `vendor/adevtool` patch was authored on `fe4c53c7b8c8` first and re-authored on 2026-10-22 on `e4aca7568bc7` (the Compartments commit that added `exitd` and `ExitApp` to the same file moved the hunk); a later commit in that tree needs the same again.
 
 ## What landing needs, in this order
 

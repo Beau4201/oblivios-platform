@@ -149,7 +149,7 @@
     </plurals>
     <string name="pm_secret_lost_title">Vault cannot be opened</string>
     <string name="pm_secret_lost_body">The key that protects this vault on this phone is gone, so even the right passphrase cannot open it. Open Passwords and import your export file.</string>
-    <string name="pm_save_locked">Unlock Passwords to save this login.</string>
+    <string name="pm_save_failed_title">Login not saved</string>
     <string name="pm_save_failed">The login could not be saved.</string>
     <!-- Locked screen -->
     <string name="pm_reason_restart">The phone restarted. Enter your passphrase.</string>

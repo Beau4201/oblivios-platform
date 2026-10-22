@@ -46,10 +46,13 @@ object PassphraseDialog {
     }
 
     /** The key that protects the vault on this phone is gone: only an import of an export file brings the passwords back. */
-    fun showSecretLost(activity: Activity, onClose: () -> Unit) {
+    fun showSecretLost(activity: Activity, onClose: () -> Unit) = showMessage(activity, R.string.pm_secret_lost_title, R.string.pm_secret_lost_body, onClose)
+
+    /** A plain message with one button, in a secure window; [onClose] runs when it is dismissed in any way. */
+    fun showMessage(activity: Activity, titleRes: Int, messageRes: Int, onClose: () -> Unit) {
         val dialog = AlertDialog.Builder(activity)
-            .setTitle(R.string.pm_secret_lost_title)
-            .setMessage(R.string.pm_secret_lost_body)
+            .setTitle(titleRes)
+            .setMessage(messageRes)
             .setPositiveButton(R.string.pm_ok) { _, _ -> onClose() }
             .setOnCancelListener { onClose() }
             .create()

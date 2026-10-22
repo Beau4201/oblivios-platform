@@ -8,7 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.os.SystemClock
 import org.freeholdos.passwords.data.DomainIndexStore
+import org.freeholdos.passwords.fill.PendingSaveSlot
 import org.freeholdos.passwords.data.VaultRepository
 import org.freeholdos.passwords.keys.AndroidKeyGateway
 import org.freeholdos.passwords.lock.LockState
@@ -32,6 +34,9 @@ class PasswordsApplication : Application() {
     lateinit var repository: VaultRepository
         private set
     val logos: LogoSource by lazy { LogoSource(this) }
+
+    /** The login submitted while the vault was locked, until the unlock that lets it be saved. */
+    val pendingSave = PendingSaveSlot { SystemClock.elapsedRealtime() }
 
     override fun onCreate() {
         super.onCreate()

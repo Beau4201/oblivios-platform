@@ -6,5 +6,6 @@ org/freeholdos/passwords/core/Reply.kt
 org/freeholdos/passwords/core/Wire.kt
 org/freeholdos/passwords/fill/FieldClassifier.kt
 org/freeholdos/passwords/fill/FillPlanner.kt
+org/freeholdos/passwords/fill/PendingSave.kt
 org/freeholdos/passwords/ui/Pattern.kt
 org/freeholdos/passwords/ui/LogoPack.kt

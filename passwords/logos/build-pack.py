@@ -5,14 +5,17 @@
     build-pack.py --simple-icons DIR --out DIR [--overrides FILE] [--top FILE]
 
 DIR holds `data/simple-icons.json` (a list of {title, hex, source, slug?}) and `icons/<slug>.svg`. For every icon the
-registrable domain is derived from the `source` URL; the pack is two tab-separated files for the app's assets:
+registrable domain is derived
+from the `source` URL, and a row is kept only when the icon is named after that domain (`github` for github.com): the other
+source URLs are shared hosts or another brand's page, and a pattern is better than the logo of the wrong brand. The pack is two
+tab-separated files for the app's assets:
 
-  icons.tsv     slug <TAB> path data (24 x 24 units) <TAB> title
+  icons.tsv     slug <TAB> path data (24 x 24 units) <TAB> title, only for the icons a domain points at
   domains.tsv   registrable domain <TAB> slug, sorted, one row per domain
 
-`overrides.tsv` (domain <TAB> slug, or domain <TAB> - to drop a derived row) wins over the derived rows. Two icons for one
-domain keep the first by title and the other is reported on stderr, so the pack never has a domain twice. `--top` names a
-file of domains (one per line, e.g. the most visited sites): the coverage of the pack over them is printed.
+`overrides.tsv` (domain <TAB> slug, or domain <TAB> - to drop a derived row) adds the rows the rule cannot derive (other
+top-level domains, brands whose icon has another name) and wins over the derived rows. `--top` names a file of domains (one
+per line, e.g. the most visited sites): the coverage of the pack over them is printed.
 
 Only the shapes are used (the app draws them in the text colour of the theme); the brand colour and the trademarks stay with
 their owners (NOTICE, SOURCES.md).
@@ -78,10 +81,9 @@ def build(src: str, overrides: dict, log=sys.stderr):
         icons[slug] = (d, entry["title"])
         host = urlparse(entry.get("source", "")).hostname
         dom = registrable(host) if host else None
-        if dom is None:
-            continue
-        if dom in domains and domains[dom] != slug:
-            print(f"domain {dom}: {domains[dom]} kept, {slug} ignored", file=log)
+        if dom is None or slug != dom.split(".")[0].replace("-", ""):
+            # A source URL names a project's home, which is often a shared host (github.com, wikimedia.org) or another
+            # brand's page: only the icon named after the domain counts. Every other row comes from overrides.tsv.
             continue
         domains[dom] = slug
     for dom, slug in overrides.items():
@@ -119,13 +121,13 @@ def main():
     icons, domains = build(a.simple_icons, read_overrides(a.overrides))
     os.makedirs(a.out, exist_ok=True)
     with open(os.path.join(a.out, "icons.tsv"), "w", encoding="utf-8", newline="\n") as f:
-        for slug in sorted(icons):
+        for slug in sorted(set(domains.values())):   # an icon no domain points at is never looked up, so it is not shipped
             d, title = icons[slug]
             f.write(f"{slug}\t{d}\t{title}\n")
     with open(os.path.join(a.out, "domains.tsv"), "w", encoding="utf-8", newline="\n") as f:
         for dom in sorted(domains):
             f.write(f"{dom}\t{domains[dom]}\n")
-    print(f"{len(icons)} icons, {len(domains)} domains")
+    print(f"{len(set(domains.values()))} icons, {len(domains)} domains")
     if a.top:
         top = [l.strip().lower() for l in open(a.top, encoding="utf-8") if l.strip()]
         hit = sum(1 for d in top if d in domains)

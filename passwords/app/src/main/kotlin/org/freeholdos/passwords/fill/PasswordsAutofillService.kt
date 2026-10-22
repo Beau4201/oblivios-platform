@@ -57,9 +57,10 @@ class PasswordsAutofillService : AutofillService() {
                 datasetFor(item, screen)?.let { response.addDataset(it); any = true }
             }
         }
-        // A new login can be saved only while the vault is open: saving needs the vault key.
+        // A submitted login is offered for saving on every login form, locked or open: it carries no sign of an account.
+        // Locked, the save waits for the unlock (onSaveRequest).
         val passwordIds = screen.idsOf(screen.fields.filter { it.role == FieldRole.Password }.map { it.key })
-        if (state is LockState.Unlocked && passwordIds.isNotEmpty()) {
+        if (passwordIds.isNotEmpty()) {
             val optional = screen.idsOf(screen.fields.filter { it.role == FieldRole.Username }.map { it.key })
             val save = SaveInfo.Builder(SaveInfo.SAVE_DATA_TYPE_PASSWORD or SaveInfo.SAVE_DATA_TYPE_USERNAME, passwordIds.toTypedArray())
             if (optional.isNotEmpty()) save.setOptionalIds(optional.toTypedArray())
@@ -108,36 +109,24 @@ class PasswordsAutofillService : AutofillService() {
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
-        if (!session.isOpenNow()) return callback.onFailure(getString(R.string.pm_save_locked))
         val structure = request.fillContexts.lastOrNull()?.structure ?: return callback.onSuccess()
         val screen = StructureParser.parse(structure)
         val candidate = SaveCandidate.of(screen.fields.mapIndexedNotNull { i, f -> screen.values[i]?.let { f.role to it } })
             ?: return callback.onSuccess()
+        if (!session.isOpenNow()) {
+            // Locked: the login waits in memory and the framework starts the unlock as the continuation of the save.
+            // The pending intent is explicit and immutable and carries nothing.
+            app.pendingSave.put(screen.webDomain, screen.packageName, candidate)
+            val sender = PendingIntent.getActivity(this, 1, Intent(this, SaveAuthActivity::class.java), PendingIntent.FLAG_IMMUTABLE).intentSender
+            return callback.onSuccess(sender)
+        }
         try {
-            val existing = repo.accounts(screen.webDomain, screen.packageName)?.firstOrNull { it.username == candidate.username }
-            val now = System.currentTimeMillis()
-            val entry = if (existing != null) {
-                repo.get(existing.entryId)?.copy(password = candidate.password.copyOf(), editedMs = now)
-            } else {
-                Entry(
-                    id = newId(), title = titleFor(screen), domains = listOfNotNull(screen.webDomain),
-                    packages = if (screen.webDomain == null) listOf(screen.packageName) else emptyList(),
-                    username = candidate.username, password = candidate.password.copyOf(), notes = "",
-                    createdMs = now, editedMs = now, lastFilledMs = null, history = emptyList(),
-                )
-            }
-            val result = entry?.let { e -> repo.save(e).also { e.wipe() } } ?: SaveResult.Failed(0)
+            val result = LoginSaver.save(repo, packageManager, screen.webDomain, screen.packageName, candidate)
             if (result is SaveResult.Saved) callback.onSuccess() else callback.onFailure(getString(R.string.pm_save_failed))
         } finally {
             candidate.wipe()
         }
     }
-
-    private fun titleFor(screen: ParsedScreen): String =
-        screen.webDomain?.removePrefix("www.")
-            ?: runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(screen.packageName, 0)).toString() }.getOrDefault(screen.packageName)
-
-    private fun newId(): ByteArray = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
 
     private fun SessionManager.isOpenNow() = state is LockState.Unlocked
 

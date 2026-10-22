@@ -39,6 +39,11 @@ ICONS = [
     {"title": "GitHub Pages Copy", "slug": "githubpagescopy", "hex": "222222", "source": "https://pages.github.com/x"},
     {"title": "Broken", "hex": "000000", "source": "https://broken.example", "svg": "<svg><path d='a'/><path d='b'/></svg>"},
     {"title": "No Site", "hex": "000000", "source": ""},
+    {"title": "Alpha One", "hex": "111111", "source": "https://shared.example/a"},
+    {"title": "Alpha Two", "hex": "222222", "source": "https://shared.example/b"},
+    {"title": "Solo", "hex": "333333", "source": "https://solo-brand.example/"},
+    {"title": "Other Solo", "hex": "444444", "source": "https://solo-brand.example/x"},
+    {"title": "Solobrand", "hex": "555555", "slug": "solobrand", "source": "https://solo-brand.example/y"},
 ]
 
 
@@ -65,12 +70,24 @@ def test_title_to_slug():
     assert bp.title_to_slug("Pokémon") == "pokemon"
 
 
-def test_domain_map_has_no_duplicate_domains():
+def test_domain_map_has_no_duplicate_domains_and_no_shared_host_icon():
     icons, domains, log = run()
     assert len(domains) == len(set(domains)), "a domain twice"
-    assert domains["github.com"] == "github", "the first by title keeps the domain"
+    assert domains["github.com"] == "github", "the icon named after the domain keeps it"
     assert "githubpagescopy" in icons and "githubpagescopy" not in domains.values()
-    assert "github.com: github kept, githubpagescopy ignored" in log
+    assert "githubpagescopy" not in log
+
+
+def test_only_the_icon_named_after_the_domain_is_derived():
+    icons, domains, _ = run()
+    assert "shared.example" not in domains, "two icons name it as their source, neither is named shared: no row"
+    assert "alphaone" in icons and "alphatwo" in icons and "othersolo" in icons
+    assert "othersolo" not in domains.values() and "solo" not in domains.values(), "another brand's page is not this brand's domain"
+
+
+def test_a_hyphen_in_the_domain_does_not_hide_the_named_icon():
+    icons, domains, _ = run()
+    assert domains["solo-brand.example"] == "solobrand", "the label without its hyphen names the icon"
 
 
 def test_every_mapped_icon_exists_in_the_pack():
@@ -104,6 +121,8 @@ def test_the_cli_writes_the_two_files_and_the_coverage():
         rows = open(os.path.join(out, "domains.tsv")).read().splitlines()
         assert rows == sorted(rows) and all(len(x.split("\t")) == 2 for x in rows)
         assert all(len(x.split("\t")) == 3 for x in open(os.path.join(out, "icons.tsv")).read().splitlines())
+        slugs = [x.split("\t")[0] for x in open(os.path.join(out, "icons.tsv")).read().splitlines()]
+        assert sorted(slugs) == sorted({r.split("\t")[1] for r in rows}), "icons.tsv holds exactly the icons that domains.tsv uses"
 
 
 if __name__ == "__main__":
