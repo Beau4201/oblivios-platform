@@ -57,6 +57,7 @@ policy are new code and patches. They were authored in disposable repositories (
 | `system/sepolicy` | `4d297ef48` | `38f19ca1f` | sepolicy: make the neverallows of the exit service hold in the combined policy |
 | `vendor/adevtool` (`freeholdos-2026100600`) | `fe4c53c7` (blob of `device-common.mk` `e9b98507`) | `e4aca756` (blob `fe456150`) | exit: ship the exit service on every Pixel target (`PRODUCT_PACKAGES += exitd ExitApp`) |
 | `vendor/freeholdos/exit` (`freeholdos-2026100600`) | `cb444ef` | `569e0c8` | the daemon prebuilt, its init definition and mask list, and the exit app |
+| `vendor/freeholdos/exit` | `569e0c8` | `06be330` | the speed guard, the never-hidden stand, the fixes of the review of 2026-10-22 and the `exitd` of `daemon/SOURCE.md` (2026-10-23: the files of this package were copied with `rsync -c` and compared again, 0 differences; the tree had held the previous package uncommitted and is clean now). Not module-built since. |
 
 Landing the adevtool patch moved its pin: `vendor/google_devices/{lynx,stallion}/adevtool-version-check.mk` name `e4aca7568bc7…`
 now (the previous files are kept as `adevtool-version-check.mk.pre-exit-service`).
