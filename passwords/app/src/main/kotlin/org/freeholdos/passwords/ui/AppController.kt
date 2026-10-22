@@ -413,6 +413,10 @@ class AppController(val activity: SecureActivity) {
             say(activity.getString(R.string.pm_import_failed))
             return
         }
+        if (!isExportFile(data)) {
+            importCsv(data)
+            return
+        }
         pendingImport = data
         PassphraseDialog.show(activity, forFill = false, error = null, onCancel = { pendingImport = null }, titleRes = R.string.pm_settings_import, messageRes = R.string.pm_import_passphrase) { chars ->
             val bytes = StandardCharsets.UTF_8.encode(CharBuffer.wrap(chars)).let { b -> ByteArray(b.remaining()).also { b.get(it) } }
@@ -429,7 +433,27 @@ class AppController(val activity: SecureActivity) {
         }
     }
 
+    /** The plain CSV of another manager: asks once (the file holds every password in the clear), merges, wipes the file. */
+    private fun importCsv(data: ByteArray) {
+        PassphraseDialog.confirm(
+            activity, R.string.pm_import_csv_title, R.string.pm_import_csv_body, R.string.pm_import_csv_yes,
+            onNo = { data.fill(0) },
+        ) {
+            val result = repo.importCsv(data, System.currentTimeMillis())
+            data.fill(0)
+            if (result == null) {
+                say(activity.getString(R.string.pm_import_csv_failed))
+            } else {
+                refresh()
+                say(activity.getString(R.string.pm_import_csv_done, result.added, result.duplicates, result.skipped))
+            }
+        }
+    }
+
     private companion object {
         const val MAX_IMPORT = 64 * 1024 * 1024 + 64
+
+        /** The export file of this app starts with the magic `FHPX`; anything else is taken for a CSV. */
+        fun isExportFile(data: ByteArray) = data.size >= 4 && data[0] == 'F'.code.toByte() && data[1] == 'H'.code.toByte() && data[2] == 'P'.code.toByte() && data[3] == 'X'.code.toByte()
     }
 }

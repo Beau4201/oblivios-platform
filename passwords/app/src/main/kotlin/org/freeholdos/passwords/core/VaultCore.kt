@@ -44,6 +44,9 @@ object VaultCore {
     /** Payload: `u32 entries added | new file`. */
     external fun importEntries(handle: Long, blob: ByteArray, passphrase: ByteArray): ByteArray?
 
+    /** Payload: `u32 added | u32 already there | u32 rows left out | new file`. The data is the plain CSV of another manager. */
+    external fun importCsv(handle: Long, data: ByteArray, nowMs: Long): ByteArray?
+
     external fun indexBuild(handle: Long, key: ByteArray): ByteArray?
     external fun indexContains(index: ByteArray, key: ByteArray, subject: String, kind: Int): Boolean
 

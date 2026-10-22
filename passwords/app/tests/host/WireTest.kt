@@ -34,6 +34,7 @@ fun main() {
     hostileInput()
     limits()
     equalityAndPrinting()
+    mergeReply()
     Check.done("WireTest")
 }
 
@@ -133,4 +134,21 @@ private fun equalityAndPrinting() {
     val w = g.copy(password = "secret".toCharArray(), history = listOf(HistoryItem("older".toCharArray(), 1)))
     w.wipe()
     Check.that("wipe clears the password and the history", w.password.all { it == '\u0000' } && w.history[0].password.all { it == '\u0000' })
+}
+
+private fun mergeReply() {
+    val file = byteArrayOf(9, 8, 7)
+    val le = { n: Int -> byteArrayOf(n.toByte(), (n shr 8).toByte(), (n shr 16).toByte(), (n shr 24).toByte()) }
+    val ok = Wire.decodeMergeReply(le(2) + le(1) + le(300) + file, 3)!!
+    Check.equal("three counts", listOf(2, 1, 300), ok.counts)
+    Check.bytes("the file after them", file, ok.file)
+    val one = Wire.decodeMergeReply(le(7) + file, 1)!!
+    Check.equal("one count", listOf(7), one.counts)
+    Check.bytes("its file", file, one.file)
+    Check.that("a reply without a file is refused", Wire.decodeMergeReply(le(2) + le(1) + le(3), 3) == null)
+    Check.that("too few bytes for the counts are refused", Wire.decodeMergeReply(le(2) + byteArrayOf(1, 0), 3) == null)
+    Check.that("an empty reply is refused", Wire.decodeMergeReply(ByteArray(0), 1) == null)
+    Check.that("a count above Int.MAX_VALUE is refused", Wire.decodeMergeReply(byteArrayOf(0, 0, 0, 0x80.toByte()) + file, 1) == null)
+    Check.equal("the largest count that fits an Int", listOf(Int.MAX_VALUE), Wire.decodeMergeReply(byteArrayOf(-1, -1, -1, 0x7f) + file, 1)!!.counts)
+    Check.that("no counts: everything is the file", Wire.decodeMergeReply(file, 0)!!.file.contentEquals(file))
 }

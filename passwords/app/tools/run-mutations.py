@@ -179,6 +179,12 @@ MUTATIONS = [
     ("pending: clear does not wipe", Q, "    fun clear() {\n        held?.candidate?.wipe()\n", "    fun clear() {\n"),
     ("pending: clear keeps the login", Q, "        held?.candidate?.wipe()\n        held = null\n    }\n}", "        held?.candidate?.wipe()\n    }\n}"),
     ("pending: the text shows the password", Q, 'override fun toString() = "PendingSave(${if (webDomain != null) "site" else "app"}, $candidate)"', 'override fun toString() = "PendingSave(${String(candidate.password)})"'),
+    # Wire.kt decodeMergeReply
+    ("merge reply: a count above Int.MAX_VALUE is accepted", W, "if (n > Int.MAX_VALUE) return null", "if (false) return null"),
+    ("merge reply: the largest Int count is refused", W, "if (n > Int.MAX_VALUE) return null", "if (n >= Int.MAX_VALUE) return null"),
+    ("merge reply: a reply without a file is accepted", W, "return if (file.isEmpty()) null else MergeReply(counts, file)", "return MergeReply(counts, file)"),
+    ("merge reply: the file is the empty rest", W, "val file = r.take(r.remaining) ?: return null", "val file = ByteArray(0)"),
+    ("merge reply: the first count is skipped", W, "List(words) { val n = r.u32()", "List(words) { r.u32(); val n = r.u32()"),
 ]
 
 

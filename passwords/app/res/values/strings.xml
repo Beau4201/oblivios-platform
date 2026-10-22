@@ -178,6 +178,11 @@
     </plurals>
     <string name="pm_import_passphrase">Passphrase of the export file</string>
     <string name="pm_import_failed">The file could not be imported. Check the passphrase.</string>
+    <string name="pm_import_csv_title">Import a password list</string>
+    <string name="pm_import_csv_body">This file holds your passwords as plain text. Passwords adds them to your vault. Delete the file afterwards: anyone who finds it can read your passwords.</string>
+    <string name="pm_import_csv_yes">Import</string>
+    <string name="pm_import_csv_done">Imported %1$d. Already in your vault: %2$d. Left out: %3$d.</string>
+    <string name="pm_import_csv_failed">This is not a password list from another manager, or it is too large.</string>
     <string name="pm_export_done">Export saved</string>
     <string name="pm_export_failed">The export could not be saved.</string>
     <string name="pm_export_passphrase_short">Use at least 8 characters.</string>

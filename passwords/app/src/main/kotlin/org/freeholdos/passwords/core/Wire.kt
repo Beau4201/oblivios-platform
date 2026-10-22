@@ -233,4 +233,18 @@ object Wire {
         }
         return if (r.finished()) Checkup(reused, weak) else null
     }
+
+    /**
+     * What a call that merges entries answers: [words] counts of `u32`, then the new vault file (never empty). `null` for a
+     * count that does not fit an Int, a missing file or too few bytes.
+     */
+    fun decodeMergeReply(bytes: ByteArray, words: Int): MergeReply? {
+        val r = In(bytes)
+        val counts = List(words) { val n = r.u32() ?: return null; if (n > Int.MAX_VALUE) return null; n.toInt() }
+        val file = r.take(r.remaining) ?: return null
+        return if (file.isEmpty()) null else MergeReply(counts, file)
+    }
 }
+
+/** The counts of a merge and the new vault file that came with them. */
+class MergeReply(val counts: List<Int>, val file: ByteArray)

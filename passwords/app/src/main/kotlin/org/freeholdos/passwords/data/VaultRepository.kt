@@ -23,6 +23,9 @@ sealed interface SaveResult {
     data class Failed(val code: Int) : SaveResult
 }
 
+/** What importing the CSV file of another manager did: entries added, entries the vault already had, rows left out. */
+class CsvImport(val added: Int, val duplicates: Int, val skipped: Int)
+
 /**
  * The vault as the screens and the services use it: every call goes through the open session, every change writes the
  * new vault file atomically and rebuilds the domain index. Calls on a locked vault answer null or [SaveResult.Locked].
@@ -80,6 +83,17 @@ class VaultRepository(
         if (!files.writeVault(file)) return -Code.IO
         index.rebuild(h)
         return added
+    }
+
+    /** Merges the plain CSV file of another password manager; null when it could not be read or the vault could not be saved. */
+    fun importCsv(data: ByteArray, nowMs: Long): CsvImport? {
+        val h = handle ?: return null
+        val reply = Reply.of(VaultCore.importCsv(h, data, nowMs))
+        if (!reply.ok) return null
+        val merged = Wire.decodeMergeReply(reply.payload(), 3) ?: return null
+        if (!files.writeVault(merged.file)) return null
+        index.rebuild(h)
+        return CsvImport(merged.counts[0], merged.counts[1], merged.counts[2])
     }
 
     /** The encrypted export file, or a negative [Code]. The caller writes it where the user chose. */
