@@ -4,13 +4,13 @@
 
 | Item | Value |
 | --- | --- |
-| Source | `freeholdos-services`, directory `exit-daemon`, commit `1b4774f869137ad1ae46b27e8bc52edb8f8fceca` (`master`) |
+| Source | `freeholdos-services`, directory `exit-daemon`, commit `63d190eabe2d6c421caec16a836cce60da22f790` (`master`) |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `cargo build --release --locked --offline`, `panic = "abort"`, `lto`, `opt-level = "z"`, the AOSP clang as linker (`tools/env.sh`) |
 | Build command | `exit-daemon/tools/build-android.sh` (copies the tree to the build server, builds, then checks the binary itself) |
-| SHA-256 | `0ce3c5a4790b3c602bbfce97655ce8a7fbe507286d03c98a1c7d6566b6ad79e6` |
-| Size | 19 374 496 bytes |
-| Built | 2026-10-22 (rustls 0.23.46 and rustls-webpki 0.103.16, a limit of 128 flows per app and a class table of at most 255, after the review of 2026-10-22; earlier the speed guard, ADR-188) |
-| Reproduced | built twice from the same tree (the files of the commit above; the commit differs from the built tree in documentation only) into two cargo target directories: same SHA-256 and size |
+| SHA-256 | `eee939b2742315413947fd1410b01e19ab96cb236876131dac5a90ecd937649e` |
+| Size | 19 374 568 bytes |
+| Built | 2026-10-23 (rustls 0.23.46 and rustls-webpki 0.103.16, a limit of 128 flows per app and a class table of at most 255, after the review of 2026-10-22; earlier the speed guard, ADR-188). The commit above moves the lookup of a flow's start out of `on_established` into `start_of` so a test can reach it, and adds tests: no behaviour change, but the code layout of the binary differs from the build of `1b4774f` (`0ce3c5a4…`, 2026-10-22). |
+| Reproduced | built twice from the files of the commit above into two cargo target directories: same SHA-256 and size. The previous commit (`f4553b4`) was rebuilt in the same session and gave `0ce3c5a4…` again, so the difference comes from the commit and not from the build environment |
 | Needed libraries | `libc.so`, `libdl.so`, `libm.so`, interpreter `/system/bin/linker64` (`llvm-readelf`, read by the build script) |
 | Contents | the Tor client (`tor-proto`), the packet layer (`smoltcp`), `aws_lc` and the daemon itself; no build-machine path (the build script reads the binary for each) |
 | Dependencies | `exit-daemon/Cargo.lock`; versions, checksums and licences in `exit-daemon/NOTICE` and `RISKS.md` |
