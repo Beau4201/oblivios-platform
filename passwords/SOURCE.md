@@ -4,7 +4,7 @@ ADR-185. The local password manager of FreeholdOS: the app `PasswordsApp` (`app/
 `libvault_core` (`core/`, built from `freeholdos-services/vault-core`, see `core/SOURCE.md`), the autofill service and the credential
 provider service of the app, and two patches that make it part of the image and its default provider.
 
-State: **authored and exported; not landed on the build server, not built as a module, not on a device.**
+State: **landed on the build server and built as modules (2026-10-23); not on a device.**
 
 ## Patches
 
@@ -18,21 +18,19 @@ build-server trees, as the repository rules require; exported with `git format-p
 
 Both patches were checked with `git apply --check` against the live trees on 2026-10-22; nothing was changed there. The `vendor/adevtool` patch was authored on `fe4c53c7b8c8` first and re-authored on 2026-10-22 on `e4aca7568bc7` (the Compartments commit that added `exitd` and `ExitApp` to the same file moved the hunk); a later commit in that tree needs the same again.
 
-## What landing needs, in this order
+## Landing
 
-1. No build running and the trees clean (`git status` in `vendor/adevtool`, `frameworks/base`, `vendor/freeholdos`).
-2. `vendor/freeholdos/passwords` made as its own repository from `app/` and `core/` of this package (not `tests/` and `tools/`), the
-   `sha256sum` of every file equal to the package, like `vendor/freeholdos/datamap`.
-3. `git am` of the two patches. A commit in `vendor/adevtool` fails every build in one second until the pin in
-   `vendor/google_devices/{lynx,stallion}/adevtool-version-check.mk` names the new HEAD; update both pins.
-4. The module build (`m PasswordsApp`, not an image) with `OFFICIAL_BUILD=true` and the ccache variables in the same command, and the
-   owner's yes. The first Soong parse of `core/Android.bp` and `app/Android.bp` happens there; neither has been parsed by Soong yet
-   (`bpfmt` accepts both).
-5. `check-required-packages.sh` gets `PasswordsApp.apk`, and then the next image check requires it.
+Landed on the build server on 2026-10-23, on the owner's word for the `lynx` image, with no build running and the trees clean:
 
-Until step 3, the next image of the build server is the same as without this package. The defaults the patch sets apply when the secure
-setting is still empty (a new user or a new install): on an existing device the owner picks the app once under Settings, Passwords and
-accounts.
+| Tree | Landed as | What |
+| --- | --- | --- |
+| `vendor/freeholdos/passwords` (new repository, branch `freeholdos-2026100600`) | `7e3ac04` | `app/` and `core/` of this package without `tests/` and `tools/` (91 files); the `sha256sum` of every file equals the package. |
+| `vendor/adevtool` | `e333ec2c` (base `e4aca7568bc7`) | patch `vendor-adevtool/0001` by `git am`. The pins `vendor/google_devices/{lynx,stallion}/adevtool-version-check.mk` name it now (the previous files are kept as `adevtool-version-check.mk.pre-passwords`). |
+| `frameworks/base` | `94e9f26848c4` (base `3a3e6af27a53`) | patch `frameworks-base/0001` by `git am`. |
+
+The module build (`tools/build-vm/build-passwords-modules.sh` of `freeholdos-foundation`: `libvault_core PasswordsApp ExitApp DataMapApp`, `OFFICIAL_BUILD=true`, ccache) passed with exit code 0 in 10 minutes 22 seconds: Soong parsed both `Android.bp` files, the installed `libvault_core.so` has the SHA-256 of `core/SOURCE.md`, and the APK declares `USE_BIOMETRIC` and `USE_FINGERPRINT` (added by a library), the signature permission `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (androidx) and no network or radio permission. The merged manifest has three exported components of the app (the launcher activity and the two services, each behind its `BIND_*` permission) and one of a library: `androidx.profileinstaller.ProfileInstallReceiver`, behind `android.permission.DUMP`. `check-required-packages.sh` requires `PasswordsApp.apk` and `libvault_core.so` since the same day.
+
+The defaults the frameworks patch sets apply when the secure setting is still empty (a new user or a new install): on an existing device the owner picks the app once under Settings, Passwords and accounts.
 
 ## Not shipped
 

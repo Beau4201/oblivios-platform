@@ -114,6 +114,8 @@ Not built. The Soong and sepolicy compile is proven only by a build (Task 9).
 
 Later landings, by `git am` after the first module build: `system/sepolicy` 0003 (`fd1b880f3`) and `frameworks/base` 0008 (`e53353ced37f`) and 0009 (`056f7900e13d`, 2026-10-12, no build running, tree clean before and after; the blobs of `HistoryCodec.java` (`3775f68`) and `DataMapService.java` (`2adad94`) are identical to the worktree commit); the blobs of `build/soong/service_fuzzer_bindings.go` (`cff8582`) and `core/res/AndroidManifest.xml` (`a421805`) are identical to the worktree commits. `vendor/sovereignos/datamap` gained the finished app screens (`17a3a03`).
 
+Later landing, 2026-10-23: `vendor/freeholdos/datamap` `b464890` carries `MainActivity.java` and `strings.xml` of platform `9a58818` (the export reads the snapshot before it opens the file, the dialog names the limit of 2000 entries; a dry-run `rsync -c` of the tracked files showed these two and `ipmap/SOURCES.md`, a document that is not part of the build and was left alone). Module-built the same day (`tools/build-vm/build-passwords-modules.sh` of `freeholdos-foundation`, exit code 0).
+
 ## Module build
 
 Three builds on 2026-10-12 of `DataMapApp datamap-classifier.tsv selinux_policy services` for `lynx-cur-userdebug` (detached, with the disk guard; no image, no signing). The first two found what no type-check could:
