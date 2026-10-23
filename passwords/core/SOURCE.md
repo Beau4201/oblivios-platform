@@ -4,15 +4,15 @@
 
 | Item | Value |
 | --- | --- |
-| Source | `freeholdos-services`, directory `vault-core`, commit `cccf460266a1a8f7966db79754808433fa6aada1` (`master`) |
+| Source | `freeholdos-services`, directory `vault-core`, tree of commit `7e92361` (the last commit that touches `vault-core`; the services working tree was clean when it was copied to the build server, `master` `63d190e`) |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `cargo build --release --locked --offline`, `panic = "abort"`, `lto`, `opt-level = "z"`, the AOSP clang as linker (`vault-core/tools/env.sh`) |
 | Build command | `vault-core/tools/build-android.sh` (copies the tree to the build server, builds, then checks the library itself) |
-| SHA-256 | `90332487ac05b99702ce4e3e78f16187120a07d57354b3e758d6c1b84f94db04` |
-| Size | 1 806 616 bytes |
-| Built | 2026-10-21 |
-| Reproduced | built twice from a `git archive` of that commit, into two cargo target directories: same SHA-256 |
+| SHA-256 | `0a02361b52edf6bcc144f35381e6fb4ffe7ad66c4b51aa5fd40327a480a29d19` |
+| Size | 1 854 288 bytes |
+| Built | 2026-10-23 |
+| Reproduced | built twice from the clean working tree (`rsync` copy without `.git` and `target`), into two cargo target directories: same SHA-256. The previous library (`90332487ac05...`, 1 806 616 bytes, 22 functions, built 2026-10-21 from `cccf460`) lacked the CSV import. |
 | Needed libraries | `libc.so`, `libdl.so`, `libm.so` (`readelf -d`, read on the workstation) |
-| Exports | the 22 `Java_org_freeholdos_passwords_core_VaultCore_*` functions of `jni.rs` and nothing else (checked by `build-android.sh`) |
+| Exports | the 23 `Java_org_freeholdos_passwords_core_VaultCore_*` functions of `jni.rs` and nothing else (checked by `build-android.sh`) |
 | Imports | no network function (`socket`, `connect`, `getaddrinfo` and the like); checked by the build script |
 | Dependencies | `vault-core/Cargo.lock` (73 crates); versions, checksums and licences in `vault-core/SOURCE.md` |
 
