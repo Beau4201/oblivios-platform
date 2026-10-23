@@ -531,6 +531,16 @@ public final class HostChecks {
         check(Presenter.appRows(c, apps, "READER").size() == 1, "search by a word of the label that has capitals");
         check(Presenter.appRows(c, apps, "nothing").isEmpty() && Presenter.appRows(c, apps, null).size() == 4, "no match, null query");
         check(Presenter.appRows(c, apps, "compart").isEmpty(), "the exit app is not listed");
+        // A package with a system uid is not listed: Policy.compute would skip it, so a Tor choice would never be applied (C2-03).
+        List<Presenter.Listed> withSystem = new ArrayList<>(apps);
+        withSystem.add(new Presenter.Listed("android.sys.tool", "System Tool", 1000));
+        withSystem.add(new Presenter.Listed("android.sys.low", "Low Tool", 9999));
+        withSystem.add(new Presenter.Listed("org.u1.app", "Second User App", 110050));
+        check(Presenter.appRows(c, withSystem, "").size() == 5 && Presenter.appRows(c, withSystem, "tool").isEmpty()
+                && Presenter.appRows(c, withSystem, "second").size() == 1, "system uids are not listed, an app of another user is");
+        check(!UidRanges.isAppUid(-1) && !UidRanges.isAppUid(1000) && !UidRanges.isAppUid(9999) && UidRanges.isAppUid(10000)
+                && UidRanges.isAppUid(19999) && !UidRanges.isAppUid(20000) && !UidRanges.isAppUid(100999) && UidRanges.isAppUid(110100)
+                && !UidRanges.isAppUid(120000), "the app uid range of every user");
 
         // A tap on an app row, then the policy: the app is Tor and its uid is in the guard.
         check(Arrays.equals(Presenter.options(), new Choices.Choice[] {Choices.Choice.DIRECT, Choices.Choice.TOR, Choices.Choice.OPEN}), "the three choices of the dialog");

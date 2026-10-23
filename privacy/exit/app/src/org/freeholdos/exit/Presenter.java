@@ -66,6 +66,11 @@ public final class Presenter {
             if (Policy.EXEMPT_PACKAGES.contains(a.pkg)) {
                 continue;
             }
+            // A package with a system uid gets no preference and no rule (Policy.compute skips it), so a row for it would
+            // show a choice that is never applied (review of 2026-10-23, C2-03).
+            if (!UidRanges.isAppUid(a.uid)) {
+                continue;
+            }
             if (!q.isEmpty() && !a.label.toLowerCase(Locale.ROOT).contains(q) && !a.pkg.toLowerCase(Locale.ROOT).contains(q)) {
                 continue;
             }

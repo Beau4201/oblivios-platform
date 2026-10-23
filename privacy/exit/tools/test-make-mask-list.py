@@ -46,6 +46,16 @@ def check(cond, what):
         sys.exit(1)
 
 
+def refused(fn):
+    """Whether fn ends the run the way the generator refuses an input (SystemExit). Asserted outside the try: a
+    check(False) inside it would raise SystemExit too and be swallowed (review of 2026-10-23, C2-04)."""
+    try:
+        fn()
+    except SystemExit:
+        return True
+    return False
+
+
 out = mml.build(CLASSIFIER, DENY, ALLOW)
 r = rows(out)
 # Rule 1: an owner that runs nothing else is masked, with its own company id and name.
@@ -88,28 +98,18 @@ check(mml.read_ids(ids3)["o:adco"] == mml.read_ids(ids1)["o:adco"], "a company t
 newer = gone + "owner\tzzz\tZZZ Last\tZZZ\tUS\tNYC\t0\t0\tWD-10\nservice\tzzz-ads.example\tzzz\tadvertising\tADG\n"
 check(rows(mml.build_with_ids(newer, DENY, ALLOW, ids3)[0])["zzz-ads.example"][0] not in set(mml.read_ids(ids3).values()), "an id is never reused")
 for bad_ids in ["o:a\t0\n", "o:a\t65536\n", "o:a\tx\n", "o:a\t1\no:b\t1\n", "o:a\t1\no:a\t2\n", "o:a\n"]:
-    try:
-        mml.read_ids(bad_ids)
-        check(False, f"registry {bad_ids!r} should be refused")
-    except SystemExit:
-        pass
+    check(refused(lambda: mml.read_ids(bad_ids)), f"registry {bad_ids!r} should be refused")
 check(mml.read_ids("# c\n\no:a\t1\n") == {"o:a": 1}, "comments and blank lines in the registry")
+# The id space is 65535: a new company after the last id is an error, not a wrapped or oversized id.
+check(refused(lambda: mml.build_with_ids(more, DENY, ALLOW, "o:last-one\t65535\n")), "no id is left for a new company")
 # A domain that the classifier lists twice is an error, not a quiet choice of one of the two.
-try:
-    mml.build(CLASSIFIER + "service\tgoogle.com\tgoogle\tcore\tADG\n", DENY, ALLOW)
-    check(False, "a duplicate domain should be refused")
-except SystemExit:
-    pass
+check(refused(lambda: mml.build(CLASSIFIER + "service\tgoogle.com\tgoogle\tcore\tADG\n", DENY, ALLOW)), "a duplicate domain should be refused")
 # A deny entry for a domain that is not in the classifier still protects it.
 r2 = rows(mml.build(CLASSIFIER, DENY + "not-listed.example\twhy\n", ALLOW))
 check(r2["not-listed.example"][0] == 0, "deny of an unlisted domain")
 # List files: a reason is required, bad domains are refused, comments and blank lines are fine.
 for bad in ["x.example\n", "x.example\t\n", "Bad Domain\treason\n", "prefix:a.\tr\n" if False else "-x.example\tr\n"]:
-    try:
-        mml.read_list(bad)
-        check(False, f"list line {bad!r} should be refused")
-    except SystemExit:
-        pass
+    check(refused(lambda: mml.read_list(bad)), f"list line {bad!r} should be refused")
 check(mml.read_list("\n# c\n\nx.example\tr\n") == ({"x.example"}, []), "comments")
 
 # The daemon's limits.

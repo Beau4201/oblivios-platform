@@ -20,6 +20,12 @@ public final class UidRanges {
 
     private UidRanges() {}
 
+    /** Whether a uid belongs to an ordinary app of some user (app id from FIRST_APP to LAST_APP). */
+    public static boolean isAppUid(int uid) {
+        int appId = uid % PER_USER; // a negative uid gives a negative app id, which is below FIRST_APP
+        return appId >= FIRST_APP && appId <= LAST_APP;
+    }
+
     /** The app uid range of one user. */
     public static int[] forUser(int userId) {
         if (userId < 0 || userId > MAX_USER) {

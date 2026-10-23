@@ -248,8 +248,8 @@ public final class ControllerChecks {
         int up = inOrder(w, 0, "prefs:{org.a.one=4}", "status:CONNECTING");
         check(w.indexOf("daemon.connect", 0) < 0, "nothing connects inside start(): " + w.log);
         w.controller.tick(0);
-        int end = inOrder(w, up + 1, "daemon.connect", "route.connect", "route.apply:net=0", "daemon.setPolicy:",
-                "net.register:exit0", "route.apply:net=101", "prefs:{org.a.one=4}", "status:RUNNING");
+        int end = inOrder(w, up + 1, "daemon.connect", "route.connect", "prefs:{org.a.one=4}", "route.apply:net=0",
+                "daemon.setPolicy:", "net.register:exit0", "route.apply:net=101", "status:RUNNING");
         // The "ready for apps" status is the last thing, and it comes once.
         check(w.count("status:RUNNING") == 1 && w.log.get(w.log.size() - 1).equals("status:RUNNING") && end == w.log.size() - 1,
                 "RUNNING is published last: " + w.log);
@@ -283,8 +283,8 @@ public final class ControllerChecks {
         check(w.log.size() == after, "no retry before 1 s");
         w.controller.tick(6000);
         // The same order again, and the overrides are sent again (a fresh daemon knows nothing).
-        inOrder(w, after, "daemon.connect", "route.connect", "route.apply:net=0", "daemon.setPolicy", "daemon.setOverrides:10100[7]",
-                "net.register", "route.apply:net=101", "prefs:{org.a.one=4}", "status:RUNNING");
+        inOrder(w, after, "daemon.connect", "route.connect", "prefs:{org.a.one=4}", "route.apply:net=0", "daemon.setPolicy",
+                "daemon.setOverrides:10100[7]", "net.register", "route.apply:net=101", "status:RUNNING");
         check(w.last.phase == Status.Phase.RUNNING && w.last.lastError == null, "running again");
         // A run in between starts the schedule again from one second.
         w.failures.put("daemon.poll", 1);
@@ -383,12 +383,12 @@ public final class ControllerChecks {
         w.choices.set("org.a.one", Choices.Choice.TOR);
         int mark = w.log.size();
         w.controller.changed(1000);
-        inOrder(w, mark, "route.apply:net=0", "daemon.setPolicy", "net.register", "route.apply:net=101", "prefs:{org.a.one=4}", "status:RUNNING");
+        inOrder(w, mark, "prefs:{org.a.one=4}", "route.apply:net=0", "daemon.setPolicy", "net.register", "route.apply:net=101", "status:RUNNING");
         // A second app: only the rules, the table and the preferences change; the network stays.
         w.choices.set("org.a.two", Choices.Choice.TOR);
         mark = w.log.size();
         w.controller.changed(2000);
-        inOrder(w, mark, "route.apply:net=101", "daemon.setPolicy", "prefs:{org.a.one=4, org.a.two=4}");
+        inOrder(w, mark, "prefs:{org.a.one=4, org.a.two=4}", "route.apply:net=101", "daemon.setPolicy");
         check(w.indexOf("net.register", mark) < 0, "one network for all");
         // Nothing changed: nothing is sent.
         mark = w.log.size();
@@ -469,7 +469,105 @@ public final class ControllerChecks {
         w.controller.changed(5300);
         mark = w.log.size();
         w.controller.tick(6000);
-        inOrder(w, mark, "daemon.connect", "route.connect", "net.register", "prefs:{org.a.one=4}", "status:RUNNING");
+        inOrder(w, mark, "daemon.connect", "route.connect", "prefs:{org.a.one=4}", "net.register", "status:RUNNING");
+    }
+
+    /** Review of 2026-10-23, C2-01: a preference the platform or a step before it refused is not lost while the daemon is down. */
+    private static void preferenceFailuresAreRetried() {
+        // A choice for Tor while RUNNING: a later step fails and the daemon never comes back. The preference is the first step,
+        // so the app is closed in spite of it.
+        World w = world();
+        w.controller.start(0);
+        w.controller.tick(0);
+        check(w.last.phase == Status.Phase.RUNNING, "running");
+        w.failures.put("daemon.setPolicy", 1);
+        w.failures.put("daemon.connect", -1);
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        int mark = w.log.size();
+        w.controller.changed(1000);
+        check(w.last.phase == Status.Phase.PAUSED, "the failed step pauses: " + w.last);
+        check(w.indexOf("prefs:{org.a.one=4}", mark) >= 0, "the preference is set before the step that failed: " + w.log.subList(mark, w.log.size()));
+        for (long t = 2000; t <= 120000; t += 1000) {
+            w.controller.tick(t);
+        }
+        check(w.count("prefs:{org.a.one=4}") == 1, "and is not set again while nothing changed: " + w.log);
+
+        // The platform refuses the preference inside the push of a running controller: the lost link asks it once more at
+        // once (a refusal inside push() throws, the controller pauses), so the app is not left on the Wi-Fi.
+        w = world();
+        w.controller.start(0);
+        w.controller.tick(0);
+        w.failures.put("prefs", 1);
+        w.failures.put("daemon.connect", -1);
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        mark = w.log.size();
+        w.controller.changed(1000);
+        check(w.last.phase == Status.Phase.PAUSED, "paused after the refusal: " + w.last);
+        check(w.count("prefs:{org.a.one=4}") == 2, "refused in push, set by the lost link: " + w.log.subList(mark, w.log.size()));
+
+        // The platform refuses the preference twice: it is asked again every PREFS_RETRY_MS, not before (the lost link of a
+        // failed connect does not ask earlier), and no more once it worked.
+        w = world();
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        w.failures.put("prefs", 2);
+        w.failures.put("daemon.connect", -1);
+        w.controller.start(0);
+        w.controller.tick(0);
+        w.controller.tick(4999);
+        check(w.count("prefs:{org.a.one=4}") == 1, "refused at start(), no retry before the delay of 5 s: " + w.log);
+        w.controller.tick(5000);
+        check(w.count("prefs:{org.a.one=4}") == 2, "retried after the delay, with the daemon down: " + w.log);
+        w.controller.tick(10000);
+        check(w.count("prefs:{org.a.one=4}") == 3, "and once more: " + w.log);
+        for (long t = 11000; t <= 120000; t += 1000) {
+            w.controller.tick(t);
+        }
+        check(w.count("prefs:{org.a.one=4}") == 3, "and not again once it worked: " + w.log);
+
+        // A refusal that never ends is retried, but no faster than the delay.
+        w = world();
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        w.failures.put("prefs", -1);
+        w.failures.put("daemon.connect", -1);
+        w.controller.start(0);
+        for (long t = 0; t <= 60000; t += 1000) {
+            w.controller.tick(t);
+        }
+        check(w.count("prefs:{org.a.one=4}") <= 3 + 60000 / ExitController.PREFS_RETRY_MS + 20, "a permanent refusal is retried at the delay, not every tick: " + w.count("prefs:"));
+
+        // The last app leaves Tor and the platform refuses to clear the preference: the clearing is retried, so an app set
+        // back to Direct does not stay without a network until the next reboot.
+        w = world();
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        w.controller.start(0);
+        w.controller.tick(0);
+        w.choices.set("org.a.one", Choices.Choice.DIRECT);
+        w.consent = Consent.OFF;
+        w.failures.put("prefs", 1);
+        mark = w.log.size();
+        w.controller.changed(1000);
+        check(w.last.phase == Status.Phase.IDLE && w.count("prefs:{}") == 1, "idle, the clearing was refused: " + w.log.subList(mark, w.log.size()));
+        w.controller.tick(1000 + ExitController.PREFS_RETRY_MS - 1);
+        check(w.count("prefs:{}") == 1, "no retry before the delay");
+        w.controller.tick(1000 + ExitController.PREFS_RETRY_MS);
+        check(w.count("prefs:{}") == 2, "the clearing is retried while idle: " + w.log);
+        w.controller.tick(60000);
+        check(w.count("prefs:{}") == 2, "and not again once it worked");
+
+        // A change of the choices or the packages is an event, not a tick: it asks again at once.
+        w = world();
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        w.controller.start(0);
+        w.controller.tick(0);
+        w.choices.set("org.a.one", Choices.Choice.DIRECT);
+        w.consent = Consent.OFF;
+        w.failures.put("prefs", 1);
+        w.controller.changed(1000);
+        check(w.count("prefs:{}") == 1, "the clearing was refused: " + w.log);
+        w.controller.changed(1500);
+        check(w.count("prefs:{}") == 2, "a sync retries the clearing: " + w.log);
+        w.controller.changed(1600);
+        check(w.count("prefs:{}") == 2, "and not again once it worked: " + w.log);
     }
 
     private static void failuresAndLadder() {
@@ -960,6 +1058,7 @@ public final class ControllerChecks {
         torOnlyWithoutConsent();
         changesWhileRunning();
         choiceWhileDaemonIsNotRunning();
+        preferenceFailuresAreRetried();
         failuresAndLadder();
         promotions();
         refusedRequests();

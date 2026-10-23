@@ -122,8 +122,7 @@ public final class Policy {
         Map<String, Integer> prefs = new LinkedHashMap<>();
         for (App a : installed) {
             // A package with a system uid (below the app ids) has no place in a table that the daemon and the helper accept.
-            int appId = a.uid % UidRanges.PER_USER;
-            if (a.uid < 0 || appId < UidRanges.FIRST_APP || appId > UidRanges.LAST_APP) {
+            if (!UidRanges.isAppUid(a.uid)) {
                 continue;
             }
             if (EXEMPT_PACKAGES.contains(a.pkg)) {

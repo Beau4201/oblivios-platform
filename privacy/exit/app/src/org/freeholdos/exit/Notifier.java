@@ -40,7 +40,7 @@ final class Notifier {
         String app = label(pkg);
         Notification.Builder b = new Notification.Builder(ctx, CHANNEL)
                 .setSmallIcon(R.drawable.ic_compartments)
-                .setVisibility(Notification.VISIBILITY_PRIVATE) // names an app and a company: not on the lock screen
+                .setVisibility(Notification.VISIBILITY_SECRET) // names an app and a company: nothing of it on the lock screen
                 .setAutoCancel(true);
         if (company == 0) {
             b.setContentTitle(ctx.getString(R.string.notif_tor_title, app))
@@ -77,7 +77,7 @@ final class Notifier {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         nm.notify(promotionId(pkg, company), new Notification.Builder(ctx, CHANNEL)
                 .setSmallIcon(R.drawable.ic_compartments)
-                .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .setVisibility(Notification.VISIBILITY_SECRET)
                 .setContentTitle(ctx.getString(R.string.notif_promo_title, label(pkg), host))
                 .setContentText(ctx.getString(R.string.notif_promo_text, label(pkg), host))
                 .addAction(new Notification.Action.Builder(null, ctx.getString(R.string.notif_action_rehide), pi).build())
@@ -94,6 +94,7 @@ final class Notifier {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         nm.notify(CONSENT_ID, new Notification.Builder(ctx, CHANNEL)
                 .setSmallIcon(R.drawable.ic_compartments)
+                .setVisibility(Notification.VISIBILITY_SECRET)
                 .setContentTitle(ctx.getString(R.string.consent_title))
                 .setContentText(ctx.getString(R.string.notif_consent_text))
                 .setContentIntent(open)

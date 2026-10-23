@@ -15,14 +15,16 @@ import java.util.Map;
  *
  * <p>The order after a connection, and the reason for each step (F01, F11):
  * <ol>
- *   <li>the rules first, without a Tor network id: an app set to Tor is closed (its sockets carry the id of another
- *       network) before the Tor network exists;
+ *   <li>the network preferences of the apps on Tor first: an app that is set to Tor has no network at all until the Tor
+ *       network exists, so a step that fails later can never leave it on the default network (review of 2026-10-23, C2-01);
+ *   <li>the rules, without a Tor network id: its sockets carry the id of another network and are closed;
  *   <li>the class table, then the overrides;
  *   <li>the Tor network, only when some app is set to Tor, and the rules again with its id (now the guard lets it through);
- *   <li>the network preferences of the apps on Tor;
  *   <li>only then {@link Status.Phase#RUNNING} is published.
  * </ol>
  * When a link is lost the Tor network goes away and the preferences stay: the apps on Tor have no network until it is back.
+ * A preference that the platform refuses is tried again every {@link #PREFS_RETRY_MS} in every phase, also while the
+ * daemon is down or not wanted.
  */
 public final class ExitController {
     /** The delay before the n-th retry (n from 1): 1, 2, 4, 8, 16 s, then 30 s. */
@@ -34,6 +36,8 @@ public final class ExitController {
      * reply, but a frame can arrive with the next reply, so a promotion is dropped only after two polls without it.
      */
     public static final long PROMOTION_STALE_MS = 2 * POLL_MS;
+    /** How long to wait before the platform is asked again for a preference that it refused (the call itself may take 10 s). */
+    public static final long PREFS_RETRY_MS = 5000;
 
     private final DaemonApi daemon;
     private final RouteApi route;
@@ -57,6 +61,9 @@ public final class ExitController {
     private long netId; // 0: the Tor network is not registered
     private Policy.Out applied;
     private Map<String, Integer> appliedPrefs;
+    /** The platform refused the last preference (or the clearing of it); tick() asks again from {@link #prefsRetryMs}. */
+    private boolean prefsPending;
+    private long prefsRetryMs;
     private final Map<Long, String> sentOverrides = new HashMap<>();
     /** The companies the daemon passes on to an app for now: (uid, company) to the time it was last listed. */
     private final java.util.TreeMap<Status.Promoted, Long> promoted = new java.util.TreeMap<>(
@@ -109,6 +116,9 @@ public final class ExitController {
     /** Call about once a second. */
     public void tick(long nowMs) {
         if (!wanted) {
+            if (prefsPending && nowMs >= prefsRetryMs) {
+                goIdle(nowMs); // the clearing of the preference was refused: an app set back to Direct has no network until it works
+            }
             return;
         }
         if (phase == Status.Phase.RUNNING) {
@@ -134,8 +144,13 @@ public final class ExitController {
                     lost(nowMs, e);
                 }
             }
-        } else if (nowMs >= nextAttemptMs) {
-            connect(nowMs);
+        } else {
+            if (prefsPending && nowMs >= prefsRetryMs) {
+                applyPreferences(nowMs); // while the daemon is down, a refused preference would leave an app on Tor on the Wi-Fi
+            }
+            if (nowMs >= nextAttemptMs) {
+                connect(nowMs);
+            }
         }
     }
 
@@ -145,8 +160,8 @@ public final class ExitController {
         boolean want = needsDaemon(choices, store.consent());
         if (!want) {
             // The platform keeps a preference when this process dies, so the first call after a start always cleans up.
-            if (!started || wanted || phase != Status.Phase.IDLE) {
-                goIdle();
+            if (!started || wanted || phase != Status.Phase.IDLE || prefsPending) {
+                goIdle(nowMs);
             }
             started = true;
             return;
@@ -156,7 +171,7 @@ public final class ExitController {
             wanted = true;
             // Deny by default (F11): the apps on Tor lose the default network now, before the daemon is up, and get the Tor
             // network when it exists. The rules follow with the connection.
-            applyPreferences();
+            applyPreferences(nowMs);
             phase = Status.Phase.CONNECTING;
             attempts = 0;
             nextAttemptMs = nowMs;
@@ -173,13 +188,16 @@ public final class ExitController {
         } else {
             // The daemon is being reached or is down: a choice made now still closes the app at once (F11). Without this
             // an app set to Tor while the daemon restarts would stay Direct until the connection succeeds, which may be never.
-            applyPreferences();
+            applyPreferences(nowMs);
             publish();
         }
     }
 
-    /** Sets the platform preference for the current choices when it differs from what is set; the daemon is not needed. */
-    private void applyPreferences() {
+    /**
+     * Sets the platform preference for the current choices when it differs from what is set; the daemon is not needed. A
+     * refusal is remembered and tried again by tick() (the preference decides whether an app is on the Wi-Fi or on Tor).
+     */
+    private void applyPreferences(long nowMs) {
         try {
             Policy.Out out = Policy.compute(store.choices(), platform.installedApps(), platform.users(), store.consent(),
                     platform.vpnActive(), platform.privateDnsStrict());
@@ -187,17 +205,23 @@ public final class ExitController {
                 platform.setOemPreferences(out.oemPrefs);
                 appliedPrefs = out.oemPrefs;
             }
+            prefsPending = false;
         } catch (IOException | RuntimeException e) {
             lastError = e.getClass().getSimpleName();
+            prefsPending = true;
+            prefsRetryMs = nowMs + PREFS_RETRY_MS;
         }
     }
 
     /** Nothing needs the daemon any more: no preference, no network, no rule, and the service is stopped. */
-    private void goIdle() {
+    private void goIdle(long nowMs) {
         try {
             platform.setOemPreferences(Collections.<String, Integer>emptyMap());
+            prefsPending = false;
         } catch (IOException | RuntimeException e) {
             lastError = e.getClass().getSimpleName();
+            prefsPending = true;
+            prefsRetryMs = nowMs + PREFS_RETRY_MS;
         }
         appliedPrefs = null;
         platform.unregisterTorNetwork();
@@ -261,6 +285,13 @@ public final class ExitController {
         boolean rulesChanged = all || applied == null || !same(applied.steer, out.steer) || !same(applied.guard, out.guard);
         boolean tableChanged = all || applied == null || !sameClasses(applied.classes, out.classes);
 
+        // 0. the preferences of the apps on Tor: with no Tor network yet they have no network at all, so a step below that
+        // fails leaves them closed and never on the default network (C2-01)
+        if (appliedPrefs == null || !appliedPrefs.equals(out.oemPrefs)) {
+            platform.setOemPreferences(out.oemPrefs);
+            appliedPrefs = out.oemPrefs;
+        }
+        prefsPending = false;
         // 1. the rules without a Tor network (a guarded app is closed before the network exists)
         if (rulesChanged) {
             route.apply(iface, netId, out.steer, out.guard);
@@ -274,11 +305,6 @@ public final class ExitController {
         if (needNetwork && netId == 0) {
             netId = platform.registerTorNetwork(iface);
             route.apply(iface, netId, out.steer, out.guard);
-        }
-        // 5. the preferences of the apps on Tor
-        if (appliedPrefs == null || !appliedPrefs.equals(out.oemPrefs)) {
-            platform.setOemPreferences(out.oemPrefs);
-            appliedPrefs = out.oemPrefs;
         }
         // The last app left Tor: the preference is gone, so the network and the id in the rules can go too.
         if (!needNetwork && netId != 0) {
@@ -327,6 +353,10 @@ public final class ExitController {
         phase = ranBefore ? Status.Phase.PAUSED : Status.Phase.CONNECTING;
         attempts++;
         nextAttemptMs = nowMs + BACKOFF_MS[Math.min(attempts, BACKOFF_MS.length) - 1];
+        // The failed step may have been before the preference of a choice made just now: do it without the daemon (C2-01).
+        if (!prefsPending || nowMs >= prefsRetryMs) {
+            applyPreferences(nowMs);
+        }
         publish();
     }
 

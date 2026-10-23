@@ -101,6 +101,17 @@ def check(app):
                 problems.append(f"{os.path.relpath(path, app)}: getString(R.string.{name}) passes {given} arguments and the "
                                 f"string has {wanted} placeholders")
 
+    # Every notification names an app, a company or a privacy setting. VISIBILITY_PRIVATE is the default of a notification and
+    # hides nothing unless the user chose to hide sensitive content, so only SECRET keeps it off the lock screen (review of
+    # 2026-10-23, C2-02: the "fix" of 2026-10-22 set the default).
+    for path, text in src.items():
+        builders = len(re.findall(r"new\s+Notification\.Builder\(", text))
+        secret = len(re.findall(r"\.setVisibility\(Notification\.VISIBILITY_SECRET\)", text))
+        if builders != secret:
+            problems.append(f"{os.path.relpath(path, app)}: {builders} notification builders and {secret} VISIBILITY_SECRET; every notification is secret")
+        if re.search(r"VISIBILITY_(PRIVATE|PUBLIC)", text):
+            problems.append(f"{os.path.relpath(path, app)}: VISIBILITY_PRIVATE or VISIBILITY_PUBLIC is used; a notification is secret")
+
     for n, v in strings.items():
         if n.startswith("notif_") and len(v) > NOTIFICATION_LIMIT:
             problems.append(f"string {n} has {len(v)} characters; a notification text is at most {NOTIFICATION_LIMIT}")
