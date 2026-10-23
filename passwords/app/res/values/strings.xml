@@ -181,8 +181,8 @@
     <string name="pm_settings_browsers">Browsers</string>
     <string name="pm_settings_browsers_vanadium">Vanadium</string>
     <string name="pm_settings_browsers_vanadium_sub">Built in. Trusted to say which website a page belongs to.</string>
-    <string name="pm_settings_browsers_note">Passwords fills a website only for a browser listed here as trusted. Any other browser is not filled, and an app that says it shows a website is filled as an app, by its own name.</string>
-    <string name="pm_settings_browsers_none">No other browser is installed. Any other app is filled as an app, by its own name; a website it claims is ignored.</string>
+    <string name="pm_settings_browsers_note">Passwords fills a website only for a browser listed here as trusted. Any other browser is not filled, and neither is an app that shows a website: a page inside an app is not the app.</string>
+    <string name="pm_settings_browsers_none">No other browser is installed. An app is filled by its own name, unless its screen shows a website.</string>
     <string name="pm_settings_browsers_failed">This browser could not be trusted.</string>
     <plurals name="pm_import_done">
         <item quantity="one">%d password imported</item>

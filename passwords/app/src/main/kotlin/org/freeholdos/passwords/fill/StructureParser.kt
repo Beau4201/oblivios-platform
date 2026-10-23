@@ -46,8 +46,8 @@ object StructureParser {
         // another origin) or a plain http page is not offered a fill and is not offered a save; the site of the first node
         // used to be applied to every field, and https credentials were filled on http pages.
         if (policy.trusted(pkg) && (domains.size > 1 || plainHttp)) return nothing
-        // P-01 and P-04: the site is believed from a trusted browser only; any other app is matched by its package, a
-        // browser that is not trusted gets nothing.
+        // P-01 and P-04: the site is believed from a trusted browser only; an app that shows no website is matched by its
+        // package; a browser that is not trusted, and an app that shows web content, get nothing.
         return when (val origin = policy.resolve(pkg, domains.firstOrNull())) {
             Origin.None -> nothing
             is Origin.Site -> ParsedScreen(fields, ids, values, origin.domain, pkg)

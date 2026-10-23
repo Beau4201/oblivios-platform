@@ -29,7 +29,7 @@ fun main() {
     aBrowserOfTheUserIsTrustedWhileItsSignerIsTheSame()
     aSiteIsBelievedFromATrustedBrowserOnly()
     aBrowserIsNeverAnApp()
-    anAppIsAnAppWhateverItClaims()
+    anAppIsAnAppOnlyWhenItShowsNoWebsite()
     theBuiltInBrowserCannotBeChanged()
     Check.done("OriginTest")
 }
@@ -87,12 +87,13 @@ private fun aBrowserIsNeverAnApp() {
     Check.equal("a trusted package with no browser filter is still no app", Origin.None, q.resolve("org.hidden.browser", null))
 }
 
-private fun anAppIsAnAppWhateverItClaims() {
+private fun anAppIsAnAppOnlyWhenItShowsNoWebsite() {
     val f = FakeFacts(); val p = OriginPolicy(f, FakeStore())
     Check.equal("an app with no claim", Origin.App("org.bank.app"), p.resolve("org.bank.app", null))
-    Check.equal("an app that claims a site is still the app", Origin.App("org.evil.app"), p.resolve("org.evil.app", "paypal.com"))
+    Check.equal("an app that shows a website gets nothing: its page is not the app", Origin.None, p.resolve("org.evil.app", "paypal.com"))
     f.system.add("org.sys.app")
-    Check.equal("a system app that claims a site is still the app", Origin.App("org.sys.app"), p.resolve("org.sys.app", "paypal.com"))
+    Check.equal("a system app that shows a website gets nothing either", Origin.None, p.resolve("org.sys.app", "paypal.com"))
+    Check.equal("and the same app without a website is the app", Origin.App("org.sys.app"), p.resolve("org.sys.app", null))
 }
 
 private fun theBuiltInBrowserCannotBeChanged() {
