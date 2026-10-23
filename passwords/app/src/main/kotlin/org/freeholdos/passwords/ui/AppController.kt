@@ -24,6 +24,7 @@ import org.freeholdos.passwords.core.Summary
 import org.freeholdos.passwords.core.VaultCore
 import org.freeholdos.passwords.core.Reply
 import org.freeholdos.passwords.data.SaveResult
+import org.freeholdos.passwords.fill.OriginPolicy
 import org.freeholdos.passwords.fill.PassphraseDialog
 import org.freeholdos.passwords.lock.BiometricOutcome
 import org.freeholdos.passwords.lock.LockState
@@ -51,6 +52,9 @@ fun unhexId(s: String): ByteArray = ByteArray(16) { s.substring(2 * it, 2 * it +
  * is wiped when the screen goes; nothing is saved to the instance state (the activity handles its own configuration
  * changes and the screens use no rememberSaveable).
  */
+/** A browser in the list of the settings. */
+class BrowserRow(val pkg: String, val label: String, val trusted: Boolean)
+
 class AppController(val activity: SecureActivity) {
     private val app = activity.applicationContext as PasswordsApplication
     private val session get() = app.session
@@ -375,6 +379,27 @@ class AppController(val activity: SecureActivity) {
         set(v) { prefs.edit().putBoolean("suggestions", v).apply() }
 
     // --- settings, export and import ---
+
+    // --- trusted browsers (P-01): which package may say which website a page is ---
+
+    /** The browsers of the phone that can be added to the trusted ones (Vanadium is trusted without being asked). */
+    fun browserRows(): List<BrowserRow> = app.packageFacts.browsers()
+        .filter { it !in OriginPolicy.BUILT_IN && it != activity.packageName }
+        .map { BrowserRow(it, app.packageFacts.label(it), app.originPolicy.trusted(it)) }
+        .sortedWith(compareBy({ it.label.lowercase() }, { it.pkg }))
+
+    /** Trusting a browser asks for a fresh biometric (or the passphrase); not trusting it does not. [done] runs either way. */
+    fun setBrowserTrusted(pkg: String, on: Boolean, done: () -> Unit) {
+        if (!on) {
+            app.originPolicy.untrust(pkg)
+            done()
+            return
+        }
+        confirmUser(R.string.pm_confirm_action) { ok ->
+            if (ok && !app.originPolicy.trust(pkg)) say(activity.getString(R.string.pm_settings_browsers_failed))
+            done()
+        }
+    }
 
     /**
      * Switches biometric unlock on or off; [done] gets what the switch is now, which is not what was asked when the prompt

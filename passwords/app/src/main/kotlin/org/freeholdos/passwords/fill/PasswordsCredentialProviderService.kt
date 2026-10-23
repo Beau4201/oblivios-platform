@@ -39,10 +39,12 @@ class PasswordsCredentialProviderService : CredentialProviderService() {
         val option = request.beginGetCredentialOptions.filterIsInstance<BeginGetPasswordOption>().firstOrNull()
         val pkg = request.callingAppInfo?.packageName
         val response = BeginGetCredentialResponse.Builder()
-        if (option != null && pkg != null) {
+        // A browser is never an app of its own (P-04): only a package that is no browser is answered by its package name.
+        val origin = pkg?.let { app.originPolicy.resolve(it, null) }
+        if (option != null && origin is Origin.App) {
             if (app.session.state is LockState.Unlocked) {
-                app.repository.accounts(null, pkg).orEmpty().forEach { response.addCredentialEntry(entryFor(it.entryId, it.username, option)) }
-            } else if (app.indexStore.hasAccount(null, pkg)) {
+                app.repository.accounts(null, origin.packageName).orEmpty().forEach { response.addCredentialEntry(entryFor(it.entryId, it.username, option)) }
+            } else if (app.indexStore.hasAccount(null, origin.packageName)) {
                 response.addAuthenticationAction(AuthenticationAction(getString(R.string.pm_chip_generic), pendingIntent(null)))
             }
         }

@@ -45,8 +45,9 @@ class CredentialAuthActivity : SecureActivity() {
             val request = PendingIntentHandler.retrieveBeginGetCredentialRequest(intent) ?: return cancel()
             val option = request.beginGetCredentialOptions.filterIsInstance<BeginGetPasswordOption>().firstOrNull() ?: return cancel()
             val pkg = request.callingAppInfo?.packageName ?: return cancel()
+            val origin = app.originPolicy.resolve(pkg, null) as? Origin.App ?: return cancel() // a browser is never an app (P-04)
             val response = BeginGetCredentialResponse.Builder()
-            app.repository.accounts(null, pkg).orEmpty().forEach { a ->
+            app.repository.accounts(null, origin.packageName).orEmpty().forEach { a ->
                 val pending = android.app.PendingIntent.getActivity(
                     this, a.entryId.contentHashCode(),
                     Intent(this, CredentialAuthActivity::class.java).putExtra(EXTRA_ENTRY, a.entryId.joinToString("") { "%02x".format(it) }),

@@ -42,7 +42,7 @@ class PasswordsAutofillService : AutofillService() {
     override fun onFillRequest(request: FillRequest, cancellationSignal: CancellationSignal, callback: FillCallback) {
         recordFills()
         val structure = request.fillContexts.lastOrNull()?.structure ?: return callback.onSuccess(null)
-        val screen = StructureParser.parse(structure)
+        val screen = StructureParser.parse(structure, app.originPolicy)
         val state = session.state
         val plan = plan(screen.fields, screen.webDomain, screen.packageName, state, lookup)
         val response = FillResponse.Builder()
@@ -110,7 +110,7 @@ class PasswordsAutofillService : AutofillService() {
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
         val structure = request.fillContexts.lastOrNull()?.structure ?: return callback.onSuccess()
-        val screen = StructureParser.parse(structure)
+        val screen = StructureParser.parse(structure, app.originPolicy)
         val candidate = SaveCandidate.of(screen.fields.mapIndexedNotNull { i, f -> screen.values[i]?.let { f.role to it } })
             ?: return callback.onSuccess()
         if (!session.isOpenNow()) {

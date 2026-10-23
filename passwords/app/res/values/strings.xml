@@ -178,6 +178,12 @@
     <string name="pm_confirm_passphrase_title">Confirm it is you</string>
     <string name="pm_confirm_reveal">Enter your passphrase to show or copy this password.</string>
     <string name="pm_confirm_action">Enter your passphrase to continue.</string>
+    <string name="pm_settings_browsers">Browsers</string>
+    <string name="pm_settings_browsers_vanadium">Vanadium</string>
+    <string name="pm_settings_browsers_vanadium_sub">Built in. Trusted to say which website a page belongs to.</string>
+    <string name="pm_settings_browsers_note">Passwords fills a website only for a browser listed here as trusted. Any other browser is not filled, and an app that says it shows a website is filled as an app, by its own name.</string>
+    <string name="pm_settings_browsers_none">No other browser is installed. Any other app is filled as an app, by its own name; a website it claims is ignored.</string>
+    <string name="pm_settings_browsers_failed">This browser could not be trusted.</string>
     <plurals name="pm_import_done">
         <item quantity="one">%d password imported</item>
         <item quantity="other">%d passwords imported</item>

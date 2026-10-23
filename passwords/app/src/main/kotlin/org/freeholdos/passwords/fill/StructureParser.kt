@@ -19,7 +19,7 @@ class ParsedScreen(
 
 /** Walks an AssistStructure once. The key of a field is its index in [ParsedScreen.ids]. */
 object StructureParser {
-    fun parse(structure: AssistStructure): ParsedScreen {
+    fun parse(structure: AssistStructure, policy: OriginPolicy): ParsedScreen {
         val fields = ArrayList<ParsedField>()
         val ids = ArrayList<AutofillId>()
         val values = ArrayList<String?>()
@@ -41,11 +41,18 @@ object StructureParser {
             ids.add(id)
             values.add(node.autofillValue?.takeIf(AutofillValue::isText)?.textValue?.toString())
         }
-        // Review of 2026-10-23, P-02 and P-03: a screen that reports more than one site (a frame of another origin) or a
-        // plain http page is not offered a fill and is not offered a save; the site of the first node used to be applied to
-        // every field, and https credentials were filled on http pages.
-        if (domains.size > 1 || plainHttp) return ParsedScreen(emptyList(), emptyList(), emptyList(), null, pkg)
-        return ParsedScreen(fields, ids, values, domains.firstOrNull(), pkg)
+        val nothing = ParsedScreen(emptyList(), emptyList(), emptyList(), null, pkg)
+        // Review of 2026-10-23, P-02 and P-03: a trusted browser's screen that reports more than one site (a frame of
+        // another origin) or a plain http page is not offered a fill and is not offered a save; the site of the first node
+        // used to be applied to every field, and https credentials were filled on http pages.
+        if (policy.trusted(pkg) && (domains.size > 1 || plainHttp)) return nothing
+        // P-01 and P-04: the site is believed from a trusted browser only; any other app is matched by its package, a
+        // browser that is not trusted gets nothing.
+        return when (val origin = policy.resolve(pkg, domains.firstOrNull())) {
+            Origin.None -> nothing
+            is Origin.Site -> ParsedScreen(fields, ids, values, origin.domain, pkg)
+            is Origin.App -> ParsedScreen(fields, ids, values, null, pkg)
+        }
     }
 
     /** Visits [node] and the visible nodes below it; a node that is not visible hides its whole subtree (P-03). */

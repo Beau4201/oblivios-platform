@@ -14,7 +14,8 @@ same values after the min with five minutes), the `<= 3` of the same function (`
 1000 shifted left by 63 is 0), the reset of lastPassphraseFailureMs on a passphrase unlock (the reset count already ends
 the wait), and the `lastPassphraseMs == 0` test of stateAtStart (a vault that never
 had a passphrase unlock is already `Restart`, because the boot count is -1), and `held = null` in PendingSaveSlot.expire (an expired
-login that stays in `held` is never handed out, because `take` tests the deadline again and answers null; the wipe is what counts).
+login that stays in `held` is never handed out, because `take` tests the deadline again and answers null; the wipe is what counts), and the `if (pkg !in BUILT_IN)` of OriginPolicy.untrust (the store never holds the built-in browser, because
+`trust` refuses it, and `trusted` does not read the store for it).
 """
 import os
 import shutil
@@ -32,6 +33,7 @@ Y = K + "core/Reply.kt"
 O = K + "ui/LogoPack.kt"
 Q = K + "fill/PendingSave.kt"
 T = K + "core/SiteText.kt"
+OR = K + "fill/Origin.kt"
 S = "src/main/kotlin/org/freeholdos/passwords/lock/LockState.kt"
 
 # (name, file, old, new)
@@ -198,6 +200,24 @@ MUTATIONS = [
     ("pending: the scheduled wipe ignores the deadline", Q, "if (held === p && now() > p.deadline) {", "if (held === p) {"),
     ("pending: the scheduled wipe hits any login", Q, "if (held === p && now() > p.deadline) {", "if (now() > p.deadline) {"),
     ("pending: the scheduled wipe does not wipe", Q, "            p.candidate.wipe()\n            held = null\n        }\n    }\n", "            held = null\n        }\n    }\n"),
+    # Origin.kt
+    ("origin: Vanadium is trusted without being a system app", OR, "if (pkg in BUILT_IN && facts.isSystemApp(pkg)) return true", "if (pkg in BUILT_IN) return true"),
+    ("origin: any system app is trusted", OR, "if (pkg in BUILT_IN && facts.isSystemApp(pkg)) return true", "if (facts.isSystemApp(pkg)) return true"),
+    ("origin: Vanadium is not trusted", OR, "if (pkg in BUILT_IN && facts.isSystemApp(pkg)) return true", ""),
+    ("origin: a stored browser is trusted whatever its signer", OR, "return stored == facts.signerDigest(pkg)", "return true"),
+    ("origin: a browser that is not stored is trusted", OR, "val stored = store.digestOf(pkg) ?: return false", "val stored = store.digestOf(pkg) ?: return true"),
+    ("origin: a missing signer matches a stored digest of null", OR, "return stored == facts.signerDigest(pkg)", "return facts.signerDigest(pkg) == null || stored == facts.signerDigest(pkg)"),
+    ("origin: a trusted browser's site is not believed", OR, "trusted(pkg) -> if (claimedDomain != null) Origin.Site(claimedDomain) else Origin.None", "trusted(pkg) -> Origin.None"),
+    ("origin: a trusted browser with no site is its package", OR, "trusted(pkg) -> if (claimedDomain != null) Origin.Site(claimedDomain) else Origin.None", "trusted(pkg) -> if (claimedDomain != null) Origin.Site(claimedDomain) else Origin.App(pkg)"),
+    ("origin: an untrusted browser's claim is believed", OR, "facts.isBrowser(pkg) -> Origin.None", "facts.isBrowser(pkg) && claimedDomain != null -> Origin.Site(claimedDomain)\n        facts.isBrowser(pkg) -> Origin.None"),
+    ("origin: an untrusted browser is its package", OR, "facts.isBrowser(pkg) -> Origin.None", "facts.isBrowser(pkg) -> Origin.App(pkg)"),
+    ("origin: an app's claim is believed", OR, "else -> Origin.App(pkg)", "else -> if (claimedDomain != null) Origin.Site(claimedDomain) else Origin.App(pkg)"),
+    ("origin: an app is nothing", OR, "else -> Origin.App(pkg)", "else -> Origin.None"),
+    ("origin: trust stores nothing", OR, "store.put(pkg, digest)", ""),
+    ("origin: trust without a digest", OR, "val digest = facts.signerDigest(pkg) ?: return false", "val digest = facts.signerDigest(pkg) ?: \"\""),
+    ("origin: the built-in browser can be trusted again", OR, "if (pkg in BUILT_IN) return false\n        val digest", "val digest"),
+    ("origin: untrust removes nothing", OR, "if (pkg !in BUILT_IN) store.remove(pkg)", ""),
+    ("origin: the package name of Vanadium", OR, 'const val VANADIUM = "app.vanadium.browser"', 'const val VANADIUM = "app.vanadium.browse"'),
     # PendingSave.kt
     ("pending: the time to live is ignored", Q, "if (now() > h.deadline) {", "if (false) {"),
     ("pending: the deadline is one early", Q, "if (now() > h.deadline) {", "if (now() >= h.deadline) {"),

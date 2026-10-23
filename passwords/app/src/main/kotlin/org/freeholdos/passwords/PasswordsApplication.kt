@@ -12,7 +12,10 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import org.freeholdos.passwords.data.DomainIndexStore
+import org.freeholdos.passwords.fill.AndroidPackageFacts
+import org.freeholdos.passwords.fill.OriginPolicy
 import org.freeholdos.passwords.fill.PendingSaveSlot
+import org.freeholdos.passwords.fill.PrefsTrustStore
 import org.freeholdos.passwords.data.VaultRepository
 import org.freeholdos.passwords.keys.AndroidKeyGateway
 import org.freeholdos.passwords.lock.LockState
@@ -36,6 +39,10 @@ class PasswordsApplication : Application() {
     lateinit var repository: VaultRepository
         private set
     val logos: LogoSource by lazy { LogoSource(this) }
+
+    /** Which package may report a website (fill/Origin.kt): Vanadium of the image and the browsers the user trusts. */
+    val packageFacts: AndroidPackageFacts by lazy { AndroidPackageFacts(this) }
+    val originPolicy: OriginPolicy by lazy { OriginPolicy(packageFacts, PrefsTrustStore(getSharedPreferences("trusted_browsers", MODE_PRIVATE))) }
 
     /** The login submitted while the vault was locked, until the unlock that lets it be saved. */
     val pendingSave = PendingSaveSlot(schedule = { ms, run -> Handler(Looper.getMainLooper()).postDelayed({ run() }, ms) }) { SystemClock.elapsedRealtime() }

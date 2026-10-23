@@ -113,6 +113,19 @@ fun SettingsScreen(c: AppController) {
                     })
                 }
             }
+            GroupHeader(stringResource(R.string.pm_settings_browsers))
+            var browsers by remember { mutableStateOf(c.browserRows()) }
+            Group {
+                item { PrefRow(stringResource(R.string.pm_settings_browsers_vanadium), summary = stringResource(R.string.pm_settings_browsers_vanadium_sub)) }
+                browsers.forEach { b ->
+                    item {
+                        PrefRow(b.label, summary = b.pkg, trailing = {
+                            PwSwitch(b.trusted) { on -> c.setBrowserTrusted(b.pkg, on) { browsers = c.browserRows() } }
+                        })
+                    }
+                }
+            }
+            SectionText(stringResource(if (browsers.isEmpty()) R.string.pm_settings_browsers_none else R.string.pm_settings_browsers_note))
             GroupHeader(stringResource(R.string.pm_settings_data))
             Group {
                 item {
