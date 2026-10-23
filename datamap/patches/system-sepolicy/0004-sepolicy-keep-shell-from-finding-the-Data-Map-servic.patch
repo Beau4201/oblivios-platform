@@ -1,0 +1,28 @@
+From 901e2eb0c27e5e7c45060b42fc0ba0c6c23949a0 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 23 Oct 2026 02:57:09 +0200
+Subject: [PATCH] sepolicy: keep shell from finding the Data Map service
+
+The shell domain has an allow rule for every service type except a fixed list, which violates the
+neverallow that only datamap_app may find datamap_service. The build ignores neverallows on the Pixel
+boards (SELINUX_IGNORE_NEVERALLOWS), so the violation was not shown by the build. Same exclusion as
+system_app and traceur_app. On userdebug the su domain still reaches the service for device tests.
+---
+ private/shell.te | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/private/shell.te b/private/shell.te
+index 5d3cabc..d66688f 100644
+--- a/private/shell.te
++++ b/private/shell.te
+@@ -382,6 +382,7 @@ allow shell servicemanager:service_manager list;
+ allow shell {
+   service_manager_type
+   -apex_service
++  -datamap_service
+   -dnsresolver_service
+   -gatekeeper_service
+   -hal_frp_service
+-- 
+2.56.0
+
