@@ -58,6 +58,7 @@ policy are new code and patches. They were authored in disposable repositories (
 | `vendor/adevtool` (`freeholdos-2026100600`) | `fe4c53c7` (blob of `device-common.mk` `e9b98507`) | `e4aca756` (blob `fe456150`) | exit: ship the exit service on every Pixel target (`PRODUCT_PACKAGES += exitd ExitApp`) |
 | `vendor/freeholdos/exit` (`freeholdos-2026100600`) | `cb444ef` | `569e0c8` | the daemon prebuilt, its init definition and mask list, and the exit app |
 | `vendor/freeholdos/exit` | `569e0c8` | `06be330` | the speed guard, the never-hidden stand, the fixes of the review of 2026-10-22 and the `exitd` of `daemon/SOURCE.md` (2026-10-23: the files of this package were copied with `rsync -c` and compared again, 0 differences; the tree had held the previous package uncommitted and is clean now). Not module-built since. |
+| `vendor/freeholdos/exit` | `06be330` | `29dd125` | the `exitd` of `daemon/SOURCE.md` (`eee939b2...`, 19 374 568 bytes) replaces `0ce3c5a4...`; landed 2026-10-23 on the owner's word, tree clean, no build running; a dry-run `rsync -c` of the 42 tracked files showed this one file differing, the hash on the server equals `SOURCE.md`, and the tree is clean after the commit. Not module-built. |
 
 Landing the adevtool patch moved its pin: `vendor/google_devices/{lynx,stallion}/adevtool-version-check.mk` name `e4aca7568bc7…`
 now (the previous files are kept as `adevtool-version-check.mk.pre-exit-service`).
