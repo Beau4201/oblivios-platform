@@ -26,6 +26,8 @@ patch and the checks.
     test/mutate-settings.py <SettingsHardening.java>
     test/run-vibrator-test.sh <VibratorCoarse.java>
     test/mutate-vibrator.py <VibratorCoarse.java>
+    test/run-loopback-test.sh <netd.c> <netd.h>
+    test/mutate-loopback.py <netd.c> <netd.h>
 
 `SettingsHardening.java` is created by `frameworks-base/0003` and changed by `0005` and `0006`; apply the three with
 `git apply --include='*SettingsHardening.java'` in that order in an empty repository, or read it from the landed tree.
