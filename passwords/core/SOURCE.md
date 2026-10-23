@@ -4,13 +4,13 @@
 
 | Item | Value |
 | --- | --- |
-| Source | `freeholdos-services`, directory `vault-core`, tree of commit `fab1696` (the last commit that touches `vault-core`; the services working tree was clean when it was copied to the build server, `master` `fab1696`) |
+| Source | `freeholdos-services`, directory `vault-core`, tree of commit `cb1c7e0` (the last commit that touches `vault-core`; the services working tree was clean when it was copied to the build server, `master` `cb1c7e0`) |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `cargo build --release --locked --offline`, `panic = "abort"`, `lto`, `opt-level = "z"`, the AOSP clang as linker (`vault-core/tools/env.sh`) |
 | Build command | `vault-core/tools/build-android.sh` (copies the tree to the build server, builds, then checks the library itself) |
-| SHA-256 | `fe44fe249e0d2ffb6fa034cd5136e73d545aada8f3302d48ea7d28eb927fbd3f` |
-| Size | 1 879 760 bytes |
+| SHA-256 | `bfff899f8e21afa580ea6344660dd5cafaf2b39045b8c4e46612d102eec8635a` |
+| Size | 1 880 168 bytes |
 | Built | 2026-10-23 |
-| Reproduced | built twice from the clean working tree (`rsync` copy without `.git` and `target`), into two cargo target directories: same SHA-256. The previous library (`0a02361b52ed...`, 1 854 288 bytes, from `7e92361`) lacked the field cap of a CSV record, the size check of an export, the lock around the temp file of a write and the overflow checks of the release profile (review of 2026-10-23, P-14, P-19, P-21, P-22). |
+| Reproduced | built twice from the clean working tree (`rsync` copy without `.git` and `target`), into two cargo target directories: same SHA-256. The previous library (`0a02361b52ed...`, 1 854 288 bytes, from `7e92361`) lacked the field caps of a CSV record and of a CSV file, the size check of an export, the lock around the temp file of a write and the overflow checks of the release profile (review of 2026-10-23, P-14, P-19, P-21, P-22). |
 | Needed libraries | `libc.so`, `libdl.so`, `libm.so` (`readelf -d`, read on the workstation) |
 | Exports | the 23 `Java_org_freeholdos_passwords_core_VaultCore_*` functions of `jni.rs` and nothing else (checked by `build-android.sh`) |
 | Imports | no network function (`socket`, `connect`, `getaddrinfo` and the like); checked by the build script |
