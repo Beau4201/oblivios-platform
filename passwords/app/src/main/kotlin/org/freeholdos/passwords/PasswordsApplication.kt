@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import org.freeholdos.passwords.data.DomainIndexStore
 import org.freeholdos.passwords.fill.PendingSaveSlot
@@ -36,7 +38,7 @@ class PasswordsApplication : Application() {
     val logos: LogoSource by lazy { LogoSource(this) }
 
     /** The login submitted while the vault was locked, until the unlock that lets it be saved. */
-    val pendingSave = PendingSaveSlot { SystemClock.elapsedRealtime() }
+    val pendingSave = PendingSaveSlot(schedule = { ms, run -> Handler(Looper.getMainLooper()).postDelayed({ run() }, ms) }) { SystemClock.elapsedRealtime() }
 
     override fun onCreate() {
         super.onCreate()
@@ -47,10 +49,18 @@ class PasswordsApplication : Application() {
         indexStore = DomainIndexStore(filesDir, gateway)
         repository = VaultRepository(files, session, indexStore)
         // The domain index is rebuilt from the open vault at every unlock, so a damaged or stale one repairs itself.
-        session.observe { if (it is LockState.Unlocked) indexStore.rebuild(it.handle) }
+        // A login that waits for the unlock does not outlive a lock of the open vault (P-07); it is taken right after an unlock.
+        var wasUnlocked = false
+        session.observe {
+            if (it is LockState.Unlocked) indexStore.rebuild(it.handle) else if (wasUnlocked) pendingSave.clear()
+            wasUnlocked = it is LockState.Unlocked
+        }
 
         registerReceiver(object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) = session.onScreenOff()
+            override fun onReceive(context: Context, intent: Intent) {
+                pendingSave.clear()
+                session.onScreenOff()
+            }
         }, IntentFilter(Intent.ACTION_SCREEN_OFF))
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

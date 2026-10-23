@@ -27,6 +27,20 @@ private fun lookAlikesAndOddInput(p: LogoPack) {
     for (h in listOf("github.com.evil.example", "evilgithub.com", "githubb.com", "co.uk", "com", "uk", "", ".", "gіthub.com", "github.co", "192.0.2.1", "[::1]", "github.com/x", "git hub.com", "login..github.com", ".github.com", "github..com")) {
         Check.that("no logo for '$h'", p.pathFor(h) == null)
     }
+    // P-10: a name no DNS name can be is refused at once (a stored domain may be 64 KiB: 32 000 labels used to mean ~10^9 copied characters).
+    val longName = (1..300).joinToString(".") { "a" } + ".github.com"
+    Check.that("a name longer than 253 characters finds nothing", longName.length > 253 && p.pathFor(longName) == null)
+    val limit = ("a".repeat(63) + ".").repeat(3) + "a".repeat(50) + ".github.com"
+    Check.that("a name of exactly 253 characters is looked up", limit.length == 253 && p.pathFor(limit) == "M0 0h24v24H0z")
+    val edge = ("a".repeat(61) + ".").repeat(3) + "github.com"
+    Check.that("a name of 253 characters or less is looked up", edge.length <= 253 && p.pathFor(edge) == "M0 0h24v24H0z")
+    val justOver = ("a".repeat(63) + ".").repeat(3) + "a".repeat(51) + ".github.com"
+    Check.that("a name of exactly 254 characters is refused", justOver.length == 254 && p.pathFor(justOver) == null)
+    val tooLong = ("a".repeat(61) + ".").repeat(4) + "github.com"
+    Check.that("a name of 254 characters or more is refused", tooLong.length > 253 && p.pathFor(tooLong) == null)
+    val started = System.nanoTime()
+    p.pathFor("a.".repeat(32_000) + "github.com")
+    Check.that("32 000 labels cost almost nothing", System.nanoTime() - started < 200_000_000L)
     Check.that("a row for a bare suffix is never used", p.pathFor("evil.com") == null && p.pathFor("anything.co.uk") == null)
     Check.that("a row whose icon is missing from the pack gives nothing", p.pathFor("broken.example") == null)
 }

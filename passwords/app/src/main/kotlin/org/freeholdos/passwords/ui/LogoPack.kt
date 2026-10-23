@@ -17,6 +17,9 @@ class LogoPack private constructor(private val domains: Map<String, String>, pri
             else -> return null
         }
         h = h.removeSuffix(".")
+        // A stored domain may be up to 64 KiB and comes from a page or an import; the walk below copies the labels once per
+        // label, so a name that no DNS name can be is refused before it (review of 2026-10-23, P-10).
+        if (h.length > MAX_HOST) return null
         if (h.isEmpty() || !h.all { it in 'a'..'z' || it in '0'..'9' || it == '-' || it == '.' }) return null
         val labels = h.split('.')
         if (labels.size < 2 || labels.any { it.isEmpty() }) return null
@@ -28,6 +31,9 @@ class LogoPack private constructor(private val domains: Map<String, String>, pri
     }
 
     companion object {
+        /** The longest name of DNS, without the dot at the end. */
+        const val MAX_HOST = 253
+
         val EMPTY = LogoPack(emptyMap(), emptyMap())
 
         /** `domains.tsv` (domain, slug) and `icons.tsv` (slug, path, title); rows with another shape are ignored. */

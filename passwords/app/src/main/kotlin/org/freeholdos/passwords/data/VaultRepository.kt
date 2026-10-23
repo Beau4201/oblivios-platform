@@ -41,7 +41,15 @@ class VaultRepository(
 
     fun search(query: String): List<Summary>? = handle?.let { h -> Wire.decodeSummaries(payloadOf(VaultCore.search(h, query)) ?: return null) }
 
-    fun get(id: ByteArray): Entry? = handle?.let { h -> Wire.decode(payloadOf(VaultCore.get(h, id)) ?: return null) }
+    /** The entry with its password. The core's answer and the copy of it that is decoded are both wiped (P-08). */
+    fun get(id: ByteArray): Entry? = handle?.let { h ->
+        val p = secretPayloadOf(VaultCore.get(h, id)) ?: return null
+        try {
+            Wire.decode(p)
+        } finally {
+            p.fill(0)
+        }
+    }
 
     /** The accounts of a site (a host) or, without a host, of an app (a package name). */
     fun accounts(webDomain: String?, packageName: String): List<Account>? {
@@ -108,6 +116,16 @@ class VaultRepository(
     }
 
     private fun payloadOf(raw: ByteArray?): ByteArray? = Reply.of(raw).let { if (it.ok) it.payload() else null }
+
+    /** Like [payloadOf] for an answer that carries a secret: the answer itself is wiped, the copy is the caller's to wipe. */
+    private fun secretPayloadOf(raw: ByteArray?): ByteArray? {
+        val reply = Reply.of(raw)
+        return try {
+            if (reply.ok) reply.payload() else null
+        } finally {
+            reply.wipe()
+        }
+    }
 }
 
 /**

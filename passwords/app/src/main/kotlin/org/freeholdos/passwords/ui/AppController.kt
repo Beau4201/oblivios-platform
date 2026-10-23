@@ -19,6 +19,7 @@ import org.freeholdos.passwords.SecureActivity
 import org.freeholdos.passwords.core.Checkup
 import org.freeholdos.passwords.core.Code
 import org.freeholdos.passwords.core.Entry
+import org.freeholdos.passwords.core.SiteText
 import org.freeholdos.passwords.core.Summary
 import org.freeholdos.passwords.core.VaultCore
 import org.freeholdos.passwords.core.Reply
@@ -253,11 +254,15 @@ class AppController(val activity: SecureActivity) {
     /** Runs [then] after a fresh strong biometric (or the passphrase): for anything that would show a stored password. */
     fun confirmThen(then: () -> Unit) = confirmUser { ok -> if (ok) then() }
 
-    private fun confirmUser(done: (Boolean) -> Unit) {
+    /**
+     * A fresh strong biometric, or the passphrase when biometrics are off. [messageRes] is what the passphrase prompt says;
+     * the default is about a password, the actions that take everything out or remove something say [R.string.pm_confirm_action].
+     */
+    private fun confirmUser(messageRes: Int = R.string.pm_confirm_reveal, done: (Boolean) -> Unit) {
         if (hasBiometrics()) {
             session.confirmWithBiometrics(activity, done)
         } else {
-            PassphraseDialog.show(activity, forFill = false, error = null, onCancel = { done(false) }, titleRes = R.string.pm_confirm_passphrase_title, messageRes = R.string.pm_confirm_reveal) { chars ->
+            PassphraseDialog.show(activity, forFill = false, error = null, onCancel = { done(false) }, titleRes = R.string.pm_confirm_passphrase_title, messageRes = messageRes) { chars ->
                 val r = session.verifyPassphrase(chars)
                 chars.fill('\u0000')
                 done(r == PassphraseOutcome.Opened)
@@ -265,16 +270,28 @@ class AppController(val activity: SecureActivity) {
         }
     }
 
-    /** Copies with the sensitive flag (the system hides it from previews) and clears it after 30 seconds. */
+    /**
+     * Copies with the sensitive flag (the system hides it from previews) and clears it after 30 seconds. The usual use is
+     * copy, switch to the other app, paste: 30 seconds later this app is in the background and may not read the clipboard any
+     * more (Android 10 and later), so the clip is not compared with the text. A change of the clipboard after our own is
+     * somebody else's copy and is left alone (P-06). Whether a clear from the background works on this platform is a
+     * device check (PWM-014).
+     */
     fun copy(label: String, text: CharSequence, message: String) {
         val cm = activity.getSystemService(ClipboardManager::class.java)
         val clip = ClipData.newPlainText(label, text)
         clip.description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
+        var ownChangePending = true
+        var changedByOthers = false
+        val listener = ClipboardManager.OnPrimaryClipChangedListener {
+            if (ownChangePending) ownChangePending = false else changedByOthers = true
+        }
+        cm.addPrimaryClipChangedListener(listener)
         cm.setPrimaryClip(clip)
         say(message)
         main.postDelayed({
-            val now = cm.primaryClip
-            if (now != null && now.itemCount > 0 && now.getItemAt(0).text?.toString() == text.toString()) cm.clearPrimaryClip()
+            cm.removePrimaryClipChangedListener(listener)
+            if (!changedByOthers) cm.clearPrimaryClip()
         }, 30_000)
     }
 
@@ -287,7 +304,9 @@ class AppController(val activity: SecureActivity) {
     }
 
     fun openSite(domain: String) {
-        runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://$domain"))) }
+        // A stored name may be anything the page or an import gave: only a plain host is opened (`me@evil.example` is not one).
+        val host = SiteText.hostOf(domain)?.takeIf { it.isNotEmpty() && it == domain.trim().lowercase() } ?: return
+        runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://$host"))) }
     }
 
     fun save(entry: Entry): Boolean {
@@ -313,16 +332,20 @@ class AppController(val activity: SecureActivity) {
         }
     }
 
-    fun delete(id: String) {
-        repo.delete(unhexId(id))
-        refresh()
-        wipeCurrent()
-        top(Route.Passwords)
+    /** Deleting asks for a fresh biometric (or the passphrase), like showing the password does: an unlocked phone is not enough (P-05). */
+    fun delete(id: String) = confirmUser(R.string.pm_confirm_action) { ok ->
+        if (ok) {
+            repo.delete(unhexId(id))
+            refresh()
+            wipeCurrent()
+            top(Route.Passwords)
+        }
     }
 
     fun generatePassword(): CharArray {
         val bytes = Reply.of(VaultCore.generate(20, lower = true, upper = true, digits = true, symbols = true))
         val raw = if (bytes.ok) bytes.payload() else ByteArray(0)
+        bytes.wipe()
         val chars = StandardCharsets.UTF_8.decode(java.nio.ByteBuffer.wrap(raw)).let { cb -> CharArray(cb.remaining()).also { cb.get(it) } }
         raw.fill(0)
         return chars
@@ -353,8 +376,19 @@ class AppController(val activity: SecureActivity) {
 
     // --- settings, export and import ---
 
-    fun toggleBiometrics(on: Boolean) {
-        if (on) session.enableBiometrics(activity) { lock = session.state } else session.disableBiometrics()
+    /**
+     * Switches biometric unlock on or off; [done] gets what the switch is now, which is not what was asked when the prompt
+     * is cancelled or fails (the switch used to show the asked state anyway, P-17). Turning it off asks too (P-05).
+     */
+    fun toggleBiometrics(on: Boolean, done: (Boolean) -> Unit) {
+        if (on) {
+            session.enableBiometrics(activity) { ok -> lock = session.state; done(ok) }
+        } else {
+            confirmUser(R.string.pm_confirm_action) { ok ->
+                if (ok) session.disableBiometrics()
+                done(!ok)
+            }
+        }
     }
 
     fun autofillServiceActive(): Boolean {
@@ -375,18 +409,25 @@ class AppController(val activity: SecureActivity) {
     /** Entries made or changed since the last export. */
     fun changesSinceExport(): Int = entries.count { it.editedMs > lastExportMs }
 
-    fun startExport(passphrase: CharArray): Boolean {
+    /**
+     * Everything leaves the phone with this: a fresh biometric (or the passphrase) first, as for showing one password
+     * (P-05). The characters of [passphrase] are wiped on every way out.
+     */
+    fun startExport(passphrase: CharArray) = confirmUser(R.string.pm_confirm_action) { ok ->
+        if (!ok) {
+            passphrase.fill('\u0000')
+            return@confirmUser
+        }
         val bytes = StandardCharsets.UTF_8.encode(CharBuffer.wrap(passphrase)).let { b -> ByteArray(b.remaining()).also { b.get(it) } }
         passphrase.fill('\u0000')
         val file = repo.export(bytes)
         bytes.fill(0)
         if (file == null) {
             say(activity.getString(R.string.pm_export_failed))
-            return false
+            return@confirmUser
         }
         pendingExport = file
         pickExportTarget?.invoke("freeholdos-passwords.fhpx")
-        return true
     }
 
     /** The picker answered: write the file to the chosen place. */
@@ -434,7 +475,11 @@ class AppController(val activity: SecureActivity) {
     }
 
     /** The plain CSV of another manager: asks once (the file holds every password in the clear), merges, wipes the file. */
-    private fun importCsv(data: ByteArray) {
+    private fun importCsv(data: ByteArray) = confirmUser(R.string.pm_confirm_action) { who ->
+        if (!who) {
+            data.fill(0)
+            return@confirmUser
+        }
         PassphraseDialog.confirm(
             activity, R.string.pm_import_csv_title, R.string.pm_import_csv_body, R.string.pm_import_csv_yes,
             onNo = { data.fill(0) },

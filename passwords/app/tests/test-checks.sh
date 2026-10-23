@@ -73,6 +73,12 @@ for perm in INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE CHANGE_NETWORK_STATE
   expect_fail "static: manifest names $perm" bash "$d/tools/check-static.sh" "$d"
 done
 
+# The allow list (P-20): a permission nobody thought to put on the deny list is caught too.
+for perm in READ_CONTACTS CAMERA RECORD_AUDIO READ_PHONE_STATE; do
+  d="$(fresh)"; sed -i "s#<application#<uses-permission android:name=\"android.permission.$perm\"/><application#" "$d/AndroidManifest.xml"
+  expect_fail "static: manifest names $perm (not on the allow list)" bash "$d/tools/check-static.sh" "$d"
+done
+
 d="$(fresh)"; sed -i 's#android:allowBackup="false"#android:allowBackup="true"#' "$d/AndroidManifest.xml"
 expect_fail "static: allowBackup true" bash "$d/tools/check-static.sh" "$d"
 

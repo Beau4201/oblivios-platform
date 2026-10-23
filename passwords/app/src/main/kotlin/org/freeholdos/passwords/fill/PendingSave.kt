@@ -10,15 +10,34 @@ class PendingSave(val webDomain: String?, val packageName: String, val candidate
  * The one place a submitted login waits for the unlock. It lives in the memory of the app process only, never in an
  * intent, a file or a saved state, and it is wiped when it is taken, replaced, cleared or older than [ttlMs]. A process
  * that dies in between loses the login; the user types it again, which is better than a password on disk.
+ *
+ * The age is also acted on: [schedule] runs a wipe just after the deadline, so a login that nobody takes does not wait in
+ * memory until the next take (review of 2026-10-23, P-07). [now] is the elapsed clock; a scheduler that stops in deep sleep
+ * fires late, and then the check in [take] is the backstop.
  */
-class PendingSaveSlot(private val ttlMs: Long = 120_000L, private val now: () -> Long) {
+class PendingSaveSlot(
+    private val ttlMs: Long = 120_000L,
+    private val schedule: (delayMs: Long, run: () -> Unit) -> Unit = { _, _ -> },
+    private val now: () -> Long,
+) {
     private var held: PendingSave? = null
 
     /** Keeps [candidate] (and wipes a login that was waiting before it); the slot now owns the characters. */
     @Synchronized
     fun put(webDomain: String?, packageName: String, candidate: SaveCandidate) {
         held?.candidate?.wipe()
-        held = PendingSave(webDomain, packageName, candidate, now() + ttlMs)
+        val p = PendingSave(webDomain, packageName, candidate, now() + ttlMs)
+        held = p
+        schedule(ttlMs + 1) { expire(p) }
+    }
+
+    /** Wipes [p] if it is still the one that waits and its time is up; a login taken, replaced or cleared since is left alone. */
+    @Synchronized
+    private fun expire(p: PendingSave) {
+        if (held === p && now() > p.deadline) {
+            p.candidate.wipe()
+            held = null
+        }
     }
 
     /** Hands the login over, once; null when nothing waits or it has expired (an expired one is wiped). */

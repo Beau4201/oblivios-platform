@@ -72,24 +72,53 @@ class SessionManager(
     fun stopObserving(listener: (LockState) -> Unit) { listeners.remove(listener) }
 
     private fun publish(s: LockState) {
+        // A handle that the new state does not carry is closed: a second unlock, or a late biometric answer, must not leave
+        // the vault and its key in the memory of the core while the screens say "locked" (review of 2026-10-23, P-13).
+        val old = (state as? LockState.Unlocked)?.handle
+        if (old != null && (s as? LockState.Unlocked)?.handle != old) VaultCore.lock(old)
         state = s
         main.post { listeners.forEach { it(s) } }
     }
 
     // --- locking ---
 
-    private fun lockTo(next: LockState) {
+    /**
+     * Locks the core first and only then decides the next state: the decision asks the Keystore (a key that was changed or
+     * invalidated can throw), and nothing it does may leave the vault open (P-12). A decision that fails asks for the
+     * passphrase.
+     */
+    private fun lockTo(next: () -> LockState) {
         (state as? LockState.Unlocked)?.let { VaultCore.lock(it.handle) }
-        publish(next)
+        val s = try {
+            next()
+        } catch (e: Exception) {
+            LockState.NeedsPassphrase(Reason.BiometricsChanged)
+        }
+        publish(s)
     }
 
-    fun lockNow() = lockTo(policy.onDeviceLocked())
+    fun lockNow() = lockTo(policy::onDeviceLocked)
 
-    fun onScreenOff() = lockTo(policy.onDeviceLocked())
+    fun onScreenOff() = lockTo(policy::onDeviceLocked)
+
+    /**
+     * A vault that locked with the fingerprint allowed may have outlived the 7 days (or a restart is not what it was)
+     * by the time somebody tries the fingerprint: the state is decided again before a fingerprint or a fill is offered
+     * (P-11). Only a plain lock is looked at; a passphrase-only state stays.
+     */
+    fun refreshLocked() {
+        if (state != LockState.Locked) return
+        val now = try {
+            policy.stateAtStart()
+        } catch (e: Exception) {
+            LockState.NeedsPassphrase(Reason.BiometricsChanged)
+        }
+        if (now != state) publish(now)
+    }
 
     fun onActivityStarted() {
         startedActivities++
-        if (startedActivities == 1) policy.onForegrounded()?.let { if (state is LockState.Unlocked) lockTo(it) }
+        if (startedActivities == 1) policy.onForegrounded()?.let { next -> if (state is LockState.Unlocked) lockTo { next } }
     }
 
     fun onActivityStopped() {
@@ -110,7 +139,7 @@ class SessionManager(
     private fun tickNow() {
         if (state !is LockState.Unlocked) return
         val next = policy.onTick()
-        if (next != null) lockTo(next) else scheduleTick()
+        if (next != null) lockTo { next } else scheduleTick()
     }
 
     // --- creating and opening with the passphrase ---
@@ -123,7 +152,12 @@ class SessionManager(
         pass.fill(0)
         hw.fill(0)
         if (!reply.ok) return reply.status
-        val created = CreatedVault.parse(reply.payload()) ?: return Code.INTERNAL
+        // The answer holds the vault key: the answer and the copy that is parsed are wiped as soon as the parts are taken (P-08).
+        val payload = reply.payload()
+        reply.wipe()
+        val parsed = CreatedVault.parse(payload)
+        payload.fill(0)
+        val created = parsed ?: return Code.INTERNAL
         try {
             if (!files.writeVault(created.file)) return Code.IO
             val h = handleOrCode(VaultCore.unlockWithVaultKey(created.file, created.vaultKey))
@@ -237,6 +271,8 @@ class SessionManager(
 
     /** Opens the vault with a fresh strong-biometric authentication. [forFill] chooses the wording of the prompt. */
     fun biometricUnlock(activity: Activity, forFill: Boolean, done: (BiometricOutcome) -> Unit) {
+        refreshLocked()
+        if (state != LockState.Locked) return done(BiometricOutcome.UsePassphrase)
         val wrapped = files.readBiometricWrapper() ?: return done(BiometricOutcome.NoWrapper)
         val file = files.readVault() ?: return done(BiometricOutcome.Failed(Code.IO))
         val cipher = try {
@@ -296,6 +332,7 @@ class SessionManager(
                 val reply = Reply.of(VaultCore.vaultKey(h))
                 if (!reply.ok) return finish(false)
                 val vk = reply.payload()
+                reply.wipe()
                 val wrapped = try {
                     gateway.finishWrap(BiometricCipher(c), vk)
                 } catch (e: GeneralSecurityException) {

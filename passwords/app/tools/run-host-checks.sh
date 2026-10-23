@@ -12,6 +12,9 @@ J="$T/prebuilts/jdk/jdk21/linux-x86/bin/java"
 K="$T/external/kotlinc/lib"
 OUT="${HOST_OUT:-$(mktemp -d)}"
 mkdir -p "$OUT"
+# A directory this script made itself is removed when it ends; the server's /tmp filled with ~800 of them and every later run failed in
+# mktemp (2026-10-23). A HOST_OUT given by the caller is theirs to keep.
+if [[ -z "${HOST_OUT:-}" ]]; then trap 'rm -rf "$OUT" "$OUT.compile.log"' EXIT; fi
 mapfile -t PURE < <(grep -v '^#' "$APP/tools/host-files.txt" | grep -v '^$' | sed "s#^#$APP/src/main/kotlin/#")
 mapfile -t TESTS < <(find "$APP/tests/host" -name '*.kt' | sort)
 for f in "${PURE[@]}"; do test -f "$f" || { echo "listed but missing: $f" >&2; exit 2; }; done

@@ -6,7 +6,8 @@
 #   - every Activity extends SecureActivity, which sets FLAG_SECURE, and every Compose dialog, sheet, popup or menu
 #     (separate windows, which FLAG_SECURE of the activity does not cover) names SecureFlagPolicy.SecureOn;
 #   - no log call (a log line is the easiest place for a secret to leave the app).
-# The merged manifest of a built APK is checked by check-merged-manifest.sh; this script reads the sources.
+# It reads the sources and the manifest of the package. The merged manifest of a built APK (what libraries add) is not read by
+# any script yet; until it is, the permission list below is an allow-list of the source manifest only (review of 2026-10-23, P-20).
 # usage: check-static.sh [APP_DIR]
 set -o errexit -o nounset -o pipefail
 APP="$(cd "${1:-$(dirname "$0")/..}" && pwd)"
@@ -20,6 +21,11 @@ fail() { echo "FAIL: $*" >&2; bad=1; }
 # Permissions that would let the app reach a network or a radio.
 FORBIDDEN='INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE|CHANGE_NETWORK_STATE|CHANGE_WIFI_STATE|NEARBY_WIFI_DEVICES|BLUETOOTH|NFC|CHANGE_WIFI_MULTICAST_STATE|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|MANAGE_NETWORK_POLICY|CONNECTIVITY_INTERNAL'
 if grep -E -n "android\.permission\.($FORBIDDEN)" "$M" >&2; then fail "the manifest names a network or radio permission"; fi
+# Only the permissions on this list may be named: a deny list lets every permission nobody thought of through.
+ALLOWED='USE_BIOMETRIC'
+while IFS= read -r perm; do
+  [[ "$perm" =~ ^android\.permission\.($ALLOWED)$ ]] || fail "the manifest names the permission $perm, which is not on the allow list ($ALLOWED)"
+done < <(grep -o '<uses-permission[^>]*android:name="[^"]*"' "$M" | sed 's/.*android:name="//; s/"$//')
 grep -q 'android:allowBackup="false"' "$M" || fail 'android:allowBackup="false" is missing from the manifest'
 if grep -q 'networkSecurityConfig' "$M"; then fail "the manifest has a network security config"; fi
 if grep -q 'usesCleartextTraffic' "$M"; then fail "the manifest says something about cleartext traffic (the app has no traffic)"; fi

@@ -23,6 +23,12 @@ class Reply private constructor(val status: Int, private val raw: ByteArray) {
     /** The bytes after the status; empty for an error reply, which carries none. */
     fun payload(): ByteArray = if (ok) raw.copyOfRange(1, raw.size) else ByteArray(0)
 
+    /**
+     * Overwrites the answer. [payload] hands out a copy, so a reply that carried a secret (a vault key, a password) is
+     * wiped here as well as the copy (review of 2026-10-23, P-08). The status stays readable.
+     */
+    fun wipe() = raw.fill(0)
+
     companion object {
         fun of(raw: ByteArray?): Reply =
             if (raw == null || raw.isEmpty()) Reply(Code.INTERNAL, ByteArray(0)) else Reply(raw[0].toInt() and 0xff, raw)

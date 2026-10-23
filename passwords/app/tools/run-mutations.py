@@ -13,7 +13,8 @@ Left out on purpose: the bracket test of LogoPack.pathFor (a bracketed host has 
 same values after the min with five minutes), the `<= 3` of the same function (`< 3` also gives 0 for three failures, because
 1000 shifted left by 63 is 0), the reset of lastPassphraseFailureMs on a passphrase unlock (the reset count already ends
 the wait), and the `lastPassphraseMs == 0` test of stateAtStart (a vault that never
-had a passphrase unlock is already `Restart`, because the boot count is -1).
+had a passphrase unlock is already `Restart`, because the boot count is -1), and `held = null` in PendingSaveSlot.expire (an expired
+login that stays in `held` is never handed out, because `take` tests the deadline again and answers null; the wipe is what counts).
 """
 import os
 import shutil
@@ -30,6 +31,7 @@ W = K + "core/Wire.kt"
 Y = K + "core/Reply.kt"
 O = K + "ui/LogoPack.kt"
 Q = K + "fill/PendingSave.kt"
+T = K + "core/SiteText.kt"
 S = "src/main/kotlin/org/freeholdos/passwords/lock/LockState.kt"
 
 # (name, file, old, new)
@@ -168,6 +170,34 @@ MUTATIONS = [
     ("logo: an empty label is allowed", O, "if (labels.size < 2 || labels.any { it.isEmpty() }) return null", "if (labels.size < 2) return null"),
     ("logo: case matters", O, "var h = host.lowercase()", "var h = host"),
     ("logo: domain rows of three columns accepted", O, "if (c.size == 2 && c[0].isNotEmpty() && c[1].isNotEmpty() && !line.startsWith(\"#\"))", "if (c.size >= 2 && c[0].isNotEmpty() && c[1].isNotEmpty() && !line.startsWith(\"#\"))"),
+    ("logo: no limit on the length of a name", O, "if (h.length > MAX_HOST) return null", ""),
+    ("logo: the limit is 254", O, "if (h.length > MAX_HOST) return null", "if (h.length > MAX_HOST + 1) return null"),
+    ("logo: the limit is 252", O, "if (h.length > MAX_HOST) return null", "if (h.length >= MAX_HOST) return null"),
+    # Reply.kt wipe
+    ("reply: wipe does nothing", Y, "fun wipe() = raw.fill(0)", "fun wipe() = Unit"),
+    ("reply: wipe leaves the first byte", Y, "fun wipe() = raw.fill(0)", "fun wipe() = raw.fill(0, 1)"),
+    # SiteText.kt
+    ("site: a user name is accepted", T, "it == '@' ||", ""),
+    ("site: a port is accepted", T, "|| it == ':' ||", "|| "),
+    ("site: white space is accepted", T, "it.isWhitespace() || ", ""),
+    ("site: a leading dot is accepted", T, 'if (t.startsWith(".") || t.endsWith(".") || t.contains("..")) return null', 'if (t.endsWith(".") || t.contains("..")) return null'),
+    ("site: a trailing dot is accepted", T, 'if (t.startsWith(".") || t.endsWith(".") || t.contains("..")) return null', 'if (t.startsWith(".") || t.contains("..")) return null'),
+    ("site: an empty label is accepted", T, 'if (t.startsWith(".") || t.endsWith(".") || t.contains("..")) return null', 'if (t.startsWith(".") || t.endsWith(".")) return null'),
+    ("site: the length limit is gone", T, "if (t.length > MAX_HOST) return null", ""),
+    ("site: the path is kept", T, "if (cut >= 0) t = t.substring(0, cut)", ""),
+    ("site: the query is not a cut", T, "it == '/' || it == '?' || it == '#'", "it == '/' || it == '#'"),
+    ("site: the fragment is not a cut", T, "it == '/' || it == '?' || it == '#'", "it == '/' || it == '?'"),
+    ("site: the scheme is kept", T, "t = t.substring(scheme.length)", ""),
+    ("site: the case is kept", T, "        t = t.lowercase()\n", ""),
+    ("site: an edit drops the other sites", T, "existing.firstOrNull() == host -> existing", "existing.firstOrNull() == host -> listOf(host)"),
+    ("site: an edit keeps a duplicate", T, "listOf(host) + rest.filter { it != host }", "listOf(host) + rest"),
+    ("site: an emptied site keeps the first", T, "host.isEmpty() -> rest", "host.isEmpty() -> existing"),
+    # PendingSave.kt
+    ("pending: the scheduled wipe is not scheduled", Q, "        schedule(ttlMs + 1) { expire(p) }\n", ""),
+    ("pending: the scheduled wipe is early", Q, "schedule(ttlMs + 1) { expire(p) }", "schedule(ttlMs - 1) { expire(p) }"),
+    ("pending: the scheduled wipe ignores the deadline", Q, "if (held === p && now() > p.deadline) {", "if (held === p) {"),
+    ("pending: the scheduled wipe hits any login", Q, "if (held === p && now() > p.deadline) {", "if (now() > p.deadline) {"),
+    ("pending: the scheduled wipe does not wipe", Q, "            p.candidate.wipe()\n            held = null\n        }\n    }\n", "            held = null\n        }\n    }\n"),
     # PendingSave.kt
     ("pending: the time to live is ignored", Q, "if (now() > h.deadline) {", "if (false) {"),
     ("pending: the deadline is one early", Q, "if (now() > h.deadline) {", "if (now() >= h.deadline) {"),
@@ -175,7 +205,7 @@ MUTATIONS = [
     ("pending: the deadline is not set from the clock", Q, "now() + ttlMs)", "ttlMs)"),
     ("pending: an expired login is not wiped", Q, "        if (now() > h.deadline) {\n            h.candidate.wipe()\n", "        if (now() > h.deadline) {\n"),
     ("pending: take keeps the login", Q, "        val h = held ?: return null\n        held = null\n", "        val h = held ?: return null\n"),
-    ("pending: a replaced login is not wiped", Q, "        held?.candidate?.wipe()\n        held = PendingSave(", "        held = PendingSave("),
+    ("pending: a replaced login is not wiped", Q, "        held?.candidate?.wipe()\n        val p = PendingSave(", "        val p = PendingSave("),
     ("pending: clear does not wipe", Q, "    fun clear() {\n        held?.candidate?.wipe()\n", "    fun clear() {\n"),
     ("pending: clear keeps the login", Q, "        held?.candidate?.wipe()\n        held = null\n    }\n}", "        held?.candidate?.wipe()\n    }\n}"),
     ("pending: the text shows the password", Q, 'override fun toString() = "PendingSave(${if (webDomain != null) "site" else "app"}, $candidate)"', 'override fun toString() = "PendingSave(${String(candidate.password)})"'),

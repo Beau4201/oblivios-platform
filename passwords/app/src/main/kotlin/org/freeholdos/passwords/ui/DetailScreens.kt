@@ -38,6 +38,7 @@ import java.text.DateFormat
 import java.util.Date
 import org.freeholdos.passwords.R
 import org.freeholdos.passwords.core.Entry
+import org.freeholdos.passwords.core.SiteText
 
 private fun dateOf(ms: Long): String = DateFormat.getDateInstance(DateFormat.LONG).format(Date(ms))
 
@@ -153,19 +154,21 @@ fun EditScreen(c: AppController, idHex: String?) {
     val tooLong = stringResource(R.string.pm_edit_too_long)
     DisposableEffect(idHex) { onDispose { pass.clearText(); user.clearText(); notes.clearText() } }
     val strength = remember(pass.text) { val ch = pass.chars(); c.strengthOf(ch).also { ch.fill('\u0000') } }
+    val siteBad = SiteText.hostOf(site.text.toString()) == null
     Column(Modifier.fillMaxSize().background(pw.bg)) {
         PwTopBar(stringResource(if (idHex == null) R.string.pm_new_password else R.string.pm_edit_title), onBack = { c.back() }, backIcon = R.drawable.ic_close) {
             PwButton(stringResource(R.string.pm_save), onClick = {
-                val host = site.text.toString().trim().removePrefix("https://").removePrefix("http://").substringBefore('/').lowercase()
+                val host = SiteText.hostOf(site.text.toString()) ?: return@PwButton
                 val title = name.text.toString().trim().ifEmpty { host.removePrefix("www.") }
                 val now = System.currentTimeMillis()
                 val entry = Entry(
-                    id = existing?.id ?: c.newId(), title = title, domains = if (host.isEmpty()) emptyList() else listOf(host),
+                    // The field shows the first site only: the others of an imported entry stay (P-09).
+                    id = existing?.id ?: c.newId(), title = title, domains = SiteText.domainsAfterEdit(existing?.domains.orEmpty(), host),
                     packages = existing?.packages.orEmpty(), username = user.text.toString().trim(), password = pass.chars(), notes = notes.text.toString(),
                     createdMs = existing?.createdMs ?: now, editedMs = now, lastFilledMs = existing?.lastFilledMs, history = existing?.history.orEmpty(),
                 )
                 if (c.save(entry)) c.back()
-            }, enabled = pass.text.isNotEmpty() && (site.text.isNotBlank() || name.text.isNotBlank() || user.text.isNotBlank()))
+            }, enabled = !siteBad && pass.text.isNotEmpty() && (site.text.isNotBlank() || name.text.isNotBlank() || user.text.isNotBlank()))
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
@@ -180,7 +183,10 @@ fun EditScreen(c: AppController, idHex: String?) {
             Spacer(Modifier.height(8.dp))
             PwField(name, stringResource(R.string.pm_field_name))
             Spacer(Modifier.height(12.dp))
-            PwField(site, stringResource(R.string.pm_field_website), keyboardType = KeyboardType.Uri)
+            PwField(
+                site, stringResource(R.string.pm_field_website), keyboardType = KeyboardType.Uri, isError = siteBad,
+                supporting = if (siteBad) stringResource(R.string.pm_edit_site_invalid) else null,
+            )
             Spacer(Modifier.height(12.dp))
             PwField(user, stringResource(R.string.pm_field_username), keyboardType = KeyboardType.Email)
             Spacer(Modifier.height(12.dp))

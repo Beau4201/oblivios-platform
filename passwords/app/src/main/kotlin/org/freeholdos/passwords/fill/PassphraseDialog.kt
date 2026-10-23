@@ -58,6 +58,19 @@ object PassphraseDialog {
         dialog.show()
     }
 
+    /** [confirm] with a message that is built at run time (the site, the user name and the app of a login about to be saved). */
+    fun confirmText(activity: Activity, titleRes: Int, message: CharSequence, yesRes: Int, onNo: () -> Unit, onYes: () -> Unit) {
+        val dialog = AlertDialog.Builder(activity)
+            .setTitle(titleRes)
+            .setMessage(message)
+            .setPositiveButton(yesRes) { _, _ -> onYes() }
+            .setNegativeButton(R.string.pm_cancel) { _, _ -> onNo() }
+            .setOnCancelListener { onNo() }
+            .create()
+        dialog.window?.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        dialog.show()
+    }
+
     /** The key that protects the vault on this phone is gone: only an import of an export file brings the passwords back. */
     fun showSecretLost(activity: Activity, onClose: () -> Unit) = showMessage(activity, R.string.pm_secret_lost_title, R.string.pm_secret_lost_body, onClose)
 

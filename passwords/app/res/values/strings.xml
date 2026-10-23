@@ -151,6 +151,10 @@
     <string name="pm_secret_lost_body">The key that protects this vault on this phone is gone, so even the right passphrase cannot open it. Open Passwords and import your export file.</string>
     <string name="pm_save_failed_title">Login not saved</string>
     <string name="pm_save_failed">The login could not be saved.</string>
+    <string name="pm_save_confirm_title">Save this login?</string>
+    <string name="pm_save_confirm_new">Site or app: %1$s\nUsername: %2$s\nSubmitted in: %3$s</string>
+    <string name="pm_save_confirm_replace">Site or app: %1$s\nUsername: %2$s\nSubmitted in: %3$s\n\nThis replaces the password of the account you already have. The old password is kept in its history.</string>
+    <string name="pm_save_confirm_yes">Save</string>
     <!-- Locked screen -->
     <string name="pm_reason_restart">The phone restarted. Enter your passphrase.</string>
     <string name="pm_reason_biometrics">Your biometrics changed. Enter your passphrase.</string>
@@ -170,8 +174,10 @@
     <!-- Detail, edit, import and export results -->
     <string name="pm_copied_username">Username copied</string>
     <string name="pm_edit_too_long">Something you entered is too long.</string>
+    <string name="pm_edit_site_invalid">This is not a website address. Use a name like example.com, without a user name or a port.</string>
     <string name="pm_confirm_passphrase_title">Confirm it is you</string>
     <string name="pm_confirm_reveal">Enter your passphrase to show or copy this password.</string>
+    <string name="pm_confirm_action">Enter your passphrase to continue.</string>
     <plurals name="pm_import_done">
         <item quantity="one">%d password imported</item>
         <item quantity="other">%d passwords imported</item>

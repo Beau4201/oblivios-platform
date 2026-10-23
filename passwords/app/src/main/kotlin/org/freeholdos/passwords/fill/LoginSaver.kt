@@ -12,6 +12,10 @@ import org.freeholdos.passwords.data.VaultRepository
  * account with the same username. Needs the open vault. The caller wipes [candidate]; the copies made here are wiped here.
  */
 object LoginSaver {
+    /** Whether saving [candidate] would replace the password of an account that exists (the user is told before it happens). */
+    fun replaces(repo: VaultRepository, webDomain: String?, packageName: String, candidate: SaveCandidate): Boolean =
+        repo.accounts(webDomain, packageName)?.any { it.username == candidate.username } == true
+
     fun save(repo: VaultRepository, pm: PackageManager, webDomain: String?, packageName: String, candidate: SaveCandidate): SaveResult {
         val existing = repo.accounts(webDomain, packageName)?.firstOrNull { it.username == candidate.username }
         val now = System.currentTimeMillis()

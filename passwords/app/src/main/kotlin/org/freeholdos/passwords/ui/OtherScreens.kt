@@ -93,7 +93,7 @@ fun SettingsScreen(c: AppController) {
             Group {
                 item {
                     PrefRow(stringResource(R.string.pm_settings_biometrics), summary = stringResource(R.string.pm_settings_biometrics_sub), trailing = {
-                        PwSwitch(biometrics) { on -> c.toggleBiometrics(on); biometrics = on }
+                        PwSwitch(biometrics) { on -> c.toggleBiometrics(on) { now -> biometrics = now } }
                     })
                 }
                 item { PrefRow(stringResource(R.string.pm_settings_autolock), summary = stringResource(R.string.pm_settings_autolock_sub)) }

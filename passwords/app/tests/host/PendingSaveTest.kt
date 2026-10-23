@@ -15,6 +15,7 @@ fun main() {
     aSecondLoginReplacesAndWipesTheFirst()
     clearWipes()
     nothingWaitingGivesNull()
+    anUntakenLoginIsWipedWhenItsTimeIsUp()
     theTextNeverPrintsThePassword()
     Check.done("PendingSave")
 }
@@ -74,6 +75,46 @@ private fun nothingWaitingGivesNull() {
     Check.that("an empty slot gives null", PendingSaveSlot { 0 }.take() == null)
     PendingSaveSlot { 0 }.clear()
     Check.that("clearing an empty slot is harmless", true)
+}
+
+/** P-07: the wipe at the deadline does not wait for a take. A fake scheduler keeps the runnables and the test runs them. */
+private fun anUntakenLoginIsWipedWhenItsTimeIsUp() {
+    var t = 1_000L
+    val scheduled = ArrayList<Pair<Long, () -> Unit>>()
+    val slot = PendingSaveSlot(ttlMs = 100, schedule = { ms, r -> scheduled.add(ms to r) }) { t }
+    val c = candidate()
+    slot.put("a.example", "p", c)
+    Check.equal("one wipe is scheduled", 1, scheduled.size)
+    Check.equal("just after the deadline", 101L, scheduled[0].first)
+    t = 1_100
+    scheduled[0].second()
+    Check.that("at the deadline the login is still kept", !c.password.all { it == '\u0000' })
+    t = 1_101
+    scheduled[0].second()
+    Check.that("after the deadline the scheduled wipe wipes it", c.password.all { it == '\u0000' })
+    Check.that("and the slot is empty", slot.take() == null)
+
+    // A wipe that comes late for a login that was replaced, taken or cleared must not touch the one that waits now.
+    t = 2_000
+    scheduled.clear()
+    val first = candidate("first-password")
+    slot.put("a.example", "p", first)
+    val second = candidate("second-password")
+    slot.put("b.example", "p", second)
+    t = 2_150
+    scheduled[0].second() // the wipe of the replaced login runs after the time of both is up
+    Check.equal("the wipe of a replaced login leaves the one that waits now alone", "second-password", String(second.password))
+    scheduled[1].second()
+    Check.that("its own wipe wipes it", second.password.all { it == '\u0000' })
+
+    // A wipe that comes after the take does nothing to the login that was handed over.
+    t = 3_000
+    scheduled.clear()
+    slot.put("c.example", "p", candidate("third-password"))
+    val got = slot.take()!!
+    t = 3_200
+    scheduled[0].second()
+    Check.equal("a wipe after a take leaves the handed-over login", "third-password", String(got.candidate.password))
 }
 
 private fun theTextNeverPrintsThePassword() {

@@ -10,6 +10,7 @@ fun main() {
     replyStatusAndPayload()
     anEmptyOrMissingReplyIsAnInternalError()
     createdVaultParsing()
+    wipeOverwritesTheAnswerAndKeepsTheStatus()
     handlesAndCodes()
     theCodesAreTheWireContract()
     Check.done("ReplyTest")
@@ -48,6 +49,21 @@ private fun createdVaultParsing() {
     Check.that("a negative length is refused", CreatedVault.parse(le(-1) + file + key) == null)
     Check.that("less than a header is refused", CreatedVault.parse(ByteArray(3)) == null)
     Check.that("an empty file is refused", CreatedVault.parse(le(0) + key) == null)
+}
+
+private fun wipeOverwritesTheAnswerAndKeepsTheStatus() {
+    // P-08: the answer of the core can hold a vault key or a password; payload() is a copy, so the answer needs its own wipe.
+    val raw = byteArrayOf(0, 7, 8, 9)
+    val r = Reply.of(raw)
+    val copy = r.payload()
+    r.wipe()
+    Check.that("the answer array is zero", raw.all { it == 0.toByte() })
+    Check.bytes("a copy taken before is not touched", byteArrayOf(7, 8, 9), copy)
+    Check.that("the status stays", r.ok && r.status == 0)
+    Check.that("a payload after the wipe is zeros", r.payload().all { it == 0.toByte() })
+    val err = byteArrayOf(Code.BAD_CREDENTIALS.toByte(), 5)
+    Reply.of(err).wipe()
+    Check.that("an error answer is wiped too", err.all { it == 0.toByte() })
 }
 
 private fun handlesAndCodes() {

@@ -15,6 +15,7 @@ import org.freeholdos.passwords.lock.SessionManager
  */
 object UnlockFlow {
     fun run(activity: SecureActivity, session: SessionManager, forFill: Boolean, onOpened: () -> Unit, onCancel: () -> Unit) {
+        session.refreshLocked() // the 7 days may have passed since the vault locked (P-11)
         when (session.state) {
             is LockState.Unlocked -> onOpened()
             LockState.SecretLost -> PassphraseDialog.showSecretLost(activity, onCancel)

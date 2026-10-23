@@ -45,7 +45,9 @@ fun passphraseThrottleMs(consecutiveFailures: Int): Long {
  * (receivers, the biometric prompt) is SessionManager.
  *
  * Priority of the reasons when several hold: a lost hardware secret, a restart, changed biometrics, five failed
- * biometric attempts, the 7 days. A clock set back never extends the 7 days.
+ * biometric attempts, the 7 days. The 7 days are measured on the wall clock, the only clock that survives a restart: a
+ * clock set back to before the last passphrase unlock counts as expired, but one set back by less than the age extends
+ * the 7 days by that much (a restart asks for the passphrase anyway, so only a clock changed while the phone runs counts).
  */
 class LockPolicy(private val clock: Clock, private val store: PolicyStore, private val env: Environment) {
     private var backgroundedAtMs = -1L
