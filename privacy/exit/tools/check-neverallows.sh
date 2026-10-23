@@ -17,17 +17,24 @@ W="$(mktemp -d)"
 trap 'rm -rf "$W"' EXIT
 python3 -I - "$CIL" "$W/mine.cil" <<'PY'
 import re, sys
-mine = 0
+exit_n = datamap_n = 0
 with open(sys.argv[1]) as src, open(sys.argv[2], "w") as out:
     for line in src:
         if line.startswith(("(neverallow ", "(neverallowx ")):
-            if not re.search(r"exit(d|_app)|datamap_service", line):
+            is_exit = re.search(r"exit(d|_app)", line) is not None
+            is_dm = "datamap_service" in line
+            if not (is_exit or is_dm):
                 continue
-            mine += 1
+            exit_n += is_exit
+            datamap_n += is_dm and not is_exit
         out.write(line)
-if mine < 6:
-    raise SystemExit(f"only {mine} neverallow statements name an exit domain: the policy is not the one with the exit service")
-print(f"{mine} neverallow statements of the exit service kept")
+# Counted apart (review of 2026-10-23, C2-08): the Data Map's statements used to count towards the floor of the exit service's, so
+# the exit service's could have vanished and the check still passed.
+if exit_n < 6:
+    raise SystemExit(f"only {exit_n} neverallow statements name an exit domain: the policy is not the one with the exit service")
+if datamap_n < 1:
+    raise SystemExit("no neverallow statement names the Data Map service: the policy is not the one with the Data Map patches")
+print(f"{exit_n} neverallow statements of the exit service and {datamap_n} of the Data Map service kept")
 PY
 "$BIN/secilc" -m -M true -G -c 30 -o "$W/policy" -f "$W/fc" "$W/mine.cil"
 echo "the neverallow rules of the exit service and of the Data Map service hold"

@@ -113,7 +113,7 @@
     <string name="delete_title">Delete everything collected?</string>
     <string name="delete_text">The history and the counts on this phone are removed. This cannot be undone.</string>
     <string name="export_title">Export the services your apps contact?</string>
-    <string name="export_text">The file lists, for each app, the services it contacted, how often and when. It leaves Atlas: the place you choose can keep it, and so can any app that reads it.</string>
+    <string name="export_text">The file lists, for each app, the services it contacted, how often and when, for the 2000 most recent entries at most. A server reached by address alone is listed by that address, and the apps are named by their package. It leaves Atlas: the place you choose can keep it, and so can any app that reads it.</string>
     <string name="export_action">Export</string>
     <string name="export_done">File saved</string>
     <string name="export_failed">The file could not be saved</string>

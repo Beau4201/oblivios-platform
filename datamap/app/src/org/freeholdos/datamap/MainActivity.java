@@ -639,12 +639,19 @@ public final class MainActivity extends Activity implements Pages.Nav, SettingsP
             IDataMapService s = mService;
             boolean ok = false;
             if (s != null) {
-                try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
-                    String text = ExportTsv.encode(SnapshotMapper.toInput(s.getSnapshot(mApps.installedPackages())));
-                    if (out != null) {
-                        out.write(text.getBytes(StandardCharsets.UTF_8));
-                        ok = true;
-                    }
+                try {
+                    // The snapshot is read first: a call that fails must not leave the file the user chose empty or cut short.
+                    byte[] bytes = ExportTsv.encode(SnapshotMapper.toInput(s.getSnapshot(mApps.installedPackages())))
+                            .getBytes(StandardCharsets.UTF_8);
+                    boolean written = false;
+                    try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
+                        if (out != null) {
+                            out.write(bytes);
+                            out.flush();
+                            written = true;
+                        }
+                    } // a failure to close is thrown here, before "saved" is claimed
+                    ok = written;
                 } catch (IOException | RemoteException | RuntimeException e) {
                     // reported below
                 }
