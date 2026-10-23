@@ -18,8 +18,7 @@ The logos of the entries come from three places, in this order (spec 4.2): the i
 Only the shape is used. The app draws it in the text colour of the theme on a neutral tile, so a brand colour never has to be
 legible on both themes, and no brand colour or wordmark is shipped.
 
-## Not decided
+## Decided and not decided
 
-- Extending the pack with the own icons of the most used sites needs the owner's yes for the downloads, a domain list and a
-  trademark review before shipping; it does not block building (the plan, Task 15).
+- The pack stays as built (owner, 2026-10-23, ADR-192): no extension with the own icons of the most used sites.
 - The app has no logo of its own: the rename plan 2 decides the identity.
