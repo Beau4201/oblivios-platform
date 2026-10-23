@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.freeholdos.passwords.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,9 +37,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
@@ -110,10 +126,11 @@ fun TextFieldState.chars(): CharArray = text.let { t -> CharArray(t.length) { t[
 @Composable
 fun EntryRow(
     name: String, subtitle: String, attention: Boolean, onClick: () -> Unit, chevron: Boolean = false,
-    domains: List<String> = emptyList(), packages: List<String> = emptyList(),
+    domains: List<String> = emptyList(), packages: List<String> = emptyList(), modifier: Modifier = Modifier,
 ) {
+    // 72 dp like a PrefRow, so a list, a card of rows and the settings share one rhythm.
     Row(
-        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         LogoTile(name, 40.dp, logo = rememberLogo(domains, packages))
@@ -130,7 +147,26 @@ fun EntryRow(
     }
 }
 
-/** The bottom navigation bar: 80 dp plus the gesture inset, the selected destination with the filled icon in a 64 x 32 pill. */
+/** One row of a card that shows a value under a small label, with actions on the right (the user name, the password). */
+@Composable
+fun FieldRow(label: String, value: String, actions: @Composable () -> Unit, extra: @Composable () -> Unit = {}) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, color = pw.onVariant, style = MaterialTheme.typography.labelMedium)
+            Text(value, color = pw.on, style = MaterialTheme.typography.bodyLarge)
+            extra()
+        }
+        actions()
+    }
+}
+
+/**
+ * The bottom navigation bar: 80 dp plus the gesture inset, the selected destination with the filled icon in a 64 x 32
+ * pill. The pill grows out of the icon and the colours cross-fade when the destination changes.
+ */
 @Composable
 fun PwNavBar(selected: Int, onSelect: (Int) -> Unit) {
     val items = listOf(
@@ -142,14 +178,21 @@ fun PwNavBar(selected: Int, onSelect: (Int) -> Unit) {
         Row(Modifier.fillMaxWidth().height(80.dp)) {
             items.forEachIndexed { i, (outline, filled, label) ->
                 val on = i == selected
+                val grow by animateFloatAsState(if (on) 1f else 0f, tween(250, easing = FastOutSlowInEasing), label = "pill")
+                val iconTint by animateColorAsState(if (on) pw.onSecondaryContainer else pw.onVariant, tween(200), label = "icon")
+                val labelTint by animateColorAsState(if (on) pw.on else pw.onVariant, tween(200), label = "label")
                 Column(
                     Modifier.weight(1f).height(80.dp).clickable(role = Role.Tab) { onSelect(i) },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                 ) {
-                    Box(Modifier.width(64.dp).height(32.dp).clip(RoundedCornerShape(16.dp)).background(if (on) pw.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent), contentAlignment = Alignment.Center) {
-                        PwIcon(if (on) filled else outline, tint = if (on) pw.onSecondaryContainer else pw.onVariant)
+                    Box(Modifier.width(64.dp).height(32.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.width(64.dp).height(32.dp).graphicsLayer { scaleX = 0.4f + 0.6f * grow; alpha = grow }
+                                .clip(RoundedCornerShape(16.dp)).background(pw.secondaryContainer),
+                        )
+                        PwIcon(if (on) filled else outline, tint = iconTint)
                     }
-                    Text(stringResource(label), color = if (on) pw.on else pw.onVariant, style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(label), color = labelTint, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -166,15 +209,22 @@ fun PwTopBar(title: String?, onBack: (() -> Unit)?, backIcon: Int = R.drawable.i
     }
 }
 
-/** The message at the bottom, e.g. "Password copied". */
+/** The message at the bottom, e.g. "Password copied". It rises in and fades out; the last text stays while it leaves. */
 @Composable
 fun Toast(text: String?, modifier: Modifier = Modifier) {
-    if (text == null) return
-    Box(modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
-        Text(
-            text, color = pw.onInverse, style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(pw.inverse).padding(horizontal = 16.dp, vertical = 14.dp),
-        )
+    var last by remember { mutableStateOf("") }
+    SideEffect { if (text != null) last = text }
+    AnimatedVisibility(
+        visible = text != null, modifier = modifier,
+        enter = fadeIn(tween(150)) + slideInVertically(tween(250, easing = FastOutSlowInEasing)) { it },
+        exit = fadeOut(tween(150)) + slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { it / 2 },
+    ) {
+        Box(Modifier.fillMaxWidth().navigationBarPadding().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
+            Text(
+                text ?: last, color = pw.onInverse, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(pw.inverse).padding(horizontal = 16.dp, vertical = 14.dp),
+            )
+        }
     }
 }
 

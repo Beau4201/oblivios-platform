@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.freeholdos.passwords.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -115,7 +116,7 @@ fun GroupHeader(text: String) {
 
 @Composable
 fun Group(modifier: Modifier = Modifier, content: @Composable GroupScope.() -> Unit) {
-    Column(modifier.padding(horizontal = 16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(modifier.padding(horizontal = 16.dp).fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         val items = mutableListOf<@Composable () -> Unit>()
         object : GroupScope {
             override fun item(content: @Composable () -> Unit) { items.add(content) }
@@ -201,9 +202,10 @@ fun Modifier.statusBarPadding(): Modifier = windowInsetsPadding(WindowInsets.sta
 fun Modifier.navigationBarPadding(): Modifier = windowInsetsPadding(WindowInsets.navigationBars)
 
 @Composable
-fun SectionText(text: String, modifier: Modifier = Modifier) {
+fun SectionText(text: String, modifier: Modifier = Modifier, inset: Dp = 32.dp) {
+    // 32 dp: the left edge of the text of a row in a card (16 dp margin and 16 dp inside), like the group headers.
     Text(
         text, color = pw.onVariant, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-        modifier = modifier.padding(horizontal = 24.dp, vertical = 8.dp), overflow = TextOverflow.Clip,
+        modifier = modifier.padding(horizontal = inset, vertical = 8.dp), overflow = TextOverflow.Clip,
     )
 }

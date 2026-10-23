@@ -8,6 +8,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.FrameLayout
 import org.freeholdos.passwords.R
 
 /**
@@ -28,10 +29,16 @@ object PassphraseDialog {
             setHint(hintRes)
             error?.let { setError(it) }
         }
+        // The dialog puts a custom view flush against its edges; the 24 dp side inset is the one of the message above it.
+        val inset = (24 * activity.resources.displayMetrics.density).toInt()
+        val holder = FrameLayout(activity).apply {
+            setPadding(inset, inset / 3, inset, 0)
+            addView(field)
+        }
         val dialog = AlertDialog.Builder(activity)
             .setTitle(titleRes)
             .setMessage(messageRes ?: if (forFill) R.string.pm_prompt_subtitle_fill else R.string.pm_prompt_subtitle_open)
-            .setView(field)
+            .setView(holder)
             .setPositiveButton(R.string.pm_unlock) { _, _ ->
                 val text = field.text
                 val chars = CharArray(text.length) { text[it] }

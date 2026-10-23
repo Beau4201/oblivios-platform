@@ -77,18 +77,21 @@ fun DetailScreen(c: AppController, idHex: String) {
             Spacer(Modifier.height(8.dp))
             Group {
                 item {
-                    PrefRow(stringResource(R.string.pm_field_username), summary = null, trailing = { IconAction(R.drawable.ic_content_copy, stringResource(R.string.pm_cd_copy), { c.copy(c.activity.getString(R.string.pm_field_username), e.username, c.activity.getString(R.string.pm_copied_username)) }) })
+                    // The label stays small and the value is shown; the user name was not shown at all before.
+                    FieldRow(
+                        stringResource(R.string.pm_field_username), e.username.ifEmpty { "–" }, // i18n-ok
+                        actions = { IconAction(R.drawable.ic_content_copy, stringResource(R.string.pm_cd_copy), { c.copy(c.activity.getString(R.string.pm_field_username), e.username, c.activity.getString(R.string.pm_copied_username)) }) },
+                    )
                 }
                 item {
-                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.pm_field_password), color = pw.onVariant, style = MaterialTheme.typography.labelMedium)
-                            Text(if (c.revealed) String(e.password) else "•".repeat(12), color = pw.on, style = MaterialTheme.typography.bodyLarge) // i18n-ok
-                            StrengthBars(c.strengthOf(e.password), Modifier.padding(top = 8.dp))
-                        }
-                        IconAction(if (c.revealed) R.drawable.ic_visibility_off else R.drawable.ic_visibility, stringResource(if (c.revealed) R.string.pm_cd_hide else R.string.pm_cd_show), { c.reveal() })
-                        IconAction(R.drawable.ic_content_copy, stringResource(R.string.pm_cd_copy), { c.copyPassword(e) })
-                    }
+                    FieldRow(
+                        stringResource(R.string.pm_field_password), if (c.revealed) String(e.password) else "•".repeat(12), // i18n-ok
+                        actions = {
+                            IconAction(if (c.revealed) R.drawable.ic_visibility_off else R.drawable.ic_visibility, stringResource(if (c.revealed) R.string.pm_cd_hide else R.string.pm_cd_show), { c.reveal() })
+                            IconAction(R.drawable.ic_content_copy, stringResource(R.string.pm_cd_copy), { c.copyPassword(e) })
+                        },
+                        extra = { StrengthBars(c.strengthOf(e.password), Modifier.padding(top = 8.dp)) },
+                    )
                 }
                 e.domains.firstOrNull()?.let { site ->
                     item { PrefRow(stringResource(R.string.pm_field_website), summary = site, trailing = { IconAction(R.drawable.ic_open_in_new, stringResource(R.string.pm_cd_open_site), { c.openSite(site) }) }) }
@@ -210,7 +213,8 @@ fun EditScreen(c: AppController, idHex: String?) {
                 },
             )
             Spacer(Modifier.height(8.dp))
-            StrengthBars(strength)
+            // 16 dp: the text edge of the field above, where its supporting texts start too.
+            StrengthBars(strength, Modifier.padding(start = 16.dp))
             Text(stringResource(R.string.pm_generated_here), color = pw.onVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, start = 16.dp))
             Spacer(Modifier.height(20.dp))
             PwField(notes, stringResource(R.string.pm_field_notes), singleLine = false, supporting = stringResource(R.string.pm_optional))

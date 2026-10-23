@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
@@ -40,41 +39,50 @@ fun CheckupScreen(c: AppController) {
         PwTopBar(stringResource(R.string.pm_nav_checkup), onBack = null)
         LazyColumn(Modifier.weight(1f)) {
             item {
-                Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     PwIcon(R.drawable.ic_verified_user_filled, tint = pw.primary, size = 48.dp)
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
                     Text(
                         if (count > 0) pluralStringResource(R.plurals.pm_checkup_summary, count, count) else stringResource(R.string.pm_checkup_none),
                         color = pw.on, style = MaterialTheme.typography.titleLarge,
                     )
+                    Spacer(Modifier.height(4.dp))
                     Text(stringResource(R.string.pm_checkup_offline), color = pw.onVariant, style = MaterialTheme.typography.bodyMedium)
                 }
             }
+            // Each list is one card with the rows inside, like the settings and the detail screen; the headers sit on the card's text edge.
             if (cu != null && cu.reused.isNotEmpty()) {
                 item { GroupHeader(stringResource(R.string.pm_checkup_reused)) }
-                cu.reused.forEach { group ->
-                    val titles = group.map { id -> c.entries.firstOrNull { it.id.contentEquals(id) }?.title.orEmpty() }
-                    items(group.size) { i ->
-                        val s = c.entries.firstOrNull { it.id.contentEquals(group[i]) } ?: return@items
-                        val others = titles.filterIndexed { j, _ -> j != i }.joinToString(", ")
-                        EntryRow(s.title, stringResource(R.string.pm_checkup_reused_with, others), false, { c.openEntry(hexOf(s.id)) }, chevron = true, domains = s.domains, packages = s.packages)
+                item {
+                    Group {
+                        cu.reused.forEach { group ->
+                            val titles = group.map { id -> c.entries.firstOrNull { it.id.contentEquals(id) }?.title.orEmpty() }
+                            group.forEachIndexed { i, rowId ->
+                                val s = c.entries.firstOrNull { it.id.contentEquals(rowId) } ?: return@forEachIndexed
+                                val others = titles.filterIndexed { j, _ -> j != i }.joinToString(", ")
+                                item { EntryRow(s.title, stringResource(R.string.pm_checkup_reused_with, others), false, { c.openEntry(hexOf(s.id)) }, chevron = true, domains = s.domains, packages = s.packages) }
+                            }
+                        }
                     }
                 }
             }
             if (cu != null && cu.weak.isNotEmpty()) {
                 item { GroupHeader(stringResource(R.string.pm_checkup_weak)) }
-                items(cu.weak.size) { i ->
-                    val (id, reason) = cu.weak[i]
-                    val s = c.entries.firstOrNull { it.id.contentEquals(id) } ?: return@items
-                    val text = when (reason) {
-                        WeakReason.TOO_SHORT -> R.string.pm_checkup_weak_short
-                        WeakReason.COMMON -> R.string.pm_checkup_weak_common
-                        WeakReason.PATTERN -> R.string.pm_checkup_weak_pattern
+                item {
+                    Group {
+                        cu.weak.forEach { (id, reason) ->
+                            val s = c.entries.firstOrNull { it.id.contentEquals(id) } ?: return@forEach
+                            val text = when (reason) {
+                                WeakReason.TOO_SHORT -> R.string.pm_checkup_weak_short
+                                WeakReason.COMMON -> R.string.pm_checkup_weak_common
+                                WeakReason.PATTERN -> R.string.pm_checkup_weak_pattern
+                            }
+                            item { EntryRow(s.title, stringResource(text), false, { c.openEntry(hexOf(s.id)) }, chevron = true, domains = s.domains, packages = s.packages) }
+                        }
                     }
-                    EntryRow(s.title, stringResource(text), false, { c.openEntry(hexOf(s.id)) }, chevron = true, domains = s.domains, packages = s.packages)
                 }
             }
-            item { SectionText(stringResource(R.string.pm_checkup_no_breach), Modifier.padding(top = 16.dp, start = 0.dp)) }
+            item { SectionText(stringResource(R.string.pm_checkup_no_breach), Modifier.padding(top = 16.dp, bottom = 16.dp)) }
         }
         PwNavBar(1) { navigate(c, it) }
     }
@@ -137,6 +145,7 @@ fun SettingsScreen(c: AppController) {
                 }
                 item { PrefRow(stringResource(R.string.pm_settings_import), onClick = { c.pickImportSource?.invoke() }) }
             }
+            Spacer(Modifier.height(24.dp))
         }
         PwNavBar(2) { navigate(c, it) }
     }

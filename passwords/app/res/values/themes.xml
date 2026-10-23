@@ -3,6 +3,9 @@
 <!-- Edge to edge: the bars are transparent and the content draws under them. Dynamic colour is off on purpose. -->
 <resources>
     <style name="Theme.Passwords" parent="android:Theme.DeviceDefault.DayNight">
+        <!-- The screens are Compose and draw their own bars; the theme's stock action bar would sit on top of them as a second header. -->
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
         <item name="android:windowBackground">@color/pm_bg</item>
         <item name="android:colorBackground">@color/pm_bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

@@ -76,7 +76,7 @@ fun CreateScreen(c: AppController) {
             PwSecretField(pass, stringResource(R.string.pm_passphrase), visible = show, isError = error != null,
                 trailing = { IconAction(if (show) R.drawable.ic_visibility_off else R.drawable.ic_visibility, stringResource(if (show) R.string.pm_cd_hide else R.string.pm_cd_show), { show = !show }) })
             Spacer(Modifier.height(8.dp))
-            StrengthBars(strength)
+            StrengthBars(strength, Modifier.padding(start = 16.dp))
             Spacer(Modifier.height(16.dp))
             PwSecretField(repeat, stringResource(R.string.pm_create_repeat), visible = show, supporting = error, isError = error != null)
             if (canBiometrics) {

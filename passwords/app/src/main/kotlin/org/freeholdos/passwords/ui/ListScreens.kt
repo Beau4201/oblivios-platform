@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
@@ -46,6 +47,7 @@ private fun subtitleOf(s: Summary) = s.username.ifEmpty { s.domains.firstOrNull(
 
 @Composable
 fun PasswordsScreen(c: AppController) {
+    val listState = rememberLazyListState()
     Box(Modifier.fillMaxSize().background(pw.bg)) {
         Column(Modifier.fillMaxSize()) {
             Row(
@@ -67,23 +69,26 @@ fun PasswordsScreen(c: AppController) {
                     Body(stringResource(R.string.pm_empty_body))
                 }
             } else {
-                LazyColumn(Modifier.weight(1f)) {
+                LazyColumn(Modifier.weight(1f), state = listState) {
                     items(c.entries, key = { hexOf(it.id) }) { s ->
-                        EntryRow(s.title, subtitleOf(s), c.needsAttention(s.id), { c.openEntry(hexOf(s.id)) }, domains = s.domains, packages = s.packages)
+                        EntryRow(
+                            s.title, subtitleOf(s), c.needsAttention(s.id), { c.openEntry(hexOf(s.id)) },
+                            domains = s.domains, packages = s.packages, modifier = Modifier.animateItem(),
+                        )
                     }
                     item { Spacer(Modifier.height(88.dp)) }
                 }
             }
             PwNavBar(0) { navigate(c, it) }
         }
+        // The button folds to its icon while the list is scrolled and opens again at the top, the way the system apps do.
         ExtendedFloatingActionButton(
-            onClick = { c.newEntry() }, shape = RoundedCornerShape(16.dp), containerColor = pw.secondaryContainer, contentColor = pw.onSecondaryContainer,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 80.dp + GestureInset + 16.dp),
-        ) {
-            PwIcon(R.drawable.ic_add, tint = pw.onSecondaryContainer)
-            Spacer(Modifier.width(12.dp))
-            Text(stringResource(R.string.pm_new_password))
-        }
+            onClick = { c.newEntry() }, expanded = !listState.canScrollBackward,
+            shape = RoundedCornerShape(16.dp), containerColor = pw.secondaryContainer, contentColor = pw.onSecondaryContainer,
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarPadding().padding(end = 16.dp, bottom = 80.dp + 16.dp),
+            icon = { PwIcon(R.drawable.ic_add, tint = pw.onSecondaryContainer) },
+            text = { Text(stringResource(R.string.pm_new_password)) },
+        )
     }
 }
 
@@ -92,7 +97,7 @@ fun navigate(c: AppController, index: Int) = c.top(when (index) { 0 -> Route.Pas
 @Composable
 private fun CheckupCard(count: Int, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(20.dp)).background(pw.secondaryContainer).clickable(onClick = onClick).padding(16.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(20.dp)).background(pw.secondaryContainer).clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         PwIcon(R.drawable.ic_verified_user_filled, tint = pw.onSecondaryContainer)
@@ -132,9 +137,12 @@ fun SearchScreen(c: AppController) {
             if (query.text.isNotEmpty()) IconAction(R.drawable.ic_close, stringResource(R.string.pm_cd_clear), { query.clearText() }, tint = pw.onVariant)
         }
         LazyColumn(Modifier.weight(1f)) {
-            items(results, key = { hexOf(it.id) }) { s -> EntryRow(s.title, subtitleOf(s), c.needsAttention(s.id), { c.openEntry(hexOf(s.id)) }) }
+            items(results, key = { hexOf(it.id) }) { s ->
+                EntryRow(s.title, subtitleOf(s), c.needsAttention(s.id), { c.openEntry(hexOf(s.id)) }, modifier = Modifier.animateItem())
+            }
             if (query.text.isNotBlank()) {
-                item { SectionText(pluralStringResource(R.plurals.pm_search_results, results.size, results.size), Modifier.padding(top = 8.dp)) }
+                // 16 dp: the plain list here has its logos at 16 dp, not inside a card.
+                item { SectionText(pluralStringResource(R.plurals.pm_search_results, results.size, results.size), Modifier.padding(top = 8.dp), inset = 16.dp) }
             }
         }
     }
