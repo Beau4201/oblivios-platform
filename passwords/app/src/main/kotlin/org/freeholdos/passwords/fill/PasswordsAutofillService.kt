@@ -42,6 +42,9 @@ class PasswordsAutofillService : AutofillService() {
     override fun onFillRequest(request: FillRequest, cancellationSignal: CancellationSignal, callback: FillCallback) {
         recordFills()
         val structure = request.fillContexts.lastOrNull()?.structure ?: return callback.onSuccess(null)
+        // The app's own screens (the passphrase, the edit form) are never filled and never offered for saving: on the first
+        // device round the passphrase of a new vault was offered as a login of this app and saved into the vault.
+        if (structure.activityComponent?.packageName == packageName) return callback.onSuccess(null)
         val screen = StructureParser.parse(structure, app.originPolicy)
         val state = session.state
         val plan = plan(screen.fields, screen.webDomain, screen.packageName, state, lookup)
