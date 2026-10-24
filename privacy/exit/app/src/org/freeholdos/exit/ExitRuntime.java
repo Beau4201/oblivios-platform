@@ -160,7 +160,10 @@ final class ExitRuntime {
         IntentFilter users = new IntentFilter();
         users.addAction(Intent.ACTION_USER_ADDED);
         users.addAction(Intent.ACTION_USER_REMOVED);
-        ctx.registerReceiver(changed, users, null, handler, Context.RECEIVER_NOT_EXPORTED);
+        // The same receiver as above: the activity manager keeps one user scope for a receiver, so a plain registration here
+        // (user 0) after the all-users one (user -1) throws "previously registered for user -1" and the app crashed at every
+        // start (IMG-014). These two actions reach every user anyway.
+        ctx.registerReceiverForAllUsers(changed, users, null, handler, Context.RECEIVER_NOT_EXPORTED);
         ctx.getSystemService(ConnectivityManager.class).registerDefaultNetworkCallback(
                 new ConnectivityManager.NetworkCallback() {
                     @Override

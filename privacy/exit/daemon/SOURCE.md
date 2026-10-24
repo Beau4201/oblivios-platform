@@ -37,5 +37,7 @@ The daemon loaded this file in the host test run of 2026-10-21 (status 1 at the 
 ## exit.rc
 
 The init definitions of the two services. The user ids 2961 and 2962 are in the OEM range (2900 to 2999) and are
-`[assumption]` unused on the device: `NET-009` reads `ps -Z`. The hard limit (`memcg.limit_in_bytes` 160 MiB) is
-`[assumption]` until `NET-009` shows a kill and a restart.
+`[assumption]` unused on the device: `NET-009` reads `ps -Z`. There is no hard limit: `memcg.limit_in_bytes`
+(160 MiB, D-K) made `init` fail `createProcessGroup` with `-EINVAL` because `ro.config.per_app_memcg` is unset on a phone
+`[verified-in-source: system/core/libprocessgroup/processgroup.cpp:747]`, `[measured]` by `NET-009` on image `2026102301`, so neither
+service started, and the line is removed. The Arti quota of 64 MiB (`--memory-max`) is the only cap until another mechanism is chosen.

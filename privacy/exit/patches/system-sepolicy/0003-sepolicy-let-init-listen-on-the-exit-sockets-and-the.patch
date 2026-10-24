@@ -1,0 +1,61 @@
+From 19078a3031cd77c342c8da2bfce33747c3134a94 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 24 Oct 2026 16:09:39 +0200
+Subject: [PATCH] sepolicy: let init listen on the exit sockets and the exit
+ services write to kmsg
+
+On lynx image 2026102301 neither exit service started. init creates the control socket of a service in the domain of the
+service; the rule that init has for all domains gives create and bind but not listen, so init was denied listen on
+/dev/socket/exitd and /dev/socket/exitd_route and could not start either service. Once the socket exists, stdio_to_kmsg
+makes the services write to the /dev/kmsg_debug descriptor that init opened, which the route helper was denied (the daemon
+would be next). Both rules are minimal: listen for init on the two service domains, write on kmsg_debug_device for the two
+services on userdebug and eng builds only, as init's own rule for opening it.
+---
+ private/exitd.te       | 11 +++++++++++
+ private/exitd_route.te |  8 ++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/private/exitd.te b/private/exitd.te
+index fe66f79..7335159 100644
+--- a/private/exitd.te
++++ b/private/exitd.te
+@@ -32,6 +32,17 @@ allow exitd exitd_data_file:file create_file_perms;
+ # The daemon reads the peer's SELinux context to check that it is the exit app.
+ allow exitd self:unix_stream_socket getopt;
+ 
++# init creates the control socket of exit.rc (stream+listen) in the domain of the service, as it does for every service socket.
++# Create and bind are in the rule that init has for all domains; listen is not, so init could not start the service at all
++# (NET-009, image 2026102301). Accept, read and write on the connections come from the rules every domain has on itself.
++allow init exitd:unix_stream_socket listen;
++
++# stdio_to_kmsg: init opens /dev/kmsg_debug, which exists on userdebug and eng builds only (the open is init's own rule); the
++# service writes to the descriptor it inherits and nothing else.
++userdebug_or_eng(`
++  allow exitd kmsg_debug_device:chr_file write;
++')
++
+ # What the daemon must never be able to do: change routing (it has the NETLINK_ROUTE socket of every network domain, which
+ # reads) or touch the packet filter.
+ neverallow exitd self:netlink_route_socket nlmsg_write;
+diff --git a/private/exitd_route.te b/private/exitd_route.te
+index 5c0b930..e0ed035 100644
+--- a/private/exitd_route.te
++++ b/private/exitd_route.te
+@@ -26,6 +26,14 @@ allowxperm exitd_route self:netlink_route_socket nlmsg {
+ # It reads the peer's SELinux context before it reads a byte.
+ allow exitd_route self:unix_stream_socket getopt;
+ 
++# The control socket of exit.rc is created by init in the domain of the service: see exitd.te for why listen is named here.
++allow init exitd_route:unix_stream_socket listen;
++
++# stdio_to_kmsg, as for the daemon (exitd.te): write to the inherited descriptor, userdebug and eng builds only.
++userdebug_or_eng(`
++  allow exitd_route kmsg_debug_device:chr_file write;
++')
++
+ # No internet of any kind, and no file but its own binary.
+ neverallow exitd_route self:{ tcp_socket udp_socket rawip_socket packet_socket } *;
+ neverallow exitd_route self:netlink_tcpdiag_socket *;
+-- 
+2.56.0
+

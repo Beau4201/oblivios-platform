@@ -7,9 +7,11 @@
 Rules: no INTERNET permission (the app talks to its services over local sockets); the app is persistent and direct-boot
 aware and allows no backup; every exported component has a permission, except the one settings activity that Settings
 starts through the IA_SETTINGS action; the privapp allowlist is exactly the manifest's privileged permissions; the
-default-permissions file grants POST_NOTIFICATIONS and nothing else.
+default-permissions file grants POST_NOTIFICATIONS and nothing else; no receiver object is registered for both the current
+user and all users.
 """
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -67,6 +69,24 @@ def check(app):
     granted = [(e.get("package"), p.get("name")) for e in default.iter("exception") for p in e.iter("permission")]
     if granted != [(PKG, "android.permission.POST_NOTIFICATIONS")]:
         problems.append(f"default-permissions grants {granted}")
+    problems += receiver_scopes(os.path.join(app, "src"))
+    return problems
+
+
+def receiver_scopes(src):
+    """One receiver object is registered for one user scope: the activity manager throws "previously registered for user -1"
+    when it is registered with `registerReceiver` and `registerReceiverForAllUsers` (IMG-014, which only a device can show)."""
+    problems = []
+    for root, _, names in os.walk(src):
+        for name in names:
+            if not name.endswith(".java"):
+                continue
+            with open(os.path.join(root, name), encoding="utf-8") as f:
+                text = f.read()
+            plain = set(re.findall(r"\bregisterReceiver\(\s*(\w+)\s*,", text))
+            all_users = set(re.findall(r"\bregisterReceiverForAllUsers\(\s*(\w+)\s*,", text))
+            for receiver in sorted(plain & all_users):
+                problems.append(f"{name}: receiver {receiver} is registered for the current user and for all users")
     return problems
 
 

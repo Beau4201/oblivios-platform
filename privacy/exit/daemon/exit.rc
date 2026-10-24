@@ -11,16 +11,17 @@ on post-fs-data
 # device, checked by NET-009]. It has NET_ADMIN for the tun and sock_diag and nothing else. Not oneshot: init starts it again
 # after an exit, a panic (the Android standard library of the tree aborts) or the shutdown that ends the Tor client.
 # The control socket is world-connectable on purpose: the SELinux policy lets only exit_app connect and the daemon reads the
-# peer's SELinux context before it reads a byte. memcg.limit_in_bytes is the hard limit of D-K (160 MiB; the Arti quota is
-# 64 MiB) [assumption: memcg is mounted and the kill and restart are seen in NET-009's limit row]. stdio_to_kmsg sends the
-# few fixed lines that the services print (never a name or a destination) to the kernel log, where userdebug builds keep them.
+# peer's SELinux context before it reads a byte. There is no memcg.limit_in_bytes line: init refuses a service with a memory
+# control unless ro.config.per_app_memcg is set, which it is not on a phone (createProcessGroup returns -EINVAL, so neither
+# service started on image 2026102301; NET-009), and the hard limit of D-K (160 MiB) is open until another mechanism is chosen.
+# The Arti quota (--memory-max, 64 MiB) is the only cap. stdio_to_kmsg sends the few fixed lines that the services print (never
+# a name or a destination) to the kernel log, where userdebug builds keep them.
 service exitd /system/bin/exitd --state-dir /data/misc/exitd/state --cache-dir /data/misc/exitd/cache --memory-max 67108864 --control-fd-env ANDROID_SOCKET_exitd --peer-context exit_app --mask-list /system/etc/freeholdos/exit-mask-list.tsv
     class main
     user 2961
     group 2961
     capabilities NET_ADMIN
     socket exitd stream+listen 0666 2961 2961
-    memcg.limit_in_bytes 167772160
     stdio_to_kmsg
 
 # The route helper: the only writer of policy rules and routes, in the closed language of routes/spec.rs. NET_ADMIN, one
