@@ -24,7 +24,9 @@ Authored in the disposable repositories `.worktrees/grab-detection-fwb` and `.wo
 | `frameworks-base/0007` | `@hide` tags on their own line, one message text for every credential type | Matches the neighbouring keys; the stock lockdown text names the PIN only. |
 | `frameworks-base/0008` | pass the settings to `BouncerMessageInteractor` in the SystemUI test fixture | `0004` added the `globalSettings` constructor argument; the Kosmos fixture builds the class with named arguments and no longer compiled. Test code only, not part of the product build. |
 | `frameworks-base/0009` | lock at once on a hard impact, with or without touch | The pull rule needs touch, a release and continued movement; the owner's grabs without touch, or after which the thief stands still, never met it (ADR-176, `Proposed`). Adds the key `grab_impact_peak_dms2` and one route in `GrabDetector`. |
+| `frameworks-base/0010` | an impact after a short free fall is a set-down and does not lock, with a strictness setting | The peak of an impact cannot separate a grab from a set-down of 3 cm (`GRB-018`, `GRB-019`); the free fall before it can. Adds the key `grab_impact_level` (0 strictest, 1 default, 2 relaxed), the free-fall tracking and the limit of 250 ms in `GrabDetector`, and the mapping of the level in `GrabDetectionService` (ADR-195, `Proposed`). |
 | `packages-apps-Settings/0001` | switch for grab detection | The mode needs an owner-visible control. |
+| `packages-apps-Settings/0002` | list of the impact strictness | The owner asked for a setting from the strictest level to a relaxed one for running (2026-10-25); a radio list like the auto-reboot page, below the switch. |
 
 Conflict surface on a new upstream release: the `Settings.Global` block after `AUTO_REBOOT_TIMEOUT`, `ExtSettings` after `AUTO_REBOOT_TIMEOUT`, the `StartSensorNotification` block of `SystemServer`, `KeyguardServiceDelegate.onShowingStateChanged`, the user-lockdown branch of `BouncerMessageInteractor`, and the first `Preference` after `auto_reboot` in `exploit_protection_settings.xml`.
 
@@ -33,7 +35,7 @@ Conflict surface on a new upstream release: the `Settings.Global` block after `A
 On the build server, with no build running and the trees clean:
 
     cd frameworks/base && git am <path>/physical/grab-detection/patches/frameworks-base/000*.patch
-    cd packages/apps/Settings && git am <path>/physical/grab-detection/patches/packages-apps-Settings/0001-*.patch
+    cd packages/apps/Settings && git am <path>/physical/grab-detection/patches/packages-apps-Settings/000*.patch
 
 ## Landed
 
@@ -50,7 +52,9 @@ On the build server 2026-10-15 with `git am`, trees clean and no build running, 
 | `frameworks-base/0007` | `42a79c600313` |
 | `frameworks-base/0008` | `2e4c21be56a4` (2026-10-15, on top of the rename commit `e6a271d588f8`, branch `freeholdos-2026100600`) |
 | `frameworks-base/0009` | `3b0677c8531a` (2026-10-18, branch `freeholdos-2026100600`, trees clean, no build running; the blobs differ from the worktree because the server tree holds later commits in the same files) |
+| `frameworks-base/0010` | `23ee105cd833` (2026-10-26, branch `freeholdos-2026100600`, trees clean, no build running, on `94e9f26848c4`; the blobs of the four touched files equal the worktree's) |
 | `packages-apps-Settings/0001` | `f70f1e9fb78` |
+| `packages-apps-Settings/0002` | `d31f2300fb2` (2026-10-26, on `fe618d503111`) |
 
 The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packages/apps/Settings`) equals the blob id in the worktree at its tip.
 
@@ -58,6 +62,7 @@ The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packa
 
 - Host: `test/run.sh` and `test/mutate.py`, 26 of 26 mutants killed (2026-10-15).
 - Host, with `0009` (worktree `.worktrees/grab-detection-fwb`, branch `impact-route`, tip `3a56f88`): `all passed`, 35 of 35 mutants killed (2026-10-18). The same test and mutants also pass on `GrabDetector.java` read from the build server after `git am` (2026-10-18). Module build `m -j6 -k services SystemUI Settings` for `lynx-cur-userdebug` with `0009` landed: exit 0, 42:30, no `FAILED:` or `error:` line (`GRB-002`); the patch is in the `lynx` image `2026102101` since 2026-10-21 (`IMG-011`, `IMG-012`), with no device check yet (`GRB-018`).
+- Host, with `0010` (worktree `.worktrees/grab-freefall`): `all passed`, 59 of 59 mutants killed (2026-10-26). The real `GrabDetector` was also replayed over the recordings of `GRB-018`/`GRB-019` at 50 Hz in five phases: at level 1, 12 of 12 staged grabs lock (free fall 0), 0 of 15 to 17 set-downs of 3 cm and 0 of 13 hard set-downs lock (free fall 20 to 159 ms); at level 0, every one locks; at level 2 (60 m/s^2), 4 to 6 of the 12 grabs lock through this route (the pull rule decides the others) and no set-down does. The recordings stay on the phone and the workstation.
 - Replay: the seven `frameworks-base` patches and the `Settings` patch applied to the baseline reproduce the worktree trees (2026-10-15).
 - Not run: a device check (`GRB-003` to `GRB-017`).
 - Build: `m -j6 -k services SystemUI Settings` for `lynx-cur-userdebug` passed on the landed trees (2026-10-15, exit 0, no `FAILED:` or `error:` line; `GRB-002`). Module outputs only, no image.

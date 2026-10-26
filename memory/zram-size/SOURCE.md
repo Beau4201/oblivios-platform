@@ -30,7 +30,7 @@ pin of `lynx` and `stallion` was updated to `c0fa4e99` (copies kept as
 
 `0003` was authored on `b3c9caf4` (`freeholdos-2026100600`, clean tree, `device-common.mk` blob
 `37fb8c91` on the build server and in the disposable repository before the edit; `0071a92b` after)
-and is not landed. `git am` of it on a copy of that blob gives `0071a92b`. Once landed, the pin of
+and landed on 2026-10-26 with `git am` as `e7276cf6` on top of `memory/decoy-stop-on-switch/0001` (`9e39466c`); the file then has the blob `4926f4c8`, the pins of `lynx` and `stallion` name `e7276cf6` (copies `adevtool-version-check.mk.pre-decoy-zram3`). `git am` of it on a copy of the older blob gives `0071a92b`. Once landed, the pin of
 every built device needs the update described below. After a `stallion` build,
 `grep '^persist.vendor.zram_swap_size_v2' <product-out>/product/etc/build.prop` must print
 `persist.vendor.zram_swap_size_v2=100%`, and on the device `SwapTotal` must be about `MemTotal`.

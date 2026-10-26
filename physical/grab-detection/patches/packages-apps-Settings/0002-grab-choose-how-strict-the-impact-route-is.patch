@@ -1,0 +1,99 @@
+From d249c88dafbef5d1d93b6d047a5d12321d07f8b6 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Mon, 26 Oct 2026 16:31:19 +0100
+Subject: [PATCH] grab: choose how strict the impact route is
+
+A list on the exploit protection page, below the switch: strictest, standard, relaxed. It sets grab_impact_level.
+---
+ res/values/strings_ext.xml                    |  8 ++++
+ res/xml/exploit_protection_settings.xml       |  5 +++
+ .../GrabImpactLevelPrefController.java        | 42 +++++++++++++++++++
+ 3 files changed, 55 insertions(+)
+ create mode 100644 src/com/android/settings/security/GrabImpactLevelPrefController.java
+
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index 8c37fc2..7c93565 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -43,6 +43,14 @@
+     <string name="auto_reboot_title">Auto reboot</string>
+     <string name="grab_detection_title">Lock when grabbed</string>
+     <string name="grab_detection_summary">If the phone is pulled out of your hand while you use it, lock it at once and restart it after 60 seconds unless you unlock it.</string>
++    <string name="grab_impact_level_title">Grab detection strictness</string>
++    <string name="grab_impact_level_footer">How hard a knock must be before the phone locks. A phone that is set down is not mistaken for a grab on Standard and Relaxed. A fall from more than about 30 cm and a grab still lock the phone.</string>
++    <string name="grab_impact_level_strict">Strictest</string>
++    <string name="grab_impact_level_strict_summary">Every hard knock locks the phone, including a phone that is set down hard.</string>
++    <string name="grab_impact_level_standard">Standard</string>
++    <string name="grab_impact_level_standard_summary">Setting the phone down does not lock it. A grab, a hard knock and a real fall do.</string>
++    <string name="grab_impact_level_relaxed">Relaxed</string>
++    <string name="grab_impact_level_relaxed_summary">Only very hard knocks lock the phone, for running or a rough ride. A gentle snatch can be missed.</string>
+     <string name="auto_reboot_footer">Automatically reboot the device if it hasn\'t been unlocked within the selected duration of time.</string>
+ 
+     <string name="screenshot_timestamp_exif_title">Save screenshot timestamp to EXIF</string>
+diff --git a/res/xml/exploit_protection_settings.xml b/res/xml/exploit_protection_settings.xml
+index 2c5908c..6625b87 100644
+--- a/res/xml/exploit_protection_settings.xml
++++ b/res/xml/exploit_protection_settings.xml
+@@ -16,6 +16,11 @@
+         android:summary="@string/grab_detection_summary"
+         settings:controller="com.android.settings.security.GrabDetectionPrefController" />
+ 
++    <Preference
++        android:key="grab_impact_level"
++        android:title="@string/grab_impact_level_title"
++        settings:controller="com.android.settings.security.GrabImpactLevelPrefController" />
++
+     <Preference
+         android:key="usbc_port"
+         android:title="@string/usbc_port_title"
+diff --git a/src/com/android/settings/security/GrabImpactLevelPrefController.java b/src/com/android/settings/security/GrabImpactLevelPrefController.java
+new file mode 100644
+index 0000000..866f1eb
+--- /dev/null
++++ b/src/com/android/settings/security/GrabImpactLevelPrefController.java
+@@ -0,0 +1,42 @@
++/*
++ * Copyright (C) 2026 FreeholdOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.settings.security;
++
++import android.content.Context;
++import android.ext.settings.ExtSettings;
++
++import androidx.preference.PreferenceScreen;
++
++import com.android.settings.R;
++import com.android.settings.ext.IntSettingPrefController;
++import com.android.settings.ext.RadioButtonPickerFragment2;
++
++/**
++ * How strict the impact route of grab detection is (ADR-195): every hard knock locks, a set-down
++ * does not, or a set-down does not and the impact peak is twice as high. It only matters while the
++ * grab detection switch is on.
++ */
++public class GrabImpactLevelPrefController extends IntSettingPrefController {
++
++    public GrabImpactLevelPrefController(Context ctx, String key) {
++        super(ctx, key, ExtSettings.GRAB_IMPACT_LEVEL);
++    }
++
++    @Override
++    public void addPrefsBeforeList(RadioButtonPickerFragment2 fragment, PreferenceScreen screen) {
++        addFooterPreference(screen, R.string.grab_impact_level_footer);
++    }
++
++    @Override
++    protected void getEntries(Entries entries) {
++        entries.add(R.string.grab_impact_level_strict, R.string.grab_impact_level_strict_summary,
++                ExtSettings.GRAB_IMPACT_LEVEL_STRICT);
++        entries.add(R.string.grab_impact_level_standard, R.string.grab_impact_level_standard_summary,
++                ExtSettings.GRAB_IMPACT_LEVEL_STANDARD);
++        entries.add(R.string.grab_impact_level_relaxed, R.string.grab_impact_level_relaxed_summary,
++                ExtSettings.GRAB_IMPACT_LEVEL_RELAXED);
++    }
++}
+-- 
+2.56.0
+

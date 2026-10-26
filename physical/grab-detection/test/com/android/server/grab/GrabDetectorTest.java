@@ -105,6 +105,170 @@ public final class GrabDetectorTest {
         return n;
     }
 
+    // a free fall of magnitude 0.3 m/s^2, far below FREE_FALL_MAX
+    private static final double FALL = -9.5;
+
+    /** Free fall at every step from fromMs to toMs inclusive, a hard impact (40) at each impact. */
+    private static Scenario fallAndImpact(long fromMs, long toMs, long... impactsMs) {
+        return new Scenario().dev(t -> {
+            for (long i : impactsMs) {
+                if (t == i) {
+                    return 40;
+                }
+            }
+            return t >= fromMs && t <= toMs ? FALL : 0.1;
+        });
+    }
+
+    private static java.util.List<Decision> decisions(GrabDetector d, Scenario s, long endMs) {
+        java.util.List<Decision> out = new java.util.ArrayList<>();
+        for (long t = 0; t <= endMs; t += STEP_MS) {
+            for (Map.Entry<Long, Boolean> e : s.touch.subMap(t - STEP_MS, false, t, true)
+                    .entrySet()) {
+                d.onTouch(e.getKey(), e.getValue());
+            }
+            Decision x = d.onAccel(t, 0f, 0f, G + (float) s.dev.applyAsDouble(t));
+            if (x != null) {
+                out.add(x);
+            }
+        }
+        return out;
+    }
+
+    /** ADR-195: an impact after a short free fall is a set-down and does not lock. */
+    private static void freeFallChecks() {
+        // 20 ms steps: 12 samples of free fall are 240 ms
+        Params ff = new Params(15f, 400, 150, 200, 800, 1.5f, 2000, 30f, 240);
+        Params strict = new Params(15f, 400, 150, 200, 800, 1.5f, 2000, 30f, 0);
+
+        Decision d = fallAndImpact(0, -1, 1000).run(new GrabDetector(ff), 4000);
+        check("an impact with no free fall locks", d != null && d.impact && d.trigger);
+        check("an impact with no free fall reports none", d != null && d.freeFallMs == 0);
+
+        d = fallAndImpact(900, 980, 1000).run(new GrabDetector(ff), 4000);
+        check("an impact after a short free fall does not lock", d != null && d.impact && !d.trigger);
+        check("a short free fall is reported in ms", d != null && d.freeFallMs == 100);
+
+        d = fallAndImpact(900, 980, 1000).run(new GrabDetector(strict), 4000);
+        check("level 0 (no long-fall limit) locks after a set-down too",
+                d != null && d.impact && d.trigger && d.freeFallMs == 100);
+
+        d = fallAndImpact(760, 980, 1000).run(new GrabDetector(ff), 4000);
+        check("a free fall as long as the limit locks", d != null && d.trigger && d.freeFallMs == 240);
+        d = fallAndImpact(780, 980, 1000).run(new GrabDetector(ff), 4000);
+        check("a free fall one sample shorter than the limit does not",
+                d != null && !d.trigger && d.freeFallMs == 220);
+        d = fallAndImpact(700, 980, 1000).run(new GrabDetector(ff), 4000);
+        check("a long fall locks", d != null && d.trigger && d.freeFallMs == 300);
+
+        // the window: a fall that ended exactly 400 ms before the impact counts, 420 ms does not
+        d = fallAndImpact(540, 600, 1000).run(new GrabDetector(ff), 4000);
+        check("a fall that ended 400 ms before the impact counts", d != null && !d.trigger);
+        d = fallAndImpact(520, 580, 1000).run(new GrabDetector(ff), 4000);
+        check("a fall that ended 420 ms before the impact does not",
+                d != null && d.trigger && d.freeFallMs == 0);
+
+        // the longest fall inside the window counts, not the last one
+        Scenario two = new Scenario().dev(t -> t == 1000 ? 40
+                : (t >= 640 && t <= 860) || (t >= 900 && t <= 920) ? FALL : 0.1);
+        d = two.run(new GrabDetector(ff), 4000);
+        check("the longest free fall in the window counts", d != null && d.trigger && d.freeFallMs == 240);
+        // an older long fall that left the window does not hide a newer short one
+        Scenario old = new Scenario().dev(t -> t == 1000 ? 40
+                : (t >= 100 && t <= 340) || (t >= 900 && t <= 920) ? FALL : 0.1);
+        d = old.run(new GrabDetector(ff), 4000);
+        check("a long fall outside the window does not count",
+                d != null && !d.trigger && d.freeFallMs == 40);
+
+        // the rest of the pulse of a set-down is not judged again; a later impact locks
+        Scenario pulse = new Scenario().dev(t -> t >= 900 && t <= 980 ? FALL
+                : t >= 1000 && t <= 1040 ? 40 : t == 1500 ? 40 : 0.1);
+        java.util.List<Decision> l = decisions(new GrabDetector(ff), pulse, 4000);
+        check("a set-down is decided once and the next impact locks",
+                l.size() == 2 && !l.get(0).trigger && l.get(1).trigger && l.get(1).impact);
+
+        // a fall that happens inside a cool-down still counts for the impact after it
+        Scenario cd = new Scenario().dev(t -> t == 1000 || t == 3020 ? 40
+                : t >= 2920 && t <= 2960 ? FALL : 0.1);
+        l = decisions(new GrabDetector(ff), cd, 5000);
+        check("a fall inside the cool-down counts for the next impact",
+                l.size() == 2 && l.get(0).trigger && !l.get(1).trigger && l.get(1).freeFallMs == 60);
+
+        // a set-down does not stop the pull rule: the candidate of the next samples still decides
+        Scenario pull = new Scenario().touch(500, true).touch(1000, true).touch(1040, false)
+                .dev(t -> t >= 900 && t <= 980 ? FALL : t == 1000 || t == 1020 ? 40 : t > 1020 ? 4 : 0.1);
+        l = decisions(new GrabDetector(ff), pull, 4000);
+        check("the pull rule still decides after a set-down",
+                l.size() == 2 && l.get(0).impact && !l.get(0).trigger && !l.get(1).impact
+                        && l.get(1).trigger);
+
+        // reset forgets the free fall that has ended, and the quiet period of a set-down
+        GrabDetector g = new GrabDetector(ff);
+        for (long t = 900; t <= 980; t += STEP_MS) {
+            g.onAccel(t, 0f, 0f, 0.3f);
+        }
+        g.onAccel(1000, 0f, 0f, G);
+        g.reset();
+        Decision x = g.onAccel(1020, 0f, 0f, G + 40f);
+        check("reset forgets the free fall", x != null && x.trigger && x.freeFallMs == 0);
+        g = new GrabDetector(ff);
+        for (long t = 900; t <= 980; t += STEP_MS) {
+            g.onAccel(t, 0f, 0f, 0.3f);
+        }
+        x = g.onAccel(1000, 0f, 0f, G + 40f);
+        check("a set-down starts no cool-down", x != null && x.impact && !x.trigger);
+        g.reset();
+        x = g.onAccel(1100, 0f, 0f, G + 40f);
+        check("reset forgets the quiet period", x != null && x.impact && x.trigger);
+
+        // the quiet period of a set-down is over at its end: the impact there is judged again
+        g = new GrabDetector(ff);
+        for (long t = 900; t <= 980; t += STEP_MS) {
+            g.onAccel(t, 0f, 0f, 0.3f);
+        }
+        g.onAccel(1000, 0f, 0f, G + 40f);
+        x = g.onAccel(1249, 0f, 0f, G + 40f);
+        check("inside the quiet period nothing is judged", x == null || !x.impact);
+        x = g.onAccel(1250, 0f, 0f, G + 40f);
+        check("at the end of the quiet period an impact is judged", x != null && x.impact);
+
+        // with the eight argument constructor (no long-fall limit) a set-down locks, as before
+        Params noLimit = new Params(15f, 400, 150, 200, 800, 1.5f, 2000, 30f);
+        d = fallAndImpact(900, 980, 1000).run(new GrabDetector(noLimit), 4000);
+        check("without a long-fall limit a set-down locks", d != null && d.impact && d.trigger);
+
+        // the impact sample itself in free fall: the run that goes on counts
+        Params lowPeak = new Params(5f, 400, 150, 200, 800, 1.5f, 2000, 8f, 240);
+        g = new GrabDetector(lowPeak);
+        for (long t = 900; t <= 980; t += STEP_MS) {
+            g.onAccel(t, 0f, 0f, 3.9f);
+        }
+        x = g.onAccel(1000, 0f, 0f, 0.3f);
+        check("an impact inside a free fall counts the fall", x != null && x.impact && x.freeFallMs == 120);
+
+        // the limit of free fall is a magnitude below FREE_FALL_MAX: exactly at it is not a fall
+        g = new GrabDetector(ff);
+        for (long t = 900; t <= 980; t += STEP_MS) {
+            g.onAccel(t, 0f, 0f, GrabDetector.FREE_FALL_MAX);
+        }
+        x = g.onAccel(1000, 0f, 0f, G + 40f);
+        check("a magnitude exactly at the limit is not a free fall", x != null && x.trigger);
+        g = new GrabDetector(ff);
+        for (long t = 900; t <= 980; t += STEP_MS) {
+            g.onAccel(t, 0f, 0f, GrabDetector.FREE_FALL_MAX - 0.1f);
+        }
+        x = g.onAccel(1000, 0f, 0f, G + 40f);
+        check("a magnitude just below the limit is a free fall", x != null && !x.trigger);
+
+        // all three axes count: a phone on its side at rest is not in free fall
+        g = new GrabDetector(ff);
+        for (long t = 900; t <= 980; t += STEP_MS) {
+            g.onAccel(t, G, 0f, 0.1f);
+        }
+        x = g.onAccel(1000, 0f, 0f, G + 40f);
+        check("a phone on its side is not in free fall", x != null && x.trigger);
+    }
+
     public static void main(String[] args) {
         // a pull out of the fingers that keeps moving triggers, and says why
         Scenario s = snatch();
@@ -326,6 +490,8 @@ public final class GrabDetectorTest {
         d = snatch().run(new GrabDetector(imp), 4000);
         check("the pull rule still triggers with the impact route on",
                 d != null && d.trigger && !d.impact);
+
+        freeFallChecks();
 
         System.out.println(failures == 0 ? "all passed" : failures + " FAILED");
         System.exit(failures == 0 ? 0 : 1);

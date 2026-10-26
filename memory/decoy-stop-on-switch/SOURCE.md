@@ -6,7 +6,7 @@ GrapheneOS `vendor/adevtool`, build-server branch `freeholdos-2026100600`, commi
 `e333ec2cfa932a8a58db2a108f86274e5f66668c` (read 2026-10-23). The patch was authored in a
 disposable local git repository that held only `config/mk/google_devices/common/device-common.mk`,
 whose blob hash (`71495311`) equalled `git rev-parse HEAD:<path>` on the build server before the
-edit. It is not landed on the build server.
+edit. Landed on the build server with `git am` on 2026-10-26 as `9e39466c` (trees clean, no build running), followed by `memory/zram-size/0003` as `e7276cf6`; `device-common.mk` has the blob `4926f4c8`, as checked in the disposable repositories. The pins of `lynx` and `stallion` name `e7276cf6` (copies `adevtool-version-check.mk.pre-decoy-zram3`).
 
 ## Patches
 
