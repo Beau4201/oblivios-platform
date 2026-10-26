@@ -113,6 +113,8 @@ class PasswordsAutofillService : AutofillService() {
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
         val structure = request.fillContexts.lastOrNull()?.structure ?: return callback.onSuccess()
+        // Never a login of the app itself (its passphrase screens), whatever the fill step offered.
+        if (structure.activityComponent?.packageName == packageName) return callback.onSuccess()
         val screen = StructureParser.parse(structure, app.originPolicy)
         val candidate = SaveCandidate.of(screen.fields.mapIndexedNotNull { i, f -> screen.values[i]?.let { f.role to it } })
             ?: return callback.onSuccess()

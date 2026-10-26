@@ -2,7 +2,6 @@
 package org.freeholdos.passwords
 
 import android.os.Bundle
-import android.view.View
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,9 +25,6 @@ class MainActivity : SecureActivity() {
         controller.pickExportTarget = { name -> exportTarget.launch(name) }
         controller.pickImportSource = { importSource.launch(arrayOf("*/*")) }
         setContent { PasswordsRoot(controller) }
-        // No autofill service, ours included, is told about the screens of the app itself: the passphrase fields and the
-        // edit form must never reach a fill or a save offer (the service refuses them too).
-        window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
     }
 
     override fun onStart() {

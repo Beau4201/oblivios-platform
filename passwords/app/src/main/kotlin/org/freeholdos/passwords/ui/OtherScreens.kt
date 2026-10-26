@@ -39,15 +39,19 @@ fun CheckupScreen(c: AppController) {
         PwTopBar(stringResource(R.string.pm_nav_checkup), onBack = null)
         LazyColumn(Modifier.weight(1f)) {
             item {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                // 32 dp sides, the text edge of the cards below; the group header brings its own 24 dp above, so no bottom padding.
+                Column(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     PwIcon(R.drawable.ic_verified_user_filled, tint = pw.primary, size = 48.dp)
                     Spacer(Modifier.height(16.dp))
                     Text(
                         if (count > 0) pluralStringResource(R.plurals.pm_checkup_summary, count, count) else stringResource(R.string.pm_checkup_none),
                         color = pw.on, style = MaterialTheme.typography.titleLarge,
                     )
-                    Spacer(Modifier.height(4.dp))
-                    Text(stringResource(R.string.pm_checkup_offline), color = pw.onVariant, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        stringResource(R.string.pm_checkup_offline), color = pw.onVariant, style = MaterialTheme.typography.bodyMedium,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
                 }
             }
             // Each list is one card with the rows inside, like the settings and the detail screen; the headers sit on the card's text edge.
@@ -82,7 +86,11 @@ fun CheckupScreen(c: AppController) {
                     }
                 }
             }
-            item { SectionText(stringResource(R.string.pm_checkup_no_breach), Modifier.padding(top = 16.dp, bottom = 16.dp)) }
+            // As the note under a card in the settings (8 dp from the card) and the same 24 dp at the end; with no list above it
+            // the note follows the summary, so it gets the 24 dp that a group header would bring.
+            val anyList = cu != null && (cu.reused.isNotEmpty() || cu.weak.isNotEmpty())
+            item { SectionText(stringResource(R.string.pm_checkup_no_breach), Modifier.padding(top = if (anyList) 0.dp else 24.dp)) }
+            item { Spacer(Modifier.height(24.dp)) }
         }
         PwNavBar(1) { navigate(c, it) }
     }
