@@ -41,3 +41,6 @@ The init definitions of the two services. The user ids 2961 and 2962 are in the 
 (160 MiB, D-K) made `init` fail `createProcessGroup` with `-EINVAL` because `ro.config.per_app_memcg` is unset on a phone
 `[verified-in-source: system/core/libprocessgroup/processgroup.cpp:747]`, `[measured]` by `NET-009` on image `2026102301`, so neither
 service started, and the line is removed. The Arti quota of 64 MiB (`--memory-max`) is the only cap until another mechanism is chosen.
+`exitd` (not `exitd_route`) runs with the group `inet` as well as its own: on image `2026102302` its self-check ended with `Os { code: 13 }` at
+`TcpListener::bind("127.0.0.1:0")` with no SELinux denial, and the same uid and gid with only the group 3003 added opened the
+socket `[measured: NET-009, a debug build of exitd run as uid and gid 2961 with and without the group]`.

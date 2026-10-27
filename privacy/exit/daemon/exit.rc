@@ -16,10 +16,13 @@ on post-fs-data
 # service started on image 2026102301; NET-009), and the hard limit of D-K (160 MiB) is open until another mechanism is chosen.
 # The Arti quota (--memory-max, 64 MiB) is the only cap. stdio_to_kmsg sends the few fixed lines that the services print (never
 # a name or a destination) to the kernel log, where userdebug builds keep them.
+# The group inet (3003) is what lets a native uid open an AF_INET socket: with only its own gid, bind() on 127.0.0.1 failed
+# with EACCES (no SELinux denial) and the self-check ended the daemon before Arti could start; with the same uid and gid and
+# only the group 3003 it succeeded [measured: NET-009, lynx image 2026102302]. exitd_route has no inet socket and gets no group.
 service exitd /system/bin/exitd --state-dir /data/misc/exitd/state --cache-dir /data/misc/exitd/cache --memory-max 67108864 --control-fd-env ANDROID_SOCKET_exitd --peer-context exit_app --mask-list /system/etc/freeholdos/exit-mask-list.tsv
     class main
     user 2961
-    group 2961
+    group 2961 inet
     capabilities NET_ADMIN
     socket exitd stream+listen 0666 2961 2961
     stdio_to_kmsg
