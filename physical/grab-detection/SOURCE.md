@@ -27,6 +27,7 @@ Authored in the disposable repositories `.worktrees/grab-detection-fwb` and `.wo
 | `frameworks-base/0010` | an impact after a short free fall is a set-down and does not lock, with a strictness setting | The peak of an impact cannot separate a grab from a set-down of 3 cm (`GRB-018`, `GRB-019`); the free fall before it can. Adds the key `grab_impact_level` (0 strictest, 1 default, 2 relaxed), the free-fall tracking and the limit of 250 ms in `GrabDetector`, and the mapping of the level in `GrabDetectionService` (ADR-195, `Proposed`). |
 | `packages-apps-Settings/0001` | switch for grab detection | The mode needs an owner-visible control. |
 | `packages-apps-Settings/0002` | list of the impact strictness | The owner asked for a setting from the strictest level to a relaxed one for running (2026-10-25); a radio list like the auto-reboot page, below the switch. |
+| `packages-apps-Settings/0003` | one row on the exploit protection page, like Auto reboot | The owner (2026-10-27, after the first look at `lynx` `2026102302`): one row instead of two, no description on the exploit protection page and none per entry, the description only as the footer of the page the row opens. Replaces the switch and the strictness row by one list (Off, Strictest, Standard, Relaxed) that writes the mode and the level together; `GrabImpactLevelPrefController` is deleted. |
 
 Conflict surface on a new upstream release: the `Settings.Global` block after `AUTO_REBOOT_TIMEOUT`, `ExtSettings` after `AUTO_REBOOT_TIMEOUT`, the `StartSensorNotification` block of `SystemServer`, `KeyguardServiceDelegate.onShowingStateChanged`, the user-lockdown branch of `BouncerMessageInteractor`, and the first `Preference` after `auto_reboot` in `exploit_protection_settings.xml`.
 
@@ -55,8 +56,9 @@ On the build server 2026-10-15 with `git am`, trees clean and no build running, 
 | `frameworks-base/0010` | `23ee105cd833` (2026-10-26, branch `freeholdos-2026100600`, trees clean, no build running, on `94e9f26848c4`; the blobs of the four touched files equal the worktree's) |
 | `packages-apps-Settings/0001` | `f70f1e9fb78` |
 | `packages-apps-Settings/0002` | `d31f2300fb2` (2026-10-26, on `fe618d503111`) |
+| `packages-apps-Settings/0003` | `0ea5154a33a` (2026-10-27, on `d31f2300fb2`, branch `freeholdos-2026100600`, tree clean, no build running; `git apply --check` passed first; the blobs of `strings_ext.xml`, `exploit_protection_settings.xml` and `GrabDetectionPrefController.java` equal the worktree's and the other controller is gone; not compiled or built) |
 
-The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packages/apps/Settings`) equals the blob id in the worktree at its tip.
+The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packages/apps/Settings`) equals the blob id in the worktree at its tip, before `packages-apps-Settings/0003`; that patch changes three of the Settings files and deletes one.
 
 ## Verification
 
