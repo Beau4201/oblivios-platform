@@ -1,0 +1,57 @@
+From 6e6f5922910ad1b75c56acc0c77a9b4787a6bdcd Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Tue, 27 Oct 2026 11:28:32 +0100
+Subject: [PATCH] sepolicy: let the exit app reach the exit sockets across MLS
+ levels
+
+The exit app runs at s0:c<app>,c<user> (levelFrom=all) and the two exit services and their sockets at s0. On lynx
+2026102302 the write on exitd_route_socket was denied by the MLS constraint on sock_file write (equal levels, a trusted
+subject or a trusted object), and the connectto constraint on unix_stream_socket tests the target domain the same way.
+The app keeps its categories, which keep its data apart from other apps and users; the two socket types become trusted
+objects and the two service domains trusted subjects. Only exit_app may write the sockets or connect to the domains.
+---
+ private/exitd.te       | 8 ++++++++
+ private/exitd_route.te | 8 ++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/private/exitd.te b/private/exitd.te
+index 7335159..c820f81 100644
+--- a/private/exitd.te
++++ b/private/exitd.te
+@@ -9,6 +9,14 @@ type exitd_exec, system_file_type, exec_type, file_type;
+ type exitd_socket, file_type, coredomain_socket;
+ type exitd_data_file, file_type, data_file_type, core_data_file_type;
+ 
++# MLS (NET-009): the exit app runs at s0:c<app>,c<user> (levelFrom=all), this domain and its socket at s0. The write to the
++# socket file and the connectto between them need equal levels or a trusted side. The app keeps its categories, because they
++# keep its data apart from the other apps and from other users, so the daemon side is the trusted one: the socket file is a
++# trusted object and the domain a trusted subject (the connectto constraint tests the target domain). Only exit_app may reach
++# either by the neverallows in exit_app.te, and this domain has no allow rule on any app data file.
++typeattribute exitd mlstrustedsubject;
++typeattribute exitd_socket mlstrustedobject;
++
+ init_daemon_domain(exitd)
+ # Ordinary tcp and udp sockets to the Tor network and the upstream resolver.
+ net_domain(exitd)
+diff --git a/private/exitd_route.te b/private/exitd_route.te
+index e0ed035..61fff3b 100644
+--- a/private/exitd_route.te
++++ b/private/exitd_route.te
+@@ -6,6 +6,14 @@ type exitd_route, domain;
+ typeattribute exitd_route coredomain;
+ type exitd_route_socket, file_type, coredomain_socket;
+ 
++# MLS (NET-009): the exit app runs at s0:c<app>,c<user> (levelFrom=all), the route helper and its socket at s0. The write to the
++# socket file and the connectto between them need equal levels or a trusted side. The app keeps its categories, because they
++# keep its data apart from the other apps and from other users, so the daemon side is the trusted one: the socket file is a
++# trusted object and the domain a trusted subject (the connectto constraint tests the target domain). Only exit_app may reach
++# either by the neverallows in exit_app.te, and this domain has no allow rule on any app data file.
++typeattribute exitd_route mlstrustedsubject;
++typeattribute exitd_route_socket mlstrustedobject;
++
+ # init starts it with `seclabel u:r:exitd_route:s0` from the same executable as the daemon; the transition has no
+ # type_transition of its own, so the daemon's remains the default for exitd_exec.
+ domain_trans(init, exitd_exec, exitd_route)
+-- 
+2.56.0
+
