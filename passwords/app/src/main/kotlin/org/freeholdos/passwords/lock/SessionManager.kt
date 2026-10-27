@@ -322,7 +322,14 @@ class SessionManager(
     /** Switches biometric unlock on: one prompt, which wraps the vault key under the biometric Keystore key. */
     fun enableBiometrics(activity: Activity, done: (Boolean) -> Unit) {
         val h = handle ?: return done(false)
-        val cipher = gateway.biometricCipherForWrap()
+        // Making the key can still fail after the caller's check (a biometric removed in between): off, not a crash.
+        val cipher = try {
+            gateway.biometricCipherForWrap()
+        } catch (e: GeneralSecurityException) {
+            return done(false)
+        } catch (e: IllegalStateException) {
+            return done(false)
+        }
         val finished = AtomicBoolean(false)
         fun finish(ok: Boolean) { if (finished.compareAndSet(false, true)) done(ok) }
         val p = prompt(activity, false) { finish(false) }

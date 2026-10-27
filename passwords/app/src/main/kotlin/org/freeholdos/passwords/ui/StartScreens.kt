@@ -30,7 +30,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
-import android.hardware.biometrics.BiometricManager
 import org.freeholdos.passwords.R
 import org.freeholdos.passwords.lock.LockState
 import org.freeholdos.passwords.lock.Reason
@@ -59,9 +58,7 @@ fun CreateScreen(c: AppController) {
     val repeat = remember { TextFieldState() }
     var show by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val canBiometrics = remember {
-        c.activity.getSystemService(BiometricManager::class.java).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
-    }
+    val canBiometrics = remember { c.biometricsAvailable() }
     var biometrics by remember { mutableStateOf(canBiometrics) }
     val strength = remember(pass.text) { val ch = pass.chars(); c.strengthOf(ch).also { ch.fill('\u0000') } }
     val tooWeak = stringResource(R.string.pm_create_weak)

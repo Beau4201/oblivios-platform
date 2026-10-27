@@ -4,13 +4,11 @@ package org.freeholdos.passwords.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -20,6 +18,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import org.freeholdos.passwords.lock.LockState
 
 /** The whole app: which screen shows follows the lock state and the route. */
@@ -48,27 +49,61 @@ private fun depth(r: Route): Int = when (r) {
     is Route.Edit -> 3
 }
 
+/** The tab a route belongs to, left to right; a move to a tab on the right counts as going forward, to the left as going back. */
+private fun tabIndex(r: Route): Int = when (r) {
+    Route.Checkup -> 1
+    Route.Settings -> 2
+    else -> 0
+}
+
 /**
- * The screens move the way the system apps do: going deeper slides the new screen in from the right by a short distance
- * while it fades in, going back mirrors it, and the tabs fade through each other with a small scale. The leaving screen
- * fades out first (90 ms), so the two never show at full strength together. A lock replaces this host at once instead,
- * outside of any animation.
+ * The framework's `fast_out_extra_slow_in` (`M 0,0 C 0.05,0 0.133333,0.06 0.166666,0.4 C 0.208333,0.82 0.25,1 1,1`
+ * [verified-in-source: frameworks/base/core/res/res/interpolator/fast_out_extra_slow_in.xml]): two cubic segments with x as time.
+ */
+private val FastOutExtraSlowIn = Easing { x ->
+    fun bezier(a: Float, b: Float, c: Float, d: Float, t: Float): Float {
+        val u = 1f - t
+        return u * u * u * a + 3f * u * u * t * b + 3f * u * t * t * c + t * t * t * d
+    }
+    val first = x <= 0.166666f
+    val xs = if (first) floatArrayOf(0f, 0.05f, 0.133333f, 0.166666f) else floatArrayOf(0.166666f, 0.208333f, 0.25f, 1f)
+    val ys = if (first) floatArrayOf(0f, 0f, 0.06f, 0.4f) else floatArrayOf(0.4f, 0.82f, 1f, 1f)
+    var lo = 0f
+    var hi = 1f
+    repeat(24) {
+        val mid = (lo + hi) / 2f
+        if (bezier(xs[0], xs[1], xs[2], xs[3], mid) < x) lo = mid else hi = mid
+    }
+    bezier(ys[0], ys[1], ys[2], ys[3], (lo + hi) / 2f)
+}
+
+/**
+ * The screens move the way the settings app does, which is the framework's own activity animation
+ * [verified-in-source: frameworks/base/core/res/res/anim/activity_open_enter.xml, activity_open_exit.xml, activity_close_enter.xml,
+ * activity_close_exit.xml; the Settings tree sets no animation of its own for its pages, SettingsTransitionHelper is empty].
+ * Going deeper: the new screen comes in from 96 dp to the right over 450 ms and fades in over 83 ms after 50 ms, while the old
+ * one moves 96 dp to the left, fully visible. Going back mirrors it: the screen below comes in from 96 dp to the left, and the
+ * leaving one (on top) moves 96 dp to the right and fades out over 83 ms after 35 ms. The edge extension of the window
+ * animation is not needed, the screens fill the host. The tabs have no counterpart in the settings app, so a tab to the
+ * right goes forward and a tab to the left goes back. A lock replaces this host at once instead, outside of any animation.
  */
 @Composable
 private fun UnlockedHost(c: AppController) {
+    val shift = with(LocalDensity.current) { 96.dp.roundToPx() }
     AnimatedContent(
         targetState = c.route,
         transitionSpec = {
             val from = depth(initialState)
             val to = depth(targetState)
-            val enter = fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing))
-            val exit = fadeOut(tween(90, easing = FastOutLinearInEasing))
-            when {
-                to > from -> (enter + slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { it / 12 }) togetherWith
-                    (exit + slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 12 })
-                to < from -> (enter + slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 12 }) togetherWith
-                    (exit + slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it / 12 })
-                else -> (enter + scaleIn(tween(210, delayMillis = 90, easing = FastOutSlowInEasing), initialScale = 0.92f)) togetherWith exit
+            val forward = if (to != from) to > from else tabIndex(targetState) >= tabIndex(initialState)
+            val slide = tween<IntOffset>(450, easing = FastOutExtraSlowIn)
+            if (forward) {
+                (fadeIn(tween(83, delayMillis = 50, easing = LinearEasing)) + slideInHorizontally(slide) { shift }) togetherWith
+                    slideOutHorizontally(slide) { -shift }
+            } else {
+                ((slideInHorizontally(slide) { -shift }) togetherWith
+                    (fadeOut(tween(83, delayMillis = 35, easing = LinearEasing)) + slideOutHorizontally(slide) { shift }))
+                    .also { it.targetContentZIndex = -1f }
             }.using(SizeTransform(clip = false))
         },
         label = "route",

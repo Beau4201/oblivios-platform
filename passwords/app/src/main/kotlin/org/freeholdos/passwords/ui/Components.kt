@@ -202,10 +202,10 @@ fun Modifier.statusBarPadding(): Modifier = windowInsetsPadding(WindowInsets.sta
 fun Modifier.navigationBarPadding(): Modifier = windowInsetsPadding(WindowInsets.navigationBars)
 
 @Composable
-fun SectionText(text: String, modifier: Modifier = Modifier, inset: Dp = 32.dp) {
+fun SectionText(text: String, modifier: Modifier = Modifier, inset: Dp = 32.dp, textAlign: androidx.compose.ui.text.style.TextAlign = androidx.compose.ui.text.style.TextAlign.Unspecified) {
     // 32 dp: the left edge of the text of a row in a card (16 dp margin and 16 dp inside), like the group headers.
     Text(
         text, color = pw.onVariant, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-        modifier = modifier.padding(horizontal = inset, vertical = 8.dp), overflow = TextOverflow.Clip,
+        modifier = modifier.padding(horizontal = inset, vertical = 8.dp), overflow = TextOverflow.Clip, textAlign = textAlign,
     )
 }

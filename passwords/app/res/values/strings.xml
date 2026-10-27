@@ -109,6 +109,7 @@
     <string name="pm_settings_security">Security</string>
     <string name="pm_settings_biometrics">Unlock with biometrics</string>
     <string name="pm_settings_biometrics_sub">Passphrase is always the fallback</string>
+    <string name="pm_settings_biometrics_none">Set up a fingerprint or face in the phone settings first.</string>
     <string name="pm_settings_autolock">Lock vault automatically</string>
     <string name="pm_settings_autolock_sub">After 1 minute in the background</string>
     <string name="pm_settings_autofill">Autofill</string>

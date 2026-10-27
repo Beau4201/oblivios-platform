@@ -46,6 +46,8 @@ fun CheckupScreen(c: AppController) {
                     Text(
                         if (count > 0) pluralStringResource(R.plurals.pm_checkup_summary, count, count) else stringResource(R.string.pm_checkup_none),
                         color = pw.on, style = MaterialTheme.typography.titleLarge,
+                        // The summary wraps to two lines on a phone; without this the second line sits at the left of a centred block.
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -89,7 +91,13 @@ fun CheckupScreen(c: AppController) {
             // As the note under a card in the settings (8 dp from the card) and the same 24 dp at the end; with no list above it
             // the note follows the summary, so it gets the 24 dp that a group header would bring.
             val anyList = cu != null && (cu.reused.isNotEmpty() || cu.weak.isNotEmpty())
-            item { SectionText(stringResource(R.string.pm_checkup_no_breach), Modifier.padding(top = if (anyList) 0.dp else 24.dp)) }
+            // With no list the note belongs to the centred summary above it, so it is centred too.
+            item {
+                SectionText(
+                    stringResource(R.string.pm_checkup_no_breach), Modifier.padding(top = if (anyList) 0.dp else 24.dp),
+                    textAlign = if (anyList) androidx.compose.ui.text.style.TextAlign.Unspecified else androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
             item { Spacer(Modifier.height(24.dp)) }
         }
         PwNavBar(1) { navigate(c, it) }

@@ -6,6 +6,7 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.hardware.biometrics.BiometricManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -190,6 +191,11 @@ class AppController(val activity: SecureActivity) {
     // --- unlocking ---
 
     fun hasBiometrics(): Boolean = session.biometricsEnabled()
+
+    /** True when a strong biometric is enrolled, which the biometric Keystore key needs before it can be made. */
+    fun biometricsAvailable(): Boolean =
+        activity.getSystemService(BiometricManager::class.java).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
+            BiometricManager.BIOMETRIC_SUCCESS
 
     fun unlockWithBiometrics() {
         session.biometricUnlock(activity, forFill = false) { outcome ->
@@ -407,6 +413,11 @@ class AppController(val activity: SecureActivity) {
      */
     fun toggleBiometrics(on: Boolean, done: (Boolean) -> Unit) {
         if (on) {
+            // The Keystore refuses a key that needs a biometric when none is enrolled; ask first instead of crashing on it.
+            if (!biometricsAvailable()) {
+                say(activity.getString(R.string.pm_settings_biometrics_none))
+                return done(false)
+            }
             session.enableBiometrics(activity) { ok -> lock = session.state; done(ok) }
         } else {
             confirmUser(R.string.pm_confirm_action) { ok ->
