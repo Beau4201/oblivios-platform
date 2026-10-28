@@ -109,6 +109,10 @@ private fun fieldsAsVanadiumReportsThem() {
     // the-internet.herokuapp.com/login: no autocomplete attribute at all
     Check.equal("herokuapp: the user name from its id and name", FieldRole.Username, web(emptyList(), "text", "username", "username"))
     Check.equal("herokuapp: the password from its type", FieldRole.Password, web(emptyList(), "password", "password", "password"))
+    // each attribute alone carries the signal (the other words say nothing)
+    Check.equal("only the HTML type says password", FieldRole.Password, web(emptyList(), "password", "field1", "field2"))
+    Check.equal("only the HTML name says user name", FieldRole.Username, web(emptyList(), "text", "field1", "username"))
+    Check.equal("only the HTML id says user name", FieldRole.Username, web(emptyList(), "text", "username", "field2"))
     // a card, a code or an address with a password type is not a login field (review of 2026-10-28, A1-1)
     Check.equal("a card security code typed as a password", FieldRole.Other, web(listOf("cc-csc"), "password", "cvv", "cvv"))
     Check.equal("a card number", FieldRole.Other, web(listOf("cc-number"), "text", "card", "card"))
