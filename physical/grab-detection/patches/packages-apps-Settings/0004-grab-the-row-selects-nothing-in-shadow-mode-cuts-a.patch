@@ -1,0 +1,75 @@
+From f4586fbf4d4c8bf576d23413023867c7eb54834d Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Wed, 28 Oct 2026 13:49:56 +0100
+Subject: [PATCH] grab: the row selects nothing in shadow mode, cuts a stray
+ level and asks for the screen lock
+
+Review of 2026-10-28 (C1, C2, C3). In shadow mode the row read Off and a tap on
+Off wrote nothing (the picker ignores the value already shown), so the detector
+stayed armed and logging. Shadow now selects none of the four entries, so a tap
+on Off writes the mode. A level outside the three is cut to the nearest one, as
+GrabDetectionService does when it arms, instead of showing as Standard. Changing
+the row asks for the screen lock first, like Auto reboot.
+---
+ .../security/GrabDetectionPrefController.java | 29 +++++++++++++------
+ 1 file changed, 20 insertions(+), 9 deletions(-)
+
+diff --git a/src/com/android/settings/security/GrabDetectionPrefController.java b/src/com/android/settings/security/GrabDetectionPrefController.java
+index 59c8121..06e1ee3 100644
+--- a/src/com/android/settings/security/GrabDetectionPrefController.java
++++ b/src/com/android/settings/security/GrabDetectionPrefController.java
+@@ -18,11 +18,15 @@ import com.android.settings.ext.RadioButtonPickerFragment2;
+ /**
+  * Grab detection on one row, like Auto reboot: Off, or on at one of the three strictnesses of the
+  * impact route (ADR-176, ADR-195). The row holds two settings, the mode (off or active) and the
+- * impact level (strictest, standard, relaxed); the shadow mode, which only logs, reads as Off as the
+- * old switch did.
++ * impact level (strictest, standard, relaxed). The shadow mode, which only logs and is the default
++ * until the feature is switched on for good, selects none of the four: the row shows no value, and
++ * a tap on Off then writes the mode (a tap on the value already shown writes nothing). Changing the
++ * row asks for the screen lock first, as Auto reboot does.
+  */
+ public class GrabDetectionPrefController extends AbstractListPreferenceController {
+     private static final int VALUE_OFF = 0;
++    // Not one of the entries, so that no entry is selected and the row shows no summary.
++    private static final int VALUE_SHADOW = -1;
+     // 1 + the impact level, so the three on values are 1, 2 and 3.
+     private static final int VALUE_ON_BASE = 1;
+ 
+@@ -53,19 +57,26 @@ public class GrabDetectionPrefController extends AbstractListPreferenceControlle
+ 
+     @Override
+     protected int getCurrentValue() {
+-        if (ExtSettings.GRAB_DETECTION_MODE.get(mContext) != ExtSettings.GRAB_DETECTION_ACTIVE) {
++        int mode = ExtSettings.GRAB_DETECTION_MODE.get(mContext);
++        if (mode == ExtSettings.GRAB_DETECTION_OFF) {
+             return VALUE_OFF;
+         }
+-        int level = ExtSettings.GRAB_IMPACT_LEVEL.get(mContext);
+-        // A value written by hand outside the three levels reads as the standard one, which is what
+-        // the detector falls back to.
+-        if (level < ExtSettings.GRAB_IMPACT_LEVEL_STRICT
+-                || level > ExtSettings.GRAB_IMPACT_LEVEL_RELAXED) {
+-            level = ExtSettings.GRAB_IMPACT_LEVEL_STANDARD;
++        if (mode != ExtSettings.GRAB_DETECTION_ACTIVE) {
++            return VALUE_SHADOW;
+         }
++        // A value written by hand outside the three levels is cut to the nearest one, as the detector
++        // does when it arms (GrabDetectionService).
++        int level = Math.max(ExtSettings.GRAB_IMPACT_LEVEL_STRICT,
++                Math.min(ExtSettings.GRAB_IMPACT_LEVEL_RELAXED,
++                        ExtSettings.GRAB_IMPACT_LEVEL.get(mContext)));
+         return VALUE_ON_BASE + level;
+     }
+ 
++    @Override
++    protected boolean isCredentialConfirmationRequired() {
++        return true;
++    }
++
+     @Override
+     protected boolean setValue(int val) {
+         if (val == VALUE_OFF) {
+-- 
+2.56.0
+

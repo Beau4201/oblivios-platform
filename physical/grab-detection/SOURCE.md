@@ -28,6 +28,7 @@ Authored in the disposable repositories `.worktrees/grab-detection-fwb` and `.wo
 | `packages-apps-Settings/0001` | switch for grab detection | The mode needs an owner-visible control. |
 | `packages-apps-Settings/0002` | list of the impact strictness | The owner asked for a setting from the strictest level to a relaxed one for running (2026-10-25); a radio list like the auto-reboot page, below the switch. |
 | `packages-apps-Settings/0003` | one row on the exploit protection page, like Auto reboot | The owner (2026-10-27, after the first look at `lynx` `2026102302`): one row instead of two, no description on the exploit protection page and none per entry, the description only as the footer of the page the row opens. Replaces the switch and the strictness row by one list (Off, Strictest, Standard, Relaxed) that writes the mode and the level together; `GrabImpactLevelPrefController` is deleted. |
+| `packages-apps-Settings/0004` | the row selects nothing in shadow mode, cuts a stray level, asks for the screen lock | Independent review of 2026-10-28 (C1 to C3, `docs/reviews/2026-10-post-2302-review.md` of `freeholdos-foundation`) and the owner's answer the same day (do what is best; ask for the PIN or fingerprint). In shadow mode, the default, the row read Off and the picker ignores a tap on the value it already shows, so Off could not be set; shadow now selects no entry. A level outside 0 to 2 is cut to the nearest one, as `GrabDetectionService.arm` does. `isCredentialConfirmationRequired` is true, as for Auto reboot. |
 
 Conflict surface on a new upstream release: the `Settings.Global` block after `AUTO_REBOOT_TIMEOUT`, `ExtSettings` after `AUTO_REBOOT_TIMEOUT`, the `StartSensorNotification` block of `SystemServer`, `KeyguardServiceDelegate.onShowingStateChanged`, the user-lockdown branch of `BouncerMessageInteractor`, and the first `Preference` after `auto_reboot` in `exploit_protection_settings.xml`.
 
@@ -57,6 +58,7 @@ On the build server 2026-10-15 with `git am`, trees clean and no build running, 
 | `packages-apps-Settings/0001` | `f70f1e9fb78` |
 | `packages-apps-Settings/0002` | `d31f2300fb2` (2026-10-26, on `fe618d503111`) |
 | `packages-apps-Settings/0003` | `0ea5154a33a` (2026-10-27, on `d31f2300fb2`, branch `freeholdos-2026100600`, tree clean, no build running; `git apply --check` passed first; the blobs of `strings_ext.xml`, `exploit_protection_settings.xml` and `GrabDetectionPrefController.java` equal the worktree's and the other controller is gone; not compiled or built) |
+| `packages-apps-Settings/0004` | `290bc735639` (2026-10-28, on `0ea5154a33a`, branch `freeholdos-2026100600`, tree clean, no build running; `git apply --check` passed first; the blob of `GrabDetectionPrefController.java` equals the disposable worktree's, authored in `.worktrees/grab-settings-0004`; not compiled or built) |
 
 The blob id of each of the 12 touched files (9 in `frameworks/base`, 3 in `packages/apps/Settings`) equals the blob id in the worktree at its tip, before `packages-apps-Settings/0003`; that patch changes three of the Settings files and deletes one.
 

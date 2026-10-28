@@ -1,6 +1,6 @@
 # grab-detection
 
-Thirteen patches that lock the phone when it is pulled out of a hand in use and restart it after
+Fourteen patches that lock the phone when it is pulled out of a hand in use and restart it after
 60 seconds without a PIN (ADR-169). The design is
 `docs/superpowers/specs/2026-10-15-grab-detection-design.md` in `freeholdos-foundation`.
 
@@ -19,6 +19,7 @@ Thirteen patches that lock the phone when it is pulled out of a hand in use and 
 | `patches/packages-apps-Settings/0001` | `packages/apps/Settings` | The on/off switch on the exploit protection page. |
 | `patches/packages-apps-Settings/0002` | `packages/apps/Settings` | The list of the impact strictness (strictest, standard, relaxed) below the switch (ADR-195). |
 | `patches/packages-apps-Settings/0003` | `packages/apps/Settings` | One row on the exploit protection page, like Auto reboot: Off, Strictest, Standard, Relaxed; replaces the switch and the strictness row. |
+| `patches/packages-apps-Settings/0004` | `packages/apps/Settings` | The row selects none of the four in shadow mode (so a tap on Off writes the mode), cuts a level outside 0 to 2 as the service does, and asks for the screen lock before a change, like Auto reboot. |
 
 `test/` holds the host test of the decision class and a mutation check:
 
