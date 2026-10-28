@@ -20,8 +20,10 @@ object InputTypes {
     const val NUMBER_PASSWORD = CLASS_NUMBER or 0x10
 }
 
-private val USERNAME_HINTS = setOf("username", "emailaddress")
-private val PASSWORD_HINTS = setOf("password", "newpassword")
+// Android's hint names, and the `autocomplete` tokens of a web page, which a browser passes on as they are: Vanadium sends
+// `username` and `current-password` [measured: dump of a fill request on lynx 2026102302, 2026-10-28, PWM-004].
+private val USERNAME_HINTS = setOf("username", "emailaddress", "email")
+private val PASSWORD_HINTS = setOf("password", "newpassword", "current-password", "new-password")
 
 private val USER_TOKENS = setOf("user", "username", "userid", "uname", "login", "loginid", "email", "mail", "emailaddress", "account", "accountid", "uid")
 private val PASSWORD_TOKENS = setOf("pass", "password", "passwd", "pwd", "passphrase", "passcode")
@@ -37,6 +39,26 @@ private fun tokens(id: String?): Set<String> {
     if (id.isNullOrEmpty()) return emptySet()
     val spaced = id.replace(Regex("([a-z0-9])([A-Z])"), "$1 $2")
     return spaced.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }.toSet()
+}
+
+/**
+ * The input type of a web field. A node that Vanadium builds for a page field has input type 0 and says what it is only in its
+ * HTML attributes (`type=password`) [measured: PWM-004, github.com/login and the-internet.herokuapp.com/login]; a node
+ * with an input type of its own keeps it.
+ */
+fun webInputType(inputType: Int, htmlType: String?): Int {
+    if (inputType != 0) return inputType
+    return when (htmlType?.lowercase()) {
+        "password" -> InputTypes.TEXT_WEB_PASSWORD
+        "email" -> InputTypes.TEXT_WEB_EMAIL
+        else -> inputType
+    }
+}
+
+/** The id words of a web field: the id entry of the node, or when it has none the `id` and `name` of the HTML element. */
+fun webIdEntry(idEntry: String?, htmlId: String?, htmlName: String?): String? {
+    if (!idEntry.isNullOrEmpty()) return idEntry
+    return listOfNotNull(htmlId, htmlName).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { null }
 }
 
 /**

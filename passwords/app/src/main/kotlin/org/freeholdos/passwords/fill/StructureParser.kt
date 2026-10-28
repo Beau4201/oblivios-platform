@@ -35,7 +35,13 @@ object StructureParser {
             if (node.autofillType != android.view.View.AUTOFILL_TYPE_TEXT) return@walk
             // A field with no size cannot be seen or typed into: a page script that adds one only wants what the fill puts there.
             if (node.width <= 0 || node.height <= 0) return@walk
-            val role = classify(node.autofillHints?.toList() ?: emptyList(), node.inputType, node.idEntry)
+            // A web field has no id entry and no input type: the HTML attributes of the node say what it is (PWM-004).
+            val html = node.htmlInfo?.attributes?.associate { it.first to it.second }.orEmpty()
+            val role = classify(
+                node.autofillHints?.toList() ?: emptyList(),
+                webInputType(node.inputType, html["type"]),
+                webIdEntry(node.idEntry, html["id"], html["name"]),
+            )
             if (role == FieldRole.Other) return@walk
             fields.add(ParsedField(ids.size.toString(), role))
             ids.add(id)

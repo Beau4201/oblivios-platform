@@ -10,6 +10,8 @@ import org.freeholdos.passwords.fill.SaveCandidate
 import org.freeholdos.passwords.fill.SiteLookup
 import org.freeholdos.passwords.fill.classify
 import org.freeholdos.passwords.fill.plan
+import org.freeholdos.passwords.fill.webIdEntry
+import org.freeholdos.passwords.fill.webInputType
 import org.freeholdos.passwords.lock.LockState
 import org.freeholdos.passwords.lock.Reason
 
@@ -35,6 +37,7 @@ fun main() {
     hintsWinOverHeuristics()
     aSearchBoxIsNotALoginField()
     heuristicsFromTheInputTypeAndTheId()
+    fieldsAsVanadiumReportsThem()
     lockedWithAMatchOffersOneGenericAuthentication()
     lockedWithoutAMatchOffersNothingAndLeaksNothing()
     unlockedOffersOneDatasetPerAccountLabelledWithTheUsernameOnly()
@@ -92,6 +95,34 @@ private fun heuristicsFromTheInputTypeAndTheId() {
     Check.equal("an id that only contains a word like pass", FieldRole.Other, classifyId("passenger_count"))
     Check.equal("a number class that is not a password", FieldRole.Other, classifyId(null, InputTypes.NUMBER))
     Check.equal("an empty id", FieldRole.Other, classifyId(""))
+}
+
+/** The nodes of the dump of two real fill requests in Vanadium (PWM-004, lynx 2026102302, 2026-10-28): no id entry, input type 0. */
+private fun fieldsAsVanadiumReportsThem() {
+    fun web(hints: List<String>, type: String?, id: String?, name: String?) =
+        classify(hints, webInputType(0, type), webIdEntry(null, id, name))
+    // github.com/login
+    Check.equal("github: the user name (autocomplete=username)", FieldRole.Username, web(listOf("username"), "text", "login_field", "login"))
+    Check.equal("github: the password (autocomplete=current-password)", FieldRole.Password, web(listOf("current-password"), "password", "password", "password"))
+    Check.equal("github: the hidden trap field is not a login field", FieldRole.Other, web(emptyList(), "text", "", "required_field_3d21"))
+    // the-internet.herokuapp.com/login: no autocomplete attribute at all
+    Check.equal("herokuapp: the user name from its id and name", FieldRole.Username, web(emptyList(), "text", "username", "username"))
+    Check.equal("herokuapp: the password from its type", FieldRole.Password, web(emptyList(), "password", "password", "password"))
+    // the helpers
+    Check.equal("a password type of the HTML is a web password", InputTypes.TEXT_WEB_PASSWORD, webInputType(0, "password"))
+    Check.equal("the type is read without case", InputTypes.TEXT_WEB_PASSWORD, webInputType(0, "PASSWORD"))
+    Check.equal("an email type of the HTML is a web email", InputTypes.TEXT_WEB_EMAIL, webInputType(0, "email"))
+    Check.equal("a text type says nothing", 0, webInputType(0, "text"))
+    Check.equal("no type says nothing", 0, webInputType(0, null))
+    Check.equal("an input type of the node itself is kept", InputTypes.TEXT_EMAIL, webInputType(InputTypes.TEXT_EMAIL, "password"))
+    Check.equal("the id entry of the node comes first", "etUser", webIdEntry("etUser", "id1", "name1"))
+    Check.equal("an empty id entry falls back to the HTML id and name", "id1 name1", webIdEntry("", "id1", "name1"))
+    Check.equal("no id entry and no HTML id", "name1", webIdEntry(null, null, "name1"))
+    Check.equal("an empty id and name give no id words", null, webIdEntry(null, "", ""))
+    // the HTML autocomplete tokens of the page
+    Check.equal("new-password is a password", FieldRole.Password, classify(listOf("new-password"), 0, null))
+    Check.equal("email is a user name", FieldRole.Username, classify(listOf("email"), 0, null))
+    Check.equal("a web password hint is read without case", FieldRole.Password, classify(listOf("Current-Password"), 0, null))
 }
 
 private fun lockedWithAMatchOffersOneGenericAuthentication() {
