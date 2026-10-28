@@ -37,11 +37,7 @@ object StructureParser {
             if (node.width <= 0 || node.height <= 0) return@walk
             // A web field has no id entry and no input type: the HTML attributes of the node say what it is (PWM-004).
             val html = node.htmlInfo?.attributes?.associate { it.first to it.second }.orEmpty()
-            val role = classify(
-                node.autofillHints?.toList() ?: emptyList(),
-                webInputType(node.inputType, html["type"]),
-                webIdEntry(node.idEntry, html["id"], html["name"]),
-            )
+            val role = classifyWeb(node.autofillHints?.toList() ?: emptyList(), node.inputType, node.idEntry, html)
             if (role == FieldRole.Other) return@walk
             fields.add(ParsedField(ids.size.toString(), role))
             ids.add(id)

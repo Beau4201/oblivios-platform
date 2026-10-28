@@ -194,7 +194,7 @@ class AppController(val activity: SecureActivity) {
 
     /** True when a strong biometric is enrolled, which the biometric Keystore key needs before it can be made. */
     fun biometricsAvailable(): Boolean =
-        activity.getSystemService(BiometricManager::class.java).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
+        activity.getSystemService(BiometricManager::class.java)?.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
             BiometricManager.BIOMETRIC_SUCCESS
 
     fun unlockWithBiometrics() {

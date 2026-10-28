@@ -322,12 +322,17 @@ class SessionManager(
     /** Switches biometric unlock on: one prompt, which wraps the vault key under the biometric Keystore key. */
     fun enableBiometrics(activity: Activity, done: (Boolean) -> Unit) {
         val h = handle ?: return done(false)
+        // A key that a new enrolment invalidated, or one that an earlier cancelled prompt left behind without a wrapper and an
+        // enrolment invalidated later, would fail every switch-on from here on (review of 2026-10-28, A2-1): start again.
+        if (!gateway.biometricsStillValid()) disableBiometrics()
         // Making the key can still fail after the caller's check (a biometric removed in between): off, not a crash.
         val cipher = try {
             gateway.biometricCipherForWrap()
         } catch (e: GeneralSecurityException) {
             return done(false)
         } catch (e: IllegalStateException) {
+            return done(false)
+        } catch (e: java.security.ProviderException) {
             return done(false)
         }
         val finished = AtomicBoolean(false)

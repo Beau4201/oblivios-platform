@@ -55,23 +55,35 @@ fun webInputType(inputType: Int, htmlType: String?): Int {
     }
 }
 
-/** The id words of a web field: the id entry of the node, or when it has none the `id` and `name` of the HTML element. */
+/**
+ * The id words of a web field: the id entry of the node, or when it has none the `id` and `name` of the HTML element, each cut at
+ * [MAX_WEB_ATTRIBUTE] characters (the page chooses their length, and the service answers on the main thread of the app).
+ */
 fun webIdEntry(idEntry: String?, htmlId: String?, htmlName: String?): String? {
     if (!idEntry.isNullOrEmpty()) return idEntry
-    return listOfNotNull(htmlId, htmlName).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { null }
+    return listOfNotNull(htmlId, htmlName).map { it.take(MAX_WEB_ATTRIBUTE) }.filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { null }
 }
+
+private const val MAX_WEB_ATTRIBUTE = 256
+
+/** [classify] for a node with HTML attributes ([html]: attribute name to value, names as the browser reports them). */
+fun classifyWeb(hints: List<String>, inputType: Int, idEntry: String?, html: Map<String, String>): FieldRole =
+    classify(hints, webInputType(inputType, html["type"]), webIdEntry(idEntry, html["id"], html["name"]))
 
 /**
  * What a field is, for the purpose of a login. The autofill hints of the app or page come first, because the author of
  * the form knows best; the input type and the words of the field id are the fallback.
  */
 fun classify(hints: List<String>, inputType: Int, idEntry: String?): FieldRole {
-    val normalised = hints.map { it.lowercase() }
+    // A web page's autocomplete attribute is a list of tokens (`username webauthn`); a browser may pass it on whole.
+    val normalised = hints.flatMap { it.lowercase().split(' ', '\t').filter(String::isNotEmpty) }
     for (h in normalised) {
         when {
             h in USERNAME_HINTS -> return FieldRole.Username
             h in PASSWORD_HINTS -> return FieldRole.Password
-            h.startsWith("credit") || h in setOf("search", "phone", "creditcardnumber", "smsotpcode", "postaladdress") -> return FieldRole.Other
+            // A card, a code, a phone or an address on a page is never a login field, even when its type is `password` (a CVV).
+            h.startsWith("credit") || h.startsWith("cc-") || h.startsWith("tel") || h.startsWith("address-") ||
+                h in setOf("search", "phone", "creditcardnumber", "smsotpcode", "postaladdress", "one-time-code", "postal-code", "street-address") -> return FieldRole.Other
         }
     }
     val words = tokens(idEntry)
@@ -80,7 +92,8 @@ fun classify(hints: List<String>, inputType: Int, idEntry: String?): FieldRole {
     val passwordType = (klass == InputTypes.CLASS_TEXT && variation in setOf(0x80, 0x90, 0xe0)) ||
         (klass == InputTypes.CLASS_NUMBER && variation == 0x10)
     if (passwordType) return FieldRole.Password
-    if (words.any { it in NOT_LOGIN_TOKENS }) return FieldRole.Other
+    // `email_address` is a login field; `shipping_address` is not.
+    if (words.any { it in NOT_LOGIN_TOKENS && !(it == "address" && ("email" in words || "mail" in words)) }) return FieldRole.Other
     val emailType = klass == InputTypes.CLASS_TEXT && variation in setOf(0x20, 0xd0)
     if (emailType) return FieldRole.Username
     return when {

@@ -9,6 +9,7 @@ import org.freeholdos.passwords.fill.ParsedField
 import org.freeholdos.passwords.fill.SaveCandidate
 import org.freeholdos.passwords.fill.SiteLookup
 import org.freeholdos.passwords.fill.classify
+import org.freeholdos.passwords.fill.classifyWeb
 import org.freeholdos.passwords.fill.plan
 import org.freeholdos.passwords.fill.webIdEntry
 import org.freeholdos.passwords.fill.webInputType
@@ -100,7 +101,7 @@ private fun heuristicsFromTheInputTypeAndTheId() {
 /** The nodes of the dump of two real fill requests in Vanadium (PWM-004, lynx 2026102302, 2026-10-28): no id entry, input type 0. */
 private fun fieldsAsVanadiumReportsThem() {
     fun web(hints: List<String>, type: String?, id: String?, name: String?) =
-        classify(hints, webInputType(0, type), webIdEntry(null, id, name))
+        classifyWeb(hints, 0, null, listOfNotNull(type?.let { "type" to it }, id?.let { "id" to it }, name?.let { "name" to it }).toMap())
     // github.com/login
     Check.equal("github: the user name (autocomplete=username)", FieldRole.Username, web(listOf("username"), "text", "login_field", "login"))
     Check.equal("github: the password (autocomplete=current-password)", FieldRole.Password, web(listOf("current-password"), "password", "password", "password"))
@@ -108,6 +109,27 @@ private fun fieldsAsVanadiumReportsThem() {
     // the-internet.herokuapp.com/login: no autocomplete attribute at all
     Check.equal("herokuapp: the user name from its id and name", FieldRole.Username, web(emptyList(), "text", "username", "username"))
     Check.equal("herokuapp: the password from its type", FieldRole.Password, web(emptyList(), "password", "password", "password"))
+    // a card, a code or an address with a password type is not a login field (review of 2026-10-28, A1-1)
+    Check.equal("a card security code typed as a password", FieldRole.Other, web(listOf("cc-csc"), "password", "cvv", "cvv"))
+    Check.equal("a card number", FieldRole.Other, web(listOf("cc-number"), "text", "card", "card"))
+    Check.equal("a one-time code typed as a password", FieldRole.Other, web(listOf("one-time-code"), "password", "code", "code"))
+    Check.equal("a phone number", FieldRole.Other, web(listOf("tel-national"), "text", "username", "username"))
+    Check.equal("an address line", FieldRole.Other, web(listOf("address-line1"), "text", "username", "username"))
+    Check.equal("a postal code", FieldRole.Other, web(listOf("postal-code"), "text", "username", "username"))
+    Check.equal("a street address", FieldRole.Other, web(listOf("street-address"), "text", "username", "username"))
+    // the autocomplete attribute as one string (A1-2)
+    Check.equal("two tokens in one hint", FieldRole.Username, web(listOf("username webauthn"), "text", null, null))
+    Check.equal("a section token before the password token", FieldRole.Password, web(listOf("section-login current-password"), "password", null, null))
+    Check.equal("a tab between tokens", FieldRole.Username, web(listOf("x-custom\tusername"), "text", null, null))
+    // an email address field is a login field (A1-3), a shipping address is not
+    Check.equal("email_address of type email", FieldRole.Username, web(emptyList(), "email", "email_address", "email_address"))
+    Check.equal("a mail address by name only", FieldRole.Username, web(emptyList(), "email", "mail_address", null))
+    Check.equal("a shipping address", FieldRole.Other, web(emptyList(), "text", "shipping_address", "shipping_address"))
+    Check.equal("an address field of type email with no email word", FieldRole.Other, web(emptyList(), "email", "address", "address"))
+    Check.equal("a phone or email field is still a phone field", FieldRole.Other, web(emptyList(), "email", "tel_or_email", "tel_or_email"))
+    // the page chooses the length of its attributes (A1-4)
+    Check.that("a huge id and name are cut", (webIdEntry(null, "a".repeat(100_000), "b".repeat(100_000))?.length ?: 0) <= 513)
+    Check.equal("a huge id does not hide a login word at its start", FieldRole.Username, web(emptyList(), "text", "username " + "x".repeat(100_000), null))
     // the helpers
     Check.equal("a password type of the HTML is a web password", InputTypes.TEXT_WEB_PASSWORD, webInputType(0, "password"))
     Check.equal("the type is read without case", InputTypes.TEXT_WEB_PASSWORD, webInputType(0, "PASSWORD"))
