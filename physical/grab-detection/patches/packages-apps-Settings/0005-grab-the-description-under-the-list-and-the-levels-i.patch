@@ -1,0 +1,60 @@
+From 065a8bb9d726716f360df9f239bac331b51556a7 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Thu, 29 Oct 2026 17:03:07 +0100
+Subject: [PATCH] grab: the description under the list and the levels in order
+ of protection
+
+The footer of Lock when grabbed is the last row of the page, below the four entries, as on the other pages of this kind,
+and the entries run from Off through Relaxed and Standard to Strictest. The text names the levels in the same order.
+The values written to the settings do not change.
+---
+ res/values/strings_ext.xml                            |  2 +-
+ .../security/GrabDetectionPrefController.java         | 11 ++++++-----
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index 9ff18278b89..4e6c1109b8e 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -42,7 +42,7 @@
+ 
+     <string name="auto_reboot_title">Auto reboot</string>
+     <string name="grab_detection_title">Lock when grabbed</string>
+-    <string name="grab_detection_footer">Lock the phone at once when it is pulled out of your hand while you use it, and restart it after 60 seconds unless you unlock it. Standard does not lock when the phone is set down. Strictest also locks for a hard set-down. Relaxed locks only for very hard knocks and can miss a gentle snatch.</string>
++    <string name="grab_detection_footer">Lock the phone at once when it is pulled out of your hand while you use it, and restart it after 60 seconds unless you unlock it. Relaxed locks only for very hard knocks and can miss a gentle snatch. Standard does not lock when the phone is set down. Strictest also locks for a hard set-down.</string>
+     <string name="grab_impact_level_strict">Strictest</string>
+     <string name="grab_impact_level_standard">Standard</string>
+     <string name="grab_impact_level_relaxed">Relaxed</string>
+diff --git a/src/com/android/settings/security/GrabDetectionPrefController.java b/src/com/android/settings/security/GrabDetectionPrefController.java
+index 06e1ee36893..284892d7389 100644
+--- a/src/com/android/settings/security/GrabDetectionPrefController.java
++++ b/src/com/android/settings/security/GrabDetectionPrefController.java
+@@ -40,19 +40,20 @@ public class GrabDetectionPrefController extends AbstractListPreferenceControlle
+     }
+ 
+     @Override
+-    public void addPrefsBeforeList(RadioButtonPickerFragment2 fragment, PreferenceScreen screen) {
++    public void addPrefsAfterList(RadioButtonPickerFragment2 fragment, PreferenceScreen screen) {
+         addFooterPreference(screen, R.string.grab_detection_footer);
+     }
+ 
+     @Override
+     protected void getEntries(Entries entries) {
+         entries.add(R.string.switch_off_text, VALUE_OFF);
+-        entries.add(R.string.grab_impact_level_strict,
+-                VALUE_ON_BASE + ExtSettings.GRAB_IMPACT_LEVEL_STRICT);
+-        entries.add(R.string.grab_impact_level_standard,
+-                VALUE_ON_BASE + ExtSettings.GRAB_IMPACT_LEVEL_STANDARD);
++        // From the least to the most protection: Off, Relaxed, Standard, Strictest.
+         entries.add(R.string.grab_impact_level_relaxed,
+                 VALUE_ON_BASE + ExtSettings.GRAB_IMPACT_LEVEL_RELAXED);
++        entries.add(R.string.grab_impact_level_standard,
++                VALUE_ON_BASE + ExtSettings.GRAB_IMPACT_LEVEL_STANDARD);
++        entries.add(R.string.grab_impact_level_strict,
++                VALUE_ON_BASE + ExtSettings.GRAB_IMPACT_LEVEL_STRICT);
+     }
+ 
+     @Override
+-- 
+2.39.5
+
