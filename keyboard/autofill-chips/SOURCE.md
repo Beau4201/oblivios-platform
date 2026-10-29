@@ -1,0 +1,26 @@
+# Source record
+
+## Base
+
+GrapheneOS `platform_packages_inputmethods_LatinIME` as checked out on the build server on 2026-10-29: branch `freeholdos-2026100600` at `92692cfef` (manifest tag `2026100600`), which holds `keyboard/restyle` `0001` and `0002` as `731facff8` and `6f0d935ba`. The patch edits `LatinIME.java` next to the hunks of `0002`, so it applies on top of that package.
+
+The patch was authored in a disposable local git repository (`.worktrees/keyboard-autofill-chips/`, gitignored) that held only `java/` and `common/` of that checkout, read-only from the server. The edits of existing files are made by `tools/keyboard/chips-latinime.py` of `freeholdos-foundation` (not published), which asserts that every old text exists exactly once and writes nothing on a conflict; the new files are plain files. Landed with `git am` on the live branch on 2026-10-29 (no build running, tree clean, `git apply --check` first; a rollback ref `freeholdos-2026100600-before-chips` points at `92692cfef`) as `7370e572a`. `git am` gives another hash than the local commit; the git tree hashes of `java/src`, `java/res` and `java/Android.bp` of the landed branch equal those of the local repository (`82733f82...`, `7f7802c3...`, `1fb372b7...`).
+
+## Patch
+
+| Patch | Subject | Files | Why it diverges from upstream |
+| --- | --- | --- | --- |
+| `0001` | show inline autofill suggestions as chips in the suggestion strip | New: `AutofillChipPolicy`, `AutofillChipStyle`, `AutofillChipRow`, `AutofillChipController` (package `suggestions`), `values/freeholdos_autofill_chips.xml`, two chip background drawables. Changed: `Android.bp`, `res/xml/method.xml`, `res/layout/suggestions_strip.xml`, `SuggestionStripPasteController`, `SuggestionStripView`, `LatinIME` | Upstream has no inline suggestion support and no row for it in the strip. The module links `androidx.autofill_autofill` (prebuilt of the tree) for the style of a chip; `method.xml` opts in with `supportsInlineSuggestions` and not with the touch-exploration variant; the strip layout gets a chip row in the cell of the suggestions and the paste actions; the paste controller gives the row priority over an automatic paste button and over the word suggestions; `LatinIME` builds the request, shows the response, tells the row about typed characters and keeps the strip visible on a password field while chips are there. |
+
+Changed upstream lines carry a `freeholdos:` comment saying why.
+
+## Rebase notes
+
+Upstream lines touched: one `static_libs` entry of `Android.bp`, the root element of `method.xml`, one place in `suggestions_strip.xml` (before `paste_actions`), nine places in `SuggestionStripPasteController`, five in `SuggestionStripView` and ten imports and hooks in `LatinIME` (`onEvent`, `onTextInput`, `onStartBatchInput`, `onFinishInputInternal`, `updateSuggestionStripVisibility`, plus two new overrides). Re-run `tools/keyboard/chips-latinime.py` on a new base instead of resolving conflicts.
+
+## Verification
+
+- `checks/run-host-checks.sh <java dir>` on the local repository (its `java` tree has the same git hashes as the landed one): `host checks passed: AutofillChipPolicy 28`, the guard self-test catches all 12 broken trees and passes the clean one, `chip guards: OK`, `22 killed, 0 survived, 0 errors`, `all chip host checks passed`. The guards on the unpatched base fail with `G4` and `G5`.
+- `tools/build-vm/typecheck-latinime.sh` (with the `androidx.autofill` jar) on the local repository and on the landed tree: `typecheck: OK`; with the original script, 11 errors naming `UiVersions`.
+- Module build `m -j6 -k LatinIME PasswordsApp` for `lynx-cur-userdebug` (`tools/build-vm/build-chips-modules.sh`, `OFFICIAL_BUILD=true`, ccache), exit code 0: `LatinIME.apk` (`2ef4be5e...`) has `supportsInlineSuggestions` true in `method.xml`, no touch-exploration attribute, no permission beyond the stock list (no `INTERNET`), and its dex holds `androidx.autofill.inline.UiVersions`, `AutofillChipController`, `AutofillChipRow` and `onCreateInlineSuggestionsRequest`.
+- Not run: any image, any device. Rows `ACH-005` to `ACH-016` of the validation matrix.
