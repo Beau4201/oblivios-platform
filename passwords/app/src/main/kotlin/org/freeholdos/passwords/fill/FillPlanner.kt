@@ -54,9 +54,13 @@ fun plan(fields: List<ParsedField>, webDomain: String?, packageName: String, sta
  * Whether a form is offered for saving at all. A form of a site is, when it has a password field (a step of a login can ask
  * for the password alone); a form of an app also needs a username field, because a lone password field in an app is mostly a
  * lock or an encryption password and not a login worth keeping (owner, 2026-10-29: only what has to be in the vault).
+ * Never when the vault already has an account for the site or app ([hasAccount], answered by the domain index, so also while
+ * locked): the owner never wants to be asked to save what is in the vault. The price: a changed password or a second account
+ * of a known site is not offered either, the user edits the entry in the app. A login filled from the vault is not offered by
+ * the framework in any case, because its values did not change.
  */
-fun offersSave(fields: List<ParsedField>, webDomain: String?): Boolean {
-    if (fields.none { it.role == FieldRole.Password }) return false
+fun offersSave(fields: List<ParsedField>, webDomain: String?, hasAccount: Boolean): Boolean {
+    if (hasAccount || fields.none { it.role == FieldRole.Password }) return false
     return webDomain != null || fields.any { it.role == FieldRole.Username }
 }
 

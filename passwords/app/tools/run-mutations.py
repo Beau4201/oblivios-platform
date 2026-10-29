@@ -245,7 +245,9 @@ MUTATIONS = [
     ("origin: a system app is an app", OR, "        facts.isSystemApp(pkg) -> Origin.None\n", ""),
     ("origin: only the system apps are an app", OR, "facts.isSystemApp(pkg) -> Origin.None", "!facts.isSystemApp(pkg) -> Origin.None"),
     # FillPlanner.kt, offersSave
-    ("save: a form with no password is offered", L, "if (fields.none { it.role == FieldRole.Password }) return false", ""),
+    ("save: a form with no password is offered", L, "if (hasAccount || fields.none { it.role == FieldRole.Password }) return false", "if (hasAccount) return false"),
+    ("save: a site with an account is offered", L, "if (hasAccount || fields.none { it.role == FieldRole.Password }) return false", "if (fields.none { it.role == FieldRole.Password }) return false"),
+    ("save: only an app with an account is refused", L, "if (hasAccount || fields.none { it.role == FieldRole.Password }) return false", "if ((hasAccount && webDomain == null) || fields.none { it.role == FieldRole.Password }) return false"),
     ("save: a lone password in an app is offered", L, "return webDomain != null || fields.any { it.role == FieldRole.Username }", "return true"),
     ("save: a site's password step is not offered", L, "return webDomain != null || fields.any { it.role == FieldRole.Username }", "return fields.any { it.role == FieldRole.Username }"),
     ("save: an app form is never offered", L, "return webDomain != null || fields.any { it.role == FieldRole.Username }", "return webDomain != null"),

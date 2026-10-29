@@ -60,11 +60,12 @@ class PasswordsAutofillService : AutofillService() {
                 datasetFor(item, screen)?.let { response.addDataset(it); any = true }
             }
         }
-        // A submitted login is offered for saving on every login form, locked or open: it carries no sign of an account.
-        // Locked, the save waits for the unlock (onSaveRequest). Never for an app of the system image (the origin policy
-        // gives such a screen no fields) and, in an app, only for a form with a username too ([offersSave]).
+        // A submitted login is offered for saving on a login form, locked or open, when the vault has no account for the
+        // site or app yet (the domain index answers that while locked too). Locked, the save waits for the unlock
+        // (onSaveRequest). Never for an app of the system image (the origin policy gives such a screen no fields) and, in an
+        // app, only for a form with a username too ([offersSave]).
         val passwordIds = screen.idsOf(screen.fields.filter { it.role == FieldRole.Password }.map { it.key })
-        if (offersSave(screen.fields, screen.webDomain) && passwordIds.isNotEmpty()) {
+        if (offersSave(screen.fields, screen.webDomain, lookup.hasAccount(screen.webDomain, screen.packageName)) && passwordIds.isNotEmpty()) {
             val optional = screen.idsOf(screen.fields.filter { it.role == FieldRole.Username }.map { it.key })
             val save = SaveInfo.Builder(SaveInfo.SAVE_DATA_TYPE_PASSWORD or SaveInfo.SAVE_DATA_TYPE_USERNAME, passwordIds.toTypedArray())
             if (optional.isNotEmpty()) save.setOptionalIds(optional.toTypedArray())
@@ -117,7 +118,8 @@ class PasswordsAutofillService : AutofillService() {
         // Never a login of the app itself (its passphrase screens), whatever the fill step offered.
         if (structure.activityComponent?.packageName == packageName) return callback.onSuccess()
         val screen = StructureParser.parse(structure, app.originPolicy)
-        if (!offersSave(screen.fields, screen.webDomain)) return callback.onSuccess()
+        // The account test is left out here: the offer was made for a login without an account, and the user chose to save it.
+        if (!offersSave(screen.fields, screen.webDomain, hasAccount = false)) return callback.onSuccess()
         val candidate = SaveCandidate.of(screen.fields.mapIndexedNotNull { i, f -> screen.values[i]?.let { f.role to it } })
             ?: return callback.onSuccess()
         if (!session.isOpenNow()) {

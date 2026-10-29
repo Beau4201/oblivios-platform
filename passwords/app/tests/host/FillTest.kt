@@ -227,12 +227,15 @@ private fun saveCandidates() {
 
 private fun onlyRealLoginsAreOfferedForSaving() {
     val other = ParsedField("3", FieldRole.Other)
-    Check.that("a site's form with both fields is offered", offersSave(listOf(user, pass), "github.com"))
-    Check.that("a step of a site with the password alone is offered", offersSave(listOf(pass), "github.com"))
-    Check.that("an app's form with both fields is offered", offersSave(listOf(user, pass), null))
-    Check.that("a lone password field of an app is not a login: lock, encryption, file password", !offersSave(listOf(pass), null))
-    Check.that("no password field, nothing to save", !offersSave(listOf(user), "github.com") && !offersSave(listOf(user), null) && !offersSave(listOf(other), null))
-    Check.that("no fields, nothing to save", !offersSave(emptyList(), "github.com") && !offersSave(emptyList(), null))
+    Check.that("a site's form with both fields is offered", offersSave(listOf(user, pass), "github.com", false))
+    Check.that("a step of a site with the password alone is offered", offersSave(listOf(pass), "github.com", false))
+    Check.that("an app's form with both fields is offered", offersSave(listOf(user, pass), null, false))
+    Check.that("a lone password field of an app is not a login: lock, encryption, file password", !offersSave(listOf(pass), null, false))
+    Check.that("no password field, nothing to save", !offersSave(listOf(user), "github.com", false) && !offersSave(listOf(user), null, false) && !offersSave(listOf(other), null, false))
+    Check.that("no fields, nothing to save", !offersSave(emptyList(), "github.com", false) && !offersSave(emptyList(), null, false))
+    // Owner, 2026-10-29: never ask to save what the vault already holds.
+    Check.that("a site that has an account is not offered", !offersSave(listOf(user, pass), "github.com", true) && !offersSave(listOf(pass), "github.com", true))
+    Check.that("an app that has an account is not offered", !offersSave(listOf(user, pass), null, true))
 }
 
 private fun everyTokenOfTheLists() {
