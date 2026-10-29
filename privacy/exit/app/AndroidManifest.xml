@@ -9,7 +9,11 @@
     <uses-permission android:name="android.permission.CONTROL_OEM_PAID_NETWORK_PREFERENCE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.QUERY_USERS" />
+    <!-- The users of the device, to mask the apps of every user: UserManager.getUserHandles needs MANAGE_USERS or CREATE_USERS
+         [verified-in-source: UserManagerService.getUsers calls checkCreateUsersPermission]; QUERY_USERS, which this app asked for
+         before, answers none of the calls that list users, so every pass of the controller ended in a SecurityException and no
+         preference or rule was ever set (NET-009, lynx image 2026102303). -->
+    <uses-permission android:name="android.permission.MANAGE_USERS" />
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS_FULL" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 

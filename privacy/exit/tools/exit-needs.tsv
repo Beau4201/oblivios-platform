@@ -1,0 +1,55 @@
+# What the exit daemon (exitd) and the route helper (exitd_route) need from the policy and from their init definition, one row
+# per operation, read from straces of the real binary on `lynx` image 2026102303 (2026-10-29): startup, Tor bootstrap with a
+# Tor class in the table (`exitd: bootstrapped`), and a route apply and clear that left the kernel as it found it. Checked by
+# check-syscall-policy.py against a compiled policy and exit.rc, so that a missing rule, xperm number or group is found
+# before an image is built, not by a service that dies after the first failed call (NET-009: three images, one defect each).
+#
+# Columns (tab separated): kind, source, target, class, permissions or numbers, need, evidence
+#   kind  allow      every permission is granted to the source on the target (`self` is the source itself)
+#         allowxperm every number (ioctl or nlmsg, hex, ranges as a-b) is granted for the named permission
+#         deny       none of the permissions may be granted (the design says the helper has no inet socket)
+#         gid        the service in exit.rc lists the group (columns: kind, service, group name, -, -, need, evidence)
+#   need  required   the row fails the check
+#         optional   a denial is tolerated: the daemon was run with the read failing (strace -e inject=openat:error=EACCES)
+#                    and kept running; the denial shows in the log and the row records that nothing depends on it
+#
+# ---- exitd -------------------------------------------------------------------------------------------------------------
+allow	exitd	tun_device	chr_file	getattr open read write ioctl	required	openat /dev/net/tun O_RDWR
+allowxperm	exitd	tun_device	chr_file	ioctl 0x54ca	required	ioctl TUNSETIFF (0x400454ca)
+allow	exitd	self	tun_socket	create	required	avc denied { create } tclass=tun_socket, NET-009 2026-10-29; netd has this one rule for its own tun
+allow	exitd	self	capability	net_admin	required	TUNSETIFF needs CAP_NET_ADMIN (EPERM without it)
+allow	exitd	self	udp_socket	create ioctl	required	socket(AF_INET, SOCK_DGRAM) for SIOCGIFMTU of the tun
+allowxperm	exitd	self	udp_socket	ioctl 0x8921	required	ioctl SIOCGIFMTU
+allow	exitd	self	tcp_socket	create bind listen accept connect read write getopt setopt shutdown getattr	required	sock_diag self-check on 127.0.0.1, Tor streams
+allow	exitd	node_type	tcp_socket	node_bind	required	bind(127.0.0.1:0) of the self-check
+allow	exitd	port_type	tcp_socket	name_connect	required	connect to relays on 80, 443 and 9100
+allow	exitd	self	netlink_tcpdiag_socket	create bind read write nlmsg_read nlmsg_write	required	socket(AF_NETLINK, NETLINK_SOCK_DIAG)
+allow	exitd	netd	unix_stream_socket	connectto	required	connect(/dev/socket/fwmarkd) by the netd client of every inet socket
+allow	exitd	fwmarkd_socket	sock_file	write	required	connect(/dev/socket/fwmarkd)
+allow	exitd	self	unix_stream_socket	create accept getopt read write getattr setopt	required	the control socket of init and SO_PEERSEC of its peer
+allow	exitd	exitd_data_file	dir	search read write add_name remove_name create getattr open lock setattr rename	required	state and cache directories of Arti
+allow	exitd	exitd_data_file	file	create open read write getattr lock setattr rename unlink append	required	state.lock, the sqlite cache, exitd-arti.toml
+allow	exitd	system_data_file	dir	search getattr	required	fs-mistrust stats every ancestor of the state directory (/data/misc)
+allow	exitd	system_data_root_file	dir	search getattr	required	the same for /data
+allow	exitd	rootfs	dir	search getattr	required	the same for /
+allow	exitd	system_file	dir	search getattr open read	required	/system/etc/freeholdos
+allow	exitd	system_file	file	open read getattr	required	the mask list
+allow	exitd	self	file	open read getattr	required	/proc/self/mountinfo and /proc/self/cgroup
+allow	exitd	self	lnk_file	read getattr	required	readlink /proc/self/exe
+allow	exitd	random_device	chr_file	open read	required	/dev/urandom
+allow	exitd	proc_meminfo	file	open read getattr	optional	/proc/meminfo, read failed with EACCES by injection: the daemon kept running
+allow	exitd	proc_stat	file	open read getattr	optional	/proc/stat, the same
+allow	exitd	cgroup_v2	file	open read getattr	optional	/sys/fs/cgroup/memory.stat, the same
+allow	init	exitd	unix_stream_socket	listen	required	init creates the control socket in the service domain
+gid	exitd	vpn	-	-	required	/dev/tun is system:vpn 0660: without the group open() fails with EACCES (NET-009 2026-10-29)
+gid	exitd	inet	-	-	required	netd client and AF_INET sockets (NET-009 2026-10-27)
+# ---- exitd_route ---------------------------------------------------------------------------------------------------------
+allow	exitd_route	self	netlink_route_socket	create bind read write getattr setopt nlmsg_read nlmsg_write	required	socket(AF_NETLINK, NETLINK_ROUTE)
+allowxperm	exitd_route	self	netlink_route_socket	nlmsg 0x12 0x13 0x14 0x18 0x19 0x20 0x21 0x22	required	RTM_GETLINK (interface index), RTM_SETLINK (link up, measured 2026-10-29), RTM_NEWADDR, RTM_NEWROUTE, RTM_DELROUTE, RTM_NEWRULE, RTM_DELRULE, RTM_GETRULE
+allow	exitd_route	self	capability	net_admin	required	every write of the helper
+allow	exitd_route	self	unix_stream_socket	create accept getopt read write getattr setopt	required	the control socket of init and SO_PEERSEC of its peer
+allow	init	exitd_route	unix_stream_socket	listen	required	init creates the control socket in the service domain
+deny	exitd_route	self	udp_socket	create	required	the design: no inet socket (if_nametoindex opened one, 2026-10-29; the helper reads the index by netlink)
+deny	exitd_route	self	tcp_socket	create	required	the design: no inet socket
+deny	exitd_route	self	rawip_socket	create	required	the design: no inet socket
+deny	exitd_route	self	packet_socket	create	required	the design: no inet socket

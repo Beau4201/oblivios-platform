@@ -1,0 +1,51 @@
+From 48645c34c4e138bd24af1d6fb2bdfca352a23e89 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Thu, 29 Oct 2026 13:27:14 +0100
+Subject: [PATCH] sepolicy: let the exit daemon create its tun and the route
+ helper bring the link up
+
+exitd needs create on its own tun_socket for TUNSETIFF, and exitd_route sends RTM_SETLINK (0x13) to bring the interface
+up; neither was in the policy, so the daemon died at tunnel creation and the helper's first apply would have failed
+(NET-009, 2026-10-29).
+---
+ private/exitd.te       | 4 ++++
+ private/exitd_route.te | 5 ++++-
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/private/exitd.te b/private/exitd.te
+index c820f81..997108d 100644
+--- a/private/exitd.te
++++ b/private/exitd.te
+@@ -25,6 +25,10 @@ net_domain(exitd)
+ allow exitd tun_device:chr_file rw_file_perms;
+ allowxperm exitd tun_device:chr_file ioctl { TUNGETIFF TUNSETIFF };
+ allow exitd self:capability net_admin;
++# TUNSETIFF of a new interface is checked by the kernel as `create` on the caller's own tun_socket; without it the daemon
++# dies with `tunnel could not be created` (NET-009, 2026-10-29: avc denied { create } tclass=tun_socket). netd, which makes
++# the tun of clat, has exactly this one permission.
++allow exitd self:tun_socket create;
+ 
+ # sock_diag, to find the uid that owns a flow (the same rules as network_stack has for its tcp lookups).
+ allow exitd self:netlink_tcpdiag_socket create_socket_perms_no_ioctl;
+diff --git a/private/exitd_route.te b/private/exitd_route.te
+index 61fff3b..56485aa 100644
+--- a/private/exitd_route.te
++++ b/private/exitd_route.te
+@@ -25,10 +25,13 @@ allow exitd_route self:netlink_route_socket create_socket_perms_no_ioctl;
+ allow exitd_route self:netlink_route_socket { nlmsg_read nlmsg_write };
+ # For kernel >= 6.13
+ allow exitd_route self:netlink_route_socket nlmsg;
++# RTM_SETLINK brings the interface up (netlink.rs link_up_msg): without it the helper's first apply fails after the addresses are
++# set and the Tor network has no link (NET-009, 2026-10-29: the helper sends 0x13, the list had 0x10 and 0x12). RTM_GETLINK is
++# how the helper reads an interface index, so that it needs no AF_INET socket for if_nametoindex.
+ allowxperm exitd_route self:netlink_route_socket nlmsg {
+   RTM_NEWRULE RTM_DELRULE RTM_GETRULE
+   RTM_NEWROUTE RTM_DELROUTE RTM_GETROUTE
+-  RTM_NEWADDR RTM_NEWLINK RTM_GETLINK
++  RTM_NEWADDR RTM_NEWLINK RTM_SETLINK RTM_GETLINK
+ };
+ 
+ # It reads the peer's SELinux context before it reads a byte.
+-- 
+2.56.0
+

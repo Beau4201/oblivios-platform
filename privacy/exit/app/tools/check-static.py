@@ -24,6 +24,19 @@ NOT_PRIVILEGED = {
     "android.permission.QUERY_ALL_PACKAGES",
 }
 IA_ACTION = "com.android.settings.action.IA_SETTINGS"
+# The platform calls of the app and the permission that the system service checks for each (any one of the alternatives).
+# The host checks never reach a real Binder call, so a call whose permission the manifest lacks passed every check and failed
+# on the device: `UserManager.getUserHandles` needs MANAGE_USERS or CREATE_USERS and the app had QUERY_USERS, so each pass of the
+# controller ended in a SecurityException (NET-009, lynx image 2026102303). Sources on the build server, 2026-10-29:
+API_PERMISSIONS = [
+    (r"\.getUserHandles\(", {"MANAGE_USERS", "CREATE_USERS"}),  # UserManagerService.getUsers: checkCreateUsersPermission
+    (r"\.setOemNetworkPreference\(", {"CONTROL_OEM_PAID_NETWORK_PREFERENCE"}),  # ConnectivityService.java:4397
+    (r"\.registerNetworkProvider\(|new NetworkAgent\(", {"NETWORK_FACTORY"}),  # ConnectivityService.java:4329
+    (r"\.(getActiveNetwork|getNetworkCapabilities|getLinkProperties|registerDefaultNetworkCallback)\(", {"ACCESS_NETWORK_STATE"}),
+    (r"\.registerReceiverForAllUsers\(", {"INTERACT_ACROSS_USERS_FULL"}),
+    (r"\.createContextAsUser\(", {"INTERACT_ACROSS_USERS_FULL"}),
+    (r"\.(getInstalledApplications|queryIntentActivities)\(", {"QUERY_ALL_PACKAGES"}),
+]
 
 
 def attr(el, name):
@@ -38,6 +51,15 @@ def check(app):
     perms = {attr(p, "name") for p in manifest.findall("uses-permission")}
     if "android.permission.INTERNET" in perms:
         problems.append("the manifest requests INTERNET")
+    src = os.path.join(app, "src")
+    for root, _, files in os.walk(src):
+        for f in sorted(files):
+            if not f.endswith(".java"):
+                continue
+            text = open(os.path.join(root, f)).read()
+            for pattern, alternatives in API_PERMISSIONS:
+                if re.search(pattern, text) and not any("android.permission." + p in perms for p in alternatives):
+                    problems.append(f"{f} calls {pattern}: the manifest lacks {' or '.join(sorted(alternatives))}")
     application = manifest.find("application")
     if application is None:
         return problems + ["no <application>"]

@@ -23,10 +23,10 @@ CASES = [
     ("AndroidManifest.xml", 'android:directBootAware="true"', '', "directBootAware is not true"),
     ("AndroidManifest.xml", 'android:allowBackup="false"', 'android:allowBackup="true"', "allowBackup is not false"),
     ("AndroidManifest.xml", 'android:exported="false"', 'android:exported="true"', "exported without a permission"),
-    ("AndroidManifest.xml", '<uses-permission android:name="android.permission.QUERY_USERS" />', '', "only listed"),
-    ("privapp-permissions-org.freeholdos.exit.xml", '<permission name="android.permission.QUERY_USERS"/>', '', "only requested"),
-    ("privapp-permissions-org.freeholdos.exit.xml", '<permission name="android.permission.QUERY_USERS"/>',
-     '<permission name="android.permission.QUERY_USERS"/><permission name="android.permission.MANAGE_USERS"/>', "only listed"),
+    ("AndroidManifest.xml", '<uses-permission android:name="android.permission.MANAGE_USERS" />', '', "only listed"),
+    ("privapp-permissions-org.freeholdos.exit.xml", '<permission name="android.permission.MANAGE_USERS"/>', '', "only requested"),
+    ("privapp-permissions-org.freeholdos.exit.xml", '<permission name="android.permission.MANAGE_USERS"/>',
+     '<permission name="android.permission.MANAGE_USERS"/><permission name="android.permission.CREATE_USERS"/>', "only listed"),
     ("default-permissions-org.freeholdos.exit.xml", 'android.permission.POST_NOTIFICATIONS', 'android.permission.READ_CONTACTS',
      "default-permissions grants"),
 ]
@@ -40,5 +40,17 @@ for fname, old, new, want in CASES:
     problems = cs.check(os.path.join(d, "a"))
     assert any(want in x for x in problems), (want, problems)
     shutil.rmtree(d)
+# The defect of NET-009 (lynx image 2026102303): the manifest asks for QUERY_USERS, which none of the calls that list users accepts.
+# The copy keeps src, so the source scan sees the call of getUserHandles.
+d = tempfile.mkdtemp()
+shutil.copytree(APP, os.path.join(d, "a"), ignore=shutil.ignore_patterns("tests", ".typecheck-*"))
+for fname in ("AndroidManifest.xml", "privapp-permissions-org.freeholdos.exit.xml"):
+    p = os.path.join(d, "a", fname)
+    text = open(p).read()
+    assert text.count("android.permission.MANAGE_USERS") >= 1
+    open(p, "w").write(text.replace("android.permission.MANAGE_USERS", "android.permission.QUERY_USERS"))
+problems = cs.check(os.path.join(d, "a"))
+assert any("getUserHandles" in x and "MANAGE_USERS" in x for x in problems), problems
+shutil.rmtree(d)
 print("check-static tests passed")
 sys.exit(0)

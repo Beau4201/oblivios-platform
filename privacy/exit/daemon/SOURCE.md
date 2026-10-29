@@ -4,13 +4,13 @@
 
 | Item | Value |
 | --- | --- |
-| Source | `freeholdos-services`, directory `exit-daemon`, commit `2b7d137870c1fe22741927e44ab964beb7007637` (`master`) |
+| Source | `freeholdos-services`, directory `exit-daemon`, commit `f38113c` (`master`) |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `cargo build --release --locked --offline`, `panic = "abort"`, `lto`, `opt-level = "z"`, the AOSP clang as linker (`tools/env.sh`) |
 | Build command | `exit-daemon/tools/build-android.sh` (copies the tree to the build server, builds, then checks the binary itself) |
-| SHA-256 | `bc743f02f1b05460de949f43af8fa399fff558e74944af4144d382d47f8319e3` |
-| Size | 19 375 480 bytes |
-| Built | 2026-10-28, after the independent review of the changes after image `2026102302` (finding B1, ADR-198): the control peer must have the type `exit_app` and a uid of user 0 (below 100000), for the daemon and the route helper, which share the check; a run with a uid is unchanged. Nothing else changed in the daemon since the build of 2026-10-23 (rustls 0.23.46 and rustls-webpki 0.103.16, a limit of 128 flows per app, a class table of at most 255, the speed guard of ADR-188). 295 host tests pass, ten new mutations are all killed, the panic audit still lists 36 sites. |
-| Reproduced | built twice from the files of the commit above, from a clean tree, into two cargo target directories: same SHA-256 and size (`bc743f02…`, 19 375 480 bytes) |
+| SHA-256 | `0e3d50b943b5f37aa216e9b88e98b295a3d206d0da57b54d7747ff896e4b1323` |
+| Size | 19 375 800 bytes |
+| Built | 2026-10-29, after `NET-009` and `IMG-018` of `lynx` `2026102303`: the route helper reads an interface index by `RTM_GETLINK` on its netlink socket and not by `if_nametoindex`, which opened an `AF_INET` socket in a domain that has none (ADR-199). `strace` of this binary on the phone: no `AF_INET` socket in an apply, 14 rules, the link up, two addresses, and a clear that restores `ip rule` and `ip route`. |
+| Reproduced | built twice from the files of the commit above, from a clean tree, into two cargo target directories: same SHA-256 and size (`0e3d50b9…`, 19 375 800 bytes) |
 | Needed libraries | `libc.so`, `libdl.so`, `libm.so`, interpreter `/system/bin/linker64` (`llvm-readelf`, read by the build script) |
 | Contents | the Tor client (`tor-proto`), the packet layer (`smoltcp`), `aws_lc` and the daemon itself; no build-machine path (the build script reads the binary for each) |
 | Dependencies | `exit-daemon/Cargo.lock`; versions, checksums and licences in `exit-daemon/NOTICE` and `RISKS.md` |
@@ -44,3 +44,6 @@ service started, and the line is removed. The Arti quota of 64 MiB (`--memory-ma
 `exitd` (not `exitd_route`) runs with the group `inet` as well as its own: on image `2026102302` its self-check ended with `Os { code: 13 }` at
 `TcpListener::bind("127.0.0.1:0")` with no SELinux denial, and the same uid and gid with only the group 3003 added opened the
 socket `[measured: NET-009, a debug build of exitd run as uid and gid 2961 with and without the group]`.
+It also runs with the group `vpn` (1016): `/dev/tun` is `system:vpn` `0660` on the phone, so without the group `open` of `/dev/net/tun`
+returns EACCES before SELinux is asked and the daemon ends with `tunnel could not be created` `[measured: NET-009, image 2026102303]`.
+`../tools/check-syscall-policy.py` reads the groups of each service from this file and fails when one is missing.
