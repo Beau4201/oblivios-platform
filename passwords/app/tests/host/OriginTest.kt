@@ -93,7 +93,11 @@ private fun anAppIsAnAppOnlyWhenItShowsNoWebsite() {
     Check.equal("an app that shows a website gets nothing: its page is not the app", Origin.None, p.resolve("org.evil.app", "paypal.com"))
     f.system.add("org.sys.app")
     Check.equal("a system app that shows a website gets nothing either", Origin.None, p.resolve("org.sys.app", "paypal.com"))
-    Check.equal("and the same app without a website is the app", Origin.App("org.sys.app"), p.resolve("org.sys.app", null))
+    // Owner, 2026-10-29: the vault offered to save the phone's own screen-lock password (Settings is a system app).
+    Check.equal("and the same system app without a website is nothing, not an app", Origin.None, p.resolve("org.sys.app", null))
+    f.system.add("com.android.settings")
+    Check.equal("the Settings app, where the screen lock is set, is nothing", Origin.None, p.resolve("com.android.settings", null))
+    Check.equal("an app that is not of the system image is still an app", Origin.App("org.bank.app"), p.resolve("org.bank.app", null))
 }
 
 private fun theBuiltInBrowserCannotBeChanged() {

@@ -51,6 +51,16 @@ fun plan(fields: List<ParsedField>, webDomain: String?, packageName: String, sta
 }
 
 /**
+ * Whether a form is offered for saving at all. A form of a site is, when it has a password field (a step of a login can ask
+ * for the password alone); a form of an app also needs a username field, because a lone password field in an app is mostly a
+ * lock or an encryption password and not a login worth keeping (owner, 2026-10-29: only what has to be in the vault).
+ */
+fun offersSave(fields: List<ParsedField>, webDomain: String?): Boolean {
+    if (fields.none { it.role == FieldRole.Password }) return false
+    return webDomain != null || fields.any { it.role == FieldRole.Username }
+}
+
+/**
  * The login a user just submitted on a form we did not fill (or filled differently). The password is a character array
  * that [wipe] clears; nothing prints it.
  */

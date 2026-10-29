@@ -242,6 +242,13 @@ MUTATIONS = [
     ("origin: an app's claim is believed", OR, "claimedDomain != null -> Origin.None", "claimedDomain != null -> Origin.Site(claimedDomain!!)"),
     ("origin: an app with web content is its package", OR, "        claimedDomain != null -> Origin.None\n        else -> Origin.App(pkg)", "        else -> Origin.App(pkg)"),
     ("origin: an app is nothing", OR, "else -> Origin.App(pkg)", "else -> Origin.None"),
+    ("origin: a system app is an app", OR, "        facts.isSystemApp(pkg) -> Origin.None\n", ""),
+    ("origin: only the system apps are an app", OR, "facts.isSystemApp(pkg) -> Origin.None", "!facts.isSystemApp(pkg) -> Origin.None"),
+    # FillPlanner.kt, offersSave
+    ("save: a form with no password is offered", L, "if (fields.none { it.role == FieldRole.Password }) return false", ""),
+    ("save: a lone password in an app is offered", L, "return webDomain != null || fields.any { it.role == FieldRole.Username }", "return true"),
+    ("save: a site's password step is not offered", L, "return webDomain != null || fields.any { it.role == FieldRole.Username }", "return fields.any { it.role == FieldRole.Username }"),
+    ("save: an app form is never offered", L, "return webDomain != null || fields.any { it.role == FieldRole.Username }", "return webDomain != null"),
     ("origin: trust stores nothing", OR, "store.put(pkg, digest)", ""),
     ("origin: trust without a digest", OR, "val digest = facts.signerDigest(pkg) ?: return false", "val digest = facts.signerDigest(pkg) ?: \"\""),
     ("origin: the built-in browser can be trusted again", OR, "if (pkg in BUILT_IN) return false\n        val digest", "val digest"),

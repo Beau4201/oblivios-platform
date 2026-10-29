@@ -7,6 +7,7 @@ import org.freeholdos.passwords.fill.FillPlan
 import org.freeholdos.passwords.fill.InputTypes
 import org.freeholdos.passwords.fill.ParsedField
 import org.freeholdos.passwords.fill.SaveCandidate
+import org.freeholdos.passwords.fill.offersSave
 import org.freeholdos.passwords.fill.SiteLookup
 import org.freeholdos.passwords.fill.classify
 import org.freeholdos.passwords.fill.classifyWeb
@@ -46,6 +47,7 @@ fun main() {
     multiStepAndNewPasswordForms()
     everyLockedStateAsksForAuthentication()
     saveCandidates()
+    onlyRealLoginsAreOfferedForSaving()
     everyTokenOfTheLists()
     Check.done("FillTest")
 }
@@ -221,6 +223,16 @@ private fun saveCandidates() {
     Check.equal("the last non-empty password field is the one submitted", "new", String(last.password))
     c!!.wipe()
     Check.that("wipe clears the password", c.password.all { it == '\u0000' })
+}
+
+private fun onlyRealLoginsAreOfferedForSaving() {
+    val other = ParsedField("3", FieldRole.Other)
+    Check.that("a site's form with both fields is offered", offersSave(listOf(user, pass), "github.com"))
+    Check.that("a step of a site with the password alone is offered", offersSave(listOf(pass), "github.com"))
+    Check.that("an app's form with both fields is offered", offersSave(listOf(user, pass), null))
+    Check.that("a lone password field of an app is not a login: lock, encryption, file password", !offersSave(listOf(pass), null))
+    Check.that("no password field, nothing to save", !offersSave(listOf(user), "github.com") && !offersSave(listOf(user), null) && !offersSave(listOf(other), null))
+    Check.that("no fields, nothing to save", !offersSave(emptyList(), "github.com") && !offersSave(emptyList(), null))
 }
 
 private fun everyTokenOfTheLists() {

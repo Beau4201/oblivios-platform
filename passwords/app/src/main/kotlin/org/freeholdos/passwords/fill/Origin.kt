@@ -51,11 +51,15 @@ class OriginPolicy(private val facts: PackageFacts, private val store: TrustStor
 
     /**
      * The origin of a screen of [pkg] that claims the site [claimedDomain] (null: no claim). A trusted browser is believed;
-     * every other browser gets nothing; any other app is an app when its screen shows no website, and gets nothing when it does.
+     * every other browser gets nothing; an app of the system image gets nothing; any other app is an app when its screen shows no website, and gets nothing when it does.
      */
     fun resolve(pkg: String, claimedDomain: String?): Origin = when {
         trusted(pkg) -> if (claimedDomain != null) Origin.Site(claimedDomain) else Origin.None
         facts.isBrowser(pkg) -> Origin.None
+        // An app of the system image (Settings, the lock screen, Wi-Fi and the like) has no account to keep: its password
+        // fields hold the phone's own secrets (the screen lock, a network key). Owner, 2026-10-29: the vault asked to save
+        // the phone password; neither a fill nor a save is ever offered for such an app.
+        facts.isSystemApp(pkg) -> Origin.None
         // Web content inside an app (a WebView, an in-app browser) is not the app: a page of any site would be filled with the
         // credentials linked to the app (security review of 2026-10-23). An app is answered only when it shows no website.
         claimedDomain != null -> Origin.None
