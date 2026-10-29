@@ -3,6 +3,7 @@ package org.freeholdos.exit;
 
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -20,7 +21,7 @@ import com.android.settingslib.widget.FooterPreference;
 import com.android.settingslib.widget.MainSwitchPreference;
 
 /**
- * The "Compartments" entry under Network &amp; internet (the {@code IA_SETTINGS} tile of the manifest): the status, the
+ * The "Compartments" entry under Network &amp; internet (a preference of the Settings app that starts this activity): the status, the
  * one-time consent, the hidden-address switch, the hosts that the speed guard shows an address to for now (with "Hide
  * again"), the warnings, and the two sub-pages: the apps with their stand and the hosts the user showed an address to.
  * It is built like the pages of the Settings app (the collapsing toolbar, the preference widgets and the theme of SettingsLib,
@@ -215,17 +216,41 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
 
         /** The values that change often, set in place so that the list does not flicker when the status is polled. */
         private void refresh(ExitRuntime.Snapshot s) {
-            statusPref.setTitle(statusText(s.status));
-            statusPref.setSummary(s.status.lastError != null && s.status.phase != Status.Phase.RUNNING
-                    ? getString(R.string.status_error, s.status.lastError) : (CharSequence) null);
+            boolean failing = s.status.lastError != null && s.status.phase != Status.Phase.RUNNING;
+            statusPref.setTitle(failing ? getString(R.string.status_error_title) : statusText(s.status));
+            statusPref.setSummary(failing ? errorText(s.status.lastError) : statusSummary(s.status));
             if (mainSwitch != null) {
                 boolean on = s.consent == Consent.ON;
                 if (mainSwitch.isChecked() != on) {
                     mainSwitch.setChecked(on);
                 }
             }
-            appsPref.setSummary(getString(R.string.apps_summary, s.choices.torApps().size(), s.choices.openApps().size()));
-            overridesPref.setSummary(getString(R.string.overrides_summary, Presenter.overrideRows(s.choices, names).size()));
+            int tor = s.choices.torApps().size();
+            int open = s.choices.openApps().size();
+            appsPref.setSummary(tor == 0 && open == 0 ? getString(R.string.apps_summary_none) : getString(R.string.apps_summary, tor, open));
+            int allowed = Presenter.overrideRows(s.choices, names).size();
+            overridesPref.setSummary(allowed == 0 ? getString(R.string.overrides_none) : getString(R.string.overrides_summary, allowed));
+        }
+
+        /** What went wrong, in plain words; the name of the exception only where the image is a debug build. */
+        private String errorText(String lastError) {
+            String plain = getString(R.string.status_error);
+            // Build.IS_DEBUGGABLE is not in the SDK the app builds against; the build type says the same.
+            boolean debug = "userdebug".equals(Build.TYPE) || "eng".equals(Build.TYPE);
+            return debug ? plain + "\n" + getString(R.string.status_error_detail, lastError) : plain;
+        }
+
+        private String statusSummary(Status st) {
+            switch (st.phase) {
+                case RUNNING:
+                    return getString(R.string.status_running_summary);
+                case CONNECTING:
+                    return getString(R.string.status_connecting_summary);
+                case PAUSED:
+                    return getString(R.string.status_paused_summary);
+                default:
+                    return getString(R.string.status_idle_summary);
+            }
         }
 
         /** One company that the speed guard shows an address to for now; a tap hides it again. */

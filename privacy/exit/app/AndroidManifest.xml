@@ -29,27 +29,19 @@
         android:theme="@style/Theme.SubSettingsBase"
         android:allowBackup="false">
 
-        <!-- The "Compartments" entry under Network & internet. Settings finds it through the IA_SETTINGS action and reads the
-             category, title, summary, icon and order from the meta-data [verified-in-source: SettingsLib TileUtils.java,
-             CategoryKey.java: the category key of "Network & internet" is ...ia.wireless]. Exported without a permission
-             because Settings starts it; it shows the user's own choices and changes them only by a tap. It is built with the
-             theme and widgets of SettingsLib and stays out of the recents list like the pages of Settings, so that it is
-             not taken for an app of its own. -->
+        <!-- The main page of Compartments. The row "Compartments" under Network & internet is a preference of the Settings app
+             itself (the patch packages-apps-Settings/0002 of privacy/exit), not an injected tile, because Settings search does not
+             index the tiles that other apps inject (an injected "Compartments", "Atlas" or "Guardian" found nothing on lynx image
+             2026102304); a preference in the XML of that page is found by its title and keywords. The row starts this activity by
+             its component, so it needs the permission that only Settings holds, like the page of one app. It is built with the
+             theme and widgets of SettingsLib and stays out of the recents list like the pages of Settings, so that it is not
+             taken for an app of its own. -->
         <activity
             android:name=".ExitSettingsActivity"
             android:label="@string/app_name"
             android:excludeFromRecents="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.android.settings.action.IA_SETTINGS" />
-            </intent-filter>
-            <meta-data android:name="com.android.settings.category"
-                android:value="com.android.settings.category.ia.wireless" />
-            <meta-data android:name="com.android.settings.title" android:resource="@string/app_name" />
-            <meta-data android:name="com.android.settings.summary" android:resource="@string/settings_summary" />
-            <meta-data android:name="com.android.settings.icon" android:resource="@drawable/ic_compartments" />
-            <meta-data android:name="com.android.settings.order" android:value="-5" />
-        </activity>
+            android:permission="android.permission.NETWORK_SETTINGS"
+            android:exported="true" />
 
         <!-- The page of one app (the package is the data of the intent). The "Compartments" row of the app's info page in
              Settings and the list of apps start it; only the platform's Settings app holds NETWORK_SETTINGS, so no other app

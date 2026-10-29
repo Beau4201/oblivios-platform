@@ -1,0 +1,34 @@
+From 143d4d7c61b6763747e61b39b18943f7a12a771e Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos-local>
+Date: Thu, 29 Oct 2026 18:56:33 +0100
+Subject: [PATCH] sepolicy: let the route helper read its interface index
+ (nlmsg_readpriv for RTM_GETLINK)
+
+On a kernel before 6.13 an RTM_GETLINK needs nlmsg_readpriv as well as the extended permission. exitd_route had the xperm
+and not the permission, so its lookup of the index of exit0 was denied at every apply (lynx image 2026102304).
+---
+ private/exitd_route.te | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/private/exitd_route.te b/private/exitd_route.te
+index 56485aa58..97a2befff 100644
+--- a/private/exitd_route.te
++++ b/private/exitd_route.te
+@@ -21,8 +21,12 @@ domain_trans(init, exitd_exec, exitd_route)
+ # One NETLINK_ROUTE socket, to add the tun address, bring the link up, and write the rules and the default routes.
+ allow exitd_route self:capability net_admin;
+ allow exitd_route self:netlink_route_socket create_socket_perms_no_ioctl;
+-# For kernel < 6.13
+-allow exitd_route self:netlink_route_socket { nlmsg_read nlmsg_write };
++# For kernel < 6.13. nlmsg_readpriv because the helper reads the index of its interface with an RTM_GETLINK, which needs it on
++# these kernels as well as the extended permission below (private/net.te: RTM_GETLINK is withheld from untrusted apps because it
++# can be abused to recover the MAC address; private/recovery.te grants both). Without it every apply failed with
++# `avc: denied { nlmsg_readpriv }` and the exit service never left Starting (NET-009, lynx image 2026102304, 2026-10-29). The
++# helper has no inet socket and no other way out than the control socket of the daemon.
++allow exitd_route self:netlink_route_socket { nlmsg_read nlmsg_readpriv nlmsg_write };
+ # For kernel >= 6.13
+ allow exitd_route self:netlink_route_socket nlmsg;
+ # RTM_SETLINK brings the interface up (netlink.rs link_up_msg): without it the helper's first apply fails after the addresses are
+-- 
+2.39.5
+

@@ -1,0 +1,82 @@
+From be6b53668fafd65aee253115c034afa50a10a0ec Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Thu, 29 Oct 2026 18:55:08 +0100
+Subject: [PATCH] Settings: Compartments is a row of the Network & internet
+ page that search finds
+
+The entry of Compartments used to be a tile that the exit app injected through IA_SETTINGS. The Settings search does not
+index injected tiles (a search for Compartments, Atlas or Guardian found nothing on lynx image 2026102304), so the entry is
+now a preference in network_provider_internet.xml, with a title, a summary and keywords, that starts the main page of the
+exit app by its component. The icon is a copy of the exit app's vector, which the row needs in the Settings resources.
+---
+ res/drawable/ic_compartments.xml      | 14 ++++++++++++++
+ res/values/strings_ext.xml            |  5 +++++
+ res/xml/network_provider_internet.xml | 16 ++++++++++++++++
+ 3 files changed, 35 insertions(+)
+ create mode 100644 res/drawable/ic_compartments.xml
+
+diff --git a/res/drawable/ic_compartments.xml b/res/drawable/ic_compartments.xml
+new file mode 100644
+index 00000000000..b9c91bd84be
+--- /dev/null
++++ b/res/drawable/ic_compartments.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-License-Identifier: Apache-2.0 -->
++<!-- The bricks of the launcher icon in one colour, tinted by the theme: the icon of the entry under Network & internet and the small icon of the notifications. -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24"
++    android:tint="?android:attr/colorControlNormal">
++    <path android:fillColor="@android:color/white" android:pathData="M5.333,3H11.334A2.333,2.333 0 0 1 13.667,5.333V9A2.333,2.333 0 0 1 11.334,11.333H5.333A2.333,2.333 0 0 1 3,9V5.333A2.333,2.333 0 0 1 5.333,3Z"/>
++    <path android:fillColor="@android:color/white" android:pathData="M17.333,3H18.667A2.333,2.333 0 0 1 21,5.333V9A2.333,2.333 0 0 1 18.667,11.333H17.333A2.333,2.333 0 0 1 15,9V5.333A2.333,2.333 0 0 1 17.333,3Z"/>
++    <path android:fillColor="@android:color/white" android:pathData="M5.333,12.667H6.667A2.333,2.333 0 0 1 9,15V18.667A2.333,2.333 0 0 1 6.667,21H5.333A2.333,2.333 0 0 1 3,18.667V15A2.333,2.333 0 0 1 5.333,12.667Z"/>
++    <path android:fillColor="@android:color/white" android:pathData="M12.666,12.667H18.667A2.333,2.333 0 0 1 21,15V18.667A2.333,2.333 0 0 1 18.667,21H12.666A2.333,2.333 0 0 1 10.333,18.667V15A2.333,2.333 0 0 1 12.666,12.667Z"/>
++</vector>
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index 4e6c1109b8e..159b14ec4dd 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -378,5 +378,10 @@ For compatibility, this app can still see clipboard metadata, such as whether an
+ 
+     <!-- The page of one app in Compartments (the per-app network exit): the row of the app's info page, under data usage. -->
+     <string name="app_compartments_label">Compartments</string>
++    <!-- The row of Compartments on the Network & internet page, which the Settings search finds (keywords: the plain words a person
++         would type). -->
++    <string name="compartments_title">Compartments</string>
++    <string name="compartments_summary">Keep trackers from seeing your address</string>
++    <string name="keywords_compartments">tor,address,ip address,hide address,hide my address,tracker,trackers,tracking,advertising,ads,analytics,privacy,anonymous,vpn,network exit</string>
+ 
+ </resources>
+diff --git a/res/xml/network_provider_internet.xml b/res/xml/network_provider_internet.xml
+index 0ed7956c448..aeedc874215 100644
+--- a/res/xml/network_provider_internet.xml
++++ b/res/xml/network_provider_internet.xml
+@@ -72,6 +72,22 @@
+         settings:controller="com.android.settings.network.AirplaneModePreferenceController"
+         settings:userRestriction="no_airplane_mode"/>
+ 
++    <!-- freeholdos: the entry of Compartments (the per-app network exit) is a preference of this page and not a tile that the
++         exit app injects, because the Settings search does not index injected tiles: it finds this row by its title and
++         keywords. The row opens the main page of the exit app by its component. -->
++    <Preference
++        android:key="compartments"
++        android:title="@string/compartments_title"
++        android:summary="@string/compartments_summary"
++        android:icon="@drawable/ic_compartments"
++        android:order="-4"
++        settings:keywords="@string/keywords_compartments">
++        <intent
++            android:action="android.intent.action.MAIN"
++            android:targetPackage="org.freeholdos.exit"
++            android:targetClass="org.freeholdos.exit.ExitSettingsActivity" />
++    </Preference>
++
+     <com.android.settingslib.RestrictedPreference
+         android:fragment="com.android.settings.network.tether.TetherSettings"
+         android:key="tether_settings"
+-- 
+2.39.5
+

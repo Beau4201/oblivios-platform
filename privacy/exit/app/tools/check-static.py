@@ -5,8 +5,8 @@
     check-static.py [APP_DIR]        exit status 0 when every rule holds, 1 with one line per broken rule
 
 Rules: no INTERNET permission (the app talks to its services over local sockets); the app is persistent and direct-boot
-aware and allows no backup; every exported component has a permission, except the one settings activity that Settings
-starts through the IA_SETTINGS action; the privapp allowlist is exactly the manifest's privileged permissions; the
+aware and allows no backup; every exported component has a permission and none is an IA_SETTINGS tile any more (the
+Compartments row is a preference of the Settings app); the privapp allowlist is exactly the manifest's privileged permissions; the
 default-permissions file grants POST_NOTIFICATIONS and nothing else; no receiver object is registered for both the current
 user and all users.
 """
@@ -77,9 +77,11 @@ def check(app):
         if filters and exported is None:
             problems.append(f"{name}: has an intent filter and no explicit exported attribute")
         if exported == "true" and not attr(comp, "permission"):
-            actions = {attr(a, "name") for f in filters for a in f.findall("action")}
-            if not (comp.tag == "activity" and actions == {IA_ACTION}):
-                problems.append(f"{name}: exported without a permission")
+            problems.append(f"{name}: exported without a permission")
+        # Since the Compartments row is a preference of the Settings app (patch packages-apps-Settings/0002), nothing is
+        # injected as a tile any more: a leftover IA_SETTINGS filter would list a second row that search cannot find.
+        if any(attr(a, "name") == IA_ACTION for f in filters for a in f.findall("action")):
+            problems.append(f"{name}: still an IA_SETTINGS tile")
     # The privapp allowlist is what the platform grants of the privileged permissions: it must match the manifest.
     privapp = ET.parse(os.path.join(app, f"privapp-permissions-{PKG}.xml")).getroot()
     listed = {p.get("name") for p in privapp.iter("permission")}

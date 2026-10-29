@@ -44,7 +44,7 @@ allow	init	exitd	unix_stream_socket	listen	required	init creates the control soc
 gid	exitd	vpn	-	-	required	/dev/tun is system:vpn 0660: without the group open() fails with EACCES (NET-009 2026-10-29)
 gid	exitd	inet	-	-	required	netd client and AF_INET sockets (NET-009 2026-10-27)
 # ---- exitd_route ---------------------------------------------------------------------------------------------------------
-allow	exitd_route	self	netlink_route_socket	create bind read write getattr setopt nlmsg_read nlmsg_write	required	socket(AF_NETLINK, NETLINK_ROUTE)
+allow	exitd_route	self	netlink_route_socket	create bind read write getattr setopt nlmsg_read nlmsg_readpriv nlmsg_write	required	socket(AF_NETLINK, NETLINK_ROUTE); nlmsg_readpriv because RTM_GETLINK needs it on a kernel before 6.13 (system/sepolicy private/net.te, recovery.te; avc denied nlmsg_readpriv, NET-009 2026-10-29 evening, lynx image 2026102304)
 allowxperm	exitd_route	self	netlink_route_socket	nlmsg 0x12 0x13 0x14 0x18 0x19 0x20 0x21 0x22	required	RTM_GETLINK (interface index), RTM_SETLINK (link up, measured 2026-10-29), RTM_NEWADDR, RTM_NEWROUTE, RTM_DELROUTE, RTM_NEWRULE, RTM_DELRULE, RTM_GETRULE
 allow	exitd_route	self	capability	net_admin	required	every write of the helper
 allow	exitd_route	self	unix_stream_socket	create accept getopt read write getattr setopt	required	the control socket of init and SO_PEERSEC of its peer

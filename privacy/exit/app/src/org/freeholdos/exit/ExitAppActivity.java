@@ -170,6 +170,7 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 SelectorWithWidgetPreference radio = new SelectorWithWidgetPreference(ctx);
                 radio.setPersistent(false);
                 radio.setTitle(modeText(c));
+                radio.setSummary(modeSummary(c));
                 radio.setOnClickListener(p -> choose(c));
                 radios.add(radio);
                 network.addPreference(radio);
@@ -230,6 +231,17 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 return;
             }
             rt.setChoice(pkg, c);
+        }
+
+        private static int modeSummary(Choices.Choice c) {
+            switch (c) {
+                case TOR:
+                    return R.string.app_mode_tor_summary;
+                case OPEN:
+                    return R.string.app_mode_open_summary;
+                default:
+                    return R.string.app_mode_direct_summary;
+            }
         }
 
         private static int modeText(Choices.Choice c) {

@@ -1,66 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Plain words for people who do not know the technology (owner, 2026-10-29): "trackers" for advertising, analytics, attribution and
+     crash-reporting hosts, "Standard", "Extra private" and "Off" for the three stands of an app, and no class name of an exception. -->
 <resources>
     <string name="app_name">Compartments</string>
 
-    <string name="notif_channel_name">Hidden addresses</string>
-    <string name="notif_tor_title">%1$s uses Tor</string>
-    <string name="notif_tor_text">Tor may be why it fails. Switch Tor off for this app?</string>
-    <string name="notif_tor_action">Switch Tor off</string>
+    <string name="notif_channel_name">Address protection</string>
+    <string name="notif_tor_title">%1$s is set to Extra private</string>
+    <string name="notif_tor_text">Extra private may be why it does not work. Switch it back to Standard?</string>
+    <string name="notif_tor_action">Use Standard</string>
     <string name="notif_mask_title">%1$s cannot reach %2$s</string>
-    <string name="notif_mask_text">It cannot reach %1$s while your address is hidden. Show your address to %1$s for this app, or keep hiding it?</string>
+    <string name="notif_mask_text">It cannot reach %1$s while your address is hidden. Show your address to %1$s in this app, or keep it hidden?</string>
     <string name="notif_action_show">Show my address</string>
-    <string name="notif_action_keep">Keep hiding</string>
-    <string name="notif_unknown_company">a hidden host</string>
+    <string name="notif_action_keep">Keep hidden</string>
+    <string name="notif_unknown_company">a tracker</string>
     <string name="notif_promo_title">%1$s: %2$s sends a lot of data</string>
-    <string name="notif_promo_text">Tor would slow it down, so %2$s sees your address for this app for 30 minutes.</string>
+    <string name="notif_promo_text">Hiding it would make the app slow, so %2$s sees your address in this app for 30 minutes.</string>
     <string name="notif_action_rehide">Hide again</string>
-    <string name="notif_consent_text">Choose whether advertising and analytics hosts see your address.</string>
+    <string name="notif_consent_text">Choose whether advertising and tracking companies can see your address.</string>
 
-    <string name="settings_summary">Hide your address, or use Tor for an app</string>
     <string name="owner_only">Compartments is set up by the owner of this phone.</string>
 
     <string name="status_idle">Off</string>
+    <string name="status_idle_summary">Trackers can see your address.</string>
     <string name="status_connecting">Starting</string>
-    <string name="status_running">Running</string>
-    <string name="status_paused">Paused. Apps on Tor have no network until it is back.</string>
-    <string name="status_error">Last error: %1$s</string>
+    <string name="status_connecting_summary">This takes a few seconds.</string>
+    <string name="status_running">On</string>
+    <string name="status_running_summary">Trackers do not see your address.</string>
+    <string name="status_paused">Paused</string>
+    <string name="status_paused_summary">Apps set to Extra private have no internet until it is back.</string>
+    <string name="status_error_title">Not working yet</string>
+    <string name="status_error">Compartments could not start and tries again by itself. If this stays, restart the phone.</string>
+    <string name="status_error_detail">Technical detail: %1$s</string>
 
-    <string name="warn_vpn">A VPN is on. It takes the place of Tor and of the hidden address.</string>
-    <string name="warn_dns">Private DNS is on. Advertising and analytics hosts may still see your address.</string>
-    <string name="warn_too_many">Too many apps are set to Tor. Set some back to Direct.</string>
-    <string name="warn_masks_off">Too many apps for hidden addresses. Advertising and analytics hosts see your address until you set some apps back to Direct.</string>
-    <string name="warn_too_many_open">Too many apps are set to never hidden. The surplus is hidden like the other apps.</string>
-    <string name="warn_damaged">Your choices could not be read completely. Check which apps are set to Tor.</string>
+    <string name="warn_vpn">A VPN is on and takes the place of Compartments, so your address is not hidden.</string>
+    <string name="warn_dns">Private DNS is on. Some trackers may still see your address.</string>
+    <string name="warn_too_many">Too many apps are set to Extra private. Some of them have no internet. Set some back to Standard.</string>
+    <string name="warn_masks_off">Too many apps are using Compartments. Trackers see your address until you set some apps back to Standard.</string>
+    <string name="warn_too_many_open">Too many apps are set to Off. The extra ones are protected like Standard.</string>
+    <string name="warn_damaged">Your choices could not be read completely. Check which apps are set to Extra private.</string>
 
-    <string name="consent_title">Hide your address from advertising and analytics hosts</string>
-    <string name="consent_text">Connections to advertising, analytics, attribution and crash-reporting hosts go through the Tor network, so those hosts do not see your address and cannot use it to tell that two apps are the same person. Your network can see that this phone uses Tor. Tor is slower, so a host that sends an app a lot of data is shown your address for 30 minutes and you are told. An app may load slowly or not at all when a host cannot be reached; you are asked then. Everything else stays direct. It does not cover an app that brings its own encrypted DNS, a connection to a fixed address, or the moments when this service is starting or restarting, when those hosts can see your address. Nothing is hidden until you continue.</string>
-    <string name="consent_switch">Hide my address from these hosts</string>
+    <string name="consent_title">Hide your address from trackers</string>
+    <string name="consent_text">Advertising, analytics and crash-reporting companies see your internet address whenever an app contacts them, and they can use it to tell that two apps belong to the same person. Compartments sends only those connections through the Tor network, so they no longer see your address. Everything else stays as it is.\n\nGood to know: Tor is slower. If one of these companies sends an app a lot of data, it sees your address for 30 minutes and you are told. An app may load slowly or not at all when it cannot reach such a company; you are then asked what to do. Your internet provider can see that this phone uses Tor. It does not cover an app that brings its own encrypted DNS or connects to a fixed address, nor the moments while Compartments is starting or restarting. Nothing is hidden until you continue.</string>
+    <string name="consent_switch">Hide my address from trackers</string>
     <string name="consent_confirm">Continue</string>
-    <string name="masked_title">Hide my address from advertising and analytics hosts</string>
-    <string name="masked_summary">Connections to these hosts use Tor. Everything else stays direct.</string>
+    <string name="masked_title">Hide my address from trackers</string>
+    <string name="masked_summary">Connections to advertising and tracking companies go through Tor, so they do not see your address. Everything else stays as it is.</string>
 
-    <string name="promoted_title">Shown for now</string>
-    <string name="promoted_summary">These hosts send an app a lot of data, so they see its address for 30 minutes.</string>
+    <string name="promoted_title">Allowed for now</string>
+    <string name="promoted_summary">These companies send an app a lot of data, so they see its address for 30 minutes.</string>
     <string name="promoted_unknown_app">An app</string>
 
     <string name="apps_title">Apps</string>
-    <string name="apps_summary">%1$d use Tor, %2$d are never hidden. The others connect directly.</string>
+    <string name="apps_summary">%1$d extra private, %2$d off</string>
+    <string name="apps_summary_none">Standard protection for every app</string>
     <string name="apps_search_hint">Search apps</string>
-    <string name="app_tor_hint">Exit: Tor</string>
-    <string name="app_direct_hint">Direct, hosts hidden</string>
-    <string name="app_open_hint">Direct, never hidden</string>
-    <string name="app_mode_title">Network for %1$s</string>
-    <string name="app_mode_direct">Direct, hide advertising and analytics hosts</string>
-    <string name="app_mode_tor">Tor for everything</string>
-    <string name="app_mode_open">Direct, never hide anything</string>
-    <string name="app_exempt">This app always connects directly and is never hidden.</string>
-    <string name="apps_limit">Tor is limited to %1$d apps.</string>
-    <string name="apps_open_limit">Never hidden is limited to %1$d apps.</string>
+    <string name="app_tor_hint">Extra private</string>
+    <string name="app_direct_hint">Standard</string>
+    <string name="app_open_hint">Off</string>
+    <string name="app_mode_title">Protection for %1$s</string>
+    <string name="app_mode_direct">Standard</string>
+    <string name="app_mode_direct_summary">Hides trackers in this app.</string>
+    <string name="app_mode_tor">Extra private</string>
+    <string name="app_mode_tor_summary">Everything this app does goes through Tor. Slower, and some apps do not work.</string>
+    <string name="app_mode_open">Off</string>
+    <string name="app_mode_open_summary">Trackers see your address in this app.</string>
+    <string name="app_exempt">This app always connects normally and is never hidden.</string>
+    <string name="apps_limit">Extra private is limited to %1$d apps.</string>
+    <string name="apps_open_limit">Off is limited to %1$d apps.</string>
 
-    <string name="overrides_title">Hosts that see your address</string>
-    <string name="overrides_summary">%1$d chosen</string>
-    <string name="overrides_empty">None. You are asked when an app cannot reach a hidden host.</string>
+    <string name="overrides_title">Trackers you allowed</string>
+    <string name="overrides_summary">%1$d allowed</string>
+    <string name="overrides_none">None</string>
+    <string name="overrides_empty">None. You are asked when an app cannot reach a tracker that is hidden.</string>
     <string name="override_row">%1$s: %2$s</string>
     <string name="override_remove">Hide again</string>
 </resources>
