@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The light grey ground of the launcher icon; the same on every wallpaper (ADR-203). -->
+<color xmlns:android="http://schemas.android.com/apk/res/android" android:color="#E9ECEF"/>

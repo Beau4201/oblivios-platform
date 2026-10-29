@@ -69,7 +69,7 @@ else:
     err("tools/icons.txt is missing")
 # The two layers of the launcher icon are drawn by hand (ADR-200: a flat mark in the system accent tones), not taken from the
 # icon set; their colours are system colours.
-LAUNCHER_LAYERS = {"ic_launcher_foreground", "ic_launcher_monochrome"}
+LAUNCHER_LAYERS = {"ic_launcher_background", "ic_launcher_foreground", "ic_launcher_monochrome"}
 for extra in sorted(drawables - listed - LAUNCHER_LAYERS):
     err(f"res/drawable/{extra}.xml is not one of the icons of tools/icons.txt")
 for missing in sorted(listed - drawables):
