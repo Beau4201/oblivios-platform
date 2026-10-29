@@ -79,7 +79,7 @@ fun PasswordsScreen(c: AppController) {
                     item { Spacer(Modifier.height(88.dp)) }
                 }
             }
-            PwNavBar(0) { navigate(c, it) }
+            PwNavBarSpace()
         }
         // The button folds to its icon while the list is scrolled and opens again at the top, the way the system apps do.
         ExtendedFloatingActionButton(

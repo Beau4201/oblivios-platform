@@ -199,6 +199,15 @@ fun PwNavBar(selected: Int, onSelect: (Int) -> Unit) {
     }
 }
 
+/**
+ * The room that a tab screen keeps free for the bottom navigation bar: the height of [PwNavBar] (80 dp plus the gesture
+ * inset). The bar itself is drawn by the host over this room, so that it stays where it is when the tab changes.
+ */
+@Composable
+fun PwNavBarSpace() {
+    Spacer(Modifier.navigationBarPadding().height(80.dp))
+}
+
 /** A bar with a title and up to two actions. */
 @Composable
 fun PwTopBar(title: String?, onBack: (() -> Unit)?, backIcon: Int = R.drawable.ic_arrow_back, actions: @Composable () -> Unit = {}) {

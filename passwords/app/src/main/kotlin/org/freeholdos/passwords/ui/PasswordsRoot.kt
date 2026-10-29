@@ -3,19 +3,30 @@ package org.freeholdos.passwords.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -84,39 +95,60 @@ private val FastOutExtraSlowIn = Easing { x ->
  * Going deeper: the new screen comes in from 96 dp to the right over 450 ms and fades in over 83 ms after 50 ms, while the old
  * one moves 96 dp to the left, fully visible. Going back mirrors it: the screen below comes in from 96 dp to the left, and the
  * leaving one (on top) moves 96 dp to the right and fades out over 83 ms after 35 ms. The edge extension of the window
- * animation is not needed, the screens fill the host. The tabs have no counterpart in the settings app, so a tab to the
- * right goes forward and a tab to the left goes back. A lock replaces this host at once instead, outside of any animation.
+ * animation is not needed, the screens fill the host. A lock replaces this host at once instead, outside of any
+ * animation.
+ *
+ * Switching between the three tabs is not opening a page, so it does not slide (owner, 2026-10-29: it looked like closing and
+ * opening a page). It is the Material "fade through" for destinations of one level that are not related by depth: the leaving
+ * screen fades out in 90 ms, then the new one fades in over 210 ms while it grows from 92 to 100 percent; the tab bar stays
+ * where it is and only its pill moves. The bar belongs to the host for that reason: a screen reserves the room for it
+ * ([PwNavBarSpace]) and the host draws it over that room. It leaves downwards when a page opens from a tab and comes back
+ * when the user returns.
  */
 @Composable
 private fun UnlockedHost(c: AppController) {
     val shift = with(LocalDensity.current) { 96.dp.roundToPx() }
-    AnimatedContent(
-        targetState = c.route,
-        transitionSpec = {
-            val from = depth(initialState)
-            val to = depth(targetState)
-            val forward = if (to != from) to > from else tabIndex(targetState) >= tabIndex(initialState)
-            val slide = tween<IntOffset>(450, easing = FastOutExtraSlowIn)
-            if (forward) {
-                (fadeIn(tween(83, delayMillis = 50, easing = LinearEasing)) + slideInHorizontally(slide) { shift }) togetherWith
-                    slideOutHorizontally(slide) { -shift }
-            } else {
-                ((slideInHorizontally(slide) { -shift }) togetherWith
-                    (fadeOut(tween(83, delayMillis = 35, easing = LinearEasing)) + slideOutHorizontally(slide) { shift }))
-                    .also { it.targetContentZIndex = -1f }
-            }.using(SizeTransform(clip = false))
-        },
-        label = "route",
-    ) { r ->
-        when (r) {
-            Route.Passwords -> PasswordsScreen(c)
-            Route.Search -> SearchScreen(c)
-            is Route.Detail -> DetailScreen(c, r.id)
-            is Route.Edit -> EditScreen(c, r.id)
-            Route.Checkup -> CheckupScreen(c)
-            Route.Settings -> SettingsScreen(c)
-            Route.Export -> ExportScreen(c)
-            Route.Create -> PasswordsScreen(c)
+    var lastTab by remember { mutableIntStateOf(0) }
+    val tab = if (depth(c.route) == 0) tabIndex(c.route) else lastTab
+    SideEffect { lastTab = tab }
+    Box(Modifier.fillMaxSize()) {
+        AnimatedContent(
+            targetState = c.route,
+            transitionSpec = {
+                val from = depth(initialState)
+                val to = depth(targetState)
+                val slide = tween<IntOffset>(450, easing = FastOutExtraSlowIn)
+                when {
+                    from == 0 && to == 0 ->
+                        (fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) +
+                            scaleIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing), initialScale = 0.92f)) togetherWith
+                            fadeOut(tween(90, easing = LinearEasing))
+                    to >= from ->
+                        (fadeIn(tween(83, delayMillis = 50, easing = LinearEasing)) + slideInHorizontally(slide) { shift }) togetherWith
+                            slideOutHorizontally(slide) { -shift }
+                    else ->
+                        ((slideInHorizontally(slide) { -shift }) togetherWith
+                            (fadeOut(tween(83, delayMillis = 35, easing = LinearEasing)) + slideOutHorizontally(slide) { shift }))
+                            .also { it.targetContentZIndex = -1f }
+                }.using(SizeTransform(clip = false))
+            },
+            label = "route",
+        ) { r ->
+            when (r) {
+                Route.Passwords -> PasswordsScreen(c)
+                Route.Search -> SearchScreen(c)
+                is Route.Detail -> DetailScreen(c, r.id)
+                is Route.Edit -> EditScreen(c, r.id)
+                Route.Checkup -> CheckupScreen(c)
+                Route.Settings -> SettingsScreen(c)
+                Route.Export -> ExportScreen(c)
+                Route.Create -> PasswordsScreen(c)
+            }
         }
+        AnimatedVisibility(
+            visible = depth(c.route) == 0, modifier = Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(tween(150)) + slideInVertically(tween(250, easing = FastOutSlowInEasing)) { it },
+            exit = fadeOut(tween(100)) + slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { it },
+        ) { PwNavBar(tab) { navigate(c, it) } }
     }
 }

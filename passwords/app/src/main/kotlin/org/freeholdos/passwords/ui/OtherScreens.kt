@@ -100,7 +100,7 @@ fun CheckupScreen(c: AppController) {
             }
             item { Spacer(Modifier.height(24.dp)) }
         }
-        PwNavBar(1) { navigate(c, it) }
+        PwNavBarSpace()
     }
 }
 
@@ -163,7 +163,7 @@ fun SettingsScreen(c: AppController) {
             }
             Spacer(Modifier.height(24.dp))
         }
-        PwNavBar(2) { navigate(c, it) }
+        PwNavBarSpace()
     }
 }
 
