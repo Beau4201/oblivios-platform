@@ -25,6 +25,7 @@ android_app {
         "SettingsLibCollapsingToolbarBaseActivity",
         "SettingsLibFooterPreference",
         "SettingsLibMainSwitchPreference",
+        "SettingsLibSelectorWithWidgetPreference",
     ],
     certificate: "platform",
     privileged: true,

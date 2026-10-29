@@ -67,7 +67,10 @@ if os.path.isfile(icons_file):
     listed = {l.strip() for l in read(icons_file).splitlines() if l.strip() and not l.startswith("#")}
 else:
     err("tools/icons.txt is missing")
-for extra in sorted(drawables - listed):
+# The two layers of the launcher icon are drawn by hand (ADR-200: a flat mark in the system accent tones), not taken from the
+# icon set; their colours are system colours.
+LAUNCHER_LAYERS = {"ic_launcher_foreground", "ic_launcher_monochrome"}
+for extra in sorted(drawables - listed - LAUNCHER_LAYERS):
     err(f"res/drawable/{extra}.xml is not one of the icons of tools/icons.txt")
 for missing in sorted(listed - drawables):
     err(f"tools/icons.txt lists {missing} but res/drawable/{missing}.xml does not exist")

@@ -50,11 +50,11 @@
     <string name="app_tor_hint">Exit: Tor</string>
     <string name="app_direct_hint">Direct, hosts hidden</string>
     <string name="app_open_hint">Direct, never hidden</string>
-    <string name="mode_cancel">Cancel</string>
     <string name="app_mode_title">Network for %1$s</string>
     <string name="app_mode_direct">Direct, hide advertising and analytics hosts</string>
     <string name="app_mode_tor">Tor for everything</string>
     <string name="app_mode_open">Direct, never hide anything</string>
+    <string name="app_exempt">This app always connects directly and is never hidden.</string>
     <string name="apps_limit">Tor is limited to %1$d apps.</string>
     <string name="apps_open_limit">Never hidden is limited to %1$d apps.</string>
 

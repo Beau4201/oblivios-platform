@@ -24,6 +24,7 @@
         android:label="@string/app_name"
         android:persistent="true"
         android:directBootAware="true"
+        android:icon="@mipmap/ic_launcher"
         android:defaultToDeviceProtectedStorage="true"
         android:theme="@style/Theme.SubSettingsBase"
         android:allowBackup="false">
@@ -49,6 +50,16 @@
             <meta-data android:name="com.android.settings.icon" android:resource="@drawable/ic_compartments" />
             <meta-data android:name="com.android.settings.order" android:value="-5" />
         </activity>
+
+        <!-- The page of one app (the package is the data of the intent). The "Compartments" row of the app's info page in
+             Settings and the list of apps start it; only the platform's Settings app holds NETWORK_SETTINGS, so no other app
+             can open it, and a package that is not installed closes it. -->
+        <activity
+            android:name=".ExitAppActivity"
+            android:label="@string/app_name"
+            android:excludeFromRecents="true"
+            android:permission="android.permission.NETWORK_SETTINGS"
+            android:exported="true" />
 
         <!-- The two sub-pages, started by the rows of the main page only. -->
         <activity

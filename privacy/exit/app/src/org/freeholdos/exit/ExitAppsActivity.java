@@ -9,20 +9,21 @@ import android.os.Looper;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.SearchView;
-import android.widget.Toast;
 
-import androidx.preference.ListPreference;
+import androidx.preference.Preference;
 import androidx.preference.PreferenceScreen;
 
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 import com.android.settingslib.preference.PreferenceFragment;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * The apps of this user and what each is set to (trackers hidden, Tor, never hidden), with the search of the Settings pages in
- * the toolbar. One tap on an app opens the three stands in the dialog of a list preference; a stand that the tables cannot hold
- * says so and changes nothing.
+ * The apps of this user with what each is set to (trackers hidden, Tor, never hidden), with the search of the Settings pages in the
+ * toolbar. A tap on an app opens the page of that app ({@link ExitAppActivity}), the same page that the app's info page in
+ * Settings opens, so an app is set in one place.
  */
 public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
     @Override
@@ -70,7 +71,7 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
         private String query = "";
         /** The packages of the rows that are shown, with the query: the rows are built again only when this changes. */
         private String built = "";
-        private final java.util.Map<String, ListPreference> rows = new java.util.HashMap<>();
+        private final Map<String, Preference> rows = new HashMap<>();
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -131,15 +132,8 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
             if (!shape.toString().equals(built)) {
                 screen.removeAll();
                 rows.clear();
-                final Choices.Choice[] options = Presenter.options();
-                CharSequence[] entries = new CharSequence[options.length];
-                CharSequence[] values = new CharSequence[options.length];
-                for (int i = 0; i < options.length; i++) {
-                    entries[i] = getString(modeText(options[i]));
-                    values[i] = options[i].name();
-                }
                 for (Presenter.AppRow r : list) {
-                    ListPreference p = new ListPreference(ctx);
+                    Preference p = new Preference(ctx);
                     p.setKey(r.pkg);
                     p.setPersistent(false);
                     p.setTitle(r.label);
@@ -148,38 +142,18 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
                     if (icon != null) {
                         p.setIcon(icon);
                     }
-                    p.setEntries(entries);
-                    p.setEntryValues(values);
-                    p.setDialogTitle(getString(R.string.app_mode_title, r.label));
-                    p.setNegativeButtonText(R.string.mode_cancel);
-                    // The stand is taken from the runtime, so the dialog's own answer is never stored here.
-                    p.setOnPreferenceChangeListener((pref, v) -> {
-                        choose(r.pkg, Choices.Choice.valueOf((String) v));
-                        return false;
-                    });
+                    p.setIntent(ExitAppActivity.intentFor(ctx, r.pkg));
                     rows.put(r.pkg, p);
                     screen.addPreference(p);
                 }
                 built = shape.toString();
             }
             for (Presenter.AppRow r : list) {
-                ListPreference p = rows.get(r.pkg);
+                Preference p = rows.get(r.pkg);
                 if (p != null) {
                     p.setSummary(hintOf(r.choice));
-                    p.setValue(r.choice.name());
                 }
             }
-        }
-
-        private void choose(String pkg, Choices.Choice c) {
-            ExitRuntime.Snapshot now = rt.snapshot();
-            if (now != null && !now.choices.accepts(pkg, c)) {
-                int limit = c == Choices.Choice.TOR ? Choices.MAX_TOR_APPS : Choices.MAX_OPEN_APPS;
-                int text = c == Choices.Choice.TOR ? R.string.apps_limit : R.string.apps_open_limit;
-                Toast.makeText(requireContext(), getString(text, limit), Toast.LENGTH_LONG).show();
-                return;
-            }
-            rt.setChoice(pkg, c);
         }
 
         private static int hintOf(Choices.Choice c) {
@@ -190,17 +164,6 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
                     return R.string.app_open_hint;
                 default:
                     return R.string.app_direct_hint;
-            }
-        }
-
-        private static int modeText(Choices.Choice c) {
-            switch (c) {
-                case TOR:
-                    return R.string.app_mode_tor;
-                case OPEN:
-                    return R.string.app_mode_open;
-                default:
-                    return R.string.app_mode_direct;
             }
         }
     }

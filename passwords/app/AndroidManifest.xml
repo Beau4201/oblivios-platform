@@ -27,7 +27,7 @@
         android:name="org.freeholdos.passwords.PasswordsApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/pm_data_extraction_rules"
-        android:icon="@drawable/ic_key_filled"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/pm_app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Passwords">
