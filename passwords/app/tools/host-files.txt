@@ -7,6 +7,7 @@ org/freeholdos/passwords/core/Wire.kt
 org/freeholdos/passwords/core/SiteText.kt
 org/freeholdos/passwords/fill/FieldClassifier.kt
 org/freeholdos/passwords/fill/FillPlanner.kt
+org/freeholdos/passwords/fill/ChipPolicy.kt
 org/freeholdos/passwords/fill/Origin.kt
 org/freeholdos/passwords/fill/PendingSave.kt
 org/freeholdos/passwords/ui/Pattern.kt

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Inline suggestions in the keyboard strip are the second plan; until then the system dropdown shows the entries. -->
+<!-- Chips in the strip of the system keyboard (ADR-191). A keyboard that ChipPolicy does not trust, or one without
+     inline support, gets the system list instead. -->
 <autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:settingsActivity="org.freeholdos.passwords.MainActivity"
-    android:supportsInlineSuggestions="false" />
+    android:supportsInlineSuggestions="true" />

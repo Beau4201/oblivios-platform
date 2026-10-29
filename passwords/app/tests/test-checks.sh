@@ -117,6 +117,15 @@ expect_fail "static: rememberSaveable in a screen" bash "$d/tools/check-static.s
 d="$(fresh)"; printf 'package org.freeholdos.passwords\nfun f() { android.util.Log.d("tag", "x") }\n' > "$(KT "$d")/Logs.kt"
 expect_fail "static: a log call in the app" bash "$d/tools/check-static.sh" "$d"
 
+d="$(fresh)"; printf 'package org.freeholdos.passwords.fill\nfun f(b: android.service.autofill.Dataset.Builder, id: android.view.autofill.AutofillId) { b.setValue(id, null) }\n' > "$(KT "$d")/fill/NoFilter.kt"
+expect_fail "static: a dataset value without NO_FILTER" bash "$d/tools/check-static.sh" "$d"
+
+d="$(fresh)"; printf 'package org.freeholdos.passwords.fill\nfun f(b: android.service.autofill.Dataset.Builder, id: android.view.autofill.AutofillId) {\n  // b.setValue(id, null)\n  b.setValue(id, null, NO_FILTER, null)\n}\n' > "$(KT "$d")/fill/WithFilter.kt"
+expect_pass "static: a dataset value with NO_FILTER and a commented call" bash "$d/tools/check-static.sh" "$d"
+
+d="$(fresh)"; sed -i 's#supportsInlineSuggestions="true"#supportsInlineSuggestions="false"#' "$d/res/xml/pm_autofill_service.xml"
+expect_fail "static: the service does not declare inline suggestions" bash "$d/tools/check-static.sh" "$d"
+
 # --- check-jni-sync.sh ---
 d="$(fresh)"; sed -i '/external fun strength/d' "$(KT "$d")/core/VaultCore.kt"
 expect_fail "jni: a Rust export without its external fun" bash "$d/tools/check-jni-sync.sh" "$d"

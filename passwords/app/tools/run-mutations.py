@@ -35,6 +35,7 @@ Q = K + "fill/PendingSave.kt"
 T = K + "core/SiteText.kt"
 OR = K + "fill/Origin.kt"
 S = "src/main/kotlin/org/freeholdos/passwords/lock/LockState.kt"
+C = K + "fill/ChipPolicy.kt"
 
 # (name, file, old, new)
 MUTATIONS = [
@@ -222,6 +223,26 @@ MUTATIONS = [
     ("site: an edit drops the other sites", T, "existing.firstOrNull() == host -> existing", "existing.firstOrNull() == host -> listOf(host)"),
     ("site: an edit keeps a duplicate", T, "listOf(host) + rest.filter { it != host }", "listOf(host) + rest"),
     ("site: an emptied site keeps the first", T, "host.isEmpty() -> rest", "host.isEmpty() -> existing"),
+    # ChipPolicy.kt
+    ("chips: a second keyboard is trusted", C, 'setOf("com.android.inputmethod.latin")', 'setOf("com.android.inputmethod.latin", "com.example.keyboard")'),
+    ("chips: any keyboard", C, "hostPackage != null && hostPackage in TRUSTED_KEYBOARDS && specCount > 0", "hostPackage != null && specCount > 0"),
+    ("chips: a package that starts like a trusted one", C, "hostPackage in TRUSTED_KEYBOARDS", "TRUSTED_KEYBOARDS.any { hostPackage.startsWith(it) }"),
+    ("chips: no host passes", C, "hostPackage != null && hostPackage in TRUSTED_KEYBOARDS", "(hostPackage == null || hostPackage in TRUSTED_KEYBOARDS)"),
+    ("chips: no style passes", C, "specCount > 0 && maxCount > 0", "specCount >= 0 && maxCount > 0"),
+    ("chips: no chip wanted passes", C, "specCount > 0 && maxCount > 0", "specCount > 0 && maxCount >= 0"),
+    ("chips: the style index runs past the list", C, "minOf(datasetIndex, specCount - 1)", "minOf(datasetIndex, specCount)"),
+    ("chips: always the first style", C, "minOf(datasetIndex, specCount - 1)", "0"),
+    ("chips: the dataset index is the style index", C, "minOf(datasetIndex, specCount - 1)", "datasetIndex"),
+    ("chips: the cap is ignored", C, "minOf(datasetCount, maxCount)", "datasetCount"),
+    ("chips: the cap is the count", C, "minOf(datasetCount, maxCount)", "maxCount"),
+    ("chips: the key drops leading zeros", C, '"%02x".format(it)', '"%x".format(it)'),
+    ("chips: the key is upper case", C, '"%02x".format(it)', '"%02X".format(it)'),
+    ("chips: a manual request is limited", C, "        if (manual) return plan\n", ""),
+    ("chips: the global switch is ignored", C, "if (!suggestionsOn) return FillPlan.None", "if (false) return FillPlan.None"),
+    ("chips: the generic entry is dropped", C, "if (plan !is FillPlan.Datasets) return plan", "if (plan !is FillPlan.Datasets) return FillPlan.None"),
+    ("chips: only the switched-off logins are kept", C, "entryKey(it.entryId) !in chipOff", "entryKey(it.entryId) in chipOff"),
+    ("chips: every login off still offers an empty list", C, "if (kept.isEmpty()) FillPlan.None else FillPlan.Datasets(kept)", "FillPlan.Datasets(kept)"),
+    ("chips: the switches of the logins are ignored", C, "val kept = plan.items.filter { entryKey(it.entryId) !in chipOff }", "val kept = plan.items"),
     # PendingSave.kt
     ("pending: the scheduled wipe is not scheduled", Q, "        schedule(ttlMs + 1) { expire(p) }\n", ""),
     ("pending: the scheduled wipe is early", Q, "schedule(ttlMs + 1) { expire(p) }", "schedule(ttlMs - 1) { expire(p) }"),

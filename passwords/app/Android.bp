@@ -18,6 +18,7 @@ android_app {
     jni_libs: ["libvault_core"],
     static_libs: [
         "androidx.credentials_credentials",
+        "androidx.autofill_autofill",
         "androidx.activity_activity",
         "androidx.activity_activity-compose",
         "androidx.navigationevent_navigationevent",

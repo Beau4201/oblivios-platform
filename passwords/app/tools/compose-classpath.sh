@@ -11,6 +11,7 @@ mkdir -p "$OUT"
 # group/artifact pairs below m2repository/androidx; the newest version directory of each is used.
 ARTIFACTS=(
   credentials/credentials
+  autofill/autofill
   biometric/biometric
   core/core
   annotation/annotation-jvm

@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.service.autofill.FillResponse
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillManager
+import android.view.inputmethod.InlineSuggestionsRequest
 import android.widget.RemoteViews
 import org.freeholdos.passwords.PasswordsApplication
 import org.freeholdos.passwords.R
@@ -32,10 +33,14 @@ class FillAuthActivity : SecureActivity() {
         val users = intent.getParcelableArrayListExtra<AutofillId>(EXTRA_USERNAME_IDS) ?: arrayListOf()
         val passwords = intent.getParcelableArrayListExtra<AutofillId>(EXTRA_PASSWORD_IDS) ?: arrayListOf()
         val accounts = app.repository.accounts(webDomain, pkg).orEmpty()
-        val datasets = accounts.mapNotNull { a ->
-            val entry = app.repository.get(a.entryId) ?: return@mapNotNull null
+        // The system hands over the request of the keyboard again, so several accounts can be chips (ADR-191). The user
+        // asked for the login by tapping, so the switch of a login does not apply here.
+        val chips = InlineChips.of(this, intent.getParcelableExtra<InlineSuggestionsRequest>(AutofillManager.EXTRA_INLINE_SUGGESTIONS_REQUEST))
+        val withChip = chips?.let { ChipPolicy.chipCount(accounts.size, it.maxCount) } ?: 0
+        val datasets = accounts.mapIndexedNotNull { i, a ->
+            val entry = app.repository.get(a.entryId) ?: return@mapIndexedNotNull null
             try {
-                DatasetFactory.build(entry, label(a.username), users, passwords, a.entryId.joinToString("") { "%02x".format(it) }) to a
+                DatasetFactory.build(entry, label(a.username), users, passwords, ChipPolicy.entryKey(a.entryId), if (i < withChip) chips?.presentation(a.username.ifEmpty { null }, i) else null) to a
             } finally {
                 entry.wipe()
             }

@@ -63,7 +63,17 @@ if [[ -d "$KT" ]]; then
   if grep -n -E '\b(android\.util\.)?Log\.[dviwe]\(|\bprintln\(|\.printStackTrace\(|Timber\.' -r "$KT" --include='*.kt' >&2; then
     fail "a log or print call in the app"
   fi
+
+  # Chips (ADR-191): a dataset value is added with a null filter (NO_FILTER). A filter taken from the value would let the
+  # system match what the user typed against the stored username or password, and a keyboard could probe the value by
+  # watching which chips stay.
+  while IFS= read -r hit; do
+    fail "$hit: a dataset value without NO_FILTER"
+  done < <(grep -n -E '\.setValue\(' -r "$KT/org/freeholdos/passwords/fill" --include='*.kt' | grep -v -E ':[0-9]+:\s*(//|\*|/\*)' | grep -v 'NO_FILTER' || true)
 fi
+
+# The feature switch of the chips: without it the system never asks the keyboard for them.
+grep -q 'android:supportsInlineSuggestions="true"' "$APP/res/xml/pm_autofill_service.xml" || fail 'the autofill service does not declare supportsInlineSuggestions'
 
 [[ $bad -eq 0 ]] || exit 1
 echo "static checks ok"

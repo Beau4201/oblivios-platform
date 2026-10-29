@@ -26,6 +26,7 @@ import org.freeholdos.passwords.core.VaultCore
 import org.freeholdos.passwords.core.Reply
 import org.freeholdos.passwords.data.SaveResult
 import org.freeholdos.passwords.fill.OriginPolicy
+import org.freeholdos.passwords.fill.ChipSettings
 import org.freeholdos.passwords.fill.PassphraseDialog
 import org.freeholdos.passwords.lock.BiometricOutcome
 import org.freeholdos.passwords.lock.LockState
@@ -61,7 +62,8 @@ class AppController(val activity: SecureActivity) {
     private val session get() = app.session
     private val repo get() = app.repository
     private val main = Handler(Looper.getMainLooper())
-    private val prefs = activity.getSharedPreferences("ui", Context.MODE_PRIVATE)
+    private val prefs = activity.getSharedPreferences(ChipSettings.PREFS, Context.MODE_PRIVATE)
+    private val chips = ChipSettings(prefs)
 
     var lock by mutableStateOf<LockState>(session.state)
         private set
@@ -372,17 +374,13 @@ class AppController(val activity: SecureActivity) {
 
     // --- per-login keyboard chip switch (kept in the app's private preferences, keyed by entry id) ---
 
-    fun chipOffered(id: String): Boolean = !prefs.getStringSet("chip_off", emptySet()).orEmpty().contains(id)
+    fun chipOffered(id: String): Boolean = chips.isOffered(id)
 
-    fun setChipOffered(id: String, offered: Boolean) {
-        val set = prefs.getStringSet("chip_off", emptySet()).orEmpty().toMutableSet()
-        if (offered) set.remove(id) else set.add(id)
-        prefs.edit().putStringSet("chip_off", set).apply()
-    }
+    fun setChipOffered(id: String, offered: Boolean) = chips.setOffered(id, offered)
 
     var suggestionsOn: Boolean
-        get() = prefs.getBoolean("suggestions", true)
-        set(v) { prefs.edit().putBoolean("suggestions", v).apply() }
+        get() = chips.suggestionsOn
+        set(v) { chips.suggestionsOn = v }
 
     // --- settings, export and import ---
 
