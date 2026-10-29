@@ -25,16 +25,19 @@
         android:persistent="true"
         android:directBootAware="true"
         android:defaultToDeviceProtectedStorage="true"
+        android:theme="@style/Theme.SubSettingsBase"
         android:allowBackup="false">
 
         <!-- The "Compartments" entry under Network & internet. Settings finds it through the IA_SETTINGS action and reads the
              category, title, summary, icon and order from the meta-data [verified-in-source: SettingsLib TileUtils.java,
              CategoryKey.java: the category key of "Network & internet" is ...ia.wireless]. Exported without a permission
-             because Settings starts it; it shows the user's own choices and changes them only by a tap. -->
+             because Settings starts it; it shows the user's own choices and changes them only by a tap. It is built with the
+             theme and widgets of SettingsLib and stays out of the recents list like the pages of Settings, so that it is
+             not taken for an app of its own. -->
         <activity
             android:name=".ExitSettingsActivity"
             android:label="@string/app_name"
-            android:theme="@android:style/Theme.DeviceDefault.Settings"
+            android:excludeFromRecents="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.android.settings.action.IA_SETTINGS" />
@@ -46,6 +49,18 @@
             <meta-data android:name="com.android.settings.icon" android:resource="@drawable/ic_compartments" />
             <meta-data android:name="com.android.settings.order" android:value="-5" />
         </activity>
+
+        <!-- The two sub-pages, started by the rows of the main page only. -->
+        <activity
+            android:name=".ExitAppsActivity"
+            android:label="@string/apps_title"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+        <activity
+            android:name=".ExitOverridesActivity"
+            android:label="@string/overrides_title"
+            android:excludeFromRecents="true"
+            android:exported="false" />
 
         <!-- The buttons of the notification. Not exported: only the pending intents of this app reach it. -->
         <receiver

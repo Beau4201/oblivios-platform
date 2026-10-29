@@ -1,485 +1,274 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.freeholdos.exit;
 
-import android.app.Activity;
-import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
-import android.view.Gravity;
-import android.view.View;
-import android.view.ViewGroup;
-import android.window.OnBackInvokedCallback;
-import android.window.OnBackInvokedDispatcher;
-import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.SearchView;
-import android.widget.Switch;
-import android.widget.TextView;
-import android.widget.Toast;
+import android.view.MenuItem;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import androidx.preference.Preference;
+import androidx.preference.PreferenceCategory;
+import androidx.preference.PreferenceScreen;
+import androidx.preference.SwitchPreferenceCompat;
+
+import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
+import com.android.settingslib.preference.PreferenceFragment;
+import com.android.settingslib.widget.ButtonPreference;
+import com.android.settingslib.widget.FooterPreference;
+import com.android.settingslib.widget.MainSwitchPreference;
 
 /**
  * The "Compartments" entry under Network &amp; internet (the {@code IA_SETTINGS} tile of the manifest): the status, the
  * one-time consent, the hidden-address switch, the hosts that the speed guard shows an address to for now (with "Hide
- * again"), the apps with their stand (trackers hidden, Tor, never hidden), the hosts the user showed an address to, and the
- * warnings. Stock widgets in the platform's Settings theme; the activity only draws what {@link Presenter}
- * lists and posts each change to {@link ExitRuntime}.
+ * again"), the warnings, and the two sub-pages: the apps with their stand and the hosts the user showed an address to.
+ * It is built like the pages of the Settings app (the collapsing toolbar, the preference widgets and the theme of SettingsLib,
+ * as the Updater does); the fragment only draws what {@link Presenter} lists and posts each change to {@link ExitRuntime}.
  */
-public final class ExitSettingsActivity extends Activity implements ExitRuntime.Listener {
-    private enum Page { MAIN, APPS, OVERRIDES }
-
-    private final Handler main = new Handler(Looper.getMainLooper());
-    private ExitRuntime rt;
-    private CompanyNames names;
-    private LinearLayout content;
-    private Page page = Page.MAIN;
-    private String query = "";
-    /** The launchable apps of this user with icon and label, loaded once in the background. */
-    private List<Presenter.Listed> listed = new ArrayList<>();
-    private final Map<String, Drawable> icons = new HashMap<>();
-    private LinearLayout appList;
-    private boolean consentChoice = true;
-
+public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        setTitle(R.string.app_name);
-        rt = ExitRuntime.get(this);
-        names = rt.companyNames();
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(16);
-        content.setPadding(pad, pad, pad, pad);
-        scroll.addView(content, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        setContentView(scroll);
-        if (getActionBar() != null) {
-            getActionBar().setDisplayHomeAsUpEnabled(true);
-        }
-        loadApps();
+        setContentView(R.layout.settings_activity);
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
-        rt.setListener(this);
-        render();
-    }
-
-    @Override
-    protected void onStop() {
-        rt.setListener(null);
-        super.onStop();
-    }
-
-    @Override
-    public void onChanged(ExitRuntime.Snapshot s) {
-        main.post(() -> {
-            if (page == Page.APPS && appList != null) {
-                fillAppList(s);
-            } else {
-                render();
-            }
-        });
-    }
-
-    @Override
-    public boolean onNavigateUp() {
-        if (page != Page.MAIN) {
-            goBack();
-        } else {
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
             finish();
+            return true;
         }
-        return true;
+        return super.onOptionsItemSelected(item);
     }
 
-    /** The back gesture goes from a sub-page to the main page; on the main page it is not ours. */
-    private final OnBackInvokedCallback back = this::goBack;
-    private boolean backRegistered;
-
-    private void goBack() {
-        page = Page.MAIN;
-        query = "";
-        render();
+    /** A line that shows text and is not a control. */
+    static Preference note(Context ctx, CharSequence title, CharSequence summary) {
+        Preference p = new Preference(ctx);
+        p.setPersistent(false);
+        p.setSelectable(false);
+        if (title != null) {
+            p.setTitle(title);
+        }
+        if (summary != null) {
+            p.setSummary(summary);
+        }
+        return p;
     }
 
-    private void updateBackCallback() {
-        boolean want = page != Page.MAIN;
-        if (want && !backRegistered) {
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, back);
-        } else if (!want && backRegistered) {
-            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(back);
-        }
-        backRegistered = want;
-    }
+    public static final class MainFragment extends PreferenceFragment implements ExitRuntime.Listener {
+        private final Handler main = new Handler(Looper.getMainLooper());
+        private ExitRuntime rt;
+        private CompanyNames names;
+        private AppIndex index = AppIndex.EMPTY;
+        private boolean consentChoice = true;
+        /** What the screen was built from: it is built again only when this changes, and refreshed in place otherwise. */
+        private String built = "";
+        private Preference statusPref;
+        private Preference appsPref;
+        private Preference overridesPref;
+        private MainSwitchPreference mainSwitch;
 
-    // ---- pages ----------------------------------------------------------------------------------------------------
-
-    private void render() {
-        updateBackCallback();
-        content.removeAllViews();
-        appList = null;
-        ExitRuntime.Snapshot s = rt.snapshot();
-        if (!rt.runsHere() || s == null) {
-            content.addView(summary(getString(R.string.owner_only)));
-            return;
-        }
-        switch (page) {
-            case APPS:
-                renderApps(s);
-                break;
-            case OVERRIDES:
-                renderOverrides(s);
-                break;
-            default:
-                renderMain(s);
-                break;
-        }
-    }
-
-    private void renderMain(ExitRuntime.Snapshot s) {
-        content.addView(title(statusText(s.status)));
-        if (s.status.lastError != null && s.status.phase != Status.Phase.RUNNING) {
-            content.addView(summary(getString(R.string.status_error, s.status.lastError)));
-        }
-        for (Policy.Warning w : s.status.warnings) {
-            content.addView(summary(getString(warningText(w))));
-        }
-        if (s.choices.damaged()) {
-            content.addView(summary(getString(R.string.warn_damaged)));
-        }
-
-        if (s.consent == Consent.UNSET) {
-            content.addView(heading(getString(R.string.consent_title)));
-            content.addView(summary(getString(R.string.consent_text)));
-            Switch choice = new Switch(this);
-            choice.setText(R.string.consent_switch);
-            choice.setChecked(consentChoice);
-            choice.setOnCheckedChangeListener((v, on) -> consentChoice = on);
-            content.addView(choice);
-            Button go = new Button(this);
-            go.setText(R.string.consent_confirm);
-            go.setOnClickListener(v -> rt.setConsent(consentChoice ? Consent.ON : Consent.OFF));
-            content.addView(go);
-        } else {
-            Switch masked = new Switch(this);
-            masked.setText(R.string.masked_title);
-            masked.setChecked(s.consent == Consent.ON);
-            masked.setOnCheckedChangeListener((v, on) -> {
-                if (on != (rt.snapshot().consent == Consent.ON)) {
-                    rt.setConsent(on ? Consent.ON : Consent.OFF);
-                }
+        @Override
+        public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
+            Context ctx = requireContext();
+            rt = ExitRuntime.get(ctx);
+            names = rt.companyNames();
+            setPreferenceScreen(getPreferenceManager().createPreferenceScreen(ctx));
+            AppIndex.load(ctx, main, i -> {
+                index = i;
+                built = "";
+                render();
             });
-            content.addView(masked);
-            content.addView(summary(getString(R.string.masked_summary)));
         }
 
-        if (!s.status.promotions.isEmpty()) {
-            content.addView(heading(getString(R.string.promoted_title)));
-            content.addView(summary(getString(R.string.promoted_summary)));
+        @Override
+        public void onStart() {
+            super.onStart();
+            rt.setListener(this);
+            render();
+        }
+
+        @Override
+        public void onStop() {
+            rt.clearListener(this);
+            super.onStop();
+        }
+
+        @Override
+        public void onChanged(ExitRuntime.Snapshot s) {
+            main.post(this::render);
+        }
+
+        private void render() {
+            Context ctx = getContext();
+            if (ctx == null || rt == null) {
+                return;
+            }
+            ExitRuntime.Snapshot s = rt.snapshot();
+            PreferenceScreen screen = getPreferenceScreen();
+            if (!rt.runsHere() || s == null) {
+                if (!"owner".equals(built)) {
+                    screen.removeAll();
+                    screen.addPreference(note(ctx, null, getString(R.string.owner_only)));
+                    built = "owner";
+                }
+                return;
+            }
+            String shape = shapeOf(s);
+            if (!shape.equals(built)) {
+                build(ctx, screen, s);
+                built = shape;
+            }
+            refresh(s);
+        }
+
+        private String shapeOf(ExitRuntime.Snapshot s) {
+            StringBuilder k = new StringBuilder();
+            k.append(s.consent).append('|').append(s.choices.damaged());
+            for (Policy.Warning w : Policy.Warning.values()) {
+                if (s.status.warnings.contains(w)) {
+                    k.append('|').append(w.name());
+                }
+            }
             for (Status.Promoted q : s.status.promotions) {
-                content.addView(promotedRow(q));
+                k.append('|').append(q.uid).append(':').append(q.company);
+            }
+            k.append('|').append(index.listed.size());
+            return k.toString();
+        }
+
+        private void build(Context ctx, PreferenceScreen screen, ExitRuntime.Snapshot s) {
+            screen.removeAll();
+            mainSwitch = null;
+            if (s.consent == Consent.UNSET) {
+                PreferenceCategory ask = new PreferenceCategory(ctx);
+                ask.setPersistent(false);
+                ask.setTitle(R.string.consent_title);
+                screen.addPreference(ask);
+                ask.addPreference(note(ctx, null, getString(R.string.consent_text)));
+                SwitchPreferenceCompat choice = new SwitchPreferenceCompat(ctx);
+                choice.setPersistent(false);
+                choice.setTitle(R.string.consent_switch);
+                choice.setChecked(consentChoice);
+                choice.setOnPreferenceChangeListener((p, v) -> {
+                    consentChoice = (Boolean) v;
+                    return true;
+                });
+                ask.addPreference(choice);
+                ButtonPreference go = new ButtonPreference(ctx);
+                go.setTitle(R.string.consent_confirm);
+                go.setOnClickListener(v -> rt.setConsent(consentChoice ? Consent.ON : Consent.OFF));
+                screen.addPreference(go);
+            } else {
+                mainSwitch = new MainSwitchPreference(ctx);
+                mainSwitch.setPersistent(false);
+                mainSwitch.setTitle(R.string.masked_title);
+                mainSwitch.addOnSwitchChangeListener((v, on) -> {
+                    ExitRuntime.Snapshot now = rt.snapshot();
+                    if (now != null && on != (now.consent == Consent.ON)) {
+                        rt.setConsent(on ? Consent.ON : Consent.OFF);
+                    }
+                });
+                screen.addPreference(mainSwitch);
+            }
+
+            statusPref = note(ctx, "", null);
+            screen.addPreference(statusPref);
+            for (Policy.Warning w : Policy.Warning.values()) {
+                if (s.status.warnings.contains(w)) {
+                    screen.addPreference(note(ctx, null, getString(warningText(w))));
+                }
+            }
+            if (s.choices.damaged()) {
+                screen.addPreference(note(ctx, null, getString(R.string.warn_damaged)));
+            }
+
+            if (!s.status.promotions.isEmpty()) {
+                PreferenceCategory promoted = new PreferenceCategory(ctx);
+                promoted.setPersistent(false);
+                promoted.setTitle(R.string.promoted_title);
+                screen.addPreference(promoted);
+                promoted.addPreference(note(ctx, null, getString(R.string.promoted_summary)));
+                for (Status.Promoted q : s.status.promotions) {
+                    promoted.addPreference(promotedRow(ctx, q));
+                }
+            }
+
+            appsPref = new Preference(ctx);
+            appsPref.setPersistent(false);
+            appsPref.setTitle(R.string.apps_title);
+            appsPref.setIntent(new Intent(ctx, ExitAppsActivity.class));
+            screen.addPreference(appsPref);
+            overridesPref = new Preference(ctx);
+            overridesPref.setPersistent(false);
+            overridesPref.setTitle(R.string.overrides_title);
+            overridesPref.setIntent(new Intent(ctx, ExitOverridesActivity.class));
+            screen.addPreference(overridesPref);
+
+            if (s.consent != Consent.UNSET) {
+                FooterPreference footer = new FooterPreference(ctx);
+                footer.setSummary(R.string.masked_summary);
+                screen.addPreference(footer);
             }
         }
 
-        content.addView(heading(getString(R.string.apps_title)));
-        content.addView(row(getString(R.string.apps_title),
-                getString(R.string.apps_summary, s.choices.torApps().size(), s.choices.openApps().size()),
-                v -> {
-                    page = Page.APPS;
-                    render();
-                }));
-        content.addView(row(getString(R.string.overrides_title),
-                getString(R.string.overrides_summary, Presenter.overrideRows(s.choices, names).size()), v -> {
-                    page = Page.OVERRIDES;
-                    render();
-                }));
-    }
+        /** The values that change often, set in place so that the list does not flicker when the status is polled. */
+        private void refresh(ExitRuntime.Snapshot s) {
+            statusPref.setTitle(statusText(s.status));
+            statusPref.setSummary(s.status.lastError != null && s.status.phase != Status.Phase.RUNNING
+                    ? getString(R.string.status_error, s.status.lastError) : (CharSequence) null);
+            if (mainSwitch != null) {
+                boolean on = s.consent == Consent.ON;
+                if (mainSwitch.isChecked() != on) {
+                    mainSwitch.setChecked(on);
+                }
+            }
+            appsPref.setSummary(getString(R.string.apps_summary, s.choices.torApps().size(), s.choices.openApps().size()));
+            overridesPref.setSummary(getString(R.string.overrides_summary, Presenter.overrideRows(s.choices, names).size()));
+        }
 
-    private void renderApps(ExitRuntime.Snapshot s) {
-        content.addView(title(getString(R.string.apps_title)));
-        SearchView search = new SearchView(this);
-        search.setIconifiedByDefault(false);
-        search.setQueryHint(getString(R.string.apps_search_hint));
-        search.setQuery(query, false);
-        search.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String q) {
+        /** One company that the speed guard shows an address to for now; a tap hides it again. */
+        private Preference promotedRow(Context ctx, Status.Promoted q) {
+            String name = names.nameOf(q.company);
+            String company = name != null ? name : getString(R.string.notif_unknown_company);
+            Preference p = new Preference(ctx);
+            p.setPersistent(false);
+            p.setTitle(getString(R.string.override_row, index.labelOfUid(q.uid, getString(R.string.promoted_unknown_app)), company));
+            p.setSummary(R.string.override_remove);
+            p.setOnPreferenceClickListener(x -> {
+                rt.release(q.uid, q.company);
                 return true;
-            }
-
-            @Override
-            public boolean onQueryTextChange(String q) {
-                query = q;
-                ExitRuntime.Snapshot now = rt.snapshot();
-                if (now != null && appList != null) {
-                    fillAppList(now);
-                }
-                return true;
-            }
-        });
-        content.addView(search);
-        appList = new LinearLayout(this);
-        appList.setOrientation(LinearLayout.VERTICAL);
-        content.addView(appList);
-        fillAppList(s);
-    }
-
-    private void fillAppList(ExitRuntime.Snapshot s) {
-        appList.removeAllViews();
-        for (Presenter.AppRow r : Presenter.appRows(s.choices, listed, query)) {
-            LinearLayout line = new LinearLayout(this);
-            line.setOrientation(LinearLayout.HORIZONTAL);
-            line.setGravity(Gravity.CENTER_VERTICAL);
-            line.setPadding(0, dp(8), 0, dp(8));
-            ImageView icon = new ImageView(this);
-            icon.setImageDrawable(icons.get(r.pkg));
-            line.addView(icon, new LinearLayout.LayoutParams(dp(40), dp(40)));
-            LinearLayout text = new LinearLayout(this);
-            text.setOrientation(LinearLayout.VERTICAL);
-            text.setPadding(dp(16), 0, dp(16), 0);
-            TextView label = new TextView(this);
-            label.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Medium);
-            label.setText(r.label);
-            label.setSingleLine(true);
-            label.setEllipsize(TextUtils.TruncateAt.END);
-            text.addView(label);
-            TextView hint = new TextView(this);
-            hint.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Small);
-            hint.setText(hintOf(r.choice));
-            text.addView(hint);
-            line.addView(text, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            line.setContentDescription(getString(R.string.app_mode_row, r.label, getString(hintOf(r.choice))));
-            line.setOnClickListener(v -> showChoices(r.pkg, r.label));
-            appList.addView(line);
-        }
-    }
-
-    private static int hintOf(Choices.Choice c) {
-        switch (c) {
-            case TOR:
-                return R.string.app_tor_hint;
-            case OPEN:
-                return R.string.app_open_hint;
-            default:
-                return R.string.app_direct_hint;
-        }
-    }
-
-    private static int modeText(Choices.Choice c) {
-        switch (c) {
-            case TOR:
-                return R.string.app_mode_tor;
-            case OPEN:
-                return R.string.app_mode_open;
-            default:
-                return R.string.app_mode_direct;
-        }
-    }
-
-    /** One tap on an app opens the three stands; a stand the tables cannot hold says so and changes nothing. */
-    private void showChoices(String pkg, String label) {
-        ExitRuntime.Snapshot now = rt.snapshot();
-        if (now == null) {
-            return;
-        }
-        final Choices.Choice[] options = Presenter.options();
-        CharSequence[] items = new CharSequence[options.length];
-        int checked = 0;
-        for (int i = 0; i < options.length; i++) {
-            items[i] = getString(modeText(options[i]));
-            if (options[i] == now.choices.choiceOf(pkg)) {
-                checked = i;
-            }
-        }
-        new AlertDialog.Builder(this)
-                .setTitle(getString(R.string.app_mode_title, label))
-                .setSingleChoiceItems(items, checked, (d, which) -> {
-                    d.dismiss();
-                    choose(pkg, options[which]);
-                })
-                .setNegativeButton(R.string.mode_cancel, null)
-                .show();
-    }
-
-    private void choose(String pkg, Choices.Choice c) {
-        ExitRuntime.Snapshot now = rt.snapshot();
-        if (now != null && !now.choices.accepts(pkg, c)) {
-            int limit = c == Choices.Choice.TOR ? Choices.MAX_TOR_APPS : Choices.MAX_OPEN_APPS;
-            int text = c == Choices.Choice.TOR ? R.string.apps_limit : R.string.apps_open_limit;
-            Toast.makeText(this, getString(text, limit), Toast.LENGTH_LONG).show();
-            return;
-        }
-        rt.setChoice(pkg, c);
-    }
-
-    /** One company that the speed guard shows an address to for now, with the action that hides it again. */
-    private View promotedRow(Status.Promoted q) {
-        String name = names.nameOf(q.company);
-        String company = name != null ? name : getString(R.string.notif_unknown_company);
-        LinearLayout line = new LinearLayout(this);
-        line.setOrientation(LinearLayout.HORIZONTAL);
-        line.setGravity(Gravity.CENTER_VERTICAL);
-        TextView t = new TextView(this);
-        t.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Medium);
-        t.setText(getString(R.string.override_row, labelOfUid(q.uid), company));
-        line.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        Button hide = new Button(this);
-        hide.setText(R.string.override_remove);
-        hide.setOnClickListener(v -> rt.release(q.uid, q.company));
-        line.addView(hide);
-        return line;
-    }
-
-    private String labelOfUid(long uid) {
-        for (Presenter.Listed l : listed) {
-            if (l.uid == uid) {
-                return l.label;
-            }
-        }
-        return getString(R.string.promoted_unknown_app);
-    }
-
-    private void renderOverrides(ExitRuntime.Snapshot s) {
-        content.addView(title(getString(R.string.overrides_title)));
-        List<Presenter.OverrideRow> rows = Presenter.overrideRows(s.choices, names);
-        if (rows.isEmpty()) {
-            content.addView(summary(getString(R.string.overrides_empty)));
-        }
-        for (Presenter.OverrideRow r : rows) {
-            String company = r.companyName != null ? r.companyName : getString(R.string.notif_unknown_company);
-            LinearLayout line = new LinearLayout(this);
-            line.setOrientation(LinearLayout.HORIZONTAL);
-            line.setGravity(Gravity.CENTER_VERTICAL);
-            TextView t = new TextView(this);
-            t.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Medium);
-            t.setText(getString(R.string.override_row, label(r.pkg), company));
-            line.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            Button remove = new Button(this);
-            remove.setText(R.string.override_remove);
-            remove.setOnClickListener(v -> rt.setShowsAddress(r.pkg, r.company, false));
-            line.addView(remove);
-            content.addView(line);
-        }
-    }
-
-    // ---- small helpers ---------------------------------------------------------------------------------------------
-
-    private int dp(int v) {
-        return Math.round(v * getResources().getDisplayMetrics().density);
-    }
-
-    private TextView title(String text) {
-        TextView t = new TextView(this);
-        t.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Large);
-        t.setText(text);
-        t.setPadding(0, 0, 0, dp(8));
-        return t;
-    }
-
-    private TextView heading(String text) {
-        TextView t = new TextView(this);
-        t.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Medium);
-        t.setText(text);
-        t.setPadding(0, dp(24), 0, dp(4));
-        return t;
-    }
-
-    private TextView summary(String text) {
-        TextView t = new TextView(this);
-        t.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Small);
-        t.setText(text);
-        t.setPadding(0, dp(4), 0, dp(8));
-        return t;
-    }
-
-    private View row(String title, String summary, View.OnClickListener click) {
-        LinearLayout r = new LinearLayout(this);
-        r.setOrientation(LinearLayout.VERTICAL);
-        r.setPadding(0, dp(12), 0, dp(12));
-        TextView t = new TextView(this);
-        t.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Medium);
-        t.setText(title);
-        r.addView(t);
-        TextView s = new TextView(this);
-        s.setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Small);
-        s.setText(summary);
-        r.addView(s);
-        r.setOnClickListener(click);
-        return r;
-    }
-
-    private String statusText(Status st) {
-        switch (st.phase) {
-            case RUNNING:
-                return getString(R.string.status_running);
-            case CONNECTING:
-                return getString(R.string.status_connecting);
-            case PAUSED:
-                return getString(R.string.status_paused);
-            default:
-                return getString(R.string.status_idle);
-        }
-    }
-
-    private static int warningText(Policy.Warning w) {
-        switch (w) {
-            case VPN_ACTIVE:
-                return R.string.warn_vpn;
-            case PRIVATE_DNS_LIMITED:
-                return R.string.warn_dns;
-            case MASK_TIER_OFF_TOO_MANY_APPS:
-                return R.string.warn_masks_off;
-            case TOO_MANY_OPEN_APPS:
-                return R.string.warn_too_many_open;
-            default:
-                return R.string.warn_too_many;
-        }
-    }
-
-    private String label(String pkg) {
-        for (Presenter.Listed l : listed) {
-            if (l.pkg.equals(pkg)) {
-                return l.label;
-            }
-        }
-        return pkg;
-    }
-
-    /** The launchable apps with label and icon; read off the main thread, drawn when they are there. */
-    private void loadApps() {
-        final PackageManager pm = getPackageManager();
-        new Thread(() -> {
-            List<Presenter.Listed> out = new ArrayList<>();
-            Map<String, Drawable> ic = new HashMap<>();
-            Intent launcher = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-            for (ResolveInfo ri : pm.queryIntentActivities(launcher, 0)) {
-                String pkg = ri.activityInfo.packageName;
-                if (!ic.containsKey(pkg)) {
-                    out.add(new Presenter.Listed(pkg, String.valueOf(ri.loadLabel(pm)), ri.activityInfo.applicationInfo.uid));
-                    ic.put(pkg, ri.loadIcon(pm));
-                }
-            }
-            main.post(() -> {
-                listed = out;
-                icons.putAll(ic);
-                if (page == Page.APPS || page == Page.OVERRIDES) {
-                    render();
-                }
             });
-        }, "exit-apps").start();
+            return p;
+        }
+
+        private String statusText(Status st) {
+            switch (st.phase) {
+                case RUNNING:
+                    return getString(R.string.status_running);
+                case CONNECTING:
+                    return getString(R.string.status_connecting);
+                case PAUSED:
+                    return getString(R.string.status_paused);
+                default:
+                    return getString(R.string.status_idle);
+            }
+        }
+
+        private static int warningText(Policy.Warning w) {
+            switch (w) {
+                case VPN_ACTIVE:
+                    return R.string.warn_vpn;
+                case PRIVATE_DNS_LIMITED:
+                    return R.string.warn_dns;
+                case MASK_TIER_OFF_TOO_MANY_APPS:
+                    return R.string.warn_masks_off;
+                case TOO_MANY_OPEN_APPS:
+                    return R.string.warn_too_many_open;
+                default:
+                    return R.string.warn_too_many;
+            }
+        }
     }
 }

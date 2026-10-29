@@ -15,6 +15,17 @@ android_app {
     // alone does not put android.net.* on the class path (the probe's first module build failed on it).
     sdk_version: "module_current",
     libs: ["framework-connectivity.stubs.module_lib"],
+    // The screens are built like those of the Settings app, with the widgets and the theme of SettingsLib, as the Updater does
+    // (packages/apps/Updater/Android.bp): the collapsing toolbar, the preference rows, the main switch, the button and the footer.
+    static_libs: [
+        "androidx.appcompat_appcompat",
+        "androidx.preference_preference",
+        "SettingsLibButtonPreference",
+        "SettingsLibCategory",
+        "SettingsLibCollapsingToolbarBaseActivity",
+        "SettingsLibFooterPreference",
+        "SettingsLibMainSwitchPreference",
+    ],
     certificate: "platform",
     privileged: true,
     required: [

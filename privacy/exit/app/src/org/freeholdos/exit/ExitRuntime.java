@@ -276,6 +276,16 @@ final class ExitRuntime {
         listener = l;
     }
 
+    /**
+     * Removes {@code l} only when it is still the listener. A page that opens another one starts the new page before it stops
+     * itself, so a plain {@code setListener(null)} in the old page's {@code onStop} would take the new page's listener away.
+     */
+    void clearListener(Listener l) {
+        if (listener == l) {
+            listener = null;
+        }
+    }
+
     boolean runsHere() {
         return started && Process.myUserHandle().isSystem();
     }

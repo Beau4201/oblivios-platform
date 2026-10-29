@@ -52,7 +52,6 @@
     <string name="app_open_hint">Direct, never hidden</string>
     <string name="mode_cancel">Cancel</string>
     <string name="app_mode_title">Network for %1$s</string>
-    <string name="app_mode_row">%1$s: %2$s</string>
     <string name="app_mode_direct">Direct, hide advertising and analytics hosts</string>
     <string name="app_mode_tor">Tor for everything</string>
     <string name="app_mode_open">Direct, never hide anything</string>

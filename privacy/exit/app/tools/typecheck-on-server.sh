@@ -19,8 +19,18 @@ A="$W/app"
 OUT="$W/.typecheck-$(date +%Y%m%d-%H%M%S)"   # a new directory every run: nothing is deleted
 mkdir -p "$OUT/classes" "$OUT/gen"
 "$AAPT2" compile --dir "$A/res" -o "$OUT/res.zip"
+# The three screens and the theme come from SettingsLib, which the SDK stubs do not hold: the theme of the manifest gets a stand-in
+# here and the screens (ExitSettingsActivity, ExitAppsActivity, ExitOverridesActivity) are left to the module build, which links
+# the libraries (build-exit-app-module.sh). Everything else, the controller included, is compiled as before.
+mkdir -p "$OUT/stub/values"
+printf '<resources><style name="Theme.SubSettingsBase" parent="android:Theme.DeviceDefault"/></resources>\n' > "$OUT/stub/values/stub.xml"
+"$AAPT2" compile --dir "$OUT/stub" -o "$OUT/stub.zip"
 "$AAPT2" link -o "$OUT/app.apk" -I "$ML/android.jar" --manifest "$A/AndroidManifest.xml" --java "$OUT/gen" \
-  --min-sdk-version 36 --target-sdk-version 37 "$OUT/res.zip"
-SRCS=$(find "$A/src" "$OUT/gen" -name '*.java' | sort)
+  --min-sdk-version 36 --target-sdk-version 37 "$OUT/res.zip" "$OUT/stub.zip"
+# The notifier starts ExitSettingsActivity by class: a stand-in with the same name lets it compile.
+mkdir -p "$OUT/stubsrc/org/freeholdos/exit"
+printf 'package org.freeholdos.exit;\npublic class ExitSettingsActivity extends android.app.Activity {}\n' > "$OUT/stubsrc/org/freeholdos/exit/ExitSettingsActivity.java"
+SRCS=$(find "$A/src" "$OUT/gen" -name '*.java' | grep -v -E '/(ExitSettingsActivity|ExitAppsActivity|ExitOverridesActivity)\.java$'; echo "$OUT/stubsrc/org/freeholdos/exit/ExitSettingsActivity.java")
+SRCS=$(echo "$SRCS" | sort)
 "$JAVAC" -proc:none -Xlint:-options -Xlint:unchecked -Xlint:deprecation -cp "$CP" -d "$OUT/classes" $SRCS
 echo "app type-check passed: $(echo "$SRCS" | wc -l) files"
