@@ -120,6 +120,21 @@ public final class GrabDetectorTest {
         });
     }
 
+    /** The first decision that came from the impact route, and the time it came at in {@code at[0]}. */
+    private static Decision firstImpact(GrabDetector d, Scenario s, long endMs, long[] at) {
+        for (long t = 0; t <= endMs; t += STEP_MS) {
+            for (Map.Entry<Long, Boolean> e : s.touch.subMap(t - STEP_MS, false, t, true).entrySet()) {
+                d.onTouch(e.getKey(), e.getValue());
+            }
+            Decision x = d.onAccel(t, 0f, 0f, G + (float) s.dev.applyAsDouble(t));
+            if (x != null && x.impact) {
+                at[0] = t;
+                return x;
+            }
+        }
+        return null;
+    }
+
     private static java.util.List<Decision> decisions(GrabDetector d, Scenario s, long endMs) {
         java.util.List<Decision> out = new java.util.ArrayList<>();
         for (long t = 0; t <= endMs; t += STEP_MS) {
@@ -267,6 +282,119 @@ public final class GrabDetectorTest {
         }
         x = g.onAccel(1000, 0f, 0f, G + 40f);
         check("a phone on its side is not in free fall", x != null && x.trigger);
+    }
+
+    /**
+     * An impact with no free fall locks only after a pulse of minPulseMs (owner, 2026-10-29: picking the phone up from a table
+     * locked it). Recorded on lynx: 12 grabs are 171 to 310 ms above 15 m/s^2, the spikes of 8 pickups and bumps 4 to 13 ms.
+     */
+    private static void pulseChecks() {
+        // 20 ms steps; a deviation of 40 is a magnitude of about 50 m/s^2, 20 one of about 30: above 15, below impactPeak
+        Params pw = new Params(15f, 400, 150, 200, 800, 1.5f, 2000, 30f, 240, 120);
+
+        // a spike of one sample is a pickup or a bump: the verdict waits and then says no
+        Scenario spike = new Scenario().dev(t -> t == 1000 ? 40 : 0.1);
+        java.util.List<Decision> l = decisions(new GrabDetector(pw), spike, 4000);
+        check("a one-sample spike is decided once", l.size() == 1);
+        check("a one-sample spike does not lock", l.size() == 1 && l.get(0).impact && !l.get(0).trigger);
+        check("a one-sample spike reports its pulse", l.size() == 1 && l.get(0).pulseMs == 20);
+        check("a one-sample spike is decided when the window ends",
+                spike.run(new GrabDetector(pw), 4000) != null && spike.decidedAtMs == 1000 + GrabDetector.PULSE_WINDOW_MS);
+
+        // a pulse that goes on is a grab: the lock comes as soon as the pulse is long enough (20 ms of the first sample + 5 x 20)
+        Scenario grab = new Scenario().dev(t -> t >= 1000 && t <= 1200 ? 40 : 0.1);
+        Decision d = grab.run(new GrabDetector(pw), 4000);
+        check("a long pulse locks", d != null && d.impact && d.trigger);
+        check("a long pulse locks when it is 120 ms long", d != null && grab.decidedAtMs == 1100 && d.pulseMs == 120);
+        d = new Scenario().dev(t -> t >= 1000 && t <= 1060 ? 40 : t >= 1080 && t <= 1200 ? 60 : 0.1).run(new GrabDetector(pw), 4000);
+        check("a pulse reports its largest peak", d != null && d.trigger && Math.abs(d.peak - 60f) < 0.01f);
+        check("a pulse one sample shorter does not lock",
+                new Scenario().dev(t -> t >= 1000 && t <= 1080 ? 40 : 0.1).run(new GrabDetector(pw), 4000).trigger == false);
+
+        // the rise before the first sample over impactPeak counts: 220 ms above 15 already, so the lock is at the impact sample
+        // (the samples of the rise are over the peak of 15 and report a pull without touch first, so the impact is looked for)
+        Scenario rise = new Scenario().dev(t -> t >= 800 && t < 1000 ? 20 : t == 1000 ? 40 : 0.1);
+        long[] at = new long[1];
+        d = firstImpact(new GrabDetector(pw), rise, 4000, at);
+        check("the rise before the impact counts", d != null && d.trigger && at[0] == 1000 && d.pulseMs == 220);
+        // but a rise that ended before is not part of it
+        Scenario gap = new Scenario().dev(t -> t >= 800 && t < 900 ? 20 : t == 1000 ? 40 : 0.1);
+        d = firstImpact(new GrabDetector(pw), gap, 4000, at);
+        check("a rise that ended earlier does not count", d != null && !d.trigger && d.pulseMs == 20);
+
+        // a real fall locks at once, whatever the pulse of the landing: the rule is for impacts with no free fall
+        Scenario fall = fallAndImpact(700, 980, 1000);
+        d = fall.run(new GrabDetector(pw), 4000);
+        check("a real fall locks at once", d != null && d.trigger && fall.decidedAtMs == 1000 && d.freeFallMs == 300 && d.pulseMs == 0);
+
+        // a set-down is still no lock, and decided at once as before
+        Scenario down = fallAndImpact(900, 980, 1000);
+        d = down.run(new GrabDetector(pw), 4000);
+        check("a set-down does not lock", d != null && !d.trigger && d.freeFallMs == 100 && down.decidedAtMs == 1000);
+
+        // the rule can be turned off: a spike locks at once
+        d = spike.run(new GrabDetector(new Params(15f, 400, 150, 200, 800, 1.5f, 2000, 30f, 240, 0)), 4000);
+        check("without a minimum pulse a spike locks at once", d != null && d.trigger && spike.decidedAtMs == 1000);
+        check("without a minimum pulse the pulse is not measured", d != null && d.pulseMs == 0);
+
+        // the boundaries: a rise of exactly the minimum locks at the impact sample, a magnitude of exactly 15 is part of the pulse
+        final double at15 = 15f - G;
+        Scenario edge = new Scenario().dev(t -> t >= 900 && t < 1000 ? 20 : t == 1000 ? 40 : 0.1);
+        long[] where = new long[1];
+        d = firstImpact(new GrabDetector(pw), edge, 4000, where);
+        check("a rise of exactly the minimum locks at the impact sample", d != null && d.trigger && where[0] == 1000 && d.pulseMs == 120);
+        Scenario exact = new Scenario().dev(t -> t == 1000 ? 40 : t > 1000 && t <= 1100 ? at15 : 0.1);
+        d = firstImpact(new GrabDetector(pw), exact, 4000, where);
+        check("samples of exactly 15 m/s^2 count for the pulse", d != null && d.trigger && where[0] == 1100 && d.pulseMs == 120);
+        Scenario exactRise = new Scenario().dev(t -> t >= 900 && t < 1000 ? at15 : t == 1000 ? 40 : 0.1);
+        d = firstImpact(new GrabDetector(pw), exactRise, 4000, where);
+        check("samples of exactly 15 m/s^2 count for the rise", d != null && d.trigger && where[0] == 1000 && d.pulseMs == 120);
+
+        // a pull candidate that was pending when the pulse locked is over: it does not decide a second time later
+        Scenario candidate = new Scenario().touch(500, true)
+                .dev(t -> t == 900 ? 20 : t >= 1000 && t <= 1200 ? 40 : 0.1);
+        l = decisions(new GrabDetector(pw), candidate, 5000);
+        check("a lock by pulse ends the pending candidate", l.size() == 1 && l.get(0).impact && l.get(0).trigger);
+
+        // a refused spike keeps the rest of its pulse quiet: a second spike 20 ms after the refusal is not judged
+        Scenario echo = new Scenario().dev(t -> t == 1000 || t == 1420 ? 40 : 0.1);
+        l = decisions(new GrabDetector(pw), echo, 4000);
+        check("the echo of a refused spike is not judged again", l.size() == 1 && !l.get(0).trigger);
+
+        // arming again (reset) leaves no wait behind
+        GrabDetector armed = new GrabDetector(pw);
+        int count = 0;
+        for (long t = 0; t <= 4000; t += STEP_MS) {
+            if (t == 1040) {
+                armed.reset();
+            }
+            if (armed.onAccel(t, 0f, 0f, G + (float) (t == 1000 ? 40 : 0.1)) != null) {
+                count++;
+            }
+        }
+        check("a reset forgets the wait", count == 0);
+
+        // pulse time is summed inside the window: two spikes 300 ms apart are 40 ms of pulse, not enough
+        Scenario two = new Scenario().dev(t -> t == 1000 || t == 1300 ? 40 : 0.1);
+        l = decisions(new GrabDetector(pw), two, 4000);
+        check("two spikes are not a pulse", l.size() == 1 && !l.get(0).trigger && l.get(0).pulseMs == 40);
+        // a pulse made of samples around 15 that dip below it is summed: 6 samples above, 1 below, 1 above is 7 x 20 only counts above
+        Scenario dip = new Scenario().dev(t -> t == 1000 ? 40 : t >= 1020 && t <= 1140 && t != 1080 ? 20 : 0.1);
+        d = dip.run(new GrabDetector(pw), 4000);
+        check("a dip below 15 inside the window does not reset the sum", d != null && d.trigger && d.pulseMs >= 120);
+
+        // after the lock the cool-down holds; after a refusal the next grab still locks
+        Scenario twice = new Scenario().dev(t -> t >= 1000 && t <= 1200 ? 40 : t >= 1400 && t <= 1600 ? 40 : 0.1);
+        l = decisions(new GrabDetector(pw), twice, 4000);
+        check("the cool-down holds after a lock", l.size() == 1 && l.get(0).trigger);
+        Scenario after = new Scenario().dev(t -> t == 1000 ? 40 : t >= 2000 && t <= 2200 ? 40 : 0.1);
+        l = decisions(new GrabDetector(pw), after, 4000);
+        check("a refused spike does not stop the next grab",
+                l.size() == 2 && !l.get(0).trigger && l.get(1).trigger && l.get(1).pulseMs == 120);
+        // a refused spike is not a cool-down: a grab 100 ms after it, inside the window, is part of the same wait
+        Scenario soon = new Scenario().dev(t -> t == 1000 ? 40 : t >= 1100 && t <= 1260 ? 40 : 0.1);
+        d = soon.run(new GrabDetector(pw), 4000);
+        check("pulses inside the window add up", d != null && d.trigger);
     }
 
     public static void main(String[] args) {
@@ -492,6 +620,7 @@ public final class GrabDetectorTest {
                 d != null && d.trigger && !d.impact);
 
         freeFallChecks();
+        pulseChecks();
 
         System.out.println(failures == 0 ? "all passed" : failures + " FAILED");
         System.exit(failures == 0 ? 0 : 1);
