@@ -1,0 +1,574 @@
+From 41311f50a539d50073f5d54ece90864ce3b004f3 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 14:50:14 +0100
+Subject: [PATCH] sensorservice: give each app the sensor mode of its profile
+
+The system server writes the mode of every app (folded, raw, invented, none) to
+a file; the sensor service reads it at most once per second and applies it in
+SensorEventConnection::sendEvents, scratch and no-scratch path, and refuses a
+direct channel for the sensors that a mode changes. A file that is missing,
+owned by anyone but the system or writable by others leaves every app on the
+folded events of the previous change. The headers are host-tested in
+privacy/compartments-profiles.
+---
+ .../sensorservice/SensorDirectConnection.cpp  |  11 +-
+ .../sensorservice/SensorEventConnection.cpp   |  28 +--
+ services/sensorservice/SensorModeProduction.h |  23 +++
+ services/sensorservice/SensorModeSource.h     |  95 ++++++++++
+ services/sensorservice/SensorModes.h          | 172 ++++++++++++++++++
+ services/sensorservice/SubstituteStream.h     | 140 ++++++++++++++
+ 6 files changed, 454 insertions(+), 15 deletions(-)
+ create mode 100644 services/sensorservice/SensorModeProduction.h
+ create mode 100644 services/sensorservice/SensorModeSource.h
+ create mode 100644 services/sensorservice/SensorModes.h
+ create mode 100644 services/sensorservice/SubstituteStream.h
+
+diff --git a/services/sensorservice/SensorDirectConnection.cpp b/services/sensorservice/SensorDirectConnection.cpp
+index 26dffaf..cbb01e9 100644
+--- a/services/sensorservice/SensorDirectConnection.cpp
++++ b/services/sensorservice/SensorDirectConnection.cpp
+@@ -20,6 +20,7 @@
+ #include <hardware/sensors.h>
+ #include "SensorDevice.h"
+ #include "SensorBiasFold.h"
++#include "SensorModeProduction.h"
+ 
+ #define UNUSED(x) (void)(x)
+ 
+@@ -189,10 +190,12 @@ int32_t SensorService::SensorDirectConnection::configureChannel(int handle, int
+         return INVALID_OPERATION;
+     }
+ 
+-    // FreeholdOS (ADR-167): the HAL writes direct events into shared memory without passing
+-    // SensorEventConnection::sendEvents, so the bias of the uncalibrated sensors cannot be
+-    // folded there. An app gets no direct channel for them.
+-    if (shouldFoldFor(mUid) && eventCarriesBias(s.getType()) &&
++    // FreeholdOS (ADR-167, ADR-208): the HAL writes direct events into shared memory without passing
++    // SensorEventConnection::sendEvents, so neither the folding of the bias nor an invented or blocked
++    // stream can be applied there. An app gets no direct channel for the sensors that its mode changes.
++    // A channel that was configured before a change of the profile keeps delivering until its
++    // connection ends (documented limit).
++    if (directChannelRefused(sensorModeSource().table()->modeFor(mUid), s.getType()) &&
+             rateLevel != SENSOR_DIRECT_RATE_STOP) {
+         return INVALID_OPERATION;
+     }
+diff --git a/services/sensorservice/SensorEventConnection.cpp b/services/sensorservice/SensorEventConnection.cpp
+index 6d0421b..ae91795 100644
+--- a/services/sensorservice/SensorEventConnection.cpp
++++ b/services/sensorservice/SensorEventConnection.cpp
+@@ -29,6 +29,8 @@
+ #include "SensorEventConnection.h"
+ #include "SensorDevice.h"
+ #include "SensorBiasFold.h"
++#include "SensorModeProduction.h"
++#include "SubstituteStream.h"
+ 
+ #define UNUSED(x) (void)(x)
+ 
+@@ -326,9 +328,14 @@ status_t SensorService::SensorEventConnection::sendEvents(
+ 
+     int count = 0;
+     Mutex::Autolock _l(mConnectionLock);
+-    // FreeholdOS (ADR-167): every app gets the uncalibrated sensors without the bias estimate,
+-    // which identifies the device. Native daemons and platform uids keep the unchanged event.
+-    const bool foldBias = shouldFoldFor(mUid);
++    // FreeholdOS (ADR-167, ADR-208): every app gets the uncalibrated sensors without the bias estimate,
++    // which identifies the device. On top of that the user's profile of the app decides whether it gets
++    // the raw events (Trusted), invented events (Isolated) or no motion events. The system server writes
++    // the choice to a file; a file that cannot be used leaves every app on the folded events.
++    // Native daemons and platform uids keep the unchanged event.
++    const auto modes = sensorModeSource().table();
++    const SensorMode mode = modes->modeFor(mUid);
++    const uint64_t seed = modes->seedFor(mUid);
+     if (scratch) {
+         size_t i=0;
+         while (i<numEvents) {
+@@ -381,10 +388,9 @@ status_t SensorService::SensorEventConnection::sendEvents(
+                     // the AppOp.
+                     if (hasSensorAccess() && noteOpIfRequired(buffer[i])) {
+                         scratch[count] = buffer[i];
+-                        if (foldBias && eventCarriesBias(scratch[count].type)) {
+-                            foldBiasIntoReadings(&scratch[count]);
++                        if (applyMode(&scratch[count], mode, seed, Activity::STILL)) {
++                            count++;
+                         }
+-                        count++;
+                     }
+                 }
+                 i++;
+@@ -395,13 +401,13 @@ status_t SensorService::SensorEventConnection::sendEvents(
+         }
+     } else {
+         if (hasSensorAccess()) {
+-            const bool anyBias = foldBias && std::any_of(buffer, buffer + numEvents,
+-                    [](const sensors_event_t& e) { return eventCarriesBias(e.type); });
+-            if (anyBias) {
+-                // scratch would alias the buffer that the other connections read: fold in a copy.
++            const bool touched = std::any_of(buffer, buffer + numEvents,
++                    [mode](const sensors_event_t& e) { return modeTouches(mode, e.type); });
++            if (touched) {
++                // scratch would alias the buffer that the other connections read: change a copy.
+                 sanitizedBuffer.reset(new sensors_event_t[numEvents]);
+                 scratch = sanitizedBuffer.get();
+-                count = copyEventsFoldingBias(buffer, numEvents, scratch);
++                count = copyEventsApplyingMode(buffer, numEvents, scratch, mode, seed, Activity::STILL);
+             } else {
+                 scratch = const_cast<sensors_event_t *>(buffer);
+                 count = numEvents;
+diff --git a/services/sensorservice/SensorModeProduction.h b/services/sensorservice/SensorModeProduction.h
+new file mode 100644
+index 0000000..aeba443
+--- /dev/null
++++ b/services/sensorservice/SensorModeProduction.h
+@@ -0,0 +1,23 @@
++/*
++ * FreeholdOS (ADR-208): the one table that the connections of the sensor service ask for the mode of an app.
++ *
++ * Why this diverges from upstream: SensorEventConnection and SensorDirectConnection both decide per app uid what an app may
++ * see, and the decision comes from a file of the system server (SensorModeSource). One function-local static serves both, so
++ * the file is read once per second for the whole service and not once per connection class. The sensor service runs inside
++ * system_server (SystemServer starts it through SensorService.startSensorServiceNative), hence the owner AID_SYSTEM.
++ */
++#ifndef ANDROID_SENSOR_MODE_PRODUCTION_H
++#define ANDROID_SENSOR_MODE_PRODUCTION_H
++
++#include "SensorModeSource.h"
++
++namespace android {
++
++inline SensorModeSource& sensorModeSource() {
++    static SensorModeSource source("/data/system/compartments/sensor_modes", AID_SYSTEM);
++    return source;
++}
++
++}  // namespace android
++
++#endif  // ANDROID_SENSOR_MODE_PRODUCTION_H
+diff --git a/services/sensorservice/SensorModeSource.h b/services/sensorservice/SensorModeSource.h
+new file mode 100644
+index 0000000..a1e3f27
+--- /dev/null
++++ b/services/sensorservice/SensorModeSource.h
+@@ -0,0 +1,95 @@
++/*
++ * FreeholdOS (ADR-208): where the sensor service gets its SensorModeTable from.
++ *
++ * Why this diverges from upstream: the policy lives in the system server and the sensor service is a separate process, so the
++ * system server writes the table to a file that only it may write and this class reads it. A file that is missing, too large,
++ * owned by anyone but the required owner or writable by group or others is not read, and every app stays on the folded
++ * events of ADR-167. The file is looked at once per second at most, so the event path costs a lock and a clock read.
++ */
++#ifndef ANDROID_SENSOR_MODE_SOURCE_H
++#define ANDROID_SENSOR_MODE_SOURCE_H
++
++#include "SensorModes.h"
++
++#include <fcntl.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#include <chrono>
++#include <functional>
++#include <memory>
++#include <mutex>
++#include <string>
++
++namespace android {
++
++class SensorModeSource {
++public:
++    using Clock = std::function<std::chrono::steady_clock::time_point()>;
++
++    // requiredOwner is AID_SYSTEM in the service; the test passes its own uid.
++    SensorModeSource(std::string path, uid_t requiredOwner,
++                     Clock clock = [] { return std::chrono::steady_clock::now(); })
++        : mPath(std::move(path)), mOwner(requiredOwner), mClock(std::move(clock)),
++          mTable(std::make_shared<const SensorModeTable>()) {}
++
++    // The current table. Never null; the status quo (every app folded) when the file cannot be used.
++    std::shared_ptr<const SensorModeTable> table() {
++        std::lock_guard<std::mutex> lock(mLock);
++        const auto now = mClock();
++        if (now >= mNextCheck) {
++            mNextCheck = now + std::chrono::seconds(1);
++            reloadLocked();
++        }
++        return mTable;
++    }
++
++private:
++    static constexpr off_t kMaxFileBytes = 256 * 1024;
++
++    void reloadLocked() {
++        const int fd = open(mPath.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
++        struct stat st;
++        if (fd < 0 || fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != mOwner ||
++            (st.st_mode & (S_IWGRP | S_IWOTH)) != 0 || st.st_size > kMaxFileBytes) {
++            if (fd >= 0) close(fd);
++            return setStatusQuoLocked();
++        }
++        if (mHaveSignature && st.st_mtim.tv_sec == mSec && st.st_mtim.tv_nsec == mNsec && st.st_size == mSize) {
++            close(fd);
++            return;
++        }
++        std::string text(static_cast<size_t>(st.st_size), '\0');
++        const ssize_t got = st.st_size == 0 ? 0 : pread(fd, &text[0], text.size(), 0);
++        close(fd);
++        auto next = std::make_shared<SensorModeTable>();
++        if (got != st.st_size || !next->parse(text)) {
++            return setStatusQuoLocked();
++        }
++        mHaveSignature = true;
++        mSec = st.st_mtim.tv_sec;
++        mNsec = st.st_mtim.tv_nsec;
++        mSize = st.st_size;
++        mTable = std::move(next);
++    }
++
++    void setStatusQuoLocked() {
++        mHaveSignature = false;
++        mTable = std::make_shared<const SensorModeTable>();
++    }
++
++    const std::string mPath;
++    const uid_t mOwner;
++    const Clock mClock;
++    std::mutex mLock;
++    std::chrono::steady_clock::time_point mNextCheck{};
++    bool mHaveSignature = false;
++    time_t mSec = 0;
++    long mNsec = 0;
++    off_t mSize = 0;
++    std::shared_ptr<const SensorModeTable> mTable;
++};
++
++}  // namespace android
++
++#endif  // ANDROID_SENSOR_MODE_SOURCE_H
+diff --git a/services/sensorservice/SensorModes.h b/services/sensorservice/SensorModes.h
+new file mode 100644
+index 0000000..9c0fb1d
+--- /dev/null
++++ b/services/sensorservice/SensorModes.h
+@@ -0,0 +1,172 @@
++/*
++ * FreeholdOS (ADR-208): what the sensor service does for an app, as set by the Compartments profile of the app.
++ *
++ * Why this diverges from upstream: ADR-167 folds the bias of the uncalibrated sensors into the readings for every app. A profile
++ * lets the user keep an app raw (Trusted), give it invented data (Isolated) or no motion events (Blocked). The system server
++ * writes the table to a file that this service reads; a file that is not exactly the format below leaves every app on the
++ * folded events of ADR-167, the behaviour of an image without profiles.
++ *
++ * File format, every line ends with a newline: "s <16 hex digits>" (salt of the invented streams), "d <MODE>" (every app
++ * without a line of its own), then any number of "a <app id> <MODE>" with an app id of an ordinary app (10000 to 19999). MODE is
++ * FOLDED, RAW, SUBSTITUTE or BLOCKED. A line holds an app id, so it reaches the app in every user, and the reader maps the
++ * SDK sandbox of an app (app id 20000 to 29999) back to its host app, so that the sandbox cannot read what the app may not.
++ * An isolated process has no host app that the sensor service can see and follows the default.
++ */
++#ifndef ANDROID_SENSOR_MODES_H
++#define ANDROID_SENSOR_MODES_H
++
++#include "SensorBiasFold.h"
++
++#include <hardware/sensors.h>
++#include <private/android_filesystem_config.h>
++
++#include <sys/types.h>
++
++#include <cstdint>
++#include <map>
++#include <string>
++
++namespace android {
++
++enum class SensorMode : uint8_t { FOLDED = 0, RAW = 1, SUBSTITUTE = 2, BLOCKED = 3 };
++
++constexpr uint32_t kFirstAppId = 10000;
++constexpr uint32_t kLastAppId = 19999;
++constexpr uint32_t kFirstSandboxId = 20000;
++constexpr uint32_t kLastSandboxId = 29999;
++
++// The app id that a uid answers to: its id without the user, and for the SDK sandbox of an app the id of the host app.
++inline uint32_t hostAppId(uid_t uid) {
++    const uint32_t appId = uid % AID_USER_OFFSET;
++    return (appId >= kFirstSandboxId && appId <= kLastSandboxId) ? appId - (kFirstSandboxId - kFirstAppId) : appId;
++}
++
++// The types that SUBSTITUTE replaces and BLOCKED drops: the three motion sensors and their uncalibrated variants.
++inline bool isMotionType(int32_t type) {
++    return type == SENSOR_TYPE_ACCELEROMETER || type == SENSOR_TYPE_GYROSCOPE ||
++           type == SENSOR_TYPE_MAGNETIC_FIELD || type == SENSOR_TYPE_ACCELEROMETER_UNCALIBRATED ||
++           type == SENSOR_TYPE_GYROSCOPE_UNCALIBRATED || type == SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED;
++}
++
++// A direct channel hands the HAL's own events to the app, so it must not exist where the app is not meant to see them:
++// for a folded app the uncalibrated types (ADR-167), for a substituted or blocked app every motion type.
++inline bool directChannelRefused(SensorMode m, int32_t type) {
++    switch (m) {
++        case SensorMode::FOLDED: return eventCarriesBias(type);
++        case SensorMode::SUBSTITUTE:
++        case SensorMode::BLOCKED: return isMotionType(type);
++        default: return false;
++    }
++}
++
++class SensorModeTable {
++public:
++    // Replaces the table with what text holds. Any text that is not exactly a file of the format above (a missing or repeated
++    // "s" or "d" line, an unknown mode, an app id outside 10000 to 19999, a line without a newline, more than 8192 lines) leaves
++    // the status quo and returns false.
++    bool parse(const std::string& text) {
++        uint64_t salt = 0;
++        SensorMode dflt = SensorMode::FOLDED;
++        bool haveSalt = false, haveDefault = false;
++        std::map<uint32_t, SensorMode> perApp;
++        size_t pos = 0, lines = 0;
++        while (pos < text.size()) {
++            const size_t nl = text.find('\n', pos);
++            if (nl == std::string::npos || ++lines > kMaxLines) { reset(); return false; }
++            const std::string line = text.substr(pos, nl - pos);
++            pos = nl + 1;
++            if (line.size() >= 3 && line[0] == 's' && line[1] == ' ' && !haveSalt && !haveDefault && perApp.empty()) {
++                if (!parseHex(line.substr(2), &salt)) { reset(); return false; }
++                haveSalt = true;
++            } else if (line.size() >= 3 && line[0] == 'd' && line[1] == ' ' && haveSalt && !haveDefault && perApp.empty()) {
++                if (!parseMode(line.substr(2), &dflt)) { reset(); return false; }
++                haveDefault = true;
++            } else if (line.size() >= 3 && line[0] == 'a' && line[1] == ' ' && haveDefault) {
++                const size_t sp = line.find(' ', 2);
++                uint64_t appId = 0;
++                SensorMode m;
++                if (sp == std::string::npos || !parseDecimal(line.substr(2, sp - 2), &appId) ||
++                    appId < kFirstAppId || appId > kLastAppId ||
++                    !parseMode(line.substr(sp + 1), &m) ||
++                    !perApp.emplace(static_cast<uint32_t>(appId), m).second) {
++                    reset();
++                    return false;
++                }
++            } else {
++                reset();
++                return false;
++            }
++        }
++        if (!haveDefault) { reset(); return false; }
++        mSalt = salt;
++        mDefault = dflt;
++        mPerApp = std::move(perApp);
++        return true;
++    }
++
++    // Native daemons and platform uids keep the unchanged event; an app, in any user, and its SDK sandbox follow the line of the
++    // app or the default.
++    SensorMode modeFor(uid_t uid) const {
++        if (!shouldFoldFor(uid)) return SensorMode::RAW;
++        auto it = mPerApp.find(hostAppId(uid));
++        return it != mPerApp.end() ? it->second : mDefault;
++    }
++
++    // The seed of the invented streams of one app: the same for the app, its sandbox and its copies in other users on this
++    // phone, different between apps and between phones.
++    uint64_t seedFor(uid_t uid) const { return mix(mSalt ^ (static_cast<uint64_t>(hostAppId(uid)) * 0x9E3779B97F4A7C15ull)); }
++
++    static uint64_t mix(uint64_t z) {
++        z += 0x9E3779B97F4A7C15ull;
++        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
++        z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
++        return z ^ (z >> 31);
++    }
++
++private:
++    static constexpr size_t kMaxLines = 8192;
++
++    void reset() { mSalt = 0; mDefault = SensorMode::FOLDED; mPerApp.clear(); }
++
++    static bool parseMode(const std::string& s, SensorMode* out) {
++        if (s == "FOLDED") *out = SensorMode::FOLDED;
++        else if (s == "RAW") *out = SensorMode::RAW;
++        else if (s == "SUBSTITUTE") *out = SensorMode::SUBSTITUTE;
++        else if (s == "BLOCKED") *out = SensorMode::BLOCKED;
++        else return false;
++        return true;
++    }
++
++    static bool parseDecimal(const std::string& s, uint64_t* out) {
++        if (s.empty() || s.size() > 10) return false;
++        uint64_t v = 0;
++        for (char c : s) {
++            if (c < '0' || c > '9') return false;
++            v = v * 10 + static_cast<uint64_t>(c - '0');
++        }
++        *out = v;
++        return true;
++    }
++
++    static bool parseHex(const std::string& s, uint64_t* out) {
++        if (s.size() != 16) return false;
++        uint64_t v = 0;
++        for (char c : s) {
++            int d;
++            if (c >= '0' && c <= '9') d = c - '0';
++            else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
++            else return false;
++            v = (v << 4) | static_cast<uint64_t>(d);
++        }
++        *out = v;
++        return true;
++    }
++
++    uint64_t mSalt = 0;
++    SensorMode mDefault = SensorMode::FOLDED;
++    std::map<uint32_t, SensorMode> mPerApp;
++};
++
++}  // namespace android
++
++#endif  // ANDROID_SENSOR_MODES_H
+diff --git a/services/sensorservice/SubstituteStream.h b/services/sensorservice/SubstituteStream.h
+new file mode 100644
+index 0000000..8ec37cb
+--- /dev/null
++++ b/services/sensorservice/SubstituteStream.h
+@@ -0,0 +1,140 @@
++/*
++ * FreeholdOS (ADR-208): invented motion data for an app on the Isolated profile, and the single place that applies a
++ * SensorMode to an event.
++ *
++ * Why this diverges from upstream: an app that demands the motion sensors must keep working and must learn nothing true. The
++ * stream is plausible for a held phone, a walking person or a vehicle, differs per app, is the same for one app on one
++ * phone, and carries no bias estimate. It is a function of (seed, event time, activity), so it needs no state in the
++ * sensor service and cannot disagree with itself between two connections of one app.
++ */
++#ifndef ANDROID_SUBSTITUTE_STREAM_H
++#define ANDROID_SUBSTITUTE_STREAM_H
++
++#include "SensorModes.h"
++
++#include <cmath>
++#include <cstddef>
++#include <cstdint>
++
++namespace android {
++
++// The activity the invented stream looks like. The first version always uses STILL; the location persona couples it to the
++// speed of the translated track (ADR-208, spec section 4.4).
++enum class Activity : uint8_t { STILL = 0, WALKING = 1, DRIVING = 2 };
++
++namespace substitute_detail {
++
++constexpr float kPi = 3.14159265358979f;
++constexpr float kGravity = 9.80665f;
++
++// A float in [-1, 1) from (seed, event time, channel), the same every time.
++inline float noise(uint64_t seed, int64_t t, uint32_t channel) {
++    const uint64_t h = SensorModeTable::mix(seed ^ static_cast<uint64_t>(t) ^ (static_cast<uint64_t>(channel) << 56));
++    return static_cast<float>(static_cast<double>(h >> 11) / 4503599627370496.0 - 1.0);
++}
++
++// A float in [lo, hi) fixed for a seed.
++inline float perSeed(uint64_t seed, uint32_t slot, float lo, float hi) {
++    const float u = noise(seed, 0, 0xF0 + slot) * 0.5f + 0.5f;
++    return lo + (hi - lo) * u;
++}
++
++}  // namespace substitute_detail
++
++// The type of events that substituteEvent writes.
++inline bool substitutes(int32_t type) {
++    return isMotionType(type);
++}
++
++// Writes the first three values of an event of a motion type (and zero as the bias of an uncalibrated one); the rest of the
++// event is left as it is. Returns false, touching nothing, for any other type.
++inline bool substituteEvent(sensors_event_t* e, uint64_t seed, Activity a) {
++    using namespace substitute_detail;
++    if (!substitutes(e->type)) return false;
++    const float t = static_cast<float>(static_cast<double>(e->timestamp) * 1e-9);
++    const float walk = (a == Activity::WALKING) ? 1.0f : 0.0f;
++    const float drive = (a == Activity::DRIVING) ? 1.0f : 0.0f;
++    float v[3];
++    switch (e->type) {
++        case SENSOR_TYPE_ACCELEROMETER:
++        case SENSOR_TYPE_ACCELEROMETER_UNCALIBRATED: {
++            const float tx = perSeed(seed, 0, -0.08f, 0.08f);   // tilt of a held phone, radians
++            const float ty = perSeed(seed, 1, -0.08f, 0.08f);
++            const float sigma = 0.035f + 0.4f * drive + 0.6f * walk;
++            const float step = 2.5f * std::sin(2.0f * kPi * 1.8f * t) + 1.0f * std::sin(2.0f * kPi * 3.6f * t);
++            const float sway = 0.8f * std::sin(2.0f * kPi * 0.25f * t);
++            v[0] = kGravity * std::sin(ty) + sigma * noise(seed, e->timestamp, 1) + drive * sway;
++            v[1] = -kGravity * std::sin(tx) * std::cos(ty) + sigma * noise(seed, e->timestamp, 2);
++            v[2] = kGravity * std::cos(tx) * std::cos(ty) + sigma * noise(seed, e->timestamp, 3) + walk * step;
++            break;
++        }
++        case SENSOR_TYPE_GYROSCOPE:
++        case SENSOR_TYPE_GYROSCOPE_UNCALIBRATED: {
++            const float sigma = 0.002f + 0.03f * drive + 0.05f * walk;
++            const float swing = 0.4f * std::sin(2.0f * kPi * 1.8f * t + perSeed(seed, 2, 0.0f, 6.28f));
++            v[0] = sigma * noise(seed, e->timestamp, 4) + walk * swing;
++            v[1] = sigma * noise(seed, e->timestamp, 5) + walk * 0.5f * swing;
++            v[2] = sigma * noise(seed, e->timestamp, 6);
++            break;
++        }
++        default: {  // magnetic field, calibrated and uncalibrated
++            const float magnitude = perSeed(seed, 3, 32.0f, 52.0f);          // microtesla
++            const float inclination = perSeed(seed, 4, 0.70f, 1.10f);        // radians
++            const float azimuth = perSeed(seed, 5, 0.0f, 6.28f);
++            const float sigma = 0.15f + 0.2f * drive + 0.1f * walk;
++            v[0] = magnitude * std::cos(inclination) * std::cos(azimuth) + sigma * noise(seed, e->timestamp, 7);
++            v[1] = magnitude * std::cos(inclination) * std::sin(azimuth) + sigma * noise(seed, e->timestamp, 8);
++            v[2] = -magnitude * std::sin(inclination) + sigma * noise(seed, e->timestamp, 9);
++            break;
++        }
++    }
++    e->data[0] = v[0];
++    e->data[1] = v[1];
++    e->data[2] = v[2];
++    if (eventCarriesBias(e->type)) {
++        e->data[3] = e->data[4] = e->data[5] = 0.0f;
++    }
++    return true;
++}
++
++// Applies a mode to one event in place. Returns false when the event is not to be delivered.
++inline bool applyMode(sensors_event_t* e, SensorMode m, uint64_t seed, Activity a) {
++    switch (m) {
++        case SensorMode::RAW:
++            return true;
++        case SensorMode::FOLDED:
++            if (eventCarriesBias(e->type)) foldBiasIntoReadings(e);
++            return true;
++        case SensorMode::SUBSTITUTE:
++            substituteEvent(e, seed, a);
++            return true;
++        case SensorMode::BLOCKED:
++            return !isMotionType(e->type);
++    }
++    return true;
++}
++
++// Whether a mode changes or drops an event of this type (so that a shared buffer must be copied first).
++inline bool modeTouches(SensorMode m, int32_t type) {
++    switch (m) {
++        case SensorMode::RAW: return false;
++        case SensorMode::FOLDED: return eventCarriesBias(type);
++        default: return isMotionType(type);
++    }
++}
++
++// Copies n events from in to out, applies the mode to each copy and leaves out the events that are not to be delivered.
++// in is never written: it is shared with the other connections. Returns the number of events written to out.
++inline size_t copyEventsApplyingMode(const sensors_event_t* in, size_t n, sensors_event_t* out, SensorMode m,
++                                     uint64_t seed, Activity a) {
++    size_t count = 0;
++    for (size_t i = 0; i < n; i++) {
++        out[count] = in[i];
++        if (applyMode(&out[count], m, seed, a)) count++;
++    }
++    return count;
++}
++
++}  // namespace android
++
++#endif  // ANDROID_SUBSTITUTE_STREAM_H
+-- 
+2.56.0
+
