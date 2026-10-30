@@ -19,6 +19,8 @@ public final class AutofillChipPolicyCheck {
         aloneIsOnlyForOneChip();
         aResponseIsCurrentUntilSomethingReplacesIt();
         typingEndsTheOfferUntilTheNextRequest();
+        anEmptyFieldOffersAgainAfterTyping();
+        anEmptyFieldWithoutTypingChangesNothing();
         aNewRequestDropsWhatWasInFlight();
         clearingDropsWhatIsInFlight();
         anEmptyResponseShowsNothingAndDropsWhatWasInFlight();
@@ -61,10 +63,32 @@ public final class AutofillChipPolicyCheck {
         that("typing is remembered", p.typed());
         that("typing drops what was in flight", !p.isCurrent(token));
         equal("a response after typing shows nothing", AutofillChipPolicy.NONE, p.begin(2));
-        equal("also after the field was emptied again", AutofillChipPolicy.NONE, p.begin(1));
+        equal("also for one chip", AutofillChipPolicy.NONE, p.begin(1));
         p.onNewRequest();
         that("a new request forgets the typing", !p.typed());
         that("and offers again", p.begin(1) != AutofillChipPolicy.NONE);
+    }
+
+    private static void anEmptyFieldOffersAgainAfterTyping() {
+        final AutofillChipPolicy p = new AutofillChipPolicy();
+        p.onNewRequest();
+        p.onTyped();
+        equal("text in the field keeps the offer ended", AutofillChipPolicy.NONE, p.begin(2));
+        p.onFieldEmpty();
+        that("an empty field forgets the typing", !p.typed());
+        that("and the next response is shown", p.begin(2) != AutofillChipPolicy.NONE);
+        p.onTyped();
+        that("typing again ends the offer again", p.typed());
+        equal("so the next response shows nothing", AutofillChipPolicy.NONE, p.begin(1));
+    }
+
+    private static void anEmptyFieldWithoutTypingChangesNothing() {
+        final AutofillChipPolicy p = new AutofillChipPolicy();
+        p.onNewRequest();
+        final int token = p.begin(2);
+        p.onFieldEmpty();
+        that("nothing was typed", !p.typed());
+        that("the response in flight stays current", p.isCurrent(token));
     }
 
     private static void aNewRequestDropsWhatWasInFlight() {

@@ -13,6 +13,7 @@ Rules:
   G3  the manifest holds no network, screen-capture or log permission
   G4  method.xml declares supportsInlineSuggestions and not supportsInlineSuggestionsWithTouchExploration
   G5  the strip layout has the chip row
+  G6  the controller offers again after typing only when the editor is empty (ADR-207), and does so somewhere
 """
 import os
 import re
@@ -31,6 +32,7 @@ def strip_comments(text):
 
 def check(root):
     bad = []
+    controller = False
     src = os.path.join(root, "src")
     for dirpath, _, names in os.walk(src):
         for n in sorted(names):
@@ -43,6 +45,16 @@ def check(root):
             if n.startswith("AutofillChip"):
                 for m in CHIP_ONLY.finditer(text):
                     bad.append(f"G2 {os.path.relpath(path, root)}: {m.group(0)}")
+            if n == "AutofillChipController.java":
+                controller = True
+                calls = list(re.finditer(r"\.onFieldEmpty\(\)", text))
+                if not calls:
+                    bad.append(f"G6 {os.path.relpath(path, root)}: the offer never returns at an empty field")
+                for m in calls:
+                    if "isFieldEmpty()" not in text[max(0, m.start() - 120):m.start()]:
+                        bad.append(f"G6 {os.path.relpath(path, root)}: the offer returns without asking whether the field is empty")
+    if not controller:
+        bad.append("G6 AutofillChipController.java is missing")
     manifest = open(os.path.join(root, "AndroidManifest.xml"), encoding="utf-8").read()
     for m in FORBIDDEN_PERMISSION.finditer(re.sub(r"<!--.*?-->", "", manifest, flags=re.S)):
         bad.append(f"G3 AndroidManifest.xml: {m.group(0)}")
@@ -61,7 +73,7 @@ GOOD = {
     "AndroidManifest.xml": '<manifest xmlns:android="x"><uses-permission android:name="android.permission.VIBRATE"/></manifest>',
     "res/xml/method.xml": '<input-method xmlns:android="x" android:supportsInlineSuggestions="true"/>',
     "res/layout/suggestions_strip.xml": '<merge><com.android.inputmethod.latin.suggestions.AutofillChipRow android:id="@+id/autofill_chips"/></merge>',
-    "src/a/AutofillChipController.java": "class A { void f(Object s) { s.inflate(); } }",
+    "src/a/AutofillChipController.java": "class A { void f(Object s) { s.inflate(); if (mPolicy.typed() && mListener.isFieldEmpty()) { mPolicy.onFieldEmpty(); } } }",
     "src/a/Other.java": "// getAutofillHints in a comment is fine\nclass B { void g() { android.util.Log.d(\"t\", \"x\"); } }",
 }
 
@@ -91,6 +103,8 @@ def selftest():
         ("G4 inline suggestions off", {"res/xml/method.xml": '<input-method android:supportsInlineSuggestions="false"/>'}, "G4"),
         ("G4 touch exploration on", {"res/xml/method.xml": '<input-method android:supportsInlineSuggestions="true" android:supportsInlineSuggestionsWithTouchExploration="true"/>'}, "G4"),
         ("G5 no chip row", {"res/layout/suggestions_strip.xml": "<merge/>"}, "G5"),
+        ("G6 offers again without asking the field", {"src/a/AutofillChipController.java": "class A { void f() { mPolicy.onFieldEmpty(); } }"}, "G6"),
+        ("G6 never offers again", {"src/a/AutofillChipController.java": "class A { void f(Object s) { s.inflate(); } }"}, "G6"),
     ]
     failures = 0
     for name, changes, rule in cases:

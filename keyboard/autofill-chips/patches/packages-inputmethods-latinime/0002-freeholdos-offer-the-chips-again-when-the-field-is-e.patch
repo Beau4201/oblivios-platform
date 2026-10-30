@@ -1,0 +1,114 @@
+From 758ba899623a7b30c445e9ceece9fce16dbf1869 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Fri, 30 Oct 2026 02:41:20 +0100
+Subject: [PATCH] freeholdos: offer the chips again when the field is empty
+
+A typed or deleted character ended the autofill offer for the field until the next request, so a field that the user
+had cleared never showed its chip again. The platform already sends the unfiltered response when the text of the field
+is empty (InlineFillUi.includeDataset: show everything when the user input is empty), and the policy dropped it.
+
+AutofillChipPolicy.onFieldEmpty forgets the typing; AutofillChipController.onResponse calls it only after typing and
+only when the editor holds no text (isTextFieldEmpty, asked through the new listener method), so a response without
+typing costs no call into the app. Text left in the field keeps the offer ended and the null filter is unchanged
+(ADR-207, amending ADR-191 point 3).
+---
+ java/src/com/android/inputmethod/latin/LatinIME.java  |  2 +-
+ .../latin/suggestions/AutofillChipController.java     | 11 ++++++++++-
+ .../latin/suggestions/AutofillChipPolicy.java         | 10 +++++++++-
+ .../latin/suggestions/SuggestionStripView.java        |  5 +++++
+ 4 files changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/java/src/com/android/inputmethod/latin/LatinIME.java b/java/src/com/android/inputmethod/latin/LatinIME.java
+index 678d812..74baf57 100644
+--- a/java/src/com/android/inputmethod/latin/LatinIME.java
++++ b/java/src/com/android/inputmethod/latin/LatinIME.java
+@@ -1555,7 +1555,7 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+     // This method is public for testability of LatinIME, but also in the future it should
+     // completely replace #onCodeInput.
+     public void onEvent(@Nonnull final Event event) {
+-        // freeholdos: a typed or deleted character ends the autofill offer for this field.
++        // freeholdos: a typed or deleted character ends the autofill offer for this field until it is empty again (ADR-207).
+         if (hasSuggestionStripView()
+                 && (!event.isFunctionalKeyEvent() || event.mKeyCode == Constants.CODE_DELETE)) {
+             mSuggestionStripView.onUserTyped();
+diff --git a/java/src/com/android/inputmethod/latin/suggestions/AutofillChipController.java b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipController.java
+index 06779a4..dc49706 100644
+--- a/java/src/com/android/inputmethod/latin/suggestions/AutofillChipController.java
++++ b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipController.java
+@@ -25,6 +25,9 @@ import java.util.function.Consumer;
+ final class AutofillChipController {
+     interface Listener {
+         void onAutofillChipsChanged(boolean shown);
++
++        /** True when the editor holds no text at all. */
++        boolean isFieldEmpty();
+     }
+ 
+     private final Context mContext;
+@@ -51,7 +54,7 @@ final class AutofillChipController {
+         show(Collections.<InlineContentView>emptyList());
+     }
+ 
+-    /** A character was typed or deleted: the chips go and stay away until the next request. */
++    /** A character was typed or deleted: the chips go and stay away until the next request or until the field is empty. */
+     void onTyped() {
+         mPolicy.onTyped();
+         show(Collections.<InlineContentView>emptyList());
+@@ -64,6 +67,12 @@ final class AutofillChipController {
+     }
+ 
+     void onResponse(final InlineSuggestionsResponse response) {
++        // freeholdos: a response after the user typed is shown again when the field is empty (ADR-207). The platform sends
++        // it because it filters nothing out of an empty field (InlineFillUi.includeDataset); the editor is asked only
++        // after typing, so a response without typing costs no call into the app.
++        if (mPolicy.typed() && mListener.isFieldEmpty()) {
++            mPolicy.onFieldEmpty();
++        }
+         final List<InlineSuggestion> suggestions = response.getInlineSuggestions();
+         final int shown = AutofillChipPolicy.visibleCount(suggestions.size());
+         final int token = mPolicy.begin(shown);
+diff --git a/java/src/com/android/inputmethod/latin/suggestions/AutofillChipPolicy.java b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipPolicy.java
+index 16ae6d3..8ca5626 100644
+--- a/java/src/com/android/inputmethod/latin/suggestions/AutofillChipPolicy.java
++++ b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipPolicy.java
+@@ -20,12 +20,20 @@ final class AutofillChipPolicy {
+         mGeneration++;
+     }
+ 
+-    /** A character was typed or deleted: the offer ends for this field until the next request. */
++    /** A character was typed or deleted: the offer ends for this field until the next request or until the field is empty. */
+     void onTyped() {
+         mTyped = true;
+         mGeneration++;
+     }
+ 
++    /**
++     * The field holds no text again (ADR-207): the offer may start again with the next response, which the platform sends
++     * when the text of the field changes and the filter text is empty. Text left in the field keeps the offer ended.
++     */
++    void onFieldEmpty() {
++        mTyped = false;
++    }
++
+     /** The chips were cleared (the keyboard went away, or the response is empty): what was in flight is dropped. */
+     void onCleared() {
+         mGeneration++;
+diff --git a/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripView.java b/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripView.java
+index efd5f03..3f98c4d 100644
+--- a/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripView.java
++++ b/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripView.java
+@@ -156,6 +156,11 @@ public final class SuggestionStripView extends RelativeLayout implements
+                             mListener.onPasteActionAvailabilityChanged();
+                         }
+                     }
++
++                    @Override
++                    public boolean isFieldEmpty() {
++                        return mListener != null && mListener.isTextFieldEmpty();
++                    }
+                 });
+         final Resources res = context.getResources();
+         mMoreSuggestionsModalTolerance = res.getDimensionPixelOffset(
+-- 
+2.56.0
+
