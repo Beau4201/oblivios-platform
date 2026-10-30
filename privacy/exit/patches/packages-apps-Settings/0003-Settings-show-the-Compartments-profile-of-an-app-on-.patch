@@ -1,0 +1,125 @@
+From 1d1750b472b4d491a8b0d5845c7b253c2dd581a6 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 15:05:08 +0100
+Subject: [PATCH] Settings: show the Compartments profile of an app on its info
+ row
+
+The Compartments row of the app info page gets the profile of the app as its
+summary (Trusted, Protected or Isolated). It is read through a method of the
+Compartments policy service that only the Settings app may call, and again when
+the page comes back, because the page that the row opens changes it. Where the
+service is missing or refuses, the row shows no summary.
+---
+ AndroidManifest.xml                           |  2 +
+ res/values/strings_ext.xml                    |  4 ++
+ .../app/appinfo/AppCompartmentsPreference.kt  | 37 +++++++++++++++++--
+ 3 files changed, 39 insertions(+), 4 deletions(-)
+
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+index cb56f7e..b0a7d29 100644
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -116,6 +116,8 @@
+     <uses-permission android:name="android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS"/>
+     <uses-permission android:name="android.permission.READ_PRINT_SERVICES" />
+     <uses-permission android:name="android.permission.NETWORK_SETTINGS" />
++    <!-- FreeholdOS (ADR-208): the profile label of one app, for the summary of the Compartments row on its info page. -->
++    <uses-permission android:name="org.freeholdos.permission.READ_COMPARTMENT_PROFILE" />
+     <uses-permission android:name="android.permission.TEST_BLACKLISTED_PASSWORD" />
+     <uses-permission android:name="android.permission.USE_RESERVED_DISK" />
+     <uses-permission android:name="android.permission.MANAGE_SCOPED_ACCESS_DIRECTORY_PERMISSIONS" />
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index 159b14e..c69d476 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -378,6 +378,10 @@ For compatibility, this app can still see clipboard metadata, such as whether an
+ 
+     <!-- The page of one app in Compartments (the per-app network exit): the row of the app's info page, under data usage. -->
+     <string name="app_compartments_label">Compartments</string>
++    <!-- Summary of that row: the profile that the app has in Compartments (ADR-208). -->
++    <string name="app_compartments_profile_trusted">Trusted</string>
++    <string name="app_compartments_profile_protected">Protected</string>
++    <string name="app_compartments_profile_isolated">Isolated</string>
+     <!-- The row of Compartments on the Network & internet page, which the Settings search finds (keywords: the plain words a person
+          would type). -->
+     <string name="compartments_title">Compartments</string>
+diff --git a/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+index 957b2ec..e139154 100644
+--- a/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
++++ b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+@@ -5,29 +5,41 @@
+ package com.android.settings.spa.app.appinfo
+ 
+ import android.content.ComponentName
++import android.content.Context
+ import android.content.Intent
+ import android.content.pm.ApplicationInfo
+ import android.content.pm.PackageManager
+ import android.net.Uri
+ import android.os.Process
++import android.os.ServiceManager
+ import android.os.UserHandle
+ import androidx.compose.runtime.Composable
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
+ import androidx.compose.runtime.remember
++import androidx.compose.runtime.setValue
+ import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.res.stringResource
++import com.android.internal.compartments.ICompartmentsPolicy
+ import com.android.settings.R
++import com.android.settingslib.spa.framework.compose.LifecycleEffect
+ import com.android.settingslib.spa.widget.preference.Preference
+ import com.android.settingslib.spa.widget.preference.PreferenceModel
+ import com.android.settingslib.spaprivileged.model.app.installed
+ 
+ private const val COMPARTMENTS_PACKAGE = "org.freeholdos.exit"
+ private const val COMPARTMENTS_PAGE = "org.freeholdos.exit.ExitAppActivity"
++private const val COMPARTMENTS_SERVICE = "compartments"
+ 
+ /**
+- * The "Compartments" row of an app's info page: it opens the page of this app in the Compartments app, where the app's network
+- * (hidden trackers, Tor, never hidden) and the hosts that see its address are set. The page is the Compartments app's, and only
+- * this app holds the permission to open it; the row is absent where Compartments is not installed or does not run (in a user
+- * other than the owner), for a system uid and for Compartments itself, and no state of Compartments is read here.
++ * The "Compartments" row of an app's info page: it opens the page of this app in the Compartments app, where the app's profile,
++ * its network (hidden trackers, Tor, never hidden) and the hosts that see its address are set. The page is the Compartments app's,
++ * and only this app holds the permission to open it; the row is absent where Compartments is not installed or does not run (in a
++ * user other than the owner), for a system uid and for Compartments itself.
++ *
++ * The summary is the profile of the app (ADR-208). It is the one thing read from Compartments: one label, through a method of the
++ * policy service that only this app may call (READ_COMPARTMENT_PROFILE); it is read again whenever the page comes back, because
++ * the page that the row opens changes it. Where the service is missing, refuses or fails, the row shows no summary.
+  */
+ @Composable
+ fun AppCompartmentsPreference(app: ApplicationInfo) {
+@@ -49,9 +61,26 @@ fun AppCompartmentsPreference(app: ApplicationInfo) {
+     ) {
+         return
+     }
++    var profile by remember(app.packageName) { mutableStateOf(profileLabel(context, app.packageName)) }
++    LifecycleEffect(onStart = { profile = profileLabel(context, app.packageName) })
+     Preference(object : PreferenceModel {
+         override val title = stringResource(R.string.app_compartments_label)
++        override val summary = { profile }
+         override val enabled = { app.installed }
+         override val onClick = { runCatching { context.startActivity(intent) }; Unit }
+     })
+ }
++
++/** The words of the profile of one package, or an empty string where the service does not answer. */
++private fun profileLabel(context: Context, packageName: String): String =
++    try {
++        val service = ICompartmentsPolicy.Stub.asInterface(ServiceManager.getService(COMPARTMENTS_SERVICE))
++        when (service?.getProfile(packageName)) {
++            ICompartmentsPolicy.PROFILE_TRUSTED -> context.getString(R.string.app_compartments_profile_trusted)
++            ICompartmentsPolicy.PROFILE_PROTECTED -> context.getString(R.string.app_compartments_profile_protected)
++            ICompartmentsPolicy.PROFILE_ISOLATED -> context.getString(R.string.app_compartments_profile_isolated)
++            else -> ""
++        }
++    } catch (e: Exception) {
++        ""
++    }
+-- 
+2.56.0
+
