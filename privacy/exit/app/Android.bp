@@ -9,7 +9,15 @@ package {
 android_app {
     name: "ExitApp",
     manifest: "AndroidManifest.xml",
-    srcs: ["src/**/*.java"],
+    // The two .aidl files of the Compartments policy service (ADR-208) are copies of those in frameworks/base; the transaction
+    // order is the contract and new methods are added at the end.
+    srcs: [
+        "src/**/*.java",
+        "src/**/*.aidl",
+    ],
+    aidl: {
+        local_include_dirs: ["src"],
+    },
     resource_dirs: ["res"],
     // NetworkAgent, NetworkProvider and OemNetworkPreferences are in the module-lib stubs of Connectivity; "module_current"
     // alone does not put android.net.* on the class path (the probe's first module build failed on it).

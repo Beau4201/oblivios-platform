@@ -14,6 +14,7 @@ import org.freeholdos.exit.CompanyNames;
 import org.freeholdos.exit.Ladder;
 import org.freeholdos.exit.Policy;
 import org.freeholdos.exit.Presenter;
+import org.freeholdos.exit.ProfileRows;
 import org.freeholdos.exit.TunNet;
 import org.freeholdos.exit.UidRanges;
 
@@ -799,7 +800,60 @@ public final class HostChecks {
         return l;
     }
 
+    // ---- ProfileRows (ADR-208) ---------------------------------------------------------------------------------------
+
+    private static String rowText(ProfileRows.Row r) {
+        return r.cls + ":" + Arrays.toString(r.values) + "=" + r.current;
+    }
+
+    static void profileRows() {
+        // the numbers are those of ICompartmentsPolicy and are pinned by ProfilesTest of the policy core
+        check(ProfileRows.PROFILE_TRUSTED == 0 && ProfileRows.PROFILE_PROTECTED == 1 && ProfileRows.PROFILE_ISOLATED == 2, "profile numbers");
+        check(ProfileRows.CLASS_SENSORS == 0 && ProfileRows.CLASS_LOOPBACK == 1 && ProfileRows.CLASS_SETTINGS == 2, "class numbers");
+        check(ProfileRows.VALUE_REAL == 0 && ProfileRows.VALUE_SUBSTITUTE == 1 && ProfileRows.VALUE_BLOCKED == 2, "value numbers");
+        check(Arrays.equals(ProfileRows.profileChoices(true), new int[] {1, 2}), "the defaults are Protected or Isolated");
+        check(Arrays.equals(ProfileRows.profileChoices(false), new int[] {0, 1, 2}), "an app may be any profile");
+        // the arrays that come back are copies: a caller cannot change what the next call returns
+        ProfileRows.profileChoices(true)[0] = 9;
+        check(Arrays.equals(ProfileRows.profileChoices(true), new int[] {1, 2}), "profileChoices returns a copy");
+
+        List<ProfileRows.Row> rows = ProfileRows.rowsFor(ProfileRows.PROFILE_PROTECTED, 0, 2, 2);
+        check(rows.size() == 3, "three classes");
+        check(rowText(rows.get(0)).equals("0:[0, 1, 2]=0"), "sensors row: " + rowText(rows.get(0)));
+        check(rowText(rows.get(1)).equals("1:[0, 2]=2"), "loopback row: " + rowText(rows.get(1)));
+        check(rowText(rows.get(2)).equals("2:[0, 2]=2"), "settings row: " + rowText(rows.get(2)));
+        ProfileRows.Row r = ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0).get(0);
+        check(r.current == 1, "sensors may be substitute data");
+        r.values[0] = 9;
+        check(ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0).get(0).values[0] == 0, "row values are copies");
+        for (int p = 0; p < 3; p++) {
+            for (ProfileRows.Row row : ProfileRows.rowsFor(p, 0, 0, 0)) {
+                boolean substitute = false;
+                for (int v : row.values) {
+                    substitute |= v == ProfileRows.VALUE_SUBSTITUTE;
+                }
+                check(substitute == (row.cls == ProfileRows.CLASS_SENSORS), "only the sensors offer substitute data");
+            }
+        }
+        throwsIae(() -> ProfileRows.rowsFor(3, 0, 0, 0), "profile 3");
+        throwsIae(() -> ProfileRows.rowsFor(-1, 0, 0, 0), "profile -1");
+        throwsIae(() -> ProfileRows.rowsFor(1, 3, 0, 0), "sensors value 3");
+        throwsIae(() -> ProfileRows.rowsFor(1, -1, 0, 0), "sensors value -1");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 3, 0), "loopback value 3");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 1, 0), "loopback cannot be substitute data");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 3), "settings value 3");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 1), "settings cannot be substitute data");
+
+        List<ProfileRows.Row> defaults = ProfileRows.defaultRows(ProfileRows.PROFILE_ISOLATED, 1);
+        check(defaults.size() == 1 && rowText(defaults.get(0)).equals("0:[0, 1, 2]=1"), "the defaults hold one row, the sensors");
+        check(ProfileRows.defaultRows(ProfileRows.PROFILE_PROTECTED, 0).size() == 1, "defaults of Protected");
+        throwsIae(() -> ProfileRows.defaultRows(ProfileRows.PROFILE_TRUSTED, 0), "the defaults are never Trusted");
+        throwsIae(() -> ProfileRows.defaultRows(3, 0), "defaults of profile 3");
+        throwsIae(() -> ProfileRows.defaultRows(1, 3), "defaults with sensors value 3");
+    }
+
     public static void main(String[] args) throws Exception {
+        profileRows();
         uidRanges();
         choices();
         consent();

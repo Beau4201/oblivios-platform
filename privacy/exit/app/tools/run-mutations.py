@@ -23,7 +23,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 J = "src/org/freeholdos/exit/"
-U, C, K, P, L, D, X, DC, RC, LK, PRE, CN, TN, ST = (J + n + ".java" for n in ("UidRanges", "Choices", "Consent", "Policy", "Ladder", "ControlCodec", "ExitController", "DaemonClient", "RouteClient", "Link", "Presenter", "CompanyNames", "TunNet", "Status"))
+U, C, K, P, L, D, X, DC, RC, LK, PRE, CN, TN, ST, PR = (J + n + ".java" for n in ("UidRanges", "Choices", "Consent", "Policy", "Ladder", "ControlCodec", "ExitController", "DaemonClient", "RouteClient", "Link", "Presenter", "CompanyNames", "TunNet", "Status", "ProfileRows"))
 
 # (name, file, old, new)
 MUTATIONS = [
@@ -288,6 +288,20 @@ MUTATIONS = [
     ('controller: going idle keeps the promotions', X, '        sentOverrides.clear();\n        promoted.clear();', '        sentOverrides.clear();'),
     ('controller: the status has no promotions', X, '                new java.util.ArrayList<>(promoted.keySet()));', '                new java.util.ArrayList<>());'),
     ('status: equality ignores the promotions', ST, '&& java.util.Objects.equals(lastError, s.lastError) && promotions.equals(s.promotions);', '&& java.util.Objects.equals(lastError, s.lastError);'),
+    # ProfileRows (ADR-208)
+    ("profiles: the defaults may be Trusted", PR, "? new int[] {PROFILE_PROTECTED, PROFILE_ISOLATED}", "? new int[] {PROFILE_TRUSTED, PROFILE_PROTECTED, PROFILE_ISOLATED}"),
+    ("profiles: an app cannot be Trusted", PR, ": new int[] {PROFILE_TRUSTED, PROFILE_PROTECTED, PROFILE_ISOLATED};", ": new int[] {PROFILE_PROTECTED, PROFILE_ISOLATED};"),
+    ("profiles: the sensor values are in another order", PR, "CLASS_SENSORS, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, sensors));\n        rows.add(row(CLASS_LOOPBACK", "CLASS_SENSORS, new int[] {VALUE_REAL, VALUE_BLOCKED, VALUE_SUBSTITUTE}, sensors));\n        rows.add(row(CLASS_LOOPBACK"),
+    ("profiles: the loopback is offered as substitute data", PR, "CLASS_LOOPBACK, new int[] {VALUE_REAL, VALUE_BLOCKED}", "CLASS_LOOPBACK, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}"),
+    ("profiles: the settings are offered as substitute data", PR, "CLASS_SETTINGS, new int[] {VALUE_REAL, VALUE_BLOCKED}", "CLASS_SETTINGS, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}"),
+    ("profiles: the loopback row names the settings class", PR, "row(CLASS_LOOPBACK,", "row(CLASS_SETTINGS,"),
+    ("profiles: a current value that is not offered is accepted", PR, "if (v == current) {", "if (true) {"),
+    ("profiles: the row forgets the current value", PR, "return new Row(cls, values, current);", "return new Row(cls, values, values[0]);"),
+    ("profiles: a profile below Trusted is accepted", PR, "profile < PROFILE_TRUSTED ||", "profile < -1 ||"),
+    ("profiles: a profile above Isolated is accepted", PR, "profile > PROFILE_ISOLATED", "profile > PROFILE_ISOLATED + 1"),
+    ("profiles: rowsFor does not check the profile", PR, "requireProfile(profile);\n        List<Row> rows = new ArrayList<>();\n        rows.add(row(CLASS_SENSORS, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, sensors));\n        rows.add(row(CLASS_LOOPBACK", "List<Row> rows = new ArrayList<>();\n        rows.add(row(CLASS_SENSORS, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, sensors));\n        rows.add(row(CLASS_LOOPBACK"),
+    ("profiles: defaultRows does not check the profile", PR, "requireProfile(profile);\n        if (profile == PROFILE_TRUSTED) {", "if (profile == PROFILE_TRUSTED) {"),
+    ("profiles: the defaults may be Trusted in defaultRows", PR, "if (profile == PROFILE_TRUSTED) {", "if (false) {"),
 ]
 
 _CONST = re.compile(r"^(?P<head>\s*(?:public |private )?static final (?:int|long) (?P<name>[A-Z0-9_]+) = )(?P<val>0x[0-9a-fA-F]+|[0-9]+)(?P<tail>L?;.*)$", re.M)
