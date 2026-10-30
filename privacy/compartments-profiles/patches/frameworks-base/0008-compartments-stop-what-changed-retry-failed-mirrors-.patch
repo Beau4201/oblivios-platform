@@ -1,0 +1,419 @@
+From 6d4adee41b5ce7508cb332f9ece05cf218adcb2a Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 20:17:00 +0100
+Subject: [PATCH] compartments: stop what changed, retry failed mirrors, keep
+ Automatic places
+
+Fixes from the review of the policy service (ADR-208):
+
+- A change of profile, sensor value, location value or place stops the packages concerned two seconds later (after the readers of the files looked again): a process read its time zone, country and operator once, a GNSS listener or a direct sensor channel keeps what it was given. Defaults changes stop nothing (known limit).
+- A failed mirror write is tried again on the background thread, after 10 s, doubling to 5 minutes, until all mirrors are written.
+- An Automatic app keeps the place of the last persona table when it was Automatic and substituted before, so a boot without a network neither moves the persona nor revokes the location permissions.
+- The persona and sensor files get their mode (0644) on the temporary file before the rename, never 0600 under the final name.
+- The package removal receiver cannot throw, and ignores a removal for one user while the package is installed for another.
+- ACCESS_MEDIA_LOCATION is taken with the other location permissions; CellSubset no longer formats the mnc with the default locale.
+---
+ .../server/compartments/CellSubset.java       |   2 +-
+ .../CompartmentsPolicyService.java            | 142 +++++++++++++++---
+ .../server/compartments/MirrorPlan.java       |  67 ++++++++-
+ 3 files changed, 184 insertions(+), 27 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CellSubset.java b/services/core/java/com/android/server/compartments/CellSubset.java
+index b570e68..03e139c 100644
+--- a/services/core/java/com/android/server/compartments/CellSubset.java
++++ b/services/core/java/com/android/server/compartments/CellSubset.java
+@@ -94,7 +94,7 @@ final class CellSubset {
+             return "";
+         }
+         Cell first = all.get(0);
+-        return first.mcc + String.format("%02d", first.mnc);
++        return first.mcc + (first.mnc < 10 ? "0" : "") + first.mnc;  // not String.format: the digits would follow the locale
+     }
+ 
+     /** At most 8 cells of the place in file order; empty for a place without cells. */
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index d2df6af..41e3c7d 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ package com.android.server.compartments;
+ 
++import android.app.ActivityManager;
+ import android.content.BroadcastReceiver;
+ import android.content.Context;
+ import android.content.Intent;
+@@ -20,6 +21,8 @@ import android.os.SystemClock;
+ import android.os.UserHandle;
+ import android.os.UserManager;
+ import android.provider.Settings;
++import android.system.ErrnoException;
++import android.system.Os;
+ import android.telephony.TelephonyManager;
+ import android.util.AtomicFile;
+ import android.util.Slog;
+@@ -77,7 +80,10 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         "android.permission.ACCESS_FINE_LOCATION",
+         "android.permission.ACCESS_COARSE_LOCATION",
+         "android.permission.ACCESS_BACKGROUND_LOCATION",
++        "android.permission.ACCESS_MEDIA_LOCATION",  // the real GPS position in the EXIF of the photos of the user
+     };
++    /** A package that the user changed starts again after this long: the readers of the mirror files look again about once a second. */
++    private static final int STOP_DELAY_MS = 2000;
+     private static final int MAX_STORE_BYTES = 1024 * 1024;
+     private static final int MAX_PLACES_BYTES = 16 * 1024 * 1024;
+     private static final int MAX_SEARCH_RESULTS = 50;
+@@ -92,6 +98,9 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     private final long mSalt;
+     private final Handler mHandler = BackgroundThread.getHandler();
+     private volatile PolicyStore mStore;
++    /** The wait before the mirrors are written again after a failed write; 0 when the last write went through. Guarded by mLock. */
++    private int mRetryMs;
++    private final Runnable mRetry = this::reapply;
+ 
+     /** The place data, read once and lazily; null when the file is missing or is not exactly a file of the format. */
+     private final Object mPlacesLock = new Object();
+@@ -280,16 +289,65 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     private void change(int cls, int value, Edit edit) {
+         final long token = Binder.clearCallingIdentity();
+         try {
++            Set<String> restart;
+             synchronized (mLock) {
+                 PolicyStore previous = mStore;
+                 PolicyStore next = edit.apply(previous);
+                 if (next == previous) {
+                     return;
+                 }
+-                writeAtomic(mPolicyFile, next.encode());
++                writeAtomic(mPolicyFile, next.encode(), -1);
+                 mStore = next;
+                 EventLogTags.writeCompartmentsChanged(cls, value);
+-                applyMirrors(previous, next, false);
++                restart = MirrorPlan.restartNeeded(previous, next);
++                mirror(previous, next, false);
++            }
++            stopLater(restart);
++        } finally {
++            Binder.restoreCallingIdentity(token);
++        }
++    }
++
++    /**
++     * Applies the mirrors; when one of them fails the store and the enforcement points disagree, so the whole set is tried
++     * again on the background thread, after 10 seconds and then after twice as long, at most 5 minutes, until all are
++     * written. The caller holds mLock.
++     */
++    private void mirror(PolicyStore previous, PolicyStore next, boolean full) {
++        mHandler.removeCallbacks(mRetry);
++        if (applyMirrors(previous, next, full)) {
++            mRetryMs = 0;
++            return;
++        }
++        mRetryMs = MirrorPlan.nextRetryMs(mRetryMs);
++        mHandler.postDelayed(mRetry, mRetryMs);
++    }
++
++    /**
++     * A process reads the time zone, country and operator of its persona once, and a sensor channel or a position listener that
++     * it holds keeps the data it was given, so the packages whose profile, sensor value, location value or place changed are
++     * stopped (they start again at the next use, with what the files now say). Known limit: a change of the defaults does not
++     * stop the apps without an entry of their own.
++     */
++    private void stopLater(Set<String> packages) {
++        if (!packages.isEmpty()) {
++            mHandler.postDelayed(() -> stopPackages(packages), STOP_DELAY_MS);
++        }
++    }
++
++    private void stopPackages(Set<String> packages) {
++        final long token = Binder.clearCallingIdentity();
++        try {
++            ActivityManager am = mContext.getSystemService(ActivityManager.class);
++            List<UserHandle> users = mContext.getSystemService(UserManager.class).getUserHandles(true);
++            for (String pkg : packages) {
++                for (UserHandle user : users) {
++                    try {
++                        am.forceStopPackageAsUser(pkg, user.getIdentifier());
++                    } catch (RuntimeException e) {
++                        Slog.w(TAG, "stop failed: " + e.getClass().getSimpleName());
++                    }
++                }
+             }
+         } finally {
+             Binder.restoreCallingIdentity(token);
+@@ -300,9 +358,10 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+      * Brings the enforcement points in line with {@code next}. Each mirror stands alone: a
+      * failure in one is logged by class name and does not stop the others. {@code full} re-applies
+      * the permission of every configured package (boot, a package added), else only those whose
+-     * loopback value changed.
++     * loopback value changed. False when a file or the persona could not be written.
+      */
+-    private void applyMirrors(PolicyStore previous, PolicyStore next, boolean full) {
++    private boolean applyMirrors(PolicyStore previous, PolicyStore next, boolean full) {
++        boolean ok = true;
+         try {
+             String wanted = MirrorPlan.settingsRealPackages(next);
+             String have = Settings.Global.getString(mContext.getContentResolver(), SETTINGS_REAL_PACKAGES);
+@@ -311,51 +370,56 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+             }
+         } catch (RuntimeException e) {
+             Slog.w(TAG, "settings mirror failed: " + e.getClass().getSimpleName());
++            ok = false;
+         }
+         try {
+             applyLoopback(previous, next, full);
+         } catch (RuntimeException e) {
+             Slog.w(TAG, "loopback mirror failed: " + e.getClass().getSimpleName());
++            ok = false;
+         }
+         try {
+             writeSensorFile(next);
+         } catch (RuntimeException e) {
+             Slog.w(TAG, "sensor mirror failed: " + e.getClass().getSimpleName());
++            ok = false;
+         }
+         try {
+-            applyPersona(next);
++            applyPersona(previous, next);
+         } catch (RuntimeException e) {
+             Slog.w(TAG, "persona mirror failed: " + e.getClass().getSimpleName());
++            ok = false;
+         }
++        return ok;
+     }
+ 
+     /** The sensor file with the activity of the phone now; the caller holds mLock. */
+     private void writeSensorFile(PolicyStore s) {
+         String file = MirrorPlan.sensorModeFile(s, this::ownerUidOf, mSalt, mActivity);
+-        writeAtomic(mSensorFile, file.getBytes(StandardCharsets.US_ASCII));
+-        FileUtils.setPermissions(mSensorFile.getBaseFile().getPath(), 0644, -1, -1);
++        writeAtomic(mSensorFile, file.getBytes(StandardCharsets.US_ASCII), 0644);
+     }
+ 
+     /**
+      * Makes the persona table of the apps whose location is substituted. The table of this process is set before the file is
+      * written, so a failed write cannot leave an app without a persona here. An app whose persona cannot be made (no place
+      * data, no country, a place that is not in the data) loses its location permissions, as an app with a blocked location
+-     * does: it is never given the real position.
++     * does: it is never given the real position. An Automatic app keeps the place of the last table ({@code previous} is the
++     * store that table was made for), so a boot without a network neither moves its persona nor takes its permissions.
+      */
+-    private void applyPersona(PolicyStore next) {
++    private void applyPersona(PolicyStore previous, PolicyStore next) {
+         Places places = places();
+         String country = realCountry();
+         double lat = mRealLat;
+         double lon = mRealLon;
+-        String file = MirrorPlan.personaFile(next, this::ownerUidOf, mSalt, places, country, lat, lon);
++        PersonaFile last = mPersona;
++        String file = MirrorPlan.personaFile(next, this::ownerUidOf, mSalt, places, country, lat, lon, previous, last);
+         PersonaFile table = PersonaFile.parse(file);
+         mPersona = table;
+         mTracks.keySet().removeIf(appId -> table.placeOf(appId) == 0);
+         Set<String> deny = new TreeSet<>(MirrorPlan.locationBlocked(next));
+-        deny.addAll(MirrorPlan.locationUnresolved(next, this::ownerUidOf, mSalt, places, country, lat, lon));
++        deny.addAll(MirrorPlan.locationUnresolved(next, this::ownerUidOf, mSalt, places, country, lat, lon, previous, last));
+         try {
+-            writeAtomic(mPersonaFile, file.getBytes(StandardCharsets.US_ASCII));
+-            FileUtils.setPermissions(mPersonaFile.getBaseFile().getPath(), 0644, -1, -1);
++            writeAtomic(mPersonaFile, file.getBytes(StandardCharsets.US_ASCII), 0644);
+         } finally {
+             revokeLocation(deny);
+         }
+@@ -492,20 +556,46 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         }
+     }
+ 
+-    /** The entry of a package that is gone from every user is cleared; a profile is not kept for a name. */
++    /**
++     * The entry of a package that is gone from every user is cleared; a profile is not kept for a name. The broadcast is sent
++     * for each user that the package was removed from, so a package that is still installed for another user keeps its entry.
++     * Nothing may escape: an exception in a receiver ends system_server (the entry then stays, and goes at the next change).
++     */
+     private void onPackageRemoved(String pkg) {
+-        if (pkg == null || !mStore.hasEntry(pkg)) {
+-            return;
++        try {
++            if (pkg == null || !mStore.hasEntry(pkg) || installedForAnyUser(pkg)) {
++                return;
++            }
++            change(-1, Profile.PROTECTED.ordinal(), s -> s.without(pkg));
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "package removal failed: " + e.getClass().getSimpleName());
++        }
++    }
++
++    private boolean installedForAnyUser(String pkg) {
++        final long token = Binder.clearCallingIdentity();
++        try {
++            PackageManager pm = mContext.getPackageManager();
++            for (UserHandle user : mContext.getSystemService(UserManager.class).getUserHandles(true)) {
++                try {
++                    pm.getPackageUidAsUser(pkg, 0, user.getIdentifier());
++                    return true;
++                } catch (PackageManager.NameNotFoundException e) {
++                    // not installed for this user
++                }
++            }
++            return false;
++        } finally {
++            Binder.restoreCallingIdentity(token);
+         }
+-        change(-1, Profile.PROTECTED.ordinal(), s -> s.without(pkg));
+     }
+ 
+-    /** Boot, boot completed or a package added: a changed uid must reach the sensor file. */
++    /** Boot, boot completed, a package added or a failed write to try again: a changed uid must reach the sensor file. */
+     private void reapply() {
+         final long token = Binder.clearCallingIdentity();
+         try {
+             synchronized (mLock) {
+-                applyMirrors(mStore, mStore, true);
++                mirror(mStore, mStore, true);
+             }
+         } finally {
+             Binder.restoreCallingIdentity(token);
+@@ -754,7 +844,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         }
+         long salt = new SecureRandom().nextLong();
+         try {
+-            writeAtomic(af, ByteBuffer.allocate(Long.BYTES).putLong(salt).array());
++            writeAtomic(af, ByteBuffer.allocate(Long.BYTES).putLong(salt).array(), -1);
+             FileUtils.setPermissions(f.getPath(), 0600, -1, -1);
+         } catch (RuntimeException e) {
+             Slog.w(TAG, "salt not stored: " + e.getClass().getSimpleName());
+@@ -762,13 +852,21 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         return salt;
+     }
+ 
+-    private static void writeAtomic(AtomicFile file, byte[] bytes) {
++    /**
++     * Writes the file through its temporary name. {@code mode} (not -1) is set on the temporary file before finishWrite renames it
++     * over the old one, so that a reader in another process never meets the file under its name with the mode of system_server's
++     * umask (0600), which the radio and Bluetooth processes cannot open.
++     */
++    private static void writeAtomic(AtomicFile file, byte[] bytes, int mode) {
+         FileOutputStream out = null;
+         try {
+             out = file.startWrite();
+             out.write(bytes);
++            if (mode >= 0) {
++                Os.fchmod(out.getFD(), mode);
++            }
+             file.finishWrite(out);
+-        } catch (IOException e) {
++        } catch (IOException | ErrnoException e) {
+             if (out != null) {
+                 file.failWrite(out);
+             }
+diff --git a/services/core/java/com/android/server/compartments/MirrorPlan.java b/services/core/java/com/android/server/compartments/MirrorPlan.java
+index 4e88bc2..e03d36a 100644
+--- a/services/core/java/com/android/server/compartments/MirrorPlan.java
++++ b/services/core/java/com/android/server/compartments/MirrorPlan.java
+@@ -119,14 +119,61 @@ final class MirrorPlan {
+      * The place of a substituted app: the one the user chose when {@code places} knows it, else the one chosen for the app in
+      * the real country; 0 when there is none (no place data, no country, a country without a place, an unknown chosen place).
+      */
+-    private static int placeOf(PolicyStore.AppPolicy p, int appId, long salt, Places places, String country, double lat, double lon) {
++    private static int placeOf(PolicyStore.AppPolicy p, int appId, long salt, Places places, String country, double lat, double lon,
++            int kept) {
+         if (places == null) {
+             return 0;
+         }
+         if (p.place != 0) {
+             return places.byId(p.place) != null ? p.place : 0;
+         }
+-        return places.automaticFor(country, lat, lon, personaSeed(salt, appId));
++        return kept > 0 ? kept : places.automaticFor(country, lat, lon, personaSeed(salt, appId));
++    }
++
++    /**
++     * The place that an Automatic app keeps (design 4.1: chosen once per app and kept): the one the table of the last run gave
++     * it, when the app was Automatic and substituted then as well and the place is still in the data. Without it the place
++     * would follow the network country at the moment of each run, and a boot without a network would take the persona of every
++     * Automatic app away. 0 when there is nothing to keep.
++     */
++    private static int keptPlace(PolicyStore before, PersonaFile table, String pkg, int appId, Places places) {
++        if (before == null || table == null || places == null) {
++            return 0;
++        }
++        if (before.policyOf(pkg).place != 0 || before.value(pkg, Cls.LOCATION) != Value.SUBSTITUTE) {
++            return 0;
++        }
++        int kept = table.placeOf(appId);
++        return kept > 0 && places.byId(kept) != null ? kept : 0;
++    }
++
++    /**
++     * The packages that must start again when the store changes from {@code before} to {@code after}: a process reads the time
++     * zone, the country and the operator of its persona once, and a sensor channel or a position listener that it holds keeps
++     * what it was given. These are the packages whose profile, sensor value, location value or place differ. A change of the
++     * defaults reaches no package without an entry of its own here (it does not restart them).
++     */
++    static Set<String> restartNeeded(PolicyStore before, PolicyStore after) {
++        Set<String> all = new TreeSet<>(before.configured());
++        all.addAll(after.configured());
++        Set<String> out = new TreeSet<>();
++        for (String pkg : all) {
++            PolicyStore.AppPolicy a = before.policyOf(pkg);
++            PolicyStore.AppPolicy b = after.policyOf(pkg);
++            if (a.profile != b.profile || before.value(pkg, Cls.SENSORS) != after.value(pkg, Cls.SENSORS)
++                    || before.value(pkg, Cls.LOCATION) != after.value(pkg, Cls.LOCATION) || a.place != b.place) {
++                out.add(pkg);
++            }
++        }
++        return out;
++    }
++
++    static final int RETRY_FIRST_MS = 10_000;
++    static final int RETRY_MAX_MS = 300_000;
++
++    /** The wait before the next try to write the mirrors again: 10 seconds, then twice as long, at most 5 minutes. */
++    static int nextRetryMs(int previousMs) {
++        return previousMs <= 0 ? RETRY_FIRST_MS : (int) Math.min(2L * previousMs, RETRY_MAX_MS);
+     }
+ 
+     /** The app id of an ordinary app, which every user shares; -1 for anything else (a platform or sandbox uid, -1: not installed). */
+@@ -141,13 +188,19 @@ final class MirrorPlan {
+      * app id give the lower place. Pure: the real country and position are arguments (a NaN position is unknown).
+      */
+     static String personaFile(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat, double lon) {
++        return personaFile(s, r, salt, places, country, lat, lon, null, null);
++    }
++
++    /** The same file, where an Automatic app keeps the place that {@code table} (made for {@code before}) gave it, see {@link #keptPlace}. */
++    static String personaFile(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat, double lon,
++            PolicyStore before, PersonaFile table) {
+         Map<Integer, Integer> perApp = new TreeMap<>();
+         for (String pkg : s.configured()) {
+             int appId = ordinaryAppId(r.uidOf(pkg));
+             if (appId < 0 || s.value(pkg, Cls.LOCATION) != Value.SUBSTITUTE) {
+                 continue;
+             }
+-            int place = placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon);
++            int place = placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon, keptPlace(before, table, pkg, appId, places));
+             if (place > 0) {
+                 perApp.merge(appId, place, Math::min);
+             }
+@@ -161,11 +214,17 @@ final class MirrorPlan {
+      */
+     static Set<String> locationUnresolved(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
+             double lon) {
++        return locationUnresolved(s, r, salt, places, country, lat, lon, null, null);
++    }
++
++    /** The same set, for the table that {@link #personaFile(PolicyStore, UidResolver, long, Places, String, double, double, PolicyStore, PersonaFile)} makes. */
++    static Set<String> locationUnresolved(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
++            double lon, PolicyStore before, PersonaFile table) {
+         Set<String> out = new TreeSet<>();
+         for (String pkg : s.configured()) {
+             int appId = ordinaryAppId(r.uidOf(pkg));
+             if (appId >= 0 && s.value(pkg, Cls.LOCATION) == Value.SUBSTITUTE
+-                    && placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon) == 0) {
++                    && placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon, keptPlace(before, table, pkg, appId, places)) == 0) {
+                 out.add(pkg);
+             }
+         }
+-- 
+2.56.0
+

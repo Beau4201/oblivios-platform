@@ -39,6 +39,7 @@ public final class ControllerChecks {
         boolean strictDns;
         /** The country of the place of each Isolated app, and the country of the user. */
         final Map<String, String> places = new TreeMap<>();
+        boolean placesUnreadable;
         String own = "NL";
         long netId = 101;
         /** Method names ("daemon.connect", "daemon.poll", ...) that throw once or for ever. */
@@ -160,7 +161,7 @@ public final class ControllerChecks {
 
             @Override
             public Map<String, String> placeCountries() {
-                return places;
+                return placesUnreadable ? null : places;
             }
 
             @Override
@@ -499,10 +500,16 @@ public final class ControllerChecks {
         mark = w.log.size();
         w.controller.tick(21000);
         inOrder(w, mark, "daemon.connect", "daemon.setPolicy", "daemon.setCountry:10100/ES", "status:RUNNING");
+        // The service cannot be read for one poll (null, not an empty map): no country is removed or sent.
+        w.placesUnreadable = true;
+        mark = w.log.size();
+        w.controller.tick(26000);
+        check(w.indexOf("daemon.setCountry", mark) < 0, "an unreadable service removes nothing: " + w.log.subList(mark, w.log.size()));
+        w.placesUnreadable = false;
         // The place data goes away altogether (the service is gone): the country that was sent is removed on the next poll.
         w.places.clear();
         mark = w.log.size();
-        w.controller.tick(26000);
+        w.controller.tick(31000);
         check(w.indexOf("daemon.setCountry:10100/none", mark) >= 0, "no places left, the country goes: " + w.log.subList(mark, w.log.size()));
         // No place data and no persona: the poll does not ask for anything.
         World q = world();

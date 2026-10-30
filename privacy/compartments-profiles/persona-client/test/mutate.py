@@ -23,7 +23,7 @@ MUTANTS = [
     ("the file is read once", "while (n < buf.length) {", "if (n < buf.length) {"),
     ("a parse error is not an answer of no persona", "} catch (ErrnoException | IOException | RuntimeException e) {", "} catch (ErrnoException | IOException e) {"),
     ("the descriptor is not closed", "Os.close(fd);", "if (fd == null) {\n                        Os.close(fd);\n                    }"),
-    ("an unusable file keeps the old persona", "mFile = load();", "PersonaFile n = load();\n            if (n != null) {\n                mFile = n;\n            }"),
+    ("an unusable file removes the persona", "if (fresh != null) {\n                mFile = fresh;", "if (true) {\n                mFile = fresh;"),
     ("the answer is the place of the wrong uid", "mFile.placeOf(uid)", "mFile.placeOf(uid + 1)"),
 ]
 

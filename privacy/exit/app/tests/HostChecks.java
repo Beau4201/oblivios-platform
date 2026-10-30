@@ -782,6 +782,7 @@ public final class HostChecks {
                 () -> ControlCodec.setCountry(1, 1, "E"), () -> ControlCodec.setCountry(1, 1, "ESP"),
                 () -> ControlCodec.setCountry(1, 1, "es"), () -> ControlCodec.setCountry(1, 1, "E1"),
                 () -> ControlCodec.setCountry(1, 1, "ÉS"), () -> ControlCodec.setCountry(256, 1, "ES"),
+                () -> ControlCodec.setCountry(1, -1, "ES"), () -> ControlCodec.setCountry(1, 0x1_0000_0000L, "ES"),
                 () -> ControlCodec.routeApply(1, "", 0, new ArrayList<int[]>(), new ArrayList<int[]>()),
                 () -> ControlCodec.routeApply(1, "sixteen_chars_xx", 0, new ArrayList<int[]>(), new ArrayList<int[]>()),
                 () -> ControlCodec.routeApply(1, "exit0", 0, Collections129(), new ArrayList<int[]>()),

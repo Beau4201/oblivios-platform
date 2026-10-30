@@ -12,6 +12,9 @@ is an error of this list, not a surviving mutant. Everything runs on the worksta
 Left out on purpose: `choices: Tor wins over Open in choiceOf` (the order of the two tests in `Choices.choiceOf`): `set` keeps the Tor
 and open lines apart and `parse` refuses an app on both, so no package is in both and the order cannot be seen.
 
+Also left out: `sentCountries.clear()` in the idle path of `ExitController`. Nothing sends a country before `connect()`, which clears
+the map again, so removing it cannot be seen (an equivalent mutant; the line stays as a second guard).
+
 The result line is "N of N mutations killed"; the exit status is 0 only when all were killed.
 """
 import os
@@ -155,6 +158,9 @@ MUTATIONS = [
     ("codec: an empty country is not no country", D, "boolean none = country == null || country.isEmpty();", "boolean none = country == null;"),
     ("codec: a country is not validated", D, "if (!none && !validCountry(country)) {", "if (!none && false) {"),
     ("codec: a country loses its uid", D, "        o.write(seq);\n        putU32(o, uid);\n        if (none) {", "        o.write(seq);\n        putU32(o, 0);\n        if (none) {"),
+    ("codec: a country uid below zero is accepted", D, "if (uid < 0 || uid > 0xffffffffL) {\n            throw new IllegalArgumentException(\"a uid is an unsigned 32 bit number\");", "if (uid > 0xffffffffL) {\n            throw new IllegalArgumentException(\"a uid is an unsigned 32 bit number\");"),
+    ("codec: a country uid above 32 bits is accepted", D, "if (uid < 0 || uid > 0xffffffffL) {\n            throw new IllegalArgumentException(\"a uid is an unsigned 32 bit number\");", "if (uid < 0) {\n            throw new IllegalArgumentException(\"a uid is an unsigned 32 bit number\");"),
+    ("controller: an unreadable service removes the countries", X, "            return; // the service could not be read: keep every country already sent", "            places = new HashMap<>();"),
     ("presenter: a code that is not a country is one", PRE, "!ControlCodec.validCountry(personaCountry) || personaCountry.equals(ownCountry)", "personaCountry == null || personaCountry.equals(ownCountry)"),
     ("presenter: the own country is abroad", PRE, "!ControlCodec.validCountry(personaCountry) || personaCountry.equals(ownCountry)", "!ControlCodec.validCountry(personaCountry)"),
     ("presenter: Direct is moved by its place", PRE, "return stand == Choices.Choice.TOR ? Exit.COUNTRY : Exit.MISMATCH;", "return stand != Choices.Choice.OPEN ? Exit.COUNTRY : Exit.MISMATCH;"),
@@ -179,11 +185,11 @@ MUTATIONS = [
     ("controller: an unchanged table is sent again", X, "boolean tableChanged = all || applied == null || !sameClasses(applied.classes, out.classes);", "boolean tableChanged = true;"),
     ("controller: an unchanged rule set is sent again", X, "boolean rulesChanged = all || applied == null ||", "boolean rulesChanged = true || all || applied == null ||"),
     ("controller: an unchanged override is sent again", X, "if (!want.get(e.getKey()).equals(sentOverrides.get(e.getKey()))) {", "if (true) {"),
-    ("controller: a removed override is not cleared", X, "if (!want.containsKey(uid)) {", "if (false) {"),
+    ("controller: a removed override is not cleared", X, "if (!want.containsKey(uid)) {\n                daemon.setOverrides(uid, new int[0]);", "if (false) {\n                daemon.setOverrides(uid, new int[0]);"),
     ("controller: the Tor network stays when a link is lost", X, "        platform.unregisterTorNetwork();\n        netId = 0;\n        daemon.close();", "        netId = 0;\n        daemon.close();"),
     ("controller: the rules stay when everything is off", X, "            route.clear();\n", ""),
     ("controller: the preference stays when everything is off", X, "            platform.setOemPreferences(Collections.<String, Integer>emptyMap());\n", ""),
-    ("controller: the overrides are not sent to a new daemon", X, "            sentOverrides.clear();\n            appliedPrefs = null;", "            appliedPrefs = null;"),
+    ("controller: the overrides are not sent to a new daemon", X, "            sentOverrides.clear();\n            sentCountries.clear();", "            sentCountries.clear();"),
     ("controller: the preferences are not sent to a new daemon", X, "            appliedPrefs = null;\n            netId = 0;\n            push(true);", "            netId = 0;\n            push(true);"),
     ("controller: the daemon is polled while idle", X, "        if (!wanted) {\n            if (prefsPending && nowMs >= prefsRetryMs) {\n                goIdle(nowMs); // the clearing of the preference was refused: an app set back to Direct has no network until it works\n            }\n            return;\n        }\n        if (phase == Status.Phase.RUNNING) {", "        if (phase == Status.Phase.RUNNING) {"),
     ("controller: a refused clearing is not retried while idle", X, "            if (prefsPending && nowMs >= prefsRetryMs) {\n                goIdle(nowMs);", "            if (false) {\n                goIdle(nowMs);"),
@@ -271,7 +277,7 @@ MUTATIONS = [
     ('presenter: the options change order', PRE, '{Choices.Choice.DIRECT, Choices.Choice.TOR, Choices.Choice.OPEN}', '{Choices.Choice.TOR, Choices.Choice.DIRECT, Choices.Choice.OPEN}'),
     ('presenter: the row does not show the choice', PRE, 'rows.add(new AppRow(a.pkg, a.label, choices.choiceOf(a.pkg)));', 'rows.add(new AppRow(a.pkg, a.label, Choices.Choice.DIRECT));'),
     ('presenter: the row does not show Tor', PRE, 'this.tor = choice == Choices.Choice.TOR;', 'this.tor = false;'),
-    ('codec: the protocol version', D, 'public static final int DAEMON_PROTOCOL = 3;', 'public static final int DAEMON_PROTOCOL = 2;'),
+    ('codec: the protocol version', D, 'public static final int DAEMON_PROTOCOL = 4;', 'public static final int DAEMON_PROTOCOL = 3;'),
     ('codec: the release tag moves', D, 'private static final int TAG_RELEASE = 0x09;', 'private static final int TAG_RELEASE = 0x0a;'),
     ('codec: a release of company 0', D, 'if (company < 1 || company > 0xffff) {\n            throw new IllegalArgumentException("company id is 1 to 65535");', 'if (company < 0 || company > 0xffff) {\n            throw new IllegalArgumentException("company id is 1 to 65535");'),
     ('codec: a release of company 65536', D, 'if (company < 1 || company > 0xffff) {\n            throw new IllegalArgumentException("company id is 1 to 65535");', 'if (company < 1 || company > 0x10000) {\n            throw new IllegalArgumentException("company id is 1 to 65535");'),
@@ -311,7 +317,7 @@ MUTATIONS = [
     ('controller: a release is sent to a daemon that is down', X, '        if (phase == Status.Phase.RUNNING) {\n            try {\n                daemon.release', '        if (true) {\n            try {\n                daemon.release'),
     ('controller: a failed release is ignored', X, '            } catch (IOException | RuntimeException e) {\n                lost(nowMs, e);\n                return;\n            }\n        }\n        publish();', '            } catch (IOException | RuntimeException e) {\n                lastError = e.getClass().getSimpleName();\n            }\n        }\n        publish();'),
     ('controller: a lost daemon keeps the promotions', X, '        // A daemon that starts again has forgotten its promotions (they live in its memory only).\n        promoted.clear();\n', '        // A daemon that starts again has forgotten its promotions (they live in its memory only).\n'),
-    ('controller: going idle keeps the promotions', X, '        sentOverrides.clear();\n        promoted.clear();', '        sentOverrides.clear();'),
+    ('controller: going idle keeps the promotions', X, '        sentCountries.clear();\n        promoted.clear();', '        sentCountries.clear();'),
     ('controller: the status has no promotions', X, '                new java.util.ArrayList<>(promoted.keySet()));', '                new java.util.ArrayList<>());'),
     ('status: equality ignores the promotions', ST, '&& java.util.Objects.equals(lastError, s.lastError) && promotions.equals(s.promotions);', '&& java.util.Objects.equals(lastError, s.lastError);'),
     # ProfileRows (ADR-208)

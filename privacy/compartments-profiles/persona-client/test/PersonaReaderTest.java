@@ -112,12 +112,14 @@ public final class PersonaReaderTest {
         Path huge = write(dir, "huge", new String(big), "rw-r--r--");
         check(new PersonaReader(huge.toString(), me).placeOf(uid, 0) == 0, "a file over the size limit");
 
-        // a file that becomes unusable removes the persona at the next look; a good one brings it back
+        // a file that becomes unusable keeps the last table (never "no persona"); a good one replaces it
         check(r.placeOf(uid, 4 * PersonaReader.INTERVAL_MS) == 7, "a good file before it turns bad");
         Files.write(good, "junk".getBytes(StandardCharsets.UTF_8));
-        check(r.placeOf(uid, 5 * PersonaReader.INTERVAL_MS) == 0, "a file that turns bad");
+        check(r.placeOf(uid, 5 * PersonaReader.INTERVAL_MS) == 7, "a file that turns bad keeps the last table");
+        Files.delete(good);
+        check(r.placeOf(uid, 6 * PersonaReader.INTERVAL_MS) == 7, "a file that is gone keeps the last table");
         Files.write(good, file(10123, 3).getBytes(StandardCharsets.UTF_8));
-        check(r.placeOf(uid, 6 * PersonaReader.INTERVAL_MS) == 3, "and turns good again");
+        check(r.placeOf(uid, 7 * PersonaReader.INTERVAL_MS) == 3, "and turns good again");
 
         check(Os.openCount() == 0, "every descriptor is closed, also after a refused file");
     }

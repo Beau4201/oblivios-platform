@@ -105,10 +105,11 @@ inline bool applyMode(sensors_event_t* e, SensorMode m, uint64_t seed, Activity 
             if (eventCarriesBias(e->type)) foldBiasIntoReadings(e);
             return true;
         case SensorMode::SUBSTITUTE:
+            if (isDerivedMotionType(e->type)) return false;
             substituteEvent(e, seed, a);
             return true;
         case SensorMode::BLOCKED:
-            return !isMotionType(e->type);
+            return !isMotionType(e->type) && !isDerivedMotionType(e->type);
     }
     return true;
 }
@@ -118,7 +119,7 @@ inline bool modeTouches(SensorMode m, int32_t type) {
     switch (m) {
         case SensorMode::RAW: return false;
         case SensorMode::FOLDED: return eventCarriesBias(type);
-        default: return isMotionType(type);
+        default: return isMotionType(type) || isDerivedMotionType(type);
     }
 }
 

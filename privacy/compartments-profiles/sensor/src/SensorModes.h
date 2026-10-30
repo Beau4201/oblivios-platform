@@ -51,13 +51,24 @@ inline bool isMotionType(int32_t type) {
            type == SENSOR_TYPE_GYROSCOPE_UNCALIBRATED || type == SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED;
 }
 
+// The types that the HAL derives from the same real motion (gravity, linear acceleration, the rotation vectors, the old
+// orientation, the steps and the detectors): the stream that SUBSTITUTE invents has no counterpart for them, and the real values
+// would contradict it, so SUBSTITUTE and BLOCKED both deliver none of them.
+inline bool isDerivedMotionType(int32_t type) {
+    return type == SENSOR_TYPE_GRAVITY || type == SENSOR_TYPE_LINEAR_ACCELERATION || type == SENSOR_TYPE_ROTATION_VECTOR ||
+           type == SENSOR_TYPE_GAME_ROTATION_VECTOR || type == SENSOR_TYPE_GEOMAGNETIC_ROTATION_VECTOR ||
+           type == SENSOR_TYPE_ORIENTATION || type == SENSOR_TYPE_DEVICE_ORIENTATION || type == SENSOR_TYPE_HEADING ||
+           type == SENSOR_TYPE_STEP_COUNTER || type == SENSOR_TYPE_STEP_DETECTOR || type == SENSOR_TYPE_SIGNIFICANT_MOTION ||
+           type == SENSOR_TYPE_STATIONARY_DETECT || type == SENSOR_TYPE_MOTION_DETECT;
+}
+
 // A direct channel hands the HAL's own events to the app, so it must not exist where the app is not meant to see them:
 // for a folded app the uncalibrated types (ADR-167), for a substituted or blocked app every motion type.
 inline bool directChannelRefused(SensorMode m, int32_t type) {
     switch (m) {
         case SensorMode::FOLDED: return eventCarriesBias(type);
         case SensorMode::SUBSTITUTE:
-        case SensorMode::BLOCKED: return isMotionType(type);
+        case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);
         default: return false;
     }
 }

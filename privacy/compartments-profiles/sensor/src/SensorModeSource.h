@@ -3,8 +3,10 @@
  *
  * Why this diverges from upstream: the policy lives in the system server and the sensor service is a separate process, so the
  * system server writes the table to a file that only it may write and this class reads it. A file that is missing, too large,
- * owned by anyone but the required owner or writable by group or others is not read, and every app stays on the folded
- * events of ADR-167. The file is looked at once per second at most, so the event path costs a lock and a clock read.
+ * owned by anyone but the required owner or writable by group or others is not read. Before a first table was read every app
+ * is on the folded events of ADR-167; after it, a file that cannot be used leaves the table that was read last (falling back
+ * to the folded events would hand an app that is substituted or blocked its real motion data until the file is usable again).
+ * The file is looked at once per second at most, so the event path costs a lock and a clock read.
  */
 #ifndef ANDROID_SENSOR_MODE_SOURCE_H
 #define ANDROID_SENSOR_MODE_SOURCE_H
@@ -33,7 +35,7 @@ public:
         : mPath(std::move(path)), mOwner(requiredOwner), mClock(std::move(clock)),
           mTable(std::make_shared<const SensorModeTable>()) {}
 
-    // The current table. Never null; the status quo (every app folded) when the file cannot be used.
+    // The current table. Never null; the status quo (every app folded) until a file has been read.
     std::shared_ptr<const SensorModeTable> table() {
         std::lock_guard<std::mutex> lock(mLock);
         const auto now = mClock();
@@ -53,7 +55,7 @@ private:
         if (fd < 0 || fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != mOwner ||
             (st.st_mode & (S_IWGRP | S_IWOTH)) != 0 || st.st_size > kMaxFileBytes) {
             if (fd >= 0) close(fd);
-            return setStatusQuoLocked();
+            return;  // the table of the last good read stays
         }
         if (mHaveSignature && st.st_mtim.tv_sec == mSec && st.st_mtim.tv_nsec == mNsec && st.st_size == mSize) {
             close(fd);
@@ -64,18 +66,13 @@ private:
         close(fd);
         auto next = std::make_shared<SensorModeTable>();
         if (got != st.st_size || !next->parse(text)) {
-            return setStatusQuoLocked();
+            return;
         }
         mHaveSignature = true;
         mSec = st.st_mtim.tv_sec;
         mNsec = st.st_mtim.tv_nsec;
         mSize = st.st_size;
         mTable = std::move(next);
-    }
-
-    void setStatusQuoLocked() {
-        mHaveSignature = false;
-        mTable = std::make_shared<const SensorModeTable>();
     }
 
     const std::string mPath;

@@ -94,7 +94,7 @@ final class CellSubset {
             return "";
         }
         Cell first = all.get(0);
-        return first.mcc + String.format("%02d", first.mnc);
+        return first.mcc + (first.mnc < 10 ? "0" : "") + first.mnc;  // not String.format: the digits would follow the locale
     }
 
     /** At most 8 cells of the place in file order; empty for a place without cells. */

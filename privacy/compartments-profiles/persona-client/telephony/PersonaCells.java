@@ -61,7 +61,7 @@ final class PersonaCells {
     private static CellIdentityLte identity(CellSubset.Cell c) {
         int ci = (int) (c.cid & LTE_CI_MASK);
         return new CellIdentityLte(ci, ci % LTE_PCI_COUNT, c.tac, CellInfo.UNAVAILABLE, new int[0], CellInfo.UNAVAILABLE,
-                String.valueOf(c.mcc), String.format("%02d", c.mnc), "", "", Collections.<String>emptyList(), null);
+                String.valueOf(c.mcc), (c.mnc < 10 ? "0" : "") + c.mnc, "", "", Collections.<String>emptyList(), null);
     }
 
     private List<CellSubset.Cell> cellsFor(int placeId) {

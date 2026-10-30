@@ -352,6 +352,9 @@ public final class ExitController {
      */
     private void sendCountries(Choices choices) throws IOException {
         Map<String, String> places = platform.placeCountries();
+        if (places == null) {
+            return; // the service could not be read: keep every country already sent
+        }
         if (places.isEmpty() && sentCountries.isEmpty()) {
             return; // the common case: no persona abroad, and the poll does not list every package for nothing
         }

@@ -39,7 +39,7 @@ MUTANTS = [
     (M, "the activity is not kept", "mActivity = activity;", ""),
     (M, "the activity is always still", "Activity activity() const { return mActivity; }", "Activity activity() const { return Activity::STILL; }"),
     (M, "a file without the line keeps the old activity", "Activity activity = Activity::STILL;\n        bool haveSalt", "Activity activity = mActivity;\n        bool haveSalt"),
-    (M, "a substituted app keeps its direct channel", "case SensorMode::BLOCKED: return isMotionType(type);", "case SensorMode::BLOCKED: return false;"),
+    (M, "a substituted app keeps its direct channel", "case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);", "case SensorMode::BLOCKED: return false;"),
     (M, "a folded app loses every motion direct channel", "case SensorMode::FOLDED: return eventCarriesBias(type);", "case SensorMode::FOLDED: return isMotionType(type);"),
     (M, "a raw app loses its direct channels", "default: return false;\n    }\n}", "default: return true;\n    }\n}"),
     (M, "an unknown mode name is accepted", 'else return false;\n        return true;\n    }\n\n    static bool parseDecimal', 'else *out = SensorMode::RAW;\n        return true;\n    }\n\n    static bool parseDecimal'),
@@ -49,7 +49,8 @@ MUTANTS = [
     (SRCH, "a group-writable file is read", "(st.st_mode & (S_IWGRP | S_IWOTH)) != 0 ||", "(st.st_mode & S_IWOTH) != 0 ||"),
     (SRCH, "a world-writable file is read", "(st.st_mode & (S_IWGRP | S_IWOTH)) != 0 ||", "(st.st_mode & S_IWGRP) != 0 ||"),
     (SRCH, "a symbolic link is followed", "O_RDONLY | O_CLOEXEC | O_NOFOLLOW", "O_RDONLY | O_CLOEXEC"),
-    (SRCH, "a refused file keeps the old table", "if (got != st.st_size || !next->parse(text)) {\n            return setStatusQuoLocked();", "if (got != st.st_size || !next->parse(text)) {\n            return;"),
+    (SRCH, "a refused file puts every app back on the folded events", "if (got != st.st_size || !next->parse(text)) {\n            return;", "if (got != st.st_size || !next->parse(text)) {\n            mTable = std::make_shared<const SensorModeTable>();\n            return;"),
+    (SRCH, "an unusable file puts every app back on the folded events", "if (fd >= 0) close(fd);\n            return;  // the table of the last good read stays", "if (fd >= 0) close(fd);\n            mTable = std::make_shared<const SensorModeTable>();\n            return;"),
     (SRCH, "an unchanged file is parsed again", "if (mHaveSignature && st.st_mtim.tv_sec == mSec && st.st_mtim.tv_nsec == mNsec && st.st_size == mSize) {", "if (false) {"),
     (S, "gravity is wrong", "constexpr float kGravity = 9.80665f;", "constexpr float kGravity = 9.0f;"),
     (S, "the bias of an invented event is not zeroed", "e->data[3] = e->data[4] = e->data[5] = 0.0f;", "(void)0;"),
@@ -58,12 +59,22 @@ MUTANTS = [
     (S, "driving has no sway", "+ drive * sway;", ";"),
     (S, "the noise ignores the event time", "seed ^ static_cast<uint64_t>(t) ^", "seed ^"),
     (S, "the noise ignores the seed", "SensorModeTable::mix(seed ^ static_cast<uint64_t>(t) ^", "SensorModeTable::mix(static_cast<uint64_t>(t) ^"),
-    (S, "a blocked app gets motion events", "return !isMotionType(e->type);", "return true;"),
+    (S, "a blocked app gets motion events", "return !isMotionType(e->type) && !isDerivedMotionType(e->type);", "return true;"),
     (S, "a folded app is not folded", "if (eventCarriesBias(e->type)) foldBiasIntoReadings(e);", ""),
     (S, "the copy writes the shared input", "out[count] = in[i];\n        if (applyMode(&out[count], m, seed, a)) count++;",
      "if (applyMode(const_cast<sensors_event_t*>(&in[i]), m, seed, a)) out[count++] = in[i];"),
     (S, "a raw mode touches events", "case SensorMode::RAW: return false;", "case SensorMode::RAW: return true;"),
 ]
+MUTANTS += [
+    (M, "a substituted or blocked app keeps a derived direct channel", "case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);", "case SensorMode::BLOCKED: return isMotionType(type);"),
+    (S, "a substituted app gets derived events", "if (isDerivedMotionType(e->type)) return false;\n            substituteEvent(e, seed, a);", "substituteEvent(e, seed, a);"),
+    (S, "a blocked app gets derived events", "return !isMotionType(e->type) && !isDerivedMotionType(e->type);", "return !isMotionType(e->type);"),
+    (S, "a derived event is delivered from the shared buffer", "default: return isMotionType(type) || isDerivedMotionType(type);", "default: return isMotionType(type);"),
+]
+# one mutant per derived type: the type is no longer in the list
+MUTANTS += [(M, f"{name.lower()} is not a derived motion type", f"type == SENSOR_TYPE_{name}", "false") for name in (
+    "GRAVITY", "LINEAR_ACCELERATION", "ROTATION_VECTOR", "GAME_ROTATION_VECTOR", "GEOMAGNETIC_ROTATION_VECTOR", "ORIENTATION",
+    "DEVICE_ORIENTATION", "HEADING", "STEP_COUNTER", "STEP_DETECTOR", "SIGNIFICANT_MOTION", "STATIONARY_DETECT", "MOTION_DETECT")]
 # The unmutated headers must pass first: with a failing baseline every mutant would count as killed and prove nothing.
 with tempfile.TemporaryDirectory() as d:
     d = pathlib.Path(d)

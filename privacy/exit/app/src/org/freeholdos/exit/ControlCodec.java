@@ -229,6 +229,9 @@ public final class ControlCodec {
      */
     public static byte[] setCountry(int seq, long uid, String country) {
         seq(seq);
+        if (uid < 0 || uid > 0xffffffffL) {
+            throw new IllegalArgumentException("a uid is an unsigned 32 bit number");
+        }
         boolean none = country == null || country.isEmpty();
         if (!none && !validCountry(country)) {
             throw new IllegalArgumentException("a country is two capital letters");

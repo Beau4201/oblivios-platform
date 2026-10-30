@@ -97,11 +97,14 @@ final class AndroidPlatform implements PlatformApi {
         }
         String[] configured = profiles.getConfigured();
         if (configured == null) {
-            return out;
+            return null; // unreadable now: the controller keeps what it sent, a failed read must not remove every country
         }
         for (String pkg : configured) {
             CompartmentsAppPolicy app = profiles.getApp(pkg);
-            if (app == null || app.location != ProfileRows.VALUE_SUBSTITUTE) {
+            if (app == null) {
+                return null;
+            }
+            if (app.location != ProfileRows.VALUE_SUBSTITUTE) {
                 continue;
             }
             int id = profiles.getPlaceId(pkg);

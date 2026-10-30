@@ -30,7 +30,8 @@ public interface PlatformApi {
 
     /**
      * The country of the place that the user chose for each Isolated app (package to two capital letters). An app on
-     * Automatic, an app that does not substitute its location and a phone without place data are not in it.
+     * Automatic, an app that does not substitute its location and a phone without place data are not in it. Null when
+     * the service cannot be read: nothing is sent or removed then.
      */
     default Map<String, String> placeCountries() {
         return java.util.Collections.emptyMap();

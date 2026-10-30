@@ -119,14 +119,61 @@ final class MirrorPlan {
      * The place of a substituted app: the one the user chose when {@code places} knows it, else the one chosen for the app in
      * the real country; 0 when there is none (no place data, no country, a country without a place, an unknown chosen place).
      */
-    private static int placeOf(PolicyStore.AppPolicy p, int appId, long salt, Places places, String country, double lat, double lon) {
+    private static int placeOf(PolicyStore.AppPolicy p, int appId, long salt, Places places, String country, double lat, double lon,
+            int kept) {
         if (places == null) {
             return 0;
         }
         if (p.place != 0) {
             return places.byId(p.place) != null ? p.place : 0;
         }
-        return places.automaticFor(country, lat, lon, personaSeed(salt, appId));
+        return kept > 0 ? kept : places.automaticFor(country, lat, lon, personaSeed(salt, appId));
+    }
+
+    /**
+     * The place that an Automatic app keeps (design 4.1: chosen once per app and kept): the one the table of the last run gave
+     * it, when the app was Automatic and substituted then as well and the place is still in the data. Without it the place
+     * would follow the network country at the moment of each run, and a boot without a network would take the persona of every
+     * Automatic app away. 0 when there is nothing to keep.
+     */
+    private static int keptPlace(PolicyStore before, PersonaFile table, String pkg, int appId, Places places) {
+        if (before == null || table == null || places == null) {
+            return 0;
+        }
+        if (before.policyOf(pkg).place != 0 || before.value(pkg, Cls.LOCATION) != Value.SUBSTITUTE) {
+            return 0;
+        }
+        int kept = table.placeOf(appId);
+        return kept > 0 && places.byId(kept) != null ? kept : 0;
+    }
+
+    /**
+     * The packages that must start again when the store changes from {@code before} to {@code after}: a process reads the time
+     * zone, the country and the operator of its persona once, and a sensor channel or a position listener that it holds keeps
+     * what it was given. These are the packages whose profile, sensor value, location value or place differ. A change of the
+     * defaults reaches no package without an entry of its own here (it does not restart them).
+     */
+    static Set<String> restartNeeded(PolicyStore before, PolicyStore after) {
+        Set<String> all = new TreeSet<>(before.configured());
+        all.addAll(after.configured());
+        Set<String> out = new TreeSet<>();
+        for (String pkg : all) {
+            PolicyStore.AppPolicy a = before.policyOf(pkg);
+            PolicyStore.AppPolicy b = after.policyOf(pkg);
+            if (a.profile != b.profile || before.value(pkg, Cls.SENSORS) != after.value(pkg, Cls.SENSORS)
+                    || before.value(pkg, Cls.LOCATION) != after.value(pkg, Cls.LOCATION) || a.place != b.place) {
+                out.add(pkg);
+            }
+        }
+        return out;
+    }
+
+    static final int RETRY_FIRST_MS = 10_000;
+    static final int RETRY_MAX_MS = 300_000;
+
+    /** The wait before the next try to write the mirrors again: 10 seconds, then twice as long, at most 5 minutes. */
+    static int nextRetryMs(int previousMs) {
+        return previousMs <= 0 ? RETRY_FIRST_MS : (int) Math.min(2L * previousMs, RETRY_MAX_MS);
     }
 
     /** The app id of an ordinary app, which every user shares; -1 for anything else (a platform or sandbox uid, -1: not installed). */
@@ -141,13 +188,19 @@ final class MirrorPlan {
      * app id give the lower place. Pure: the real country and position are arguments (a NaN position is unknown).
      */
     static String personaFile(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat, double lon) {
+        return personaFile(s, r, salt, places, country, lat, lon, null, null);
+    }
+
+    /** The same file, where an Automatic app keeps the place that {@code table} (made for {@code before}) gave it, see {@link #keptPlace}. */
+    static String personaFile(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat, double lon,
+            PolicyStore before, PersonaFile table) {
         Map<Integer, Integer> perApp = new TreeMap<>();
         for (String pkg : s.configured()) {
             int appId = ordinaryAppId(r.uidOf(pkg));
             if (appId < 0 || s.value(pkg, Cls.LOCATION) != Value.SUBSTITUTE) {
                 continue;
             }
-            int place = placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon);
+            int place = placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon, keptPlace(before, table, pkg, appId, places));
             if (place > 0) {
                 perApp.merge(appId, place, Math::min);
             }
@@ -161,11 +214,17 @@ final class MirrorPlan {
      */
     static Set<String> locationUnresolved(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
             double lon) {
+        return locationUnresolved(s, r, salt, places, country, lat, lon, null, null);
+    }
+
+    /** The same set, for the table that {@link #personaFile(PolicyStore, UidResolver, long, Places, String, double, double, PolicyStore, PersonaFile)} makes. */
+    static Set<String> locationUnresolved(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
+            double lon, PolicyStore before, PersonaFile table) {
         Set<String> out = new TreeSet<>();
         for (String pkg : s.configured()) {
             int appId = ordinaryAppId(r.uidOf(pkg));
             if (appId >= 0 && s.value(pkg, Cls.LOCATION) == Value.SUBSTITUTE
-                    && placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon) == 0) {
+                    && placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon, keptPlace(before, table, pkg, appId, places)) == 0) {
                 out.add(pkg);
             }
         }

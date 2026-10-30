@@ -225,6 +225,9 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
                 screen.addPreference(footer);
             }
             if (identity) {
+                FooterPreference restart = new FooterPreference(ctx);
+                restart.setSummary(R.string.identity_restart_note);
+                screen.addPreference(restart);
                 FooterPreference footer = new FooterPreference(ctx);
                 footer.setSummary(R.string.identity_footer);
                 screen.addPreference(footer);

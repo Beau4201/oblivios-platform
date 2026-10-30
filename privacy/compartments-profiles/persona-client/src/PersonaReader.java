@@ -15,7 +15,8 @@ import java.nio.charset.StandardCharsets;
  * Bluetooth app each have a copy of this class and of {@link PersonaFile}, and ask which place an app is in. The rules are those
  * of the sensor service for {@code sensor_modes}: the file is opened without following a link, it must be a regular file owned
  * by the system user and not writable by group or others, it must not be larger than {@link #MAX_BYTES}, and it is parsed
- * strictly. A file that cannot be used means no persona for anyone (the answer is 0, the real data). The file is looked at
+ * strictly. A file that cannot be used keeps the table that was last read (a file that is unreadable for a moment must not
+ * give every Isolated app the real data); before a first table is read the answer is 0, no persona. The file is looked at
  * again at most once a second, however often the question is asked.
  */
 public final class PersonaReader {
@@ -46,7 +47,10 @@ public final class PersonaReader {
 
     synchronized int placeOf(int uid, long nowMs) {
         if (!mLoaded || nowMs - mLoadedAtMs >= INTERVAL_MS) {
-            mFile = load();
+            PersonaFile fresh = load();
+            if (fresh != null) {
+                mFile = fresh;  // a file that cannot be used now leaves the last table in force: it is never read as "no persona"
+            }
             mLoadedAtMs = nowMs;
             mLoaded = true;
         }

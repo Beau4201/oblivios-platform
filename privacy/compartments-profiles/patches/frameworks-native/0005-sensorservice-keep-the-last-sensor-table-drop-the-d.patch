@@ -1,0 +1,128 @@
+From 8d2a02a9dfb8f075222f0c70026522a5fb54aa31 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 20:22:17 +0100
+Subject: [PATCH] sensorservice: keep the last sensor table, drop the derived
+ motion types
+
+Two fixes from the review of ADR-208. A sensor file that cannot be read or parsed after a table was read now leaves that table in force: falling back to the folded events gave an app that is substituted or blocked its real motion data until the file was usable again (the folded events stay the answer before the first table). The types that the HAL derives from the same real motion (gravity, linear acceleration, the rotation vectors, orientation, heading, the step counter and detector, the motion detectors) are delivered in neither SUBSTITUTE nor BLOCKED and get no direct channel there; the invented stream has no counterpart for them and the real values contradicted it.
+---
+ services/sensorservice/SensorModeSource.h | 17 +++++++----------
+ services/sensorservice/SensorModes.h      | 13 ++++++++++++-
+ services/sensorservice/SubstituteStream.h |  5 +++--
+ 3 files changed, 22 insertions(+), 13 deletions(-)
+
+diff --git a/services/sensorservice/SensorModeSource.h b/services/sensorservice/SensorModeSource.h
+index a1e3f27..cb8f011 100644
+--- a/services/sensorservice/SensorModeSource.h
++++ b/services/sensorservice/SensorModeSource.h
+@@ -3,8 +3,10 @@
+  *
+  * Why this diverges from upstream: the policy lives in the system server and the sensor service is a separate process, so the
+  * system server writes the table to a file that only it may write and this class reads it. A file that is missing, too large,
+- * owned by anyone but the required owner or writable by group or others is not read, and every app stays on the folded
+- * events of ADR-167. The file is looked at once per second at most, so the event path costs a lock and a clock read.
++ * owned by anyone but the required owner or writable by group or others is not read. Before a first table was read every app
++ * is on the folded events of ADR-167; after it, a file that cannot be used leaves the table that was read last (falling back
++ * to the folded events would hand an app that is substituted or blocked its real motion data until the file is usable again).
++ * The file is looked at once per second at most, so the event path costs a lock and a clock read.
+  */
+ #ifndef ANDROID_SENSOR_MODE_SOURCE_H
+ #define ANDROID_SENSOR_MODE_SOURCE_H
+@@ -33,7 +35,7 @@ public:
+         : mPath(std::move(path)), mOwner(requiredOwner), mClock(std::move(clock)),
+           mTable(std::make_shared<const SensorModeTable>()) {}
+ 
+-    // The current table. Never null; the status quo (every app folded) when the file cannot be used.
++    // The current table. Never null; the status quo (every app folded) until a file has been read.
+     std::shared_ptr<const SensorModeTable> table() {
+         std::lock_guard<std::mutex> lock(mLock);
+         const auto now = mClock();
+@@ -53,7 +55,7 @@ private:
+         if (fd < 0 || fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != mOwner ||
+             (st.st_mode & (S_IWGRP | S_IWOTH)) != 0 || st.st_size > kMaxFileBytes) {
+             if (fd >= 0) close(fd);
+-            return setStatusQuoLocked();
++            return;  // the table of the last good read stays
+         }
+         if (mHaveSignature && st.st_mtim.tv_sec == mSec && st.st_mtim.tv_nsec == mNsec && st.st_size == mSize) {
+             close(fd);
+@@ -64,7 +66,7 @@ private:
+         close(fd);
+         auto next = std::make_shared<SensorModeTable>();
+         if (got != st.st_size || !next->parse(text)) {
+-            return setStatusQuoLocked();
++            return;
+         }
+         mHaveSignature = true;
+         mSec = st.st_mtim.tv_sec;
+@@ -73,11 +75,6 @@ private:
+         mTable = std::move(next);
+     }
+ 
+-    void setStatusQuoLocked() {
+-        mHaveSignature = false;
+-        mTable = std::make_shared<const SensorModeTable>();
+-    }
+-
+     const std::string mPath;
+     const uid_t mOwner;
+     const Clock mClock;
+diff --git a/services/sensorservice/SensorModes.h b/services/sensorservice/SensorModes.h
+index 0a87b27..5732b1c 100644
+--- a/services/sensorservice/SensorModes.h
++++ b/services/sensorservice/SensorModes.h
+@@ -51,13 +51,24 @@ inline bool isMotionType(int32_t type) {
+            type == SENSOR_TYPE_GYROSCOPE_UNCALIBRATED || type == SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED;
+ }
+ 
++// The types that the HAL derives from the same real motion (gravity, linear acceleration, the rotation vectors, the old
++// orientation, the steps and the detectors): the stream that SUBSTITUTE invents has no counterpart for them, and the real values
++// would contradict it, so SUBSTITUTE and BLOCKED both deliver none of them.
++inline bool isDerivedMotionType(int32_t type) {
++    return type == SENSOR_TYPE_GRAVITY || type == SENSOR_TYPE_LINEAR_ACCELERATION || type == SENSOR_TYPE_ROTATION_VECTOR ||
++           type == SENSOR_TYPE_GAME_ROTATION_VECTOR || type == SENSOR_TYPE_GEOMAGNETIC_ROTATION_VECTOR ||
++           type == SENSOR_TYPE_ORIENTATION || type == SENSOR_TYPE_DEVICE_ORIENTATION || type == SENSOR_TYPE_HEADING ||
++           type == SENSOR_TYPE_STEP_COUNTER || type == SENSOR_TYPE_STEP_DETECTOR || type == SENSOR_TYPE_SIGNIFICANT_MOTION ||
++           type == SENSOR_TYPE_STATIONARY_DETECT || type == SENSOR_TYPE_MOTION_DETECT;
++}
++
+ // A direct channel hands the HAL's own events to the app, so it must not exist where the app is not meant to see them:
+ // for a folded app the uncalibrated types (ADR-167), for a substituted or blocked app every motion type.
+ inline bool directChannelRefused(SensorMode m, int32_t type) {
+     switch (m) {
+         case SensorMode::FOLDED: return eventCarriesBias(type);
+         case SensorMode::SUBSTITUTE:
+-        case SensorMode::BLOCKED: return isMotionType(type);
++        case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);
+         default: return false;
+     }
+ }
+diff --git a/services/sensorservice/SubstituteStream.h b/services/sensorservice/SubstituteStream.h
+index 4a50db6..ee19e65 100644
+--- a/services/sensorservice/SubstituteStream.h
++++ b/services/sensorservice/SubstituteStream.h
+@@ -105,10 +105,11 @@ inline bool applyMode(sensors_event_t* e, SensorMode m, uint64_t seed, Activity
+             if (eventCarriesBias(e->type)) foldBiasIntoReadings(e);
+             return true;
+         case SensorMode::SUBSTITUTE:
++            if (isDerivedMotionType(e->type)) return false;
+             substituteEvent(e, seed, a);
+             return true;
+         case SensorMode::BLOCKED:
+-            return !isMotionType(e->type);
++            return !isMotionType(e->type) && !isDerivedMotionType(e->type);
+     }
+     return true;
+ }
+@@ -118,7 +119,7 @@ inline bool modeTouches(SensorMode m, int32_t type) {
+     switch (m) {
+         case SensorMode::RAW: return false;
+         case SensorMode::FOLDED: return eventCarriesBias(type);
+-        default: return isMotionType(type);
++        default: return isMotionType(type) || isDerivedMotionType(type);
+     }
+ }
+ 
+-- 
+2.56.0
+

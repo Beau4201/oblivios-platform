@@ -27,6 +27,11 @@ static int failures = 0;
 static const int32_t kMotion[] = {SENSOR_TYPE_ACCELEROMETER, SENSOR_TYPE_GYROSCOPE, SENSOR_TYPE_MAGNETIC_FIELD,
                                   SENSOR_TYPE_ACCELEROMETER_UNCALIBRATED, SENSOR_TYPE_GYROSCOPE_UNCALIBRATED,
                                   SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED};
+static const int32_t kDerived[] = {SENSOR_TYPE_GRAVITY, SENSOR_TYPE_LINEAR_ACCELERATION, SENSOR_TYPE_ROTATION_VECTOR,
+                                   SENSOR_TYPE_GAME_ROTATION_VECTOR, SENSOR_TYPE_GEOMAGNETIC_ROTATION_VECTOR,
+                                   SENSOR_TYPE_ORIENTATION, SENSOR_TYPE_DEVICE_ORIENTATION, SENSOR_TYPE_HEADING,
+                                   SENSOR_TYPE_STEP_COUNTER, SENSOR_TYPE_STEP_DETECTOR, SENSOR_TYPE_SIGNIFICANT_MOTION,
+                                   SENSOR_TYPE_STATIONARY_DETECT, SENSOR_TYPE_MOTION_DETECT};
 
 static sensors_event_t make(int32_t type, int64_t ts, float fill = 1.0f) {
     sensors_event_t e;
@@ -150,6 +155,12 @@ static void table() {
         CHECK(directChannelRefused(SensorMode::BLOCKED, type));
     }
     CHECK(!directChannelRefused(SensorMode::SUBSTITUTE, SENSOR_TYPE_PRESSURE));
+    for (int32_t type : kDerived) {
+        CHECK(directChannelRefused(SensorMode::SUBSTITUTE, type));
+        CHECK(directChannelRefused(SensorMode::BLOCKED, type));
+        CHECK(!directChannelRefused(SensorMode::FOLDED, type));
+        CHECK(!directChannelRefused(SensorMode::RAW, type));
+    }
 }
 
 static void write(const std::string& path, const std::string& text, mode_t mode = 0600) {
@@ -332,6 +343,27 @@ static void modes() {
     CHECK(!modeTouches(SensorMode::BLOCKED, SENSOR_TYPE_PRESSURE));
     CHECK(!modeTouches(SensorMode::SUBSTITUTE, SENSOR_TYPE_META_DATA));
 
+    // the types that the HAL derives from the real motion are delivered in neither SUBSTITUTE nor BLOCKED; FOLDED and RAW pass them
+    for (int32_t type : kDerived) {
+        sensors_event_t d = make(type, 9);
+        CHECK(!applyMode(&d, SensorMode::SUBSTITUTE, seed, Activity::STILL));
+        sensors_event_t e = make(type, 9);
+        CHECK(!applyMode(&e, SensorMode::BLOCKED, seed, Activity::STILL));
+        sensors_event_t f = make(type, 9);
+        sensors_event_t fBefore = f;
+        CHECK(applyMode(&f, SensorMode::FOLDED, seed, Activity::STILL) && memcmp(&f, &fBefore, sizeof(f)) == 0);
+        sensors_event_t g = make(type, 9);
+        CHECK(applyMode(&g, SensorMode::RAW, seed, Activity::STILL));
+        CHECK(modeTouches(SensorMode::SUBSTITUTE, type));
+        CHECK(modeTouches(SensorMode::BLOCKED, type));
+        CHECK(!modeTouches(SensorMode::FOLDED, type));
+        CHECK(!modeTouches(SensorMode::RAW, type));
+    }
+    sensors_event_t stepIn[2] = {make(SENSOR_TYPE_STEP_COUNTER, 1), make(SENSOR_TYPE_PRESSURE, 2)};
+    sensors_event_t stepOut[2];
+    CHECK(copyEventsApplyingMode(stepIn, 2, stepOut, SensorMode::SUBSTITUTE, seed, Activity::STILL) == 1 &&
+          stepOut[0].type == SENSOR_TYPE_PRESSURE);
+
     // the copy leaves the shared input alone, drops what is blocked and keeps the order
     sensors_event_t in[4] = {make(SENSOR_TYPE_ACCELEROMETER, 1), make(SENSOR_TYPE_PRESSURE, 2),
                              make(SENSOR_TYPE_META_DATA, 3), make(SENSOR_TYPE_GYROSCOPE_UNCALIBRATED, 4)};
@@ -374,17 +406,20 @@ static void source() {
     now += std::chrono::seconds(5);
     CHECK(src.table() == held);
 
-    // an unusable file puts every app back on the folded events
+    // an unusable file leaves the table that was read last (never a fall back to real motion data for an app that was
+    // substituted or blocked); the folded events remain the answer only while no table has been read
     write(path, "garbage\n");
     now += std::chrono::seconds(2);
-    CHECK(src.table()->modeFor(10100) == SensorMode::FOLDED);
+    CHECK(src.table()->modeFor(10100) == SensorMode::SUBSTITUTE);
 
     write(path, "s 0000000000000001\nd BLOCKED\n", 0620);  // writable by the group
     now += std::chrono::seconds(2);
-    CHECK(src.table()->modeFor(10100) == SensorMode::FOLDED);
+    CHECK(src.table()->modeFor(10100) == SensorMode::SUBSTITUTE);
     write(path, "s 0000000000000001\nd BLOCKED\n", 0602);  // writable by others
     now += std::chrono::seconds(2);
-    CHECK(src.table()->modeFor(10100) == SensorMode::FOLDED);
+    CHECK(src.table()->modeFor(10100) == SensorMode::SUBSTITUTE);
+    SensorModeSource neverRead(path, getuid(), [&now] { return now; });
+    CHECK(neverRead.table()->modeFor(10100) == SensorMode::FOLDED);  // no table before: the status quo
 
     write(path, "s 0000000000000001\nd BLOCKED\n");
     now += std::chrono::seconds(2);
@@ -398,9 +433,19 @@ static void source() {
     CHECK(symlink(path.c_str(), link.c_str()) == 0);
     SensorModeSource viaLink(link, getuid(), [&now] { return now; });
     CHECK(viaLink.table()->modeFor(10100) == SensorMode::FOLDED);
-    write(path, "s 0000000000000001\nd BLOCKED\n" + std::string(300 * 1024, '\n'));
+    write(path, "s 0000000000000001\nd SUBSTITUTE\n" + std::string(300 * 1024, '\n'));
     now += std::chrono::seconds(2);
-    CHECK(src.table()->modeFor(10100) == SensorMode::FOLDED);
+    CHECK(src.table()->modeFor(10100) == SensorMode::BLOCKED);  // the last table stays
+    SensorModeSource huge(path, getuid(), [&now] { return now; });
+    CHECK(huge.table()->modeFor(10100) == SensorMode::FOLDED);
+
+    // the file is gone for a moment: the last table stays
+    unlink(path.c_str());
+    now += std::chrono::seconds(2);
+    CHECK(src.table()->modeFor(10100) == SensorMode::BLOCKED);
+    write(path, "s 0000000000000001\nd SUBSTITUTE\n");
+    now += std::chrono::seconds(2);
+    CHECK(src.table()->modeFor(10100) == SensorMode::SUBSTITUTE);
 
     unlink(link.c_str());
     unlink(path.c_str());

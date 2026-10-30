@@ -211,6 +211,13 @@ public final class PlacesTest {
         check(ops.operatorFor(3).equals("505100"), "mnc 100 has three digits");
         check(ops.operatorFor(4).equals("21400"), "mnc 0 is padded to two digits");
         check(ops.operatorFor(9).isEmpty() && ops.operatorFor(0).isEmpty(), "no cell, no operator");
+        java.util.Locale saved = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("ar-EG-u-nu-arab"));
+            check(ops.operatorFor(4).equals("21400") && ops.operatorFor(1).equals("21407"), "the digits do not follow the locale");
+        } finally {
+            java.util.Locale.setDefault(saved);
+        }
         check(CellSubset.parse(cellLines(5, 64)).cellsFor(5).size() == 8, "64 lines of one place");
         check(throwsIllegal(() -> CellSubset.parse(cellLines(5, 65))), "65 lines of one place");
         check(CellSubset.parse(cellLines(5, 64) + cellLines(6, 64)).cellsFor(6).size() == 8, "the limit is per place");

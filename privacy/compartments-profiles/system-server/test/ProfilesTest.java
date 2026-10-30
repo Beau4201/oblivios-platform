@@ -43,6 +43,7 @@ public final class ProfilesTest {
         placeBehaviour();
         codecVersion2();
         personaMirrors();
+        keptPlacesAndRestarts();
         System.out.println("ok " + checks + " checks");
     }
 
@@ -555,5 +556,75 @@ public final class ProfilesTest {
         check(noData.toString().equals("[com.a.app, com.b.app, com.d.app, com.g.app]"), "no place data, every substituted app: " + noData);
         java.util.Set<String> noCountry = MirrorPlan.locationUnresolved(s, pkg -> uids.getOrDefault(pkg, -1), salt, places, "", 0, 0);
         check(noCountry.toString().equals("[com.a.app, com.d.app, com.g.app]"), "no country, every Automatic app: " + noCountry);
+    }
+
+    private static void keptPlacesAndRestarts() throws Exception {
+        Places places = Places.parse(PLACES);
+        long salt = 0xABCDEF0123456789L;
+        PolicyStore auto = PolicyStore.EMPTY.withApp("com.a.app", ISO);
+        MirrorPlan.UidResolver uid = pkg -> 10100;
+        PersonaFile first = PersonaFile.parse(MirrorPlan.personaFile(auto, uid, salt, places, "NL", 52.37, 4.89));
+        int place = first.placeOf(10100);
+        check(far(place), "the first place of an Automatic app is far: " + place);
+
+        // a boot without a network: the app keeps the place of the last table, and keeps its location permissions
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, uid, salt, places, "", Double.NaN, Double.NaN)).placeOf(10100) == 0,
+                "without a country and without a kept place there is no persona");
+        PersonaFile again = PersonaFile.parse(MirrorPlan.personaFile(auto, uid, salt, places, "", Double.NaN, Double.NaN, auto, first));
+        check(again.placeOf(10100) == place, "an Automatic app keeps its place when the country is not known");
+        check(MirrorPlan.locationUnresolved(auto, uid, salt, places, "", Double.NaN, Double.NaN).contains("com.a.app"),
+                "unresolved without a kept place");
+        check(MirrorPlan.locationUnresolved(auto, uid, salt, places, "", Double.NaN, Double.NaN, auto, first).isEmpty(),
+                "a kept place is a resolved place");
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, uid, salt, places, "DE", 48.1, 11.5, auto, first)).placeOf(10100) == place,
+                "the place is chosen once: another real country does not move it");
+
+        // nothing is kept when the app was not Automatic and substituted before, or the place left the data
+        PolicyStore chosen = PolicyStore.EMPTY.withApp("com.a.app", ISO.withPlace(2));
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, uid, salt, places, "", Double.NaN, Double.NaN, chosen, first)).placeOf(10100)
+                == 0, "a place that the user chose is not an Automatic place to keep");
+        PolicyStore real = PolicyStore.EMPTY.withApp("com.a.app", ISO.withValue(Cls.LOCATION, Value.REAL));
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, uid, salt, places, "", Double.NaN, Double.NaN, real, first)).placeOf(10100)
+                == 0, "a place from before the location was real is not kept");
+        PersonaFile gone = PersonaFile.parse(PersonaFile.format(salt, Map.of(10100, 99)));
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, uid, salt, places, "", Double.NaN, Double.NaN, auto, gone)).placeOf(10100)
+                == 0, "a kept place that is not in the data is dropped");
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, uid, salt, null, "NL", 52.37, 4.89, auto, first)).placeOf(10100) == 0,
+                "no place data, nothing kept");
+        int other = place == 2 ? 3 : 2;  // a place that is not the kept one
+        PolicyStore userChoice = PolicyStore.EMPTY.withApp("com.a.app", ISO.withPlace(other));
+        check(PersonaFile.parse(MirrorPlan.personaFile(userChoice, uid, salt, places, "NL", 52.37, 4.89, auto, first)).placeOf(10100)
+                == other, "a chosen place wins over a kept one");
+        check(MirrorPlan.personaFile(auto, uid, salt, places, "NL", 52.37, 4.89, auto, null)
+                .equals(MirrorPlan.personaFile(auto, uid, salt, places, "NL", 52.37, 4.89)), "without a table nothing is kept");
+
+        // restartNeeded
+        PolicyStore prot = PolicyStore.EMPTY.withApp("com.a.app", AppPolicy.PROTECTED).withApp("com.b.app", AppPolicy.PROTECTED);
+        check(MirrorPlan.restartNeeded(prot, prot).isEmpty(), "no change, no restart");
+        check(MirrorPlan.restartNeeded(prot, prot.withApp("com.a.app", ISO)).toString().equals("[com.a.app]"),
+                "a new profile restarts that app only");
+        check(MirrorPlan.restartNeeded(prot, prot.withApp("com.a.app", AppPolicy.PROTECTED.withProfile(Profile.TRUSTED)))
+                .toString().equals("[com.a.app]"), "a profile that changes only the sensor mode restarts");
+        check(MirrorPlan.restartNeeded(prot, prot.withApp("com.a.app", AppPolicy.PROTECTED.withValue(Cls.SENSORS, Value.BLOCKED)))
+                .toString().equals("[com.a.app]"), "a sensor value restarts");
+        check(MirrorPlan.restartNeeded(prot, prot.withApp("com.b.app", AppPolicy.PROTECTED.withValue(Cls.LOCATION, Value.BLOCKED)))
+                .toString().equals("[com.b.app]"), "a location value restarts");
+        check(MirrorPlan.restartNeeded(prot, prot.withApp("com.a.app", AppPolicy.PROTECTED.withValue(Cls.LOOPBACK, Value.REAL))).isEmpty(),
+                "a loopback value restarts nothing (the permission change does it)");
+        check(MirrorPlan.restartNeeded(userChoice, userChoice.withApp("com.a.app", ISO.withPlace(4))).toString().equals("[com.a.app]"),
+                "another place restarts");
+        check(MirrorPlan.restartNeeded(prot, prot.without("com.a.app")).isEmpty(), "an entry that changes nothing restarts nothing");
+        check(MirrorPlan.restartNeeded(PolicyStore.EMPTY, prot.withApp("com.c.app", ISO)).toString().equals("[com.c.app]"),
+                "an app that gets its first entry restarts");
+        check(MirrorPlan.restartNeeded(prot.withApp("com.c.app", ISO), prot).toString().equals("[com.c.app]"),
+                "an app whose entry is cleared restarts");
+
+        // the wait before the mirrors are written again
+        check(MirrorPlan.nextRetryMs(0) == 10_000, "first retry after 10 s");
+        check(MirrorPlan.nextRetryMs(10_000) == 20_000, "the wait doubles");
+        check(MirrorPlan.nextRetryMs(160_000) == 300_000, "the wait stops at 5 minutes");
+        check(MirrorPlan.nextRetryMs(300_000) == 300_000, "and stays there");
+        check(MirrorPlan.nextRetryMs(-5) == 10_000, "a negative wait starts again");
+        check(MirrorPlan.nextRetryMs(Integer.MAX_VALUE) == 300_000, "no overflow");
     }
 }

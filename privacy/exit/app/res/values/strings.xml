@@ -112,7 +112,8 @@
     <string name="place_search_hint">Search for a place</string>
     <string name="place_none">No place data on this phone</string>
     <string name="place_error">Could not set the place</string>
-    <string name="identity_time_zone_note">The time zone changes when the app next starts.</string>
+    <string name="identity_time_zone_note">The app is stopped when you change its place, and starts again with the new one.</string>
+    <string name="identity_restart_note">An app that has its own settings here is stopped when you change them, and starts again with them.</string>
     <string name="persona_disagree">This app is not on Tor, so its address still shows your country while its place is in another.</string>
     <string name="persona_use_tor">Send this app through Tor</string>
 

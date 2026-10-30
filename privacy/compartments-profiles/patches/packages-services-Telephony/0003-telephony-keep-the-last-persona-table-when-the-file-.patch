@@ -1,0 +1,68 @@
+From 40c630197df7cebcf9812c4f450f6113e4324df5 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 20:18:07 +0100
+Subject: [PATCH] telephony: keep the last persona table when the file cannot
+ be read
+
+The persona file is replaced by a rename; a read that fails for a moment (a mode, a full disk, a bad file) must not give every Isolated app the real cells. The reader keeps the table it read last, and answers no persona only before a first table. PersonaCells and CellSubset write the mnc without String.format, whose digits follow the locale.
+---
+ src/com/android/phone/CellSubset.java    | 2 +-
+ src/com/android/phone/PersonaCells.java  | 2 +-
+ src/com/android/phone/PersonaReader.java | 8 ++++++--
+ 3 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/src/com/android/phone/CellSubset.java b/src/com/android/phone/CellSubset.java
+index 84f1c78..958103e 100644
+--- a/src/com/android/phone/CellSubset.java
++++ b/src/com/android/phone/CellSubset.java
+@@ -94,7 +94,7 @@ final class CellSubset {
+             return "";
+         }
+         Cell first = all.get(0);
+-        return first.mcc + String.format("%02d", first.mnc);
++        return first.mcc + (first.mnc < 10 ? "0" : "") + first.mnc;  // not String.format: the digits would follow the locale
+     }
+ 
+     /** At most 8 cells of the place in file order; empty for a place without cells. */
+diff --git a/src/com/android/phone/PersonaCells.java b/src/com/android/phone/PersonaCells.java
+index 2e1191a..61424f4 100644
+--- a/src/com/android/phone/PersonaCells.java
++++ b/src/com/android/phone/PersonaCells.java
+@@ -61,7 +61,7 @@ final class PersonaCells {
+     private static CellIdentityLte identity(CellSubset.Cell c) {
+         int ci = (int) (c.cid & LTE_CI_MASK);
+         return new CellIdentityLte(ci, ci % LTE_PCI_COUNT, c.tac, CellInfo.UNAVAILABLE, new int[0], CellInfo.UNAVAILABLE,
+-                String.valueOf(c.mcc), String.format("%02d", c.mnc), "", "", Collections.<String>emptyList(), null);
++                String.valueOf(c.mcc), (c.mnc < 10 ? "0" : "") + c.mnc, "", "", Collections.<String>emptyList(), null);
+     }
+ 
+     private List<CellSubset.Cell> cellsFor(int placeId) {
+diff --git a/src/com/android/phone/PersonaReader.java b/src/com/android/phone/PersonaReader.java
+index 03bc2d3..7a794d9 100644
+--- a/src/com/android/phone/PersonaReader.java
++++ b/src/com/android/phone/PersonaReader.java
+@@ -15,7 +15,8 @@ import java.nio.charset.StandardCharsets;
+  * Bluetooth app each have a copy of this class and of {@link PersonaFile}, and ask which place an app is in. The rules are those
+  * of the sensor service for {@code sensor_modes}: the file is opened without following a link, it must be a regular file owned
+  * by the system user and not writable by group or others, it must not be larger than {@link #MAX_BYTES}, and it is parsed
+- * strictly. A file that cannot be used means no persona for anyone (the answer is 0, the real data). The file is looked at
++ * strictly. A file that cannot be used keeps the table that was last read (a file that is unreadable for a moment must not
++ * give every Isolated app the real data); before a first table is read the answer is 0, no persona. The file is looked at
+  * again at most once a second, however often the question is asked.
+  */
+ public final class PersonaReader {
+@@ -46,7 +47,10 @@ public final class PersonaReader {
+ 
+     synchronized int placeOf(int uid, long nowMs) {
+         if (!mLoaded || nowMs - mLoadedAtMs >= INTERVAL_MS) {
+-            mFile = load();
++            PersonaFile fresh = load();
++            if (fresh != null) {
++                mFile = fresh;  // a file that cannot be used now leaves the last table in force: it is never read as "no persona"
++            }
+             mLoadedAtMs = nowMs;
+             mLoaded = true;
+         }
+-- 
+2.56.0
+
