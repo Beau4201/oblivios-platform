@@ -47,7 +47,13 @@ final class PersonaFile {
             }
             sorted.put(appId, place);
         }
-        StringBuilder b = new StringBuilder(String.format("s %016x\n", salt));
+        // Sixteen hex digits, padded with zeros: String.format is refused by the Bluetooth build (AndroidFrameworkEfficientStrings).
+        String hex = Long.toHexString(salt);
+        StringBuilder b = new StringBuilder("s ");
+        for (int i = hex.length(); i < 16; i++) {
+            b.append('0');
+        }
+        b.append(hex).append('\n');
         for (Map.Entry<Integer, Integer> e : sorted.entrySet()) {
             b.append("p ").append(e.getKey()).append(' ').append(e.getValue()).append('\n');
         }

@@ -33,17 +33,68 @@ def added_files(patch_text):
     return out
 
 
-def check(root):
-    """The list of copies that differ from their source, and the number of copies compared."""
-    bad, compared = [], 0
-    for patch in sorted((root / "patches").rglob("*.patch")):
-        for path, text in added_files(patch.read_text(encoding="utf-8")).items():
-            name = path.rsplit("/", 1)[-1]
-            if name not in SOURCES:
+def changed_files(patch_text):
+    """{path: hunks} of the files that a patch modifies (not creates): the hunks are lists of (start, [lines with their marker])."""
+    out = {}
+    for block in re.split(r"(?m)^diff --git ", patch_text)[1:]:
+        head = block.split("\n@@", 1)[0]
+        if "\nnew file mode" in head or "\n@@" not in block:
+            continue
+        path = re.match(r"a/(\S+) b/", block).group(1)
+        hunks = []
+        for h in re.split(r"(?m)^@@ ", block)[1:]:
+            header, _, body = h.partition("\n")
+            body = body.split("\n-- \n")[0]  # the signature that git format-patch ends a patch with
+            start = int(re.match(r"-(\d+)", header).group(1))
+            lines = [l for l in body.split("\n") if l[:1] in (" ", "+", "-")]
+            hunks.append((start, lines))
+        out[path] = hunks
+    return out
+
+
+def apply_hunks(text, hunks):
+    """The text after the hunks of a later patch, or None when a context or removed line is not where the hunk says."""
+    old = text.split("\n")
+    out, pos = [], 0
+    for start, lines in hunks:
+        begin = max(start - 1, 0)
+        out += old[pos:begin]
+        pos = begin
+        for l in lines:
+            if l[0] == "+":
+                out.append(l[1:])
                 continue
+            if pos >= len(old) or old[pos] != l[1:]:
+                return None
+            if l[0] == " ":
+                out.append(old[pos])
+            pos += 1
+    return "\n".join(out + old[pos:])
+
+
+def check(root):
+    """The list of copies that differ from their source, and the number of copies compared. A copy is what the patch that
+    creates it holds after the later patches of the same repository folder that change it."""
+    bad, compared = [], 0
+    for folder in sorted(p for p in (root / "patches").iterdir() if p.is_dir()):
+        copies = {}  # path -> [creating patch name, text]
+        for patch in sorted(folder.glob("*.patch")):
+            patch_text = patch.read_text(encoding="utf-8")
+            for path, text in added_files(patch_text).items():
+                if path.rsplit("/", 1)[-1] in SOURCES:
+                    copies[path] = [patch.name, text]
+            for path, hunks in changed_files(patch_text).items():
+                if path in copies:
+                    after = apply_hunks(copies[path][1], hunks)
+                    if after is None:
+                        bad.append(f"{patch.name}: {path} (does not apply to the copy)")
+                        del copies[path]
+                    else:
+                        copies[path][1] = after
+        for path, (name, text) in copies.items():
             compared += 1
-            if normalise(text) != normalise((root / SOURCES[name]).read_text(encoding="utf-8")):
-                bad.append(f"{patch.name}: {path}")
+            if normalise(text) != normalise((root / SOURCES[path.rsplit("/", 1)[-1]]).read_text(encoding="utf-8")):
+                bad.append(f"{name}: {path}")
     return bad, compared
 
 

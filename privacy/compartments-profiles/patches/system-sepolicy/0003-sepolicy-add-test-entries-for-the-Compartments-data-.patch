@@ -1,0 +1,27 @@
+From ec5ada688244194b6d930b7793701567e9fe330f Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 20:05:25 +0100
+Subject: [PATCH] sepolicy: add test entries for the Compartments data
+ directory
+
+plat_file_contexts_data_test needs a line in file_contexts_test_data for every file_contexts entry, and the entry for /data/system/compartments (type compartments_data_file, sepolicy 0001) had none: checkfc reported "No matches for (/data/system/compartments(/.*)?, u:object_r:compartments_data_file:s0)". One line for the directory and one for the store file.
+---
+ contexts/file_contexts_test_data | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/contexts/file_contexts_test_data b/contexts/file_contexts_test_data
+index 8c744c6..f047374 100644
+--- a/contexts/file_contexts_test_data
++++ b/contexts/file_contexts_test_data
+@@ -879,6 +879,8 @@
+ /data/does_not_exist                                              system_data_file
+ /data/system/environ                                              environ_system_data_file
+ /data/system/environ/test                                         environ_system_data_file
++/data/system/compartments                                         compartments_data_file
++/data/system/compartments/policy.bin                              compartments_data_file
+ /data/system/packages.list                                        packages_list_file
+ /data/system/users/user.list                                      user_list_data_file
+ /data/system/game_mode_intervention.list                          game_mode_intervention_list_file
+-- 
+2.56.0
+

@@ -1,0 +1,32 @@
+From bfe17319ff31cf227a52cb991b6fae7fb46f48f1 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 20:05:54 +0100
+Subject: [PATCH] wifi: write the persona file salt without String.format
+
+The Bluetooth build refuses String.format here (errorprone AndroidFrameworkEfficientStrings). Long.toHexString padded to sixteen digits gives the same text, so the copies stay equal to their source.
+---
+ service/java/com/android/server/wifi/PersonaFile.java | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/service/java/com/android/server/wifi/PersonaFile.java b/service/java/com/android/server/wifi/PersonaFile.java
+index d444e42..5dc191a 100644
+--- a/service/java/com/android/server/wifi/PersonaFile.java
++++ b/service/java/com/android/server/wifi/PersonaFile.java
+@@ -47,7 +47,13 @@ final class PersonaFile {
+             }
+             sorted.put(appId, place);
+         }
+-        StringBuilder b = new StringBuilder(String.format("s %016x\n", salt));
++        // Sixteen hex digits, padded with zeros: String.format is refused by the Bluetooth build (AndroidFrameworkEfficientStrings).
++        String hex = Long.toHexString(salt);
++        StringBuilder b = new StringBuilder("s ");
++        for (int i = hex.length(); i < 16; i++) {
++            b.append('0');
++        }
++        b.append(hex).append('\n');
+         for (Map.Entry<Integer, Integer> e : sorted.entrySet()) {
+             b.append("p ").append(e.getKey()).append(' ').append(e.getValue()).append('\n');
+         }
+-- 
+2.56.0
+

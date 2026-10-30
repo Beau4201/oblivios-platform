@@ -267,6 +267,8 @@ public final class PlacesTest {
         check(f.placeOf(19999) == 0 && f.placeOf(29999) == 0, "the last app id without a line");
         check(PersonaFile.parse(PersonaFile.format(-1L, map())).salt() == -1L, "a negative salt");
         check(PersonaFile.format(-1L, map()).equals("s ffffffffffffffff\n"), "a salt of all ones");
+        check(PersonaFile.format(0L, map()).equals("s 0000000000000000\n"), "a salt of zero is padded to sixteen digits");
+        check(PersonaFile.format(0xabcL, map()).equals("s 0000000000000abc\n"), "a short salt is padded to sixteen digits");
         check(PersonaFile.parse(PersonaFile.format(0, map(10000, 1, 19999, 2147483647))).placeOf(19999) == 2147483647, "the limits of an app id and a place");
         check(PersonaFile.parse(PersonaFile.format(1, map(10000, 1))).placeOf(20000) == 1, "the first sandbox answers to the first app");
         check(PersonaFile.parse(PersonaFile.format(1, map(19999, 1))).placeOf(29999) == 1, "the last sandbox answers to the last app");

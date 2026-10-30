@@ -37,4 +37,33 @@ bad, n = run(good + "// more\n")
 assert len(bad) == 1, "a copy with an extra line must fail"
 # a modified file (no 'new file mode') is not a copy
 assert run(good, extra="diff --git a/Other.java b/Other.java\nindex 1..2 100644\n--- a/Other.java\n+++ b/Other.java\n@@ -1 +1 @@\n-a\n+b\n") == ([], 1)
+# a later patch of the same folder that changes the copy: the copy is what the creating patch holds after it
+def fix(old, new, path="src/p/PersonaFile.java"):
+    return (f"From def Mon Sep 17 00:00:00 2001\n\n---\ndiff --git a/{path} b/{path}\nindex 1111111..2222222 100644\n"
+            f"--- a/{path}\n+++ b/{path}\n@@ -5 +5 @@\n-{old}\n+{new}\n-- \n2.43.0\n\n")
+
+
+def run_later(source, later, folder="x"):
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        for rel in cc.SOURCES.values():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(source)
+        (root / "patches" / "x").mkdir(parents=True)
+        (root / "patches" / "x" / "0001-a.patch").write_text(patch_for("src/p/PersonaFile.java", good))
+        if folder != "x":
+            (root / "patches" / folder).mkdir(parents=True)
+        (root / "patches" / folder / "0002-b.patch").write_text(later)
+        return cc.check(root)
+
+
+changed_source = SRC.replace("x = 1", "x = 2")
+assert run_later(changed_source, fix("    int x = 1;", "    int x = 2;")) == ([], 1), "a later patch brings the copy to the new source"
+bad, n = run_later(SRC, fix("    int x = 1;", "    int x = 2;"))
+assert n == 1 and len(bad) == 1, "a later patch that moves the copy away from the source must fail"
+bad, n = run_later(changed_source, fix("    int x = 7;", "    int x = 2;"))
+assert len(bad) == 1 and "does not apply" in bad[0], "a hunk that does not apply to the copy must fail"
+bad, n = run_later(changed_source, fix("    int x = 1;", "    int x = 2;"), folder="y")
+assert n == 1 and len(bad) == 1, "a patch of another folder does not change the copy"
+assert run_later(changed_source, fix("    int x = 1;", "    int x = 2;", "src/p/Other.java"))[0], "a patch of another file does not change the copy"
 print("ok")
