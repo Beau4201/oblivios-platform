@@ -5,6 +5,7 @@ import android.os.IBinder;
 import android.os.RemoteException;
 
 import com.android.internal.compartments.CompartmentsAppPolicy;
+import com.android.internal.compartments.CompartmentsPlace;
 import com.android.internal.compartments.ICompartmentsPolicy;
 
 import java.lang.reflect.Method;
@@ -94,6 +95,24 @@ final class ProfileClient {
             return true;
         } catch (RemoteException | RuntimeException e) {
             return false;
+        }
+    }
+
+    /** The place id the user chose for one app (0 is Automatic), or -1 when the service is absent or refuses. */
+    int getPlaceId(String packageName) {
+        try {
+            return mService == null ? -1 : mService.getPlaceId(packageName);
+        } catch (RemoteException | RuntimeException e) {
+            return -1;
+        }
+    }
+
+    /** One place by its id, or null. */
+    CompartmentsPlace getPlace(int placeId) {
+        try {
+            return mService == null ? null : mService.getPlace(placeId);
+        } catch (RemoteException | RuntimeException e) {
+            return null;
         }
     }
 

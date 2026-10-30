@@ -548,6 +548,17 @@ public final class HostChecks {
         check(Presenter.appRows(c, apps, "").get(0).choice == Choices.Choice.DIRECT && !Presenter.appRows(c, apps, "").get(0).tor, "the row starts at Direct");
         c.set("org.a.alpha", Choices.Choice.TOR);
         check(Presenter.appRows(c, apps, "").get(0).tor && Presenter.appRows(c, apps, "").get(0).choice == Choices.Choice.TOR, "the row shows Tor");
+        // The exit follows the place of an Isolated app only when the app is on Tor (ADR-208).
+        check(Presenter.exitFor("ES", "NL", Choices.Choice.DIRECT) == Presenter.Exit.MISMATCH, "a place abroad on Direct disagrees");
+        check(Presenter.exitFor("ES", "NL", Choices.Choice.OPEN) == Presenter.Exit.MISMATCH, "a place abroad on Open disagrees");
+        check(Presenter.exitFor("ES", "NL", Choices.Choice.TOR) == Presenter.Exit.COUNTRY, "a place abroad on Tor moves the exit");
+        check(Presenter.exitFor("NL", "NL", Choices.Choice.DIRECT) == Presenter.Exit.NONE, "a place in the own country needs nothing");
+        check(Presenter.exitFor("NL", "NL", Choices.Choice.TOR) == Presenter.Exit.NONE, "nor on Tor");
+        check(Presenter.exitFor("", "NL", Choices.Choice.TOR) == Presenter.Exit.NONE && Presenter.exitFor(null, "NL", Choices.Choice.TOR) == Presenter.Exit.NONE,
+                "no place, no change");
+        check(Presenter.exitFor("es", "NL", Choices.Choice.TOR) == Presenter.Exit.NONE && Presenter.exitFor("ESP", "NL", Choices.Choice.TOR) == Presenter.Exit.NONE,
+                "a code that is not two capitals is no country");
+        check(Presenter.exitFor("ES", "", Choices.Choice.TOR) == Presenter.Exit.COUNTRY, "an unknown own country still follows the place");
         c.set("org.b.beta", Choices.Choice.OPEN);
         check(Presenter.appRows(c, apps, "beta").get(0).choice == Choices.Choice.OPEN && !Presenter.appRows(c, apps, "beta").get(0).tor, "the row shows Open");
         c.set("org.b.beta", Choices.Choice.DIRECT);
@@ -646,6 +657,11 @@ public final class HostChecks {
         same(v, "to_daemon.set_policy", ControlCodec.setPolicy(1, classes));
         same(v, "to_daemon.set_overrides", ControlCodec.setOverrides(2, 10123, new int[] {7, 300}));
         same(v, "to_daemon.release", ControlCodec.release(11, 10123, 300));
+        same(v, "to_daemon.set_country", ControlCodec.setCountry(12, 10123, "ES"));
+        same(v, "to_daemon.clear_country", ControlCodec.setCountry(13, 10123, null));
+        check(Arrays.equals(ControlCodec.setCountry(13, 10123, ""), v.get("to_daemon.clear_country")), "an empty country is no choice");
+        check(ControlCodec.validCountry("AZ") && ControlCodec.validCountry("ZA") && !ControlCodec.validCountry("A@")
+                && !ControlCodec.validCountry("A[") && !ControlCodec.validCountry("a") && !ControlCodec.validCountry(null), "the capital letters, and only they");
         same(v, "route.hello", ControlCodec.routeHello());
         same(v, "route.apply", ControlCodec.routeApply(5, "exit0", 0x01020304L,
                 Arrays.asList(new int[] {10000, 10230}), Arrays.asList(new int[] {10231, 10231})));
@@ -653,7 +669,7 @@ public final class HostChecks {
         same(v, "route.get_applied", ControlCodec.routeGetApplied(4));
 
         ControlCodec.Reply r = daemon(v, "from_daemon.ready");
-        check(r.type == ControlCodec.Type.READY && r.version == 3 && "exit0".equals(r.iface), "ready");
+        check(r.type == ControlCodec.Type.READY && r.version == 4 && "exit0".equals(r.iface), "ready");
         r = daemon(v, "from_daemon.state_up");
         check(r.type == ControlCodec.Type.STATE && r.state == ControlCodec.STATE_UP, "state");
         r = daemon(v, "from_daemon.failures");
@@ -683,7 +699,7 @@ public final class HostChecks {
         check(r.type == ControlCodec.Type.ERROR && r.seq == 9 && r.code == ControlCodec.ERR_FAILED, "route error");
 
         // The numbers that the vectors do not reach.
-        check(ControlCodec.DAEMON_PROTOCOL == 3 && ControlCodec.ROUTE_PROTOCOL == 1 && ControlCodec.MAX_FRAME == 4096 && ControlCodec.IFNAME_MAX == 15,
+        check(ControlCodec.DAEMON_PROTOCOL == 4 && ControlCodec.ROUTE_PROTOCOL == 1 && ControlCodec.MAX_FRAME == 4096 && ControlCodec.IFNAME_MAX == 15,
                 "the numbers of the protocols");
         check(ControlCodec.STATE_BOOTSTRAPPING == 0 && ControlCodec.STATE_UP == 1 && ControlCodec.STATE_FAILED == 2, "state values");
         check(ControlCodec.ERR_BAD_VALUE == 1 && ControlCodec.ERR_TOO_MANY == 2 && ControlCodec.ERR_BUSY == 3
@@ -763,6 +779,9 @@ public final class HostChecks {
         for (Runnable bad : new Runnable[] {
                 () -> ControlCodec.getState(256), () -> ControlCodec.getState(-1),
                 () -> ControlCodec.setOverrides(1, 1, new int[33]),
+                () -> ControlCodec.setCountry(1, 1, "E"), () -> ControlCodec.setCountry(1, 1, "ESP"),
+                () -> ControlCodec.setCountry(1, 1, "es"), () -> ControlCodec.setCountry(1, 1, "E1"),
+                () -> ControlCodec.setCountry(1, 1, "ÉS"), () -> ControlCodec.setCountry(256, 1, "ES"),
                 () -> ControlCodec.routeApply(1, "", 0, new ArrayList<int[]>(), new ArrayList<int[]>()),
                 () -> ControlCodec.routeApply(1, "sixteen_chars_xx", 0, new ArrayList<int[]>(), new ArrayList<int[]>()),
                 () -> ControlCodec.routeApply(1, "exit0", 0, Collections129(), new ArrayList<int[]>()),

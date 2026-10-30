@@ -18,6 +18,9 @@ public interface DaemonApi {
     /** The companies whose hosts may see the real address of one app uid; an empty list removes the override. */
     void setOverrides(long uid, int[] companies) throws IOException;
 
+    /** The country whose exit relays one app uid must use (two capital letters); null removes the choice. */
+    void setCountry(long uid, String country) throws IOException;
+
     /** The daemon state, the failure reports that arrived since the last call and the companies it passes on for now. */
     Poll poll() throws IOException;
 

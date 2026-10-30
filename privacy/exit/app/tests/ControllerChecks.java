@@ -37,6 +37,9 @@ public final class ControllerChecks {
         int[] users = {0};
         boolean vpn;
         boolean strictDns;
+        /** The country of the place of each Isolated app, and the country of the user. */
+        final Map<String, String> places = new TreeMap<>();
+        String own = "NL";
         long netId = 101;
         /** Method names ("daemon.connect", "daemon.poll", ...) that throw once or for ever. */
         final Map<String, Integer> failures = new TreeMap<>();
@@ -83,6 +86,12 @@ public final class ControllerChecks {
                 List<Promotion> q = nextPromotions;
                 nextPromotions = new ArrayList<>();
                 return new Poll(ControlCodec.STATE_UP, f, q);
+            }
+
+            @Override
+            public void setCountry(long uid, String country) throws IOException {
+                log.add("daemon.setCountry:" + uid + "/" + (country == null ? "none" : country));
+                maybeFail("daemon.setCountry");
             }
 
             @Override
@@ -147,6 +156,16 @@ public final class ControllerChecks {
             @Override
             public boolean privateDnsStrict() {
                 return strictDns;
+            }
+
+            @Override
+            public Map<String, String> placeCountries() {
+                return places;
+            }
+
+            @Override
+            public String ownCountry() {
+                return own;
             }
 
             @Override
@@ -432,6 +451,75 @@ public final class ControllerChecks {
     }
 
     /** F11: a choice made while the daemon is being reached or is down closes the app at once; it must not wait for the link. */
+    /** The exit follows the place of an Isolated app that is on Tor, and nothing else (ADR-208). */
+    private static void exitCountries() {
+        World w = world();
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        w.choices.set("org.a.two", Choices.Choice.TOR);
+        w.places.put("org.a.one", "ES");
+        w.places.put("org.a.two", "NL"); // the user's own country: no change
+        w.controller.start(0);
+        w.controller.tick(0);
+        inOrder(w, 0, "daemon.setPolicy", "daemon.setCountry:10100/ES", "net.register");
+        check(w.count("daemon.setCountry") == 1, "only the place abroad is sent: " + w.log);
+        // Nothing changed: nothing is sent, on a change or on a poll.
+        int mark = w.log.size();
+        w.controller.changed(1000);
+        w.controller.tick(5000);
+        check(w.indexOf("daemon.setCountry", mark) < 0, "an unchanged country is not sent again: " + w.log.subList(mark, w.log.size()));
+        // A place changed elsewhere reaches the daemon on the next poll.
+        w.places.put("org.a.one", "DE");
+        w.places.put("org.a.two", "FR");
+        mark = w.log.size();
+        w.controller.tick(10000);
+        check(w.indexOf("daemon.setCountry:10100/DE", mark) >= 0 && w.indexOf("daemon.setCountry:10101/FR", mark) >= 0, "changed countries: " + w.log.subList(mark, w.log.size()));
+        // Back in the own country, or Automatic (no entry): the choice is removed.
+        w.places.put("org.a.one", "NL");
+        w.places.remove("org.a.two");
+        mark = w.log.size();
+        w.controller.changed(11000);
+        check(w.indexOf("daemon.setCountry:10100/none", mark) >= 0 && w.indexOf("daemon.setCountry:10101/none", mark) >= 0, "removed: " + w.log.subList(mark, w.log.size()));
+        // An app that is not on Tor is not moved by its place, and a country already sent goes when the app leaves Tor.
+        w.places.put("org.a.one", "ES");
+        w.places.put("org.a.two", "ES");
+        w.choices.set("org.a.two", Choices.Choice.DIRECT);
+        mark = w.log.size();
+        w.controller.changed(12000);
+        check(w.indexOf("daemon.setCountry:10100/ES", mark) >= 0 && w.count("daemon.setCountry:10101/ES") == 0, "only the app on Tor: " + w.log.subList(mark, w.log.size()));
+        w.choices.set("org.a.one", Choices.Choice.OPEN);
+        mark = w.log.size();
+        w.controller.changed(13000);
+        check(w.indexOf("daemon.setCountry:10100/none", mark) >= 0, "an app that leaves Tor loses its country: " + w.log.subList(mark, w.log.size()));
+        // A fresh daemon knows nothing: the country is sent again after a lost link.
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        w.controller.changed(14000);
+        w.failures.put("daemon.poll", 1);
+        w.controller.tick(20000);
+        check(w.last.phase == Status.Phase.PAUSED, "paused: " + w.last);
+        mark = w.log.size();
+        w.controller.tick(21000);
+        inOrder(w, mark, "daemon.connect", "daemon.setPolicy", "daemon.setCountry:10100/ES", "status:RUNNING");
+        // The place data goes away altogether (the service is gone): the country that was sent is removed on the next poll.
+        w.places.clear();
+        mark = w.log.size();
+        w.controller.tick(26000);
+        check(w.indexOf("daemon.setCountry:10100/none", mark) >= 0, "no places left, the country goes: " + w.log.subList(mark, w.log.size()));
+        // No place data and no persona: the poll does not ask for anything.
+        World q = world();
+        q.choices.set("org.a.one", Choices.Choice.TOR);
+        q.controller.start(0);
+        q.controller.tick(0);
+        check(q.count("daemon.setCountry") == 0, "no country without a place: " + q.log);
+        // A refusal by the daemon is a lost daemon like any other (the next attempt sends everything again).
+        World f = world();
+        f.choices.set("org.a.one", Choices.Choice.TOR);
+        f.places.put("org.a.one", "ES");
+        f.failures.put("daemon.setCountry", 1);
+        f.controller.start(0);
+        f.controller.tick(0);
+        check(f.last.phase != Status.Phase.RUNNING && f.indexOf("net.register", 0) < 0, "a refused country leaves the app closed: " + f.log);
+    }
+
     private static void choiceWhileDaemonIsNotRunning() {
         // CONNECTING: start() was called, nothing connected yet.
         World w = world();
@@ -850,34 +938,35 @@ public final class ControllerChecks {
     private static void daemonClient() throws IOException {
         List<Policy.Cls> classes = Arrays.asList(new Policy.Cls(10000, 19999, Policy.Kind.MASKED));
         // Hello, a policy, overrides and a poll with reports after the state; each request carries the next sequence number.
-        Script s = new Script().reply(ready(3, "exit0"), frame(0x84, 1), frame(0x84, 2),
+        Script s = new Script().reply(ready(4, "exit0"), frame(0x84, 1), frame(0x84, 2), frame(0x84, 3),
                 frame(0x82, 1), cat(frame(0x83, 0, 0, 0x27, 0x8b, 0, 7, 0, 0, 0, 3)), cat(frame(0x83, 0, 0, 0x27, 0x8c, 0, 8, 0, 0, 0, 4)));
         DaemonClient c = new DaemonClient(s);
         check("exit0".equals(c.connect()), "interface name");
         c.setPolicy(classes);
         c.setOverrides(10123, new int[] {7});
+        c.setCountry(10123, "ES");
         DaemonApi.Poll p = c.poll();
         check(p.state == 1 && p.failures.size() == 2 && p.failures.get(0).uid == 10123 && p.failures.get(0).company == 7
                 && p.failures.get(0).count == 3 && p.failures.get(1).uid == 10124, "poll: " + p.failures.size());
         byte[] want = cat(ControlCodec.hello(), ControlCodec.setPolicy(1, classes), ControlCodec.setOverrides(2, 10123, new int[] {7}),
-                ControlCodec.getState(3));
+                ControlCodec.setCountry(3, 10123, "ES"), ControlCodec.getState(4));
         check(Arrays.equals(s.sent.toByteArray(), want), "the requests, byte for byte");
 
         // Shutdown is a request like the others.
-        s = new Script().reply(ready(3, "exit0"), frame(0x84, 1));
+        s = new Script().reply(ready(4, "exit0"), frame(0x84, 1));
         c = new DaemonClient(s);
         c.connect();
         c.shutdown();
         check(Arrays.equals(s.sent.toByteArray(), cat(ControlCodec.hello(), ControlCodec.shutdown(1))), "shutdown request");
 
         // A shutdown that is not acknowledged is a failure.
-        c = new DaemonClient(new Script().reply(ready(3, "exit0")));
+        c = new DaemonClient(new Script().reply(ready(4, "exit0")));
         c.connect();
         DaemonClient noAck = c;
         expectIo(noAck::shutdown, "a shutdown without an Ack");
 
         // A refusal carries its code and is an IOException.
-        s = new Script().reply(ready(3, "exit0"), frame(0x85, 1, 2));
+        s = new Script().reply(ready(4, "exit0"), frame(0x85, 1, 2));
         c = new DaemonClient(s);
         c.connect();
         try {
@@ -888,10 +977,10 @@ public final class ControllerChecks {
         }
         // A wrong sequence number, a reply of the wrong kind, a wrong version, a closed link and garbage.
         for (Script bad : new Script[] {
-                new Script().reply(ready(3, "exit0"), frame(0x84, 9)),
-                new Script().reply(ready(3, "exit0"), frame(0x82, 1)),
-                new Script().reply(ready(3, "exit0")),
-                new Script().reply(ready(3, "exit0"), new byte[] {0, 0, 0, 2, 0x7f, 1})}) {
+                new Script().reply(ready(4, "exit0"), frame(0x84, 9)),
+                new Script().reply(ready(4, "exit0"), frame(0x82, 1)),
+                new Script().reply(ready(4, "exit0")),
+                new Script().reply(ready(4, "exit0"), new byte[] {0, 0, 0, 2, 0x7f, 1})}) {
             DaemonClient d = new DaemonClient(bad);
             d.connect();
             expectIo(() -> d.setPolicy(classes), "a bad answer to a request");
@@ -901,20 +990,20 @@ public final class ControllerChecks {
             expectIo(d::connect, "a bad answer to hello");
         }
         // Reports that arrive before an Ack are kept for the next poll.
-        s = new Script().reply(ready(3, "exit0"), frame(0x83, 0, 0, 0x27, 0x8b, 0, 7, 0, 0, 0, 3), frame(0x84, 1), frame(0x82, 1));
+        s = new Script().reply(ready(4, "exit0"), frame(0x83, 0, 0, 0x27, 0x8b, 0, 7, 0, 0, 0, 3), frame(0x84, 1), frame(0x82, 1));
         c = new DaemonClient(s);
         c.connect();
         c.setPolicy(classes);
         p = c.poll();
         check(p.failures.size() == 1 && p.failures.get(0).company == 7, "a report before an Ack is not lost");
         // After a poll the queue is empty.
-        s = new Script().reply(ready(3, "exit0")).then().reply(frame(0x83, 0, 0, 0x27, 0x8b, 0, 7, 0, 0, 0, 3), frame(0x82, 1)).then().reply(frame(0x82, 0));
+        s = new Script().reply(ready(4, "exit0")).then().reply(frame(0x83, 0, 0, 0x27, 0x8b, 0, 7, 0, 0, 0, 3), frame(0x82, 1)).then().reply(frame(0x82, 0));
         c = new DaemonClient(s);
         c.connect();
         check(c.poll().failures.size() == 1, "a report before the state is returned with it");
         check(c.poll().failures.isEmpty(), "and is not returned again");
         // The sequence number wraps after 255 and never becomes 0.
-        Script many = new Script().reply(ready(3, "exit0"));
+        Script many = new Script().reply(ready(4, "exit0"));
         for (int i = 1; i <= 256; i++) {
             many.reply(frame(0x84, i % 255 == 0 ? 255 : i % 255));
         }
@@ -951,8 +1040,8 @@ public final class ControllerChecks {
     private static void daemonClientPromotions() throws IOException {
         // What the old connection queued is forgotten with it: a new connection starts without it.
         byte[] promotedFrame = frame(0x86, 0, 0, 0x27, 0x8b, 0, 7, 1);
-        Script first = new Script().reply(ready(3, "exit0")).then().reply(promotedFrame, frame(0x84, 1));
-        Script later = new Script().reply(ready(3, "exit0")).then().reply(frame(0x82, 1));
+        Script first = new Script().reply(ready(4, "exit0")).then().reply(promotedFrame, frame(0x84, 1));
+        Script later = new Script().reply(ready(4, "exit0")).then().reply(frame(0x82, 1));
         DaemonClient fresh = new DaemonClient(twice(first, later));
         fresh.connect();
         fresh.setPolicy(Arrays.asList(new Policy.Cls(10000, 19999, Policy.Kind.MASKED)));
@@ -962,7 +1051,7 @@ public final class ControllerChecks {
         // Promotions ride on the reply to GetState, after the state; a frame that has not arrived yet comes with the next reply.
         byte[] promoted = frame(0x86, 0, 0, 0x27, 0x8b, 0, 7, 1);
         byte[] again = frame(0x86, 0, 0, 0x27, 0x8b, 0, 7, 0);
-        Script s = new Script().reply(ready(3, "exit0")).then().reply(frame(0x82, 1), promoted).then().reply(frame(0x82, 1), again);
+        Script s = new Script().reply(ready(4, "exit0")).then().reply(frame(0x82, 1), promoted).then().reply(frame(0x82, 1), again);
         DaemonClient c = new DaemonClient(s);
         c.connect();
         DaemonApi.Poll p = c.poll();
@@ -970,26 +1059,26 @@ public final class ControllerChecks {
         p = c.poll();
         check(p.promotions.size() == 1 && !p.promotions.get(0).fresh, "a listed promotion is not fresh");
         // A promotion that arrives while a request waits for its Ack is kept for the next poll.
-        s = new Script().reply(ready(3, "exit0"), promoted, frame(0x84, 1), frame(0x82, 1));
+        s = new Script().reply(ready(4, "exit0"), promoted, frame(0x84, 1), frame(0x82, 1));
         c = new DaemonClient(s);
         c.connect();
         c.setPolicy(Arrays.asList(new Policy.Cls(10000, 19999, Policy.Kind.MASKED)));
         p = c.poll();
         check(p.promotions.size() == 1 && p.promotions.get(0).company == 7, "a promotion before an Ack is not lost");
         // The queue is empty after a poll and after a new connection.
-        s = new Script().reply(ready(3, "exit0")).then().reply(frame(0x82, 1), promoted).then().reply(frame(0x82, 1));
+        s = new Script().reply(ready(4, "exit0")).then().reply(frame(0x82, 1), promoted).then().reply(frame(0x82, 1));
         c = new DaemonClient(s);
         c.connect();
         c.poll();
         check(c.poll().promotions.isEmpty(), "not returned again");
         // A release is a request like the others and is acknowledged.
-        s = new Script().reply(ready(3, "exit0"), frame(0x84, 1));
+        s = new Script().reply(ready(4, "exit0"), frame(0x84, 1));
         c = new DaemonClient(s);
         c.connect();
         c.release(10123, 7);
         check(Arrays.equals(s.sent.toByteArray(), cat(ControlCodec.hello(), ControlCodec.release(1, 10123, 7))), "release request, byte for byte");
         // A refused release carries its code; an unacknowledged one is a failure.
-        s = new Script().reply(ready(3, "exit0"), frame(0x85, 1, 1));
+        s = new Script().reply(ready(4, "exit0"), frame(0x85, 1, 1));
         c = new DaemonClient(s);
         c.connect();
         try {
@@ -998,7 +1087,7 @@ public final class ControllerChecks {
         } catch (Link.ProtocolException e) {
             check(e.code == ControlCodec.ERR_BAD_VALUE, "the code of the refusal");
         }
-        DaemonClient noAck = new DaemonClient(new Script().reply(ready(3, "exit0")));
+        DaemonClient noAck = new DaemonClient(new Script().reply(ready(4, "exit0")));
         noAck.connect();
         expectIo(() -> noAck.release(10123, 7), "a release without an Ack");
     }
@@ -1057,6 +1146,7 @@ public final class ControllerChecks {
         maskedOnly();
         torOnlyWithoutConsent();
         changesWhileRunning();
+        exitCountries();
         choiceWhileDaemonIsNotRunning();
         preferenceFailuresAreRetried();
         failuresAndLadder();

@@ -9,6 +9,7 @@
 | Build command | `exit-daemon/tools/build-android.sh` (copies the tree to the build server, builds, then checks the binary itself) |
 | SHA-256 | `0e3d50b943b5f37aa216e9b88e98b295a3d206d0da57b54d7747ff896e4b1323` |
 | Size | 19 375 800 bytes |
+| Control protocol | 3 |
 | Built | 2026-10-29, after `NET-009` and `IMG-018` of `lynx` `2026102303`: the route helper reads an interface index by `RTM_GETLINK` on its netlink socket and not by `if_nametoindex`, which opened an `AF_INET` socket in a domain that has none (ADR-199). `strace` of this binary on the phone: no `AF_INET` socket in an apply, 14 rules, the link up, two addresses, and a clear that restores `ip rule` and `ip route`. |
 | Reproduced | built twice from the files of the commit above, from a clean tree, into two cargo target directories: same SHA-256 and size (`0e3d50b9…`, 19 375 800 bytes) |
 | Needed libraries | `libc.so`, `libdl.so`, `libm.so`, interpreter `/system/bin/linker64` (`llvm-readelf`, read by the build script) |

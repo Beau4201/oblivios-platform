@@ -65,6 +65,8 @@ public final class ExitController {
     private boolean prefsPending;
     private long prefsRetryMs;
     private final Map<Long, String> sentOverrides = new HashMap<>();
+    /** The exit country the daemon holds for each app uid (the place of an Isolated app on Tor). */
+    private final Map<Long, String> sentCountries = new HashMap<>();
     /** The companies the daemon passes on to an app for now: (uid, company) to the time it was last listed. */
     private final java.util.TreeMap<Status.Promoted, Long> promoted = new java.util.TreeMap<>(
             (a, b) -> a.uid != b.uid ? Long.compare(a.uid, b.uid) : Integer.compare(a.company, b.company));
@@ -127,6 +129,7 @@ public final class ExitController {
                 try {
                     DaemonApi.Poll p = daemon.poll();
                     daemonState = p.state;
+                    sendCountries(store.choices());
                     for (DaemonApi.Failure f : p.failures) {
                         if (ladder.shouldNotify((int) f.uid, f.company, nowMs)) {
                             platform.notifyFailure(f.uid, f.company);
@@ -251,6 +254,7 @@ public final class ExitController {
         daemonState = -1;
         applied = null;
         sentOverrides.clear();
+        sentCountries.clear();
         promoted.clear();
         attempts = 0;
         publish();
@@ -262,6 +266,7 @@ public final class ExitController {
             route.connect();
             // The daemon starts empty: everything is sent again, including overrides.
             sentOverrides.clear();
+            sentCountries.clear();
             appliedPrefs = null;
             netId = 0;
             push(true);
@@ -301,6 +306,7 @@ public final class ExitController {
             daemon.setPolicy(out.classes);
         }
         sendOverrides(choices);
+        sendCountries(choices);
         // 4. the Tor network, once, and the rules with its id
         if (needNetwork && netId == 0) {
             netId = platform.registerTorNetwork(iface);
@@ -336,6 +342,37 @@ public final class ExitController {
             if (!want.containsKey(uid)) {
                 daemon.setOverrides(uid, new int[0]);
                 sentOverrides.remove(uid);
+            }
+        }
+    }
+
+    /**
+     * Sends the exit country of every app uid whose persona is abroad and that is on Tor ({@link Presenter#exitFor}), and
+     * removes it for a uid that had one and has none now. The place is the service's, so this runs on every poll too.
+     */
+    private void sendCountries(Choices choices) throws IOException {
+        Map<String, String> places = platform.placeCountries();
+        if (places.isEmpty() && sentCountries.isEmpty()) {
+            return; // the common case: no persona abroad, and the poll does not list every package for nothing
+        }
+        String own = platform.ownCountry();
+        Map<Long, String> want = new HashMap<>();
+        for (Policy.App a : platform.installedApps()) {
+            String country = places.get(a.pkg);
+            if (country != null && Presenter.exitFor(country, own, choices.choiceOf(a.pkg)) == Presenter.Exit.COUNTRY) {
+                want.put((long) a.uid, country);
+            }
+        }
+        for (Map.Entry<Long, String> e : want.entrySet()) {
+            if (!e.getValue().equals(sentCountries.get(e.getKey()))) {
+                daemon.setCountry(e.getKey(), e.getValue());
+                sentCountries.put(e.getKey(), e.getValue());
+            }
+        }
+        for (Long uid : new java.util.ArrayList<>(sentCountries.keySet())) {
+            if (!want.containsKey(uid)) {
+                daemon.setCountry(uid, null);
+                sentCountries.remove(uid);
             }
         }
     }

@@ -83,6 +83,27 @@ public final class Presenter {
         return rows;
     }
 
+    /** What the place of an Isolated app asks of its exit (ADR-208). */
+    public enum Exit {
+        /** The place is in the user's own country, or the app has none: nothing to change. */
+        NONE,
+        /** The place is abroad and the app is on Tor: its connections leave through exits in that country. */
+        COUNTRY,
+        /** The place is abroad and the app is not on Tor: its address still shows the user's country (the page says so). */
+        MISMATCH
+    }
+
+    /**
+     * What the exit of an app does about the country of its persona. A country that is not two capital letters is no
+     * country. An app on Direct or Open is not moved by itself: only the user may send it through Tor.
+     */
+    public static Exit exitFor(String personaCountry, String ownCountry, Choices.Choice stand) {
+        if (!ControlCodec.validCountry(personaCountry) || personaCountry.equals(ownCountry)) {
+            return Exit.NONE;
+        }
+        return stand == Choices.Choice.TOR ? Exit.COUNTRY : Exit.MISMATCH;
+    }
+
     /** The choices a tap on an app row offers, in the order of the dialog. */
     public static Choices.Choice[] options() {
         return new Choices.Choice[] {Choices.Choice.DIRECT, Choices.Choice.TOR, Choices.Choice.OPEN};

@@ -28,6 +28,19 @@ public interface PlatformApi {
     /** Sets the network preference of the given packages (package to preference); an empty map removes every preference. */
     void setOemPreferences(Map<String, Integer> prefs) throws IOException;
 
+    /**
+     * The country of the place that the user chose for each Isolated app (package to two capital letters). An app on
+     * Automatic, an app that does not substitute its location and a phone without place data are not in it.
+     */
+    default Map<String, String> placeCountries() {
+        return java.util.Collections.emptyMap();
+    }
+
+    /** The country the user is in now (two capital letters), or an empty string when the phone does not know it. */
+    default String ownCountry() {
+        return "";
+    }
+
     /** The ladder says an app has trouble with a company's hosts: tell the user once (the caller already deduplicates). */
     void notifyFailure(long uid, int company);
 

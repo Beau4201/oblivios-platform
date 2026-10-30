@@ -57,6 +57,13 @@ final class DaemonClient implements DaemonApi {
     }
 
     @Override
+    public void setCountry(long uid, String country) throws IOException {
+        int s = nextSeq();
+        link.send(ControlCodec.setCountry(s, uid, country));
+        awaitAck(s);
+    }
+
+    @Override
     public void release(long uid, int company) throws IOException {
         int s = nextSeq();
         link.send(ControlCodec.release(s, uid, company));

@@ -19,11 +19,17 @@ import android.net.RouteInfo;
 import android.os.Looper;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.telephony.TelephonyManager;
+
+import com.android.internal.compartments.CompartmentsAppPolicy;
+import com.android.internal.compartments.CompartmentsPlace;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -42,6 +48,7 @@ final class AndroidPlatform implements PlatformApi {
     private final ConnectivityManager cm;
     private final Notifier notifier;
     private final StatusSink sink;
+    private ProfileClient profiles;
     private NetworkProvider provider;
     private NetworkAgent agent;
 
@@ -80,6 +87,41 @@ final class AndroidPlatform implements PlatformApi {
             }
         }
         return out;
+    }
+
+    @Override
+    public Map<String, String> placeCountries() {
+        Map<String, String> out = new HashMap<>();
+        if (profiles == null || !profiles.available()) {
+            profiles = ProfileClient.find();
+        }
+        String[] configured = profiles.getConfigured();
+        if (configured == null) {
+            return out;
+        }
+        for (String pkg : configured) {
+            CompartmentsAppPolicy app = profiles.getApp(pkg);
+            if (app == null || app.location != ProfileRows.VALUE_SUBSTITUTE) {
+                continue;
+            }
+            int id = profiles.getPlaceId(pkg);
+            CompartmentsPlace place = id > 0 ? profiles.getPlace(id) : null;
+            String country = place == null || place.country == null ? "" : place.country.toUpperCase(Locale.ROOT);
+            if (ControlCodec.validCountry(country)) {
+                out.put(pkg, country);
+            }
+        }
+        return out;
+    }
+
+    @Override
+    public String ownCountry() {
+        TelephonyManager tm = ctx.getSystemService(TelephonyManager.class);
+        String c = tm == null ? "" : tm.getNetworkCountryIso();
+        if (c == null || c.isEmpty()) {
+            c = tm == null ? "" : tm.getSimCountryIso();
+        }
+        return c == null ? "" : c.toUpperCase(Locale.ROOT);
     }
 
     @Override

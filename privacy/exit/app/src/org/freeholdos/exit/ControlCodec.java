@@ -6,14 +6,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * The Java twin of the two control protocols: the daemon's ({@code control.rs}, version 3) and the route helper's
+ * The Java twin of the two control protocols: the daemon's ({@code control.rs}, version 4) and the route helper's
  * ({@code routes/proto.rs}, version 1). A frame is a u32 big-endian length of tag plus payload, the tag byte, the
  * payload. The golden vectors in {@code tests/vectors.txt} are loaded by the Rust tests as well, so that the two codecs
  * cannot drift. A decoder checks the claimed length first and never allocates from it. Pure Java.
  */
 public final class ControlCodec {
     public static final int MAX_FRAME = 4096;
-    public static final int DAEMON_PROTOCOL = 3;
+    public static final int DAEMON_PROTOCOL = 4;
     public static final int ROUTE_PROTOCOL = 1;
     public static final int IFNAME_MAX = 15;
 
@@ -26,6 +26,7 @@ public final class ControlCodec {
     private static final int TAG_SET_POLICY = 0x07;
     private static final int TAG_SET_OVERRIDES = 0x08;
     private static final int TAG_RELEASE = 0x09;
+    private static final int TAG_SET_COUNTRY = 0x0a;
     private static final int TAG_ROUTE_APPLY = 0x02;
     private static final int TAG_ROUTE_CLEAR = 0x03;
     private static final int TAG_ROUTE_GET_APPLIED = 0x04;
@@ -211,6 +212,38 @@ public final class ControlCodec {
         putU32(o, uid);
         putU16(o, company);
         return frame(TAG_RELEASE, o.toByteArray());
+    }
+
+    /** Two capital ASCII letters: the only country the daemon accepts (it refuses anything else, as does {@link #setCountry}). */
+    public static boolean validCountry(String country) {
+        return country != null && country.length() == 2 && isUpper(country.charAt(0)) && isUpper(country.charAt(1));
+    }
+
+    private static boolean isUpper(char c) {
+        return c >= 'A' && c <= 'Z';
+    }
+
+    /**
+     * The country whose exit relays the connections of {@code uid} must use (the place of an Isolated app, ADR-208);
+     * null or empty removes the choice.
+     */
+    public static byte[] setCountry(int seq, long uid, String country) {
+        seq(seq);
+        boolean none = country == null || country.isEmpty();
+        if (!none && !validCountry(country)) {
+            throw new IllegalArgumentException("a country is two capital letters");
+        }
+        ByteArrayOutputStream o = new ByteArrayOutputStream();
+        o.write(seq);
+        putU32(o, uid);
+        if (none) {
+            o.write(0);
+        } else {
+            o.write(2);
+            o.write(country.charAt(0));
+            o.write(country.charAt(1));
+        }
+        return frame(TAG_SET_COUNTRY, o.toByteArray());
     }
 
     public static byte[] routeHello() {
