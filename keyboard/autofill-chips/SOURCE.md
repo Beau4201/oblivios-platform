@@ -16,7 +16,7 @@ The patch was authored in a disposable local git repository (`.worktrees/keyboar
 
 Changed upstream lines carry a `freeholdos:` comment saying why.
 
-`0002` was authored in the same local repository as a second commit (`758ba89`); its four edits were made as exact single-occurrence text replacements. Packages `0001` and `0002` applied with `git am` to the base import give the same git tree (`0a76b36b...`) as the local repository, and `git apply --check` of `0002` on the live branch `freeholdos-2026100600` at `7370e572a` (tree clean) exits 0. It is not landed on the build server.
+`0002` was authored in the same local repository as a second commit (`758ba89`); its four edits were made as exact single-occurrence text replacements. Packages `0001` and `0002` applied with `git am` to the base import give the same git tree (`0a76b36b...`) as the local repository, and `git apply --check` of `0002` on the live branch `freeholdos-2026100600` at `7370e572a` (tree clean) exits 0. It was landed on that branch with `git am` on 2026-10-30 as `8a5787c9f` (read back: four files changed, 25 insertions, 3 deletions, the stat of this patch).
 
 ## Rebase notes
 
