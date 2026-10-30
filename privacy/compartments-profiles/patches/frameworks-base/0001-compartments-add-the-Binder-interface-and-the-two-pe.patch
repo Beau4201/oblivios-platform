@@ -1,0 +1,155 @@
+From 52d5109cbb099bfa734c96e1cbd00c373dae281a Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 14:38:56 +0100
+Subject: [PATCH] compartments: add the Binder interface and the two
+ permissions
+
+---
+ .../compartments/CompartmentsAppPolicy.aidl   | 17 ++++++
+ .../compartments/ICompartmentsPolicy.aidl     | 58 +++++++++++++++++++
+ core/res/AndroidManifest.xml                  | 16 +++++
+ core/res/res/values/strings.xml               | 12 ++++
+ 4 files changed, 103 insertions(+)
+ create mode 100644 core/java/com/android/internal/compartments/CompartmentsAppPolicy.aidl
+ create mode 100644 core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+
+diff --git a/core/java/com/android/internal/compartments/CompartmentsAppPolicy.aidl b/core/java/com/android/internal/compartments/CompartmentsAppPolicy.aidl
+new file mode 100644
+index 0000000..f3d5b1e
+--- /dev/null
++++ b/core/java/com/android/internal/compartments/CompartmentsAppPolicy.aidl
+@@ -0,0 +1,17 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.compartments;
++
++/** What the policy store holds for one app, resolved to values. */
++parcelable CompartmentsAppPolicy {
++    /** One of ICompartmentsPolicy.PROFILE_*. */
++    int profile;
++    /** One of ICompartmentsPolicy.VALUE_*, for each class. */
++    int sensors;
++    int loopback;
++    int settings;
++    /** The user has set this app. False for an app that follows the defaults. */
++    boolean configured;
++}
+diff --git a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+new file mode 100644
+index 0000000..10a97ef
+--- /dev/null
++++ b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+@@ -0,0 +1,58 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.compartments;
++
++import com.android.internal.compartments.CompartmentsAppPolicy;
++
++/**
++ * The Binder interface of the Compartments policy service (ADR-208). Every call acts on the owner
++ * user's store. The first eight methods need org.freeholdos.permission.MANAGE_COMPARTMENTS, which
++ * only the exit app holds; getProfile also accepts org.freeholdos.permission.READ_COMPARTMENT_PROFILE,
++ * which only the Settings app holds.
++ *
++ * <p>The transaction order is part of the contract with the app, which compiles its own copy of
++ * this file: new methods are added at the end. The numbers of the constants are the order of the
++ * enums of the policy core and are pinned by its host test.
++ */
++interface ICompartmentsPolicy {
++    const int PROFILE_TRUSTED = 0;
++    const int PROFILE_PROTECTED = 1;
++    const int PROFILE_ISOLATED = 2;
++
++    const int CLASS_SENSORS = 0;
++    const int CLASS_LOOPBACK = 1;
++    const int CLASS_SETTINGS = 2;
++
++    const int VALUE_REAL = 0;
++    const int VALUE_SUBSTITUTE = 1;
++    const int VALUE_BLOCKED = 2;
++
++    /** The policy of one package; the defaults if the user has not set it. */
++    CompartmentsAppPolicy getApp(String packageName);
++
++    /** What a new app gets: the default profile and its values. */
++    CompartmentsAppPolicy getDefaults();
++
++    /** The packages that the user has set. */
++    String[] getConfigured();
++
++    /** PROFILE_PROTECTED or PROFILE_ISOLATED; never PROFILE_TRUSTED. */
++    void setDefaultProfile(int profile);
++
++    /** The sensors value of the defaults. */
++    void setDefaultSensors(int value);
++
++    /** Sets the profile of one app and resets its values to that profile's defaults. */
++    void setProfile(String packageName, int profile);
++
++    /** Sets one class of one app; the value must be valid for the class. */
++    void setClassValue(String packageName, int cls, int value);
++
++    /** Forgets what the user set for one app: it follows the defaults again. */
++    void clearApp(String packageName);
++
++    /** The profile of one package, as one of PROFILE_*. Nothing else about the app. */
++    int getProfile(String packageName);
++}
+diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
+index 5a88775..5b1f468 100644
+--- a/core/res/AndroidManifest.xml
++++ b/core/res/AndroidManifest.xml
+@@ -957,6 +957,22 @@
+         android:description="@string/permdesc_freeholdosReadDataMap"
+         android:protectionLevel="signature|privileged" />
+ 
++    <!-- Allows the FreeholdOS exit app to read and set the Compartments profile of each app, for the
++         owner user. Only that app holds it (ADR-208).
++         @hide -->
++    <permission android:name="org.freeholdos.permission.MANAGE_COMPARTMENTS"
++        android:label="@string/permlab_freeholdosManageCompartments"
++        android:description="@string/permdesc_freeholdosManageCompartments"
++        android:protectionLevel="signature|privileged" />
++
++    <!-- Allows the Settings app to read the Compartments profile of one app, for its App info page.
++         Only that app holds it (ADR-208).
++         @hide -->
++    <permission android:name="org.freeholdos.permission.READ_COMPARTMENT_PROFILE"
++        android:label="@string/permlab_freeholdosReadCompartmentProfile"
++        android:description="@string/permdesc_freeholdosReadCompartmentProfile"
++        android:protectionLevel="signature|privileged" />
++
+     <!-- Allows an app to update the verification status of E2EE contact keys owned by other apps.
+         <p>This permission is only granted to system apps.
+         <p>Protection level: signature|privileged
+diff --git a/core/res/res/values/strings.xml b/core/res/res/values/strings.xml
+index 2016c64..730d9c0 100644
+--- a/core/res/res/values/strings.xml
++++ b/core/res/res/values/strings.xml
+@@ -1316,6 +1316,18 @@
+      [CHAR LIMIT=NONE] -->
+     <string name="permdesc_freeholdosReadDataMap">Allows the Data Map app to read the names and counts of the services that apps of the same user contact.</string>
+ 
++    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
++    <string name="permlab_freeholdosManageCompartments">manage how apps are kept apart</string>
++    <!-- Description of an application permission. Only the FreeholdOS exit app holds it.
++     [CHAR LIMIT=NONE] -->
++    <string name="permdesc_freeholdosManageCompartments">Allows the exit app to read and set the Compartments profile of each app.</string>
++
++    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
++    <string name="permlab_freeholdosReadCompartmentProfile">read the profile of an app</string>
++    <!-- Description of an application permission. Only the Settings app holds it.
++     [CHAR LIMIT=NONE] -->
++    <string name="permdesc_freeholdosReadCompartmentProfile">Allows the Settings app to read the Compartments profile of one app.</string>
++
+     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+     <string name="permlab_reorderTasks">reorder running apps</string>
+     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+-- 
+2.56.0
+

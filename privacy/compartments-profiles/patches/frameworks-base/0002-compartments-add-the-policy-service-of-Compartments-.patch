@@ -1,0 +1,883 @@
+From b811ed8e039fe8fd6647e081448b2060e9618dcc Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 14:43:44 +0100
+Subject: [PATCH] compartments: add the policy service of Compartments
+ (ADR-208)
+
+One store of profiles per package in system_server, written only by the exit app
+(MANAGE_COMPARTMENTS) and readable for one label by Settings
+(READ_COMPARTMENT_PROFILE). The pure core (Profiles, PolicyStore, MirrorPlan) is
+host-tested in privacy/compartments-profiles. The service mirrors the store to
+the settings hardening list (ADR-175), the USE_LOOPBACK_INTERFACE permission and
+the file that the sensor service reads (ADR-167); each mirror stands alone. A
+store that cannot be read reads as Protected for every app. The event log
+records the class and value, never the package.
+---
+ .../com/android/server/EventLogTags.logtags   |   4 +
+ .../CompartmentsPolicyService.java            | 444 ++++++++++++++++++
+ .../server/compartments/MirrorPlan.java       |  95 ++++
+ .../server/compartments/PolicyStore.java      | 209 +++++++++
+ .../android/server/compartments/Profiles.java |  46 ++
+ .../java/com/android/server/SystemServer.java |   5 +
+ 6 files changed, 803 insertions(+)
+ create mode 100644 services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+ create mode 100644 services/core/java/com/android/server/compartments/MirrorPlan.java
+ create mode 100644 services/core/java/com/android/server/compartments/PolicyStore.java
+ create mode 100644 services/core/java/com/android/server/compartments/Profiles.java
+
+diff --git a/services/core/java/com/android/server/EventLogTags.logtags b/services/core/java/com/android/server/EventLogTags.logtags
+index be98a71..d22bf82 100644
+--- a/services/core/java/com/android/server/EventLogTags.logtags
++++ b/services/core/java/com/android/server/EventLogTags.logtags
+@@ -308,3 +308,7 @@ option java_package com.android.server
+ 51700 datamap_collecting (user|1), (enabled|1)
+ 51701 datamap_history (user|1), (enabled|1), (days|1)
+ 51702 datamap_cleared (user|1)
++
++# Compartments (ADR-208): a profile or a value changed. class is -1 for a profile or the defaults.
++# Never the package name.
++51710 compartments_changed (class|1),(value|1)
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+new file mode 100644
+index 0000000..44ae98d
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -0,0 +1,444 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++import android.content.BroadcastReceiver;
++import android.content.Context;
++import android.content.Intent;
++import android.content.IntentFilter;
++import android.content.pm.PackageInfo;
++import android.content.pm.PackageManager;
++import android.os.Binder;
++import android.os.Environment;
++import android.os.FileUtils;
++import android.os.Handler;
++import android.os.UserHandle;
++import android.os.UserManager;
++import android.provider.Settings;
++import android.util.AtomicFile;
++import android.util.Slog;
++
++import com.android.internal.compartments.CompartmentsAppPolicy;
++import com.android.internal.compartments.ICompartmentsPolicy;
++import com.android.internal.os.BackgroundThread;
++import com.android.server.EventLogTags;
++import com.android.server.SystemService;
++import com.android.server.compartments.PolicyStore.AppPolicy;
++import com.android.server.compartments.Profiles.Cls;
++import com.android.server.compartments.Profiles.Profile;
++import com.android.server.compartments.Profiles.Value;
++
++import java.io.File;
++import java.io.FileOutputStream;
++import java.io.IOException;
++import java.nio.ByteBuffer;
++import java.nio.charset.StandardCharsets;
++import java.security.SecureRandom;
++import java.util.List;
++import java.util.Set;
++import java.util.TreeSet;
++
++/**
++ * The policy store of Compartments (ADR-208): one profile per app, written only by the exit app and
++ * mirrored to the three enforcement points that exist in the image: the global setting that lists
++ * the packages which read every settings key (ADR-175), the runtime permission
++ * USE_LOOPBACK_INTERFACE, and a file that the sensor service reads (ADR-167).
++ *
++ * <p>The store is the one of the owner user and belongs to packages, so a profile reaches an app in
++ * every user. A store that cannot be read at boot reads as Protected for every app. The event log
++ * records that a class changed, never which package.
++ */
++public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
++    static final String TAG = "CompartmentsPolicy";
++    static final String SERVICE_NAME = "compartments";
++    static final String MANAGE = "org.freeholdos.permission.MANAGE_COMPARTMENTS";
++    static final String READ_PROFILE = "org.freeholdos.permission.READ_COMPARTMENT_PROFILE";
++    static final String EXIT_PACKAGE = "org.freeholdos.exit";
++    static final String SETTINGS_REAL_PACKAGES = "freeholdos_settings_real_packages";
++    private static final String LOOPBACK_PERMISSION = "android.permission.USE_LOOPBACK_INTERFACE";
++    private static final int MAX_STORE_BYTES = 1024 * 1024;
++
++    private final Context mContext;
++    private final Object mLock = new Object();
++    private final File mDir;
++    private final AtomicFile mPolicyFile;
++    private final AtomicFile mSensorFile;
++    private final long mSalt;
++    private volatile PolicyStore mStore;
++
++    CompartmentsPolicyService(Context context) {
++        mContext = context;
++        mDir = new File(Environment.getDataSystemDirectory(), "compartments");
++        mDir.mkdirs();
++        FileUtils.setPermissions(mDir.getPath(), 0700, -1, -1);
++        mPolicyFile = new AtomicFile(new File(mDir, "policy.bin"));
++        mSensorFile = new AtomicFile(new File(mDir, "sensor_modes"));
++        mSalt = loadSalt(new File(mDir, "salt"));
++        mStore = loadStore();
++    }
++
++    // ---------------------------------------------------------------- interface
++
++    @Override
++    public CompartmentsAppPolicy getApp(String packageName) {
++        enforceManage();
++        requireValidName(packageName);
++        PolicyStore s = mStore;
++        return toParcel(s.policyOf(packageName), s.hasEntry(packageName));
++    }
++
++    @Override
++    public CompartmentsAppPolicy getDefaults() {
++        enforceManage();
++        return toParcel(mStore.defaults, false);
++    }
++
++    @Override
++    public String[] getConfigured() {
++        enforceManage();
++        return mStore.configured().toArray(new String[0]);
++    }
++
++    @Override
++    public void setDefaultProfile(int profile) {
++        enforceManage();
++        Profile p = profileOf(profile);
++        if (p == Profile.TRUSTED) {
++            throw new IllegalArgumentException("the default profile is never Trusted");
++        }
++        change(-1, profile, s -> s.withDefaults(s.defaults.withProfile(p)));
++    }
++
++    @Override
++    public void setDefaultSensors(int value) {
++        enforceManage();
++        Value v = valueOf(value);
++        change(Cls.SENSORS.ordinal(), value, s -> s.withDefaults(s.defaults.withValue(Cls.SENSORS, v)));
++    }
++
++    @Override
++    public void setProfile(String packageName, int profile) {
++        enforceManage();
++        Profile p = profileOf(profile);
++        requireSettableApp(packageName);
++        change(-1, profile, s -> s.withApp(packageName, s.policyOf(packageName).withProfile(p)));
++    }
++
++    @Override
++    public void setClassValue(String packageName, int cls, int value) {
++        enforceManage();
++        Cls c = clsOf(cls);
++        Value v = valueOf(value);
++        requireSettableApp(packageName);
++        change(cls, value, s -> s.withApp(packageName, s.policyOf(packageName).withValue(c, v)));
++    }
++
++    @Override
++    public void clearApp(String packageName) {
++        enforceManage();
++        requireValidName(packageName);
++        change(-1, Profile.PROTECTED.ordinal(), s -> s.without(packageName));
++    }
++
++    @Override
++    public int getProfile(String packageName) {
++        if (mContext.checkCallingPermission(MANAGE) != PackageManager.PERMISSION_GRANTED
++                && mContext.checkCallingPermission(READ_PROFILE) != PackageManager.PERMISSION_GRANTED) {
++            throw new SecurityException("needs " + MANAGE + " or " + READ_PROFILE);
++        }
++        requireValidName(packageName);
++        return mStore.policyOf(packageName).profile.ordinal();
++    }
++
++    // ---------------------------------------------------------------- change and mirrors
++
++    private interface Edit {
++        PolicyStore apply(PolicyStore current);
++    }
++
++    /**
++     * Computes the next store, writes it, publishes it, logs it and applies the mirrors. A change
++     * that the pure core refuses, or a write that fails, leaves the store as it was.
++     */
++    private void change(int cls, int value, Edit edit) {
++        final long token = Binder.clearCallingIdentity();
++        try {
++            synchronized (mLock) {
++                PolicyStore previous = mStore;
++                PolicyStore next = edit.apply(previous);
++                if (next == previous) {
++                    return;
++                }
++                writeAtomic(mPolicyFile, next.encode());
++                mStore = next;
++                EventLogTags.writeCompartmentsChanged(cls, value);
++                applyMirrors(previous, next, false);
++            }
++        } finally {
++            Binder.restoreCallingIdentity(token);
++        }
++    }
++
++    /**
++     * Brings the three enforcement points in line with {@code next}. Each mirror stands alone: a
++     * failure in one is logged by class name and does not stop the others. {@code full} re-applies
++     * the permission of every configured package (boot, a package added), else only those whose
++     * loopback value changed.
++     */
++    private void applyMirrors(PolicyStore previous, PolicyStore next, boolean full) {
++        try {
++            String wanted = MirrorPlan.settingsRealPackages(next);
++            String have = Settings.Global.getString(mContext.getContentResolver(), SETTINGS_REAL_PACKAGES);
++            if (!wanted.equals(have == null ? "" : have)) {
++                Settings.Global.putString(mContext.getContentResolver(), SETTINGS_REAL_PACKAGES, wanted);
++            }
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "settings mirror failed: " + e.getClass().getSimpleName());
++        }
++        try {
++            applyLoopback(previous, next, full);
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "loopback mirror failed: " + e.getClass().getSimpleName());
++        }
++        try {
++            String file = MirrorPlan.sensorModeFile(next, this::ownerUidOf, mSalt);
++            writeAtomic(mSensorFile, file.getBytes(StandardCharsets.US_ASCII));
++            FileUtils.setPermissions(mSensorFile.getBaseFile().getPath(), 0644, -1, -1);
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "sensor mirror failed: " + e.getClass().getSimpleName());
++        }
++    }
++
++    private void applyLoopback(PolicyStore previous, PolicyStore next, boolean full) {
++        Set<String> allowed = MirrorPlan.loopbackAllowed(next);
++        Set<String> touched = new TreeSet<>(next.configured());
++        touched.addAll(previous.configured());
++        PackageManager pm = mContext.getPackageManager();
++        List<UserHandle> users = mContext.getSystemService(UserManager.class).getUserHandles(true);
++        for (String pkg : touched) {
++            if (!full && previous.value(pkg, Cls.LOOPBACK) == next.value(pkg, Cls.LOOPBACK)) {
++                continue;
++            }
++            for (UserHandle user : users) {
++                try {
++                    pm.getPackageUidAsUser(pkg, 0, user.getIdentifier());
++                    if (allowed.contains(pkg)) {
++                        pm.grantRuntimePermission(pkg, LOOPBACK_PERMISSION, user);
++                    } else {
++                        pm.revokeRuntimePermission(pkg, LOOPBACK_PERMISSION, user);
++                    }
++                } catch (PackageManager.NameNotFoundException e) {
++                    // not installed for this user: nothing to mirror
++                } catch (RuntimeException e) {
++                    Slog.w(TAG, "loopback permission failed: " + e.getClass().getSimpleName());
++                }
++            }
++        }
++    }
++
++    private int ownerUidOf(String pkg) {
++        try {
++            return mContext.getPackageManager().getPackageUidAsUser(pkg, 0, UserHandle.USER_SYSTEM);
++        } catch (PackageManager.NameNotFoundException e) {
++            return -1;
++        }
++    }
++
++    // ---------------------------------------------------------------- lifecycle
++
++    private void systemReady() {
++        IntentFilter removed = new IntentFilter(Intent.ACTION_PACKAGE_FULLY_REMOVED);
++        removed.addDataScheme("package");
++        IntentFilter added = new IntentFilter(Intent.ACTION_PACKAGE_ADDED);
++        added.addDataScheme("package");
++        Handler handler = BackgroundThread.getHandler();
++        mContext.registerReceiverForAllUsers(new BroadcastReceiver() {
++            @Override
++            public void onReceive(Context context, Intent intent) {
++                if (intent.getData() == null) {
++                    return;
++                }
++                onPackageRemoved(intent.getData().getSchemeSpecificPart());
++            }
++        }, removed, null, handler);
++        mContext.registerReceiverForAllUsers(new BroadcastReceiver() {
++            @Override
++            public void onReceive(Context context, Intent intent) {
++                reapply();
++            }
++        }, added, null, handler);
++        reapply();
++    }
++
++    /** The entry of a package that is gone from every user is cleared; a profile is not kept for a name. */
++    private void onPackageRemoved(String pkg) {
++        if (pkg == null || !mStore.hasEntry(pkg)) {
++            return;
++        }
++        change(-1, Profile.PROTECTED.ordinal(), s -> s.without(pkg));
++    }
++
++    /** Boot, boot completed or a package added: a changed uid must reach the sensor file. */
++    private void reapply() {
++        final long token = Binder.clearCallingIdentity();
++        try {
++            synchronized (mLock) {
++                applyMirrors(mStore, mStore, true);
++            }
++        } finally {
++            Binder.restoreCallingIdentity(token);
++        }
++    }
++
++    // ---------------------------------------------------------------- checks
++
++    private void enforceManage() {
++        mContext.enforceCallingPermission(MANAGE, "Compartments policy");
++        if (UserHandle.getCallingUserId() != UserHandle.USER_SYSTEM) {
++            throw new SecurityException("only the owner user manages Compartments");
++        }
++    }
++
++    private static void requireValidName(String packageName) {
++        if (!PolicyStore.validPackage(packageName)) {
++            throw new IllegalArgumentException("not a package name");
++        }
++    }
++
++    /**
++     * A package that can be set apart: installed for the owner user, an ordinary app, the only
++     * package of its uid (the sensor service and the permission decide per uid), and not the exit
++     * app, which would lock the user out.
++     */
++    private void requireSettableApp(String packageName) {
++        requireValidName(packageName);
++        if (EXIT_PACKAGE.equals(packageName)) {
++            throw new IllegalArgumentException("the exit app cannot be set");
++        }
++        final long token = Binder.clearCallingIdentity();
++        try {
++            PackageManager pm = mContext.getPackageManager();
++            int uid = pm.getPackageUidAsUser(packageName, 0, UserHandle.USER_SYSTEM);
++            if (!UserHandle.isApp(uid)) {
++                throw new IllegalArgumentException("not an ordinary app");
++            }
++            PackageInfo info = pm.getPackageInfoAsUser(packageName, 0, UserHandle.USER_SYSTEM);
++            if (info.sharedUserId != null) {
++                throw new IllegalArgumentException("shares its uid with another package");
++            }
++        } catch (PackageManager.NameNotFoundException e) {
++            throw new IllegalArgumentException("not installed");
++        } finally {
++            Binder.restoreCallingIdentity(token);
++        }
++    }
++
++    private static Profile profileOf(int n) {
++        Profile[] all = Profile.values();
++        if (n < 0 || n >= all.length) {
++            throw new IllegalArgumentException("profile");
++        }
++        return all[n];
++    }
++
++    private static Cls clsOf(int n) {
++        Cls[] all = Cls.values();
++        if (n < 0 || n >= all.length) {
++            throw new IllegalArgumentException("class");
++        }
++        return all[n];
++    }
++
++    private static Value valueOf(int n) {
++        Value[] all = Value.values();
++        if (n < 0 || n >= all.length) {
++            throw new IllegalArgumentException("value");
++        }
++        return all[n];
++    }
++
++    private static CompartmentsAppPolicy toParcel(AppPolicy p, boolean configured) {
++        CompartmentsAppPolicy out = new CompartmentsAppPolicy();
++        out.profile = p.profile.ordinal();
++        out.sensors = p.value(Cls.SENSORS).ordinal();
++        out.loopback = p.value(Cls.LOOPBACK).ordinal();
++        out.settings = p.value(Cls.SETTINGS).ordinal();
++        out.configured = configured;
++        return out;
++    }
++
++    // ---------------------------------------------------------------- files
++
++    private PolicyStore loadStore() {
++        try {
++            if (!mPolicyFile.exists()) {
++                return PolicyStore.EMPTY;
++            }
++            byte[] data = mPolicyFile.readFully();
++            return data.length > MAX_STORE_BYTES ? PolicyStore.EMPTY : PolicyStore.decode(data);
++        } catch (IOException | RuntimeException e) {
++            Slog.w(TAG, "policy store unreadable, every app is Protected: " + e.getClass().getSimpleName());
++            return PolicyStore.EMPTY;
++        }
++    }
++
++    private static long loadSalt(File f) {
++        AtomicFile af = new AtomicFile(f);
++        try {
++            if (af.exists()) {
++                byte[] b = af.readFully();
++                if (b.length == Long.BYTES) {
++                    return ByteBuffer.wrap(b).getLong();
++                }
++            }
++        } catch (IOException | RuntimeException e) {
++            Slog.w(TAG, "salt unreadable, a new one is made: " + e.getClass().getSimpleName());
++        }
++        long salt = new SecureRandom().nextLong();
++        try {
++            writeAtomic(af, ByteBuffer.allocate(Long.BYTES).putLong(salt).array());
++            FileUtils.setPermissions(f.getPath(), 0600, -1, -1);
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "salt not stored: " + e.getClass().getSimpleName());
++        }
++        return salt;
++    }
++
++    private static void writeAtomic(AtomicFile file, byte[] bytes) {
++        FileOutputStream out = null;
++        try {
++            out = file.startWrite();
++            out.write(bytes);
++            file.finishWrite(out);
++        } catch (IOException e) {
++            if (out != null) {
++                file.failWrite(out);
++            }
++            throw new IllegalStateException("write failed: " + e.getClass().getSimpleName());
++        }
++    }
++
++    // ---------------------------------------------------------------- lifecycle class
++
++    public static final class Lifecycle extends SystemService {
++        private CompartmentsPolicyService mService;
++
++        public Lifecycle(Context context) {
++            super(context);
++        }
++
++        @Override
++        public void onStart() {
++            mService = new CompartmentsPolicyService(getContext());
++            publishBinderService(SERVICE_NAME, mService);
++        }
++
++        @Override
++        public void onBootPhase(int phase) {
++            if (phase == PHASE_SYSTEM_SERVICES_READY) {
++                mService.systemReady();
++            } else if (phase == PHASE_BOOT_COMPLETED) {
++                mService.reapply();
++            }
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/MirrorPlan.java b/services/core/java/com/android/server/compartments/MirrorPlan.java
+new file mode 100644
+index 0000000..df1ba6e
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/MirrorPlan.java
+@@ -0,0 +1,95 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++import com.android.server.compartments.Profiles.Cls;
++import com.android.server.compartments.Profiles.SensorMode;
++import com.android.server.compartments.Profiles.Value;
++
++import java.util.Map;
++import java.util.Set;
++import java.util.TreeMap;
++import java.util.TreeSet;
++
++/** What the enforcement points are told, computed from a store. Pure: the service applies the results. */
++final class MirrorPlan {
++    private MirrorPlan() {}
++
++    /** The uid of a package in the owner user, or -1 when the package is not installed there. */
++    interface UidResolver {
++        int uidOf(String pkg);
++    }
++
++    static final int USER_OFFSET = 100000;
++    static final int FIRST_APP_ID = 10000;
++    static final int LAST_APP_ID = 19999;
++
++    /** The value of the global setting that lists the packages allowed to read every settings key (ADR-175). */
++    static String settingsRealPackages(PolicyStore s) {
++        StringBuilder out = new StringBuilder();
++        for (String pkg : new TreeSet<>(s.configured())) {
++            if (s.value(pkg, Cls.SETTINGS) == Value.REAL) {
++                out.append(out.length() == 0 ? "" : ",").append(pkg);
++            }
++        }
++        return out.toString();
++    }
++
++    /** The packages that hold the loopback permission: only those the user set; the default is blocked. */
++    static Set<String> loopbackAllowed(PolicyStore s) {
++        Set<String> out = new TreeSet<>();
++        for (String pkg : s.configured()) {
++            if (s.value(pkg, Cls.LOOPBACK) == Value.REAL) {
++                out.add(pkg);
++            }
++        }
++        return out;
++    }
++
++    /** The more protective of two modes: RAW, FOLDED, SUBSTITUTE, BLOCKED in that order. */
++    static SensorMode stricter(SensorMode a, SensorMode b) {
++        return rank(a) >= rank(b) ? a : b;
++    }
++
++    private static int rank(SensorMode m) {
++        switch (m) {
++            case RAW:
++                return 0;
++            case FOLDED:
++                return 1;
++            case SUBSTITUTE:
++                return 2;
++            default:
++                return 3;
++        }
++    }
++
++    /**
++     * The file that the sensor service reads: "s SALT" (16 hex digits, the per-phone salt of the invented streams), "d MODE"
++     * for every app without a line of its own, then "a APPID MODE" for each configured app whose mode differs from that
++     * default, in app id order. A line holds an app id, so it reaches the app in every user (and the sandbox of the app, which
++     * the reader maps back). Only app ids of ordinary apps are written, because the reader refuses a file with any other id and
++     * every choice of the user would then be lost; two packages with one app id get the more protective mode.
++     */
++    static String sensorModeFile(PolicyStore s, UidResolver r, long salt) {
++        SensorMode dflt = mode(s.defaults.profile, s.defaults.value(Cls.SENSORS));
++        Map<Integer, SensorMode> perApp = new TreeMap<>();
++        for (String pkg : s.configured()) {
++            int uid = r.uidOf(pkg);
++            int appId = uid % USER_OFFSET;
++            if (appId >= FIRST_APP_ID && appId <= LAST_APP_ID) {  // -1 (not installed) is outside the range too
++                perApp.merge(appId, mode(s.policyOf(pkg).profile, s.value(pkg, Cls.SENSORS)), MirrorPlan::stricter);
++            }
++        }
++        StringBuilder out = new StringBuilder(String.format("s %016x\n", salt)).append("d ").append(dflt).append('\n');
++        for (Map.Entry<Integer, SensorMode> e : perApp.entrySet()) {
++            if (e.getValue() != dflt) {
++                out.append("a ").append(e.getKey()).append(' ').append(e.getValue()).append('\n');
++            }
++        }
++        return out.toString();
++    }
++
++    private static SensorMode mode(Profiles.Profile p, Value v) {
++        return Profiles.sensorMode(p, v);
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/PolicyStore.java b/services/core/java/com/android/server/compartments/PolicyStore.java
+new file mode 100644
+index 0000000..73863cf
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/PolicyStore.java
+@@ -0,0 +1,209 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++import com.android.server.compartments.Profiles.Cls;
++import com.android.server.compartments.Profiles.Profile;
++import com.android.server.compartments.Profiles.Value;
++
++import java.io.ByteArrayInputStream;
++import java.io.ByteArrayOutputStream;
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.IOException;
++import java.util.Collections;
++import java.util.Map;
++import java.util.Set;
++import java.util.TreeMap;
++import java.util.regex.Pattern;
++
++/**
++ * The policy of every app: a profile and per-class values, plus the defaults that an app the user has not set follows.
++ * Immutable. A store that cannot be read back reads as {@link #EMPTY}, in which every app is Protected.
++ */
++final class PolicyStore {
++    static final int MAX_APPS = 4096;
++    private static final int MAGIC = 0x434D5031;
++    private static final int VERSION = 1;
++    private static final Pattern PACKAGE = Pattern.compile("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+");
++
++    /** A profile and the classes the user set on top of it. */
++    static final class AppPolicy {
++        static final AppPolicy PROTECTED = new AppPolicy(Profile.PROTECTED, new Value[Cls.values().length]);
++
++        final Profile profile;
++        private final Value[] overrides;
++
++        AppPolicy(Profile profile, Value[] overrides) {
++            Value[] copy = new Value[Cls.values().length];
++            System.arraycopy(overrides, 0, copy, 0, Math.min(overrides.length, copy.length));
++            this.profile = profile;
++            this.overrides = copy;
++        }
++
++        Value value(Cls c) {
++            Value o = overrides[c.ordinal()];
++            return o != null ? o : Profiles.defaultValue(profile, c);
++        }
++
++        /** A new profile clears what the user set per class. */
++        AppPolicy withProfile(Profile p) {
++            return new AppPolicy(p, new Value[Cls.values().length]);
++        }
++
++        /** A value equal to the profile's own default is kept as no override. */
++        AppPolicy withValue(Cls c, Value v) {
++            if (!Profiles.isValid(c, v)) {
++                throw new IllegalArgumentException(c + " cannot be " + v);
++            }
++            Value[] next = overrides.clone();
++            next[c.ordinal()] = v == Profiles.defaultValue(profile, c) ? null : v;
++            return new AppPolicy(profile, next);
++        }
++    }
++
++    static final PolicyStore EMPTY = new PolicyStore(AppPolicy.PROTECTED, new TreeMap<>());
++
++    final AppPolicy defaults;
++    private final TreeMap<String, AppPolicy> apps;
++
++    private PolicyStore(AppPolicy defaults, TreeMap<String, AppPolicy> apps) {
++        this.defaults = defaults;
++        this.apps = apps;
++    }
++
++    static boolean validPackage(String name) {
++        return name != null && name.length() <= 255 && PACKAGE.matcher(name).matches();
++    }
++
++    /** What an app without an entry of its own follows may be Protected or Isolated, with its sensors set; never more. */
++    static boolean validDefaults(AppPolicy d) {
++        return d.profile != Profile.TRUSTED
++                && d.value(Cls.LOOPBACK) == Profiles.defaultValue(d.profile, Cls.LOOPBACK)
++                && d.value(Cls.SETTINGS) == Profiles.defaultValue(d.profile, Cls.SETTINGS);
++    }
++
++    AppPolicy policyOf(String pkg) {
++        AppPolicy p = apps.get(pkg);
++        return p != null ? p : defaults;
++    }
++
++    Value value(String pkg, Cls c) {
++        return policyOf(pkg).value(c);
++    }
++
++    boolean hasEntry(String pkg) {
++        return apps.containsKey(pkg);
++    }
++
++    Set<String> configured() {
++        return Collections.unmodifiableSet(apps.keySet());
++    }
++
++    PolicyStore withDefaults(AppPolicy d) {
++        if (!validDefaults(d)) {
++            throw new IllegalArgumentException("defaults may be Protected or Isolated with their own loopback and settings");
++        }
++        return new PolicyStore(d, apps);
++    }
++
++    PolicyStore withApp(String pkg, AppPolicy p) {
++        if (!validPackage(pkg)) {
++            throw new IllegalArgumentException("not a package name");
++        }
++        if (!apps.containsKey(pkg) && apps.size() >= MAX_APPS) {
++            throw new IllegalStateException("too many configured apps");
++        }
++        TreeMap<String, AppPolicy> next = new TreeMap<>(apps);
++        next.put(pkg, p);
++        return new PolicyStore(defaults, next);
++    }
++
++    /** The app follows the defaults again. */
++    PolicyStore without(String pkg) {
++        if (!apps.containsKey(pkg)) {
++            return this;
++        }
++        TreeMap<String, AppPolicy> next = new TreeMap<>(apps);
++        next.remove(pkg);
++        return new PolicyStore(defaults, next);
++    }
++
++    byte[] encode() {
++        try {
++            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
++            DataOutputStream out = new DataOutputStream(bytes);
++            out.writeInt(MAGIC);
++            out.writeByte(VERSION);
++            writePolicy(out, defaults);
++            out.writeInt(apps.size());
++            for (Map.Entry<String, AppPolicy> e : apps.entrySet()) {
++                out.writeUTF(e.getKey());
++                writePolicy(out, e.getValue());
++            }
++            return bytes.toByteArray();
++        } catch (IOException e) {
++            throw new IllegalStateException(e);
++        }
++    }
++
++    /** The store that {@code data} holds, or {@link #EMPTY} for anything that is not exactly a store this version wrote. */
++    static PolicyStore decode(byte[] data) {
++        if (data == null) {
++            return EMPTY;
++        }
++        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
++            if (in.readInt() != MAGIC || in.readByte() != VERSION) {
++                return EMPTY;
++            }
++            AppPolicy d = readPolicy(in);
++            if (d == null || !validDefaults(d)) {
++                return EMPTY;
++            }
++            int n = in.readInt();
++            if (n < 0 || n > MAX_APPS) {
++                return EMPTY;
++            }
++            TreeMap<String, AppPolicy> apps = new TreeMap<>();
++            for (int i = 0; i < n; i++) {
++                String pkg = in.readUTF();
++                AppPolicy p = readPolicy(in);
++                if (p == null || !validPackage(pkg) || apps.put(pkg, p) != null) {
++                    return EMPTY;
++                }
++            }
++            return in.read() == -1 ? new PolicyStore(d, apps) : EMPTY;
++        } catch (IOException e) {
++            return EMPTY;
++        }
++    }
++
++    private static void writePolicy(DataOutputStream out, AppPolicy p) throws IOException {
++        out.writeByte(p.profile.ordinal());
++        out.writeByte(Cls.values().length);
++        for (Cls c : Cls.values()) {
++            Value o = p.overrides[c.ordinal()];
++            out.writeByte(o == null ? -1 : o.ordinal());
++        }
++    }
++
++    /** Null for a value that is not valid; a file written with fewer classes reads with the rest at their defaults. */
++    private static AppPolicy readPolicy(DataInputStream in) throws IOException {
++        int profile = in.readUnsignedByte();
++        int classes = in.readUnsignedByte();
++        if (profile >= Profile.values().length || classes > Cls.values().length) {
++            return null;
++        }
++        Value[] overrides = new Value[Cls.values().length];
++        for (int i = 0; i < classes; i++) {
++            int v = in.readByte();
++            if (v == -1) {
++                continue;
++            }
++            if (v < 0 || v >= Value.values().length || !Profiles.isValid(Cls.values()[i], Value.values()[v])) {
++                return null;
++            }
++            overrides[i] = Value.values()[v];
++        }
++        return new AppPolicy(Profile.values()[profile], overrides);
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/Profiles.java b/services/core/java/com/android/server/compartments/Profiles.java
+new file mode 100644
+index 0000000..d67c33d
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/Profiles.java
+@@ -0,0 +1,46 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++/**
++ * The profiles, classes and values of Compartments (ADR-208). Pure Java with no android.* import, so that the host tests
++ * compile it as it is.
++ */
++final class Profiles {
++    private Profiles() {}
++
++    enum Profile { TRUSTED, PROTECTED, ISOLATED }
++
++    /** Classes of the first version. Location joins with the persona plan; the codec of PolicyStore tolerates a longer list. */
++    enum Cls { SENSORS, LOOPBACK, SETTINGS }
++
++    /** REAL: what the phone has. SUBSTITUTE: invented, per app. BLOCKED: refused (for SETTINGS: the 40 keys of ADR-175). */
++    enum Value { REAL, SUBSTITUTE, BLOCKED }
++
++    /** What the sensor service does for an app: the unchanged event, the bias folded in (ADR-167), invented data, or nothing. */
++    enum SensorMode { FOLDED, RAW, SUBSTITUTE, BLOCKED }
++
++    /** Only the sensors can be substituted; loopback and the settings tables are real or blocked. */
++    static boolean isValid(Cls c, Value v) {
++        return c == Cls.SENSORS || v != Value.SUBSTITUTE;
++    }
++
++    /** The value a profile gives a class when the user has not set that class (spec section 3). */
++    static Value defaultValue(Profile p, Cls c) {
++        if (c == Cls.SENSORS) {
++            return p == Profile.ISOLATED ? Value.SUBSTITUTE : Value.REAL;
++        }
++        return p == Profile.TRUSTED ? Value.REAL : Value.BLOCKED;
++    }
++
++    /** Real sensor data is raw only for a Trusted app; for every other profile the bias stays folded in. */
++    static SensorMode sensorMode(Profile p, Value v) {
++        switch (v) {
++            case SUBSTITUTE:
++                return SensorMode.SUBSTITUTE;
++            case BLOCKED:
++                return SensorMode.BLOCKED;
++            default:
++                return p == Profile.TRUSTED ? SensorMode.RAW : SensorMode.FOLDED;
++        }
++    }
++}
+diff --git a/services/java/com/android/server/SystemServer.java b/services/java/com/android/server/SystemServer.java
+index c03e3d8..8e698dd 100644
+--- a/services/java/com/android/server/SystemServer.java
++++ b/services/java/com/android/server/SystemServer.java
+@@ -159,6 +159,7 @@ import com.android.server.clipboard.ClipboardService;
+ import com.android.server.companion.CompanionDeviceManagerService;
+ import com.android.server.companion.datatransfer.continuity.TaskContinuityManagerService;
+ import com.android.server.companion.virtual.VirtualDeviceManagerService;
++import com.android.server.compartments.CompartmentsPolicyService;
+ import com.android.server.compat.PlatformCompat;
+ import com.android.server.compat.PlatformCompatNative;
+ import com.android.server.compat.overrides.AppCompatOverridesService;
+@@ -1833,6 +1834,10 @@ public final class SystemServer implements Dumpable {
+             mSystemServiceManager.startService(DataMapService.Lifecycle.class);
+             t.traceEnd();
+ 
++            t.traceBegin("CompartmentsPolicyService");
++            mSystemServiceManager.startService(CompartmentsPolicyService.Lifecycle.class);
++            t.traceEnd();
++
+             t.traceBegin("PinnerService");
+             mSystemServiceManager.startService(PinnerService.class);
+             t.traceEnd();
+-- 
+2.56.0
+
