@@ -1,0 +1,120 @@
+From 7d37c40bc665b2e98bb06d6403227d33a88ffd87 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 14:47:08 +0100
+Subject: [PATCH] sepolicy: add the Compartments policy service and its data
+ file type (ADR-208)
+
+The service compartments in system_server, found only by the exit app and by
+system_app (the Settings app); system_server writes /data/system/compartments
+under its own type. traceur_app and shell keep their broad service lists
+without the new service, as for the Data Map service.
+---
+ build/soong/service_fuzzer_bindings.go |  1 +
+ private/compartments_service.te        | 18 ++++++++++++++++++
+ private/file_contexts                  |  1 +
+ private/service.te                     |  1 +
+ private/service_contexts               |  1 +
+ private/shell.te                       |  1 +
+ private/traceur_app.te                 |  1 +
+ 7 files changed, 24 insertions(+)
+ create mode 100644 private/compartments_service.te
+
+diff --git a/build/soong/service_fuzzer_bindings.go b/build/soong/service_fuzzer_bindings.go
+index cff8582..274983a 100644
+--- a/build/soong/service_fuzzer_bindings.go
++++ b/build/soong/service_fuzzer_bindings.go
+@@ -275,6 +275,7 @@ var (
+ 		"com.android.net.IProxyService":                                        EXCEPTION_NO_FUZZER,
+ 		"companiondevice":                                                      EXCEPTION_NO_FUZZER,
+ 		"communal":                                                             EXCEPTION_NO_FUZZER,
++		"compartments":                                                         EXCEPTION_NO_FUZZER,
+ 		"platform_compat":                                                      EXCEPTION_NO_FUZZER,
+ 		"platform_compat_native":                                               EXCEPTION_NO_FUZZER,
+ 		"connectivity":                                                         EXCEPTION_NO_FUZZER,
+diff --git a/private/compartments_service.te b/private/compartments_service.te
+new file mode 100644
+index 0000000..8945f98
+--- /dev/null
++++ b/private/compartments_service.te
+@@ -0,0 +1,18 @@
++# SPDX-License-Identifier: Apache-2.0
++# The policy service of Compartments (ADR-208) in system_server, and the files it keeps in /data/system/compartments:
++# the store, the salt and the file that the sensor service reads (the sensor service runs inside system_server).
++type compartments_data_file, file_type, data_file_type, core_data_file_type;
++
++# system_server creates the directory with its own type instead of the type of /data/system, so no restorecon is needed.
++type_transition system_server system_data_file:dir compartments_data_file "compartments";
++allow system_server compartments_data_file:dir create_dir_perms;
++allow system_server compartments_data_file:file create_file_perms;
++
++# Only the exit app sets the policy and only the Settings app (system_app) reads one label: the permissions of the
++# service say which of them, and SELinux keeps every other app domain from finding the service at all.
++allow exit_app compartments_service:service_manager find;
++allow system_app compartments_service:service_manager find;
++neverallow { appdomain -exit_app -system_app } compartments_service:service_manager find;
++
++# Nothing but system_server writes the files.
++neverallow { domain -system_server } compartments_data_file:file { write append create unlink rename setattr };
+diff --git a/private/file_contexts b/private/file_contexts
+index 149fcb4..55eb7ab 100644
+--- a/private/file_contexts
++++ b/private/file_contexts
+@@ -760,6 +760,7 @@
+ /data/misc/update_engine_log(/.*)?  u:object_r:update_engine_log_data_file:s0
+ /data/misc/snapuserd_log(/.*)?  u:object_r:snapuserd_log_data_file:s0
+ /data/system/aiseal(/.*)?       u:object_r:aiseal_data_file:s0
++/data/system/compartments(/.*)? u:object_r:compartments_data_file:s0
+ /data/system/dropbox(/.*)?      u:object_r:dropbox_data_file:s0
+ /data/system/heapdump(/.*)?     u:object_r:heapdump_data_file:s0
+ /data/misc/trace(/.*)?          u:object_r:method_trace_data_file:s0
+diff --git a/private/service.te b/private/service.te
+index b0b9e50..47b28b6 100644
+--- a/private/service.te
++++ b/private/service.te
+@@ -11,6 +11,7 @@ type bg_install_control_service,     system_api_service, system_server_service,
+ type binder_stats_consumer_service,  system_server_service, service_manager_type;
+ type compos_service,                 service_manager_type;
+ type communal_service,               app_api_service, system_server_service, service_manager_type;
++type compartments_service,           system_server_service, service_manager_type;
+ type content_restriction_service,    app_api_service, ephemeral_app_api_service, system_server_service, service_manager_type;
+ type d2d_connectivity_service,       system_api_service, system_server_service, service_manager_type;
+ type dynamic_system_service,         system_api_service, system_server_service, service_manager_type;
+diff --git a/private/service_contexts b/private/service_contexts
+index 3d22cf9..6b3aa22 100644
+--- a/private/service_contexts
++++ b/private/service_contexts
+@@ -265,6 +265,7 @@ cloudsearch_service                       u:object_r:cloudsearch_service:s0
+ com.android.net.IProxyService             u:object_r:IProxyService_service:s0
+ companiondevice                           u:object_r:companion_device_service:s0
+ communal                                  u:object_r:communal_service:s0
++compartments                              u:object_r:compartments_service:s0
+ credential                                u:object_r:credential_service:s0
+ platform_compat                           u:object_r:platform_compat_service:s0
+ platform_compat_native                    u:object_r:platform_compat_service:s0
+diff --git a/private/shell.te b/private/shell.te
+index d66688f..94beba2 100644
+--- a/private/shell.te
++++ b/private/shell.te
+@@ -382,6 +382,7 @@ allow shell servicemanager:service_manager list;
+ allow shell {
+   service_manager_type
+   -apex_service
++  -compartments_service
+   -datamap_service
+   -dnsresolver_service
+   -gatekeeper_service
+diff --git a/private/traceur_app.te b/private/traceur_app.te
+index 8339618..4b45033 100644
+--- a/private/traceur_app.te
++++ b/private/traceur_app.te
+@@ -31,6 +31,7 @@ allow traceur_app hwservicemanager:hwservice_manager list;
+ allow traceur_app {
+   service_manager_type
+   -apex_service
++  -compartments_service
+   -datamap_service
+   -dnsresolver_service
+   -gatekeeper_service
+-- 
+2.56.0
+
