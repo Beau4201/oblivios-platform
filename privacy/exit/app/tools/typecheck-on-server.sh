@@ -30,7 +30,26 @@ printf '<resources><style name="Theme.SubSettingsBase" parent="android:Theme.Dev
 # The notifier starts ExitSettingsActivity by class: a stand-in with the same name lets it compile.
 mkdir -p "$OUT/stubsrc/org/freeholdos/exit"
 printf 'package org.freeholdos.exit;\npublic class ExitSettingsActivity extends android.app.Activity {}\n' > "$OUT/stubsrc/org/freeholdos/exit/ExitSettingsActivity.java"
-SRCS=$(find "$A/src" "$OUT/gen" -name '*.java' | grep -v -E '/(ExitSettingsActivity|ExitAppsActivity|ExitAppActivity|ExitOverridesActivity)\.java$'; echo "$OUT/stubsrc/org/freeholdos/exit/ExitSettingsActivity.java")
-SRCS=$(echo "$SRCS" | sort)
-"$JAVAC" -proc:none -Xlint:-options -Xlint:unchecked -Xlint:deprecation -cp "$CP" -d "$OUT/classes" $SRCS
+# The two .aidl files of the Compartments policy service (ADR-208) are compiled with the tree's own tool, as Soong does.
+AIDL="$OBJ/host/linux-x86/bin/aidl"
+test -e "$AIDL" || { echo "missing: $AIDL" >&2; exit 2; }
+"$AIDL" --lang=java -I "$A/src" -o "$OUT/gen" $(find "$A/src" -name '*.aidl')
+# With the javac statement of an earlier module build of ExitApp in the ninja files (its boot class path and class path hold SettingsLib
+# and androidx, which the SDK stubs do not) the four screens are compiled as well, with exactly the options of the module build; the
+# R class of that build loses against the R class generated above. Without the statement the screens are left out.
+STMT_FILE=$(grep -l 'ExitApp/android_common/javac/ExitApp.jar \$' "$OBJ"/soong/build.lynx.*.ninja 2>/dev/null | head -1 || true)
+if [ -n "$STMT_FILE" ]; then
+  L=$(grep -n 'ExitApp/android_common/javac/ExitApp.jar \$' "$STMT_FILE" | head -1 | cut -d: -f1)
+  STMT=$(sed -n "${L},$((L+400))p" "$STMT_FILE")
+  BOOT=$(printf '%s\n' "$STMT" | grep -m1 -E '^    bootClasspath = ' | sed 's/^    bootClasspath = //')
+  CPOPT=$(printf '%s\n' "$STMT" | grep -m1 -E '^    classpath = ' | sed 's/^    classpath = //')
+  test -n "$BOOT" -a -n "$CPOPT" || { echo "no class path in the javac statement of ExitApp" >&2; exit 2; }
+  SRCS=$(find "$A/src" "$OUT/gen" -name '*.java' | sort)
+  # the options hold paths relative to the tree
+  (cd "$T" && "$JAVAC" -proc:none -Xlint:-options -Xlint:unchecked -Xlint:deprecation $BOOT $CPOPT -d "$OUT/classes" $SRCS)
+else
+  SRCS=$(find "$A/src" "$OUT/gen" -name '*.java' | grep -v -E '/(ExitSettingsActivity|ExitAppsActivity|ExitAppActivity|ExitOverridesActivity|ExitVisibleActivity)\.java$'; echo "$OUT/stubsrc/org/freeholdos/exit/ExitSettingsActivity.java")
+  SRCS=$(echo "$SRCS" | sort)
+  "$JAVAC" -proc:none -Xlint:-options -Xlint:unchecked -Xlint:deprecation -cp "$CP" -d "$OUT/classes" $SRCS
+fi
 echo "app type-check passed: $(echo "$SRCS" | wc -l) files"

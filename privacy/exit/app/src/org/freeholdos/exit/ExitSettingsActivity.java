@@ -8,17 +8,23 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MenuItem;
+import android.widget.Toast;
 
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceScreen;
 import androidx.preference.SwitchPreferenceCompat;
 
+import com.android.internal.compartments.CompartmentsAppPolicy;
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 import com.android.settingslib.preference.PreferenceFragment;
 import com.android.settingslib.widget.ButtonPreference;
 import com.android.settingslib.widget.FooterPreference;
 import com.android.settingslib.widget.MainSwitchPreference;
+
+import java.util.List;
+import java.util.function.BooleanSupplier;
 
 /**
  * The "Compartments" entry under Network &amp; internet (a preference of the Settings app that starts this activity): the status, the
@@ -69,12 +75,16 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
         private Preference appsPref;
         private Preference overridesPref;
         private MainSwitchPreference mainSwitch;
+        private ProfileClient profiles;
+        private ListPreference defaultProfilePref;
+        private ListPreference defaultSensorsPref;
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
             Context ctx = requireContext();
             rt = ExitRuntime.get(ctx);
             names = rt.companyNames();
+            profiles = ProfileClient.find();
             setPreferenceScreen(getPreferenceManager().createPreferenceScreen(ctx));
             AppIndex.load(ctx, main, i -> {
                 index = i;
@@ -207,10 +217,76 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
             overridesPref.setIntent(new Intent(ctx, ExitOverridesActivity.class));
             screen.addPreference(overridesPref);
 
+            boolean identity = addIdentity(ctx, screen);
+
             if (s.consent != Consent.UNSET) {
                 FooterPreference footer = new FooterPreference(ctx);
                 footer.setSummary(R.string.masked_summary);
                 screen.addPreference(footer);
+            }
+            if (identity) {
+                FooterPreference footer = new FooterPreference(ctx);
+                footer.setSummary(R.string.identity_footer);
+                screen.addPreference(footer);
+            }
+        }
+
+        /**
+         * The profile that apps follow until the user sets them, and the page of what stays visible (ADR-208). Absent when this
+         * image has no Compartments policy service or the service does not answer. Returns whether the category was added.
+         */
+        private boolean addIdentity(Context ctx, PreferenceScreen screen) {
+            defaultProfilePref = null;
+            defaultSensorsPref = null;
+            CompartmentsAppPolicy d = profiles.available() ? profiles.getDefaults() : null;
+            if (d == null) {
+                return false;
+            }
+            List<ProfileRows.Row> rows;
+            try {
+                rows = ProfileRows.defaultRows(d.profile, d.sensors);
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+            PreferenceCategory category = new PreferenceCategory(ctx);
+            category.setPersistent(false);
+            category.setTitle(R.string.identity_title);
+            screen.addPreference(category);
+
+            defaultProfilePref = ProfileText.choice(ctx, "default_profile", R.string.identity_defaults_profile,
+                    ProfileRows.profileChoices(true), ProfileText::profileName, d.profile);
+            defaultProfilePref.setOnPreferenceChangeListener((p, v) -> {
+                changeDefault(() -> profiles.setDefaultProfile(Integer.parseInt((String) v)));
+                return false;
+            });
+            category.addPreference(defaultProfilePref);
+
+            defaultSensorsPref = ProfileText.choice(ctx, "default_sensors", R.string.identity_defaults_sensors,
+                    rows.get(0).values, v -> ProfileText.valueName(ProfileRows.CLASS_SENSORS, v), rows.get(0).current);
+            defaultSensorsPref.setOnPreferenceChangeListener((p, v) -> {
+                changeDefault(() -> profiles.setDefaultSensors(Integer.parseInt((String) v)));
+                return false;
+            });
+            category.addPreference(defaultSensorsPref);
+
+            Preference visible = new Preference(ctx);
+            visible.setPersistent(false);
+            visible.setTitle(R.string.identity_visible_title);
+            visible.setSummary(R.string.identity_visible_summary);
+            visible.setIntent(new Intent(ctx, ExitVisibleActivity.class));
+            category.addPreference(visible);
+            return true;
+        }
+
+        /** A refused or failed change says so and changes nothing; the rows are read back from the service either way. */
+        private void changeDefault(BooleanSupplier change) {
+            if (!change.getAsBoolean()) {
+                Toast.makeText(requireContext(), R.string.identity_error, Toast.LENGTH_LONG).show();
+            }
+            CompartmentsAppPolicy d = profiles.getDefaults();
+            if (d != null && defaultProfilePref != null && defaultSensorsPref != null) {
+                defaultProfilePref.setValue(Integer.toString(d.profile));
+                defaultSensorsPref.setValue(Integer.toString(d.sensors));
             }
         }
 

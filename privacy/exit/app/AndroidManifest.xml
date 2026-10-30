@@ -64,6 +64,12 @@
             android:label="@string/overrides_title"
             android:excludeFromRecents="true"
             android:exported="false" />
+        <!-- What stays visible (ADR-206, ADR-208): read-only, started by a row of the main page only. -->
+        <activity
+            android:name=".ExitVisibleActivity"
+            android:label="@string/identity_visible_title"
+            android:excludeFromRecents="true"
+            android:exported="false" />
 
         <!-- The buttons of the notification. Not exported: only the pending intents of this app reach it. -->
         <receiver

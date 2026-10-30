@@ -75,4 +75,42 @@
     <string name="overrides_empty">None. You are asked when an app cannot reach a tracker that is hidden.</string>
     <string name="override_row">%1$s: %2$s</string>
     <string name="override_remove">Hide again</string>
+
+    <!-- Profiles (ADR-208): what each app learns about this phone. -->
+    <string name="identity_title">Your identity</string>
+    <string name="identity_defaults_profile">Apps you have not set</string>
+    <string name="identity_defaults_sensors">Motion sensors for those apps</string>
+    <string name="identity_error">Could not change this setting</string>
+    <string name="identity_footer">Compartments keeps apps apart. It does not make your phone invisible.</string>
+    <string name="profile_title">Profile</string>
+    <string name="profile_trusted">Trusted</string>
+    <string name="profile_protected">Protected</string>
+    <string name="profile_isolated">Isolated</string>
+    <string name="profile_trusted_footer">This app can recognise this phone and link itself to your other apps. Use it for an app that must know you, such as a bank.</string>
+    <string name="profile_protected_footer">This app works as normal and cannot link itself to other apps or to this phone.</string>
+    <string name="profile_isolated_footer">This app gets invented motion data and keeps working; what it reads is not yours. An app may refuse to run if it notices.</string>
+    <string name="class_sensors">Motion sensors</string>
+    <string name="class_loopback">Other apps on this phone</string>
+    <string name="class_settings">Phone settings</string>
+    <string name="value_sensors_real">Real data</string>
+    <string name="value_sensors_substitute">Substitute data</string>
+    <string name="value_blocked">Blocked</string>
+    <string name="value_loopback_real">Allowed</string>
+    <string name="value_settings_real">All settings</string>
+    <string name="value_settings_blocked">Only what apps need</string>
+
+    <string name="identity_visible_title">What stays visible</string>
+    <string name="identity_visible_summary">What Compartments does not hide</string>
+    <string name="identity_visible_address_title">Your internet address</string>
+    <string name="identity_visible_address_summary">The servers of an app see it, unless the app is set to Extra private.</string>
+    <string name="identity_visible_model_title">Phone model and screen</string>
+    <string name="identity_visible_model_summary">The model, the Android version, the screen and the graphics chip.</string>
+    <string name="identity_visible_installed_title">Which apps are installed</string>
+    <string name="identity_visible_installed_summary">An app that asks for it, or that was made for an old Android version, can see whether another app is installed.</string>
+    <string name="identity_visible_processes_title">Other processes</string>
+    <string name="identity_visible_processes_summary">An app can see that other processes exist and how much graphics memory they use.</string>
+    <string name="identity_visible_uptime_title">Time since the phone started</string>
+    <string name="identity_visible_uptime_summary">An app can read it, and a few battery and processor counters.</string>
+    <string name="identity_visible_downloads_title">The Downloads folder</string>
+    <string name="identity_visible_downloads_summary">An app can check whether a file with a known name is in the shared Downloads folder.</string>
 </resources>

@@ -12,12 +12,15 @@ import android.os.Looper;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceScreen;
 
+import com.android.internal.compartments.CompartmentsAppPolicy;
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 import com.android.settingslib.preference.PreferenceFragment;
+import com.android.settingslib.widget.FooterPreference;
 import com.android.settingslib.widget.SelectorWithWidgetPreference;
 
 import java.util.ArrayList;
@@ -65,12 +68,14 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         private ApplicationInfo info;
         private String built = "";
         private final List<SelectorWithWidgetPreference> radios = new ArrayList<>();
+        private ProfileClient profiles;
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
             Context ctx = requireContext();
             rt = ExitRuntime.get(ctx);
             names = rt.companyNames();
+            profiles = ProfileClient.find();
             pkg = packageOf(requireActivity().getIntent());
             try {
                 info = pkg == null ? null : ctx.getPackageManager().getApplicationInfo(pkg, 0);
@@ -130,6 +135,7 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                     promoted.add(q);
                 }
             }
+            CompartmentsAppPolicy policy = fixed || !profiles.available() ? null : profiles.getApp(pkg);
             StringBuilder shape = new StringBuilder().append(fixed);
             for (Presenter.OverrideRow r : shown) {
                 shape.append('|').append(r.company);
@@ -137,8 +143,12 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
             for (Status.Promoted q : promoted) {
                 shape.append("|p").append(q.company);
             }
+            if (policy != null) {
+                // a change of the profile or of a value builds the rows again: which rows exist and what they show follow it
+                shape.append("|i").append(policy.profile).append(policy.sensors).append(policy.loopback).append(policy.settings);
+            }
             if (!shape.toString().equals(built)) {
-                build(ctx, screen, fixed, shown, promoted);
+                build(ctx, screen, fixed, shown, promoted, policy);
                 built = shape.toString();
             }
             Choices.Choice now = s.choices.choiceOf(pkg);
@@ -149,7 +159,7 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         }
 
         private void build(Context ctx, PreferenceScreen screen, boolean fixed, List<Presenter.OverrideRow> shown,
-                List<Status.Promoted> promoted) {
+                List<Status.Promoted> promoted, CompartmentsAppPolicy policy) {
             screen.removeAll();
             radios.clear();
             PackageManager pm = ctx.getPackageManager();
@@ -174,6 +184,10 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 radio.setOnClickListener(p -> choose(c));
                 radios.add(radio);
                 network.addPreference(radio);
+            }
+
+            if (policy != null) {
+                addIdentity(ctx, screen, policy);
             }
 
             if (!promoted.isEmpty()) {
@@ -213,6 +227,57 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 });
                 hosts.addPreference(p);
             }
+        }
+
+        /**
+         * The profile of the app, one row for each class it can be set for, and what the profile means (ADR-208). Every row
+         * stores nothing itself: a change goes to the service and the page is built again from what the service reports.
+         */
+        private void addIdentity(Context ctx, PreferenceScreen screen, CompartmentsAppPolicy policy) {
+            List<ProfileRows.Row> rows;
+            try {
+                rows = ProfileRows.rowsFor(policy.profile, policy.sensors, policy.loopback, policy.settings);
+            } catch (IllegalArgumentException e) {
+                return;
+            }
+            PreferenceCategory category = new PreferenceCategory(ctx);
+            category.setPersistent(false);
+            category.setTitle(R.string.identity_title);
+            screen.addPreference(category);
+
+            ListPreference profile = ProfileText.choice(ctx, "app_profile", R.string.profile_title,
+                    ProfileRows.profileChoices(false), ProfileText::profileName, policy.profile);
+            profile.setOnPreferenceChangeListener((p, v) -> {
+                changed(profiles.setProfile(pkg, Integer.parseInt((String) v)));
+                return false;
+            });
+            category.addPreference(profile);
+
+            for (ProfileRows.Row row : rows) {
+                final int cls = row.cls;
+                ListPreference pref = ProfileText.choice(ctx, "app_class_" + cls, ProfileText.classTitle(cls), row.values,
+                        v -> ProfileText.valueName(cls, v), row.current);
+                pref.setOnPreferenceChangeListener((p, v) -> {
+                    changed(profiles.setClassValue(pkg, cls, Integer.parseInt((String) v)));
+                    return false;
+                });
+                category.addPreference(pref);
+            }
+
+            FooterPreference footer = new FooterPreference(ctx);
+            footer.setSummary(ProfileText.profileFooter(policy.profile));
+            screen.addPreference(footer);
+        }
+
+        /** A refused or failed change says so and changes nothing; the page is built again from the service either way. */
+        private void changed(boolean ok) {
+            if (!ok) {
+                Toast.makeText(requireContext(), R.string.identity_error, Toast.LENGTH_LONG).show();
+            }
+            main.post(() -> {
+                built = "";
+                render();
+            });
         }
 
         private String companyOf(int company) {

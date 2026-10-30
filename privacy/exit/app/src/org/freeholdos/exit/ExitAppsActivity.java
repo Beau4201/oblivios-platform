@@ -13,12 +13,16 @@ import android.widget.SearchView;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceScreen;
 
+import com.android.internal.compartments.CompartmentsAppPolicy;
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 import com.android.settingslib.preference.PreferenceFragment;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The apps of this user with what each is set to (trackers hidden, Tor, never hidden), with the search of the Settings pages in the
@@ -72,11 +76,13 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
         /** The packages of the rows that are shown, with the query: the rows are built again only when this changes. */
         private String built = "";
         private final Map<String, Preference> rows = new HashMap<>();
+        private ProfileClient profiles;
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
             Context ctx = requireContext();
             rt = ExitRuntime.get(ctx);
+            profiles = ProfileClient.find();
             setPreferenceScreen(getPreferenceManager().createPreferenceScreen(ctx));
             AppIndex.load(ctx, main, i -> {
                 index = i;
@@ -148,10 +154,23 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
                 }
                 built = shape.toString();
             }
+            // The profile of an app (ADR-208): the one the user set, else the default; two calls however long the list is.
+            Set<String> configured = null;
+            int defaultProfile = -1;
+            if (profiles.available()) {
+                String[] set = profiles.getConfigured();
+                CompartmentsAppPolicy defaults = profiles.getDefaults();
+                if (set != null && defaults != null) {
+                    configured = new HashSet<>(Arrays.asList(set));
+                    defaultProfile = defaults.profile;
+                }
+            }
             for (Presenter.AppRow r : list) {
                 Preference p = rows.get(r.pkg);
                 if (p != null) {
-                    p.setSummary(hintOf(r.choice));
+                    String stand = getString(hintOf(r.choice));
+                    int profile = configured == null ? -1 : configured.contains(r.pkg) ? profiles.getProfile(r.pkg) : defaultProfile;
+                    p.setSummary(profile < 0 ? stand : stand + " · " + getString(ProfileText.profileName(profile)));
                 }
             }
         }
