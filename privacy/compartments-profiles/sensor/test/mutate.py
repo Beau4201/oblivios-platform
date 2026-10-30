@@ -27,7 +27,18 @@ MUTANTS = [
     (M, "a short salt is accepted", "if (s.size() != 16) return false;", ""),
     (M, "letters beyond f are hex digits", "else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;", "else if (c >= 'a' && c <= 'z') d = c - 'a' + 10;"),
     (M, "the default line may come first", "line[0] == 'd' && line[1] == ' ' && haveSalt &&", "line[0] == 'd' && line[1] == ' ' &&"),
-    (M, "a refused file keeps the old table", "void reset() { mSalt = 0; mDefault = SensorMode::FOLDED; mPerApp.clear(); }", "void reset() {}"),
+    (M, "a refused file keeps the old table", "void reset() { mSalt = 0; mDefault = SensorMode::FOLDED; mActivity = Activity::STILL; mPerApp.clear(); }", "void reset() {}"),
+    (M, "a refused file keeps the old activity", "mActivity = Activity::STILL; mPerApp.clear(); }", "mPerApp.clear(); }"),
+    (M, "an activity line before the default is accepted", "line[0] == 't' && line[1] == ' ' && haveDefault &&", "line[0] == 't' && line[1] == ' ' &&"),
+    (M, "a repeated activity line is accepted", "haveDefault && !haveActivity && perApp.empty()", "haveDefault && perApp.empty()"),
+    (M, "an activity line after an app line is accepted", "haveDefault && !haveActivity && perApp.empty()", "haveDefault && !haveActivity"),
+    (M, "an unknown activity is accepted", 'else if (s == "DRIVING") *out = Activity::DRIVING;\n        else return false;', 'else if (s == "DRIVING") *out = Activity::DRIVING;\n        else *out = Activity::STILL;'),
+    (M, "walking is read as still", 'else if (s == "WALKING") *out = Activity::WALKING;', 'else if (s == "WALKING") *out = Activity::STILL;'),
+    (M, "driving is read as walking", 'else if (s == "DRIVING") *out = Activity::DRIVING;', 'else if (s == "DRIVING") *out = Activity::WALKING;'),
+    (M, "still is not accepted", 'if (s == "STILL") *out = Activity::STILL;\n        else if', 'if (false) *out = Activity::STILL;\n        else if'),
+    (M, "the activity is not kept", "mActivity = activity;", ""),
+    (M, "the activity is always still", "Activity activity() const { return mActivity; }", "Activity activity() const { return Activity::STILL; }"),
+    (M, "a file without the line keeps the old activity", "Activity activity = Activity::STILL;\n        bool haveSalt", "Activity activity = mActivity;\n        bool haveSalt"),
     (M, "a substituted app keeps its direct channel", "case SensorMode::BLOCKED: return isMotionType(type);", "case SensorMode::BLOCKED: return false;"),
     (M, "a folded app loses every motion direct channel", "case SensorMode::FOLDED: return eventCarriesBias(type);", "case SensorMode::FOLDED: return isMotionType(type);"),
     (M, "a raw app loses its direct channels", "default: return false;\n    }\n}", "default: return true;\n    }\n}"),
@@ -53,6 +64,16 @@ MUTANTS = [
      "if (applyMode(const_cast<sensors_event_t*>(&in[i]), m, seed, a)) out[count++] = in[i];"),
     (S, "a raw mode touches events", "case SensorMode::RAW: return false;", "case SensorMode::RAW: return true;"),
 ]
+# The unmutated headers must pass first: with a failing baseline every mutant would count as killed and prove nothing.
+with tempfile.TemporaryDirectory() as d:
+    d = pathlib.Path(d)
+    for h in (M, S, SRCH, "SensorBiasFold.h"):
+        shutil.copy(SRC / h, d / h)
+    c = subprocess.run(["g++", "-std=c++17", "-Wall", f"-I{d}"] + INCLUDES + [str(HERE / "SensorProfile_test.cpp"), "-o", str(d / "t")],
+                       capture_output=True, text=True)
+    if c.returncode != 0 or subprocess.run([str(d / "t")], capture_output=True, text=True, timeout=60).returncode != 0:
+        print("BASELINE FAILS, no mutant counts:", c.stderr[:300])
+        sys.exit(2)
 survived = 0
 for name, what, old, new in MUTANTS:
     with tempfile.TemporaryDirectory() as d:

@@ -5,6 +5,7 @@
 package com.android.internal.compartments;
 
 import com.android.internal.compartments.CompartmentsAppPolicy;
+import com.android.internal.compartments.CompartmentsPlace;
 
 /**
  * The Binder interface of the Compartments policy service (ADR-208). Every call acts on the owner
@@ -24,6 +25,7 @@ interface ICompartmentsPolicy {
     const int CLASS_SENSORS = 0;
     const int CLASS_LOOPBACK = 1;
     const int CLASS_SETTINGS = 2;
+    const int CLASS_LOCATION = 3;
 
     const int VALUE_REAL = 0;
     const int VALUE_SUBSTITUTE = 1;
@@ -55,4 +57,22 @@ interface ICompartmentsPolicy {
 
     /** The profile of one package, as one of PROFILE_*. Nothing else about the app. */
     int getProfile(String packageName);
+
+    /**
+     * The places whose name contains the query, the names that start with it first, at most limit of them (and at most 50);
+     * empty when the image has no place data. Needs MANAGE_COMPARTMENTS.
+     */
+    CompartmentsPlace[] searchPlaces(String query, int limit);
+
+    /** One place by its id, or null. Needs MANAGE_COMPARTMENTS. */
+    CompartmentsPlace getPlace(int placeId);
+
+    /**
+     * Sets the place of the persona of one app: a place id of searchPlaces, or 0 for Automatic. The app must substitute its
+     * location (an Isolated app, or location set to VALUE_SUBSTITUTE); an unknown place is refused.
+     */
+    void setPlace(String packageName, int placeId);
+
+    /** The place id that the user chose for one app, 0 for Automatic. */
+    int getPlaceId(String packageName);
 }

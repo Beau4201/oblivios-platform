@@ -10,8 +10,8 @@ final class Profiles {
 
     enum Profile { TRUSTED, PROTECTED, ISOLATED }
 
-    /** Classes of the first version. Location joins with the persona plan; the codec of PolicyStore tolerates a longer list. */
-    enum Cls { SENSORS, LOOPBACK, SETTINGS }
+    /** The classes; the order is the wire format of the interface and of the store (version 2 added LOCATION). */
+    enum Cls { SENSORS, LOOPBACK, SETTINGS, LOCATION }
 
     /** REAL: what the phone has. SUBSTITUTE: invented, per app. BLOCKED: refused (for SETTINGS: the 40 keys of ADR-175). */
     enum Value { REAL, SUBSTITUTE, BLOCKED }
@@ -19,14 +19,14 @@ final class Profiles {
     /** What the sensor service does for an app: the unchanged event, the bias folded in (ADR-167), invented data, or nothing. */
     enum SensorMode { FOLDED, RAW, SUBSTITUTE, BLOCKED }
 
-    /** Only the sensors can be substituted; loopback and the settings tables are real or blocked. */
+    /** Only the sensors and the location can be substituted; loopback and the settings tables are real or blocked. */
     static boolean isValid(Cls c, Value v) {
-        return c == Cls.SENSORS || v != Value.SUBSTITUTE;
+        return c == Cls.SENSORS || c == Cls.LOCATION || v != Value.SUBSTITUTE;
     }
 
     /** The value a profile gives a class when the user has not set that class (spec section 3). */
     static Value defaultValue(Profile p, Cls c) {
-        if (c == Cls.SENSORS) {
+        if (c == Cls.SENSORS || c == Cls.LOCATION) {
             return p == Profile.ISOLATED ? Value.SUBSTITUTE : Value.REAL;
         }
         return p == Profile.TRUSTED ? Value.REAL : Value.BLOCKED;

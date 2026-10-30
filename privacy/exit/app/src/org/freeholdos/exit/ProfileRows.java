@@ -21,6 +21,7 @@ public final class ProfileRows {
     public static final int CLASS_SENSORS = 0;
     public static final int CLASS_LOOPBACK = 1;
     public static final int CLASS_SETTINGS = 2;
+    public static final int CLASS_LOCATION = 3;
 
     public static final int VALUE_REAL = 0;
     public static final int VALUE_SUBSTITUTE = 1;

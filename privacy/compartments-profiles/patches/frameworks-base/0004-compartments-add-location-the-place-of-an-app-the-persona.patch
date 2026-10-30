@@ -1,0 +1,1447 @@
+From 9b098a405addeb006904be45cdfaa733f80cb55f Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 17:38:03 +0100
+Subject: [PATCH] compartments: add location, the place of an app, the persona
+
+The policy store is version 2: a location class (real, substituted or blocked) and, for an Isolated app, the place of its persona. The service reads the place data of the image once, writes the persona file next to the sensor file, takes the location permissions of an app whose location is blocked or whose persona cannot be made, offers the persona to the other services of this process (CompartmentsInternal), and tells the sensor service what the phone is doing from the speed of the real fixes that pass the passive provider (ADR-208).
+---
+ .../compartments/CompartmentsAppPolicy.aidl   |   2 +
+ .../compartments/CompartmentsPlace.aidl       |  17 +
+ .../compartments/ICompartmentsPolicy.aidl     |  20 +
+ .../compartments/ActivityEstimator.java       |  59 +++
+ .../compartments/CompartmentsInternal.java    |  36 ++
+ .../CompartmentsPolicyService.java            | 344 +++++++++++++++++-
+ .../com/android/server/compartments/Geo.java  |  31 ++
+ .../server/compartments/MirrorPlan.java       |  89 ++++-
+ .../server/compartments/PersonaFile.java      | 115 ++++++
+ .../server/compartments/PersonaTrack.java     |  56 +++
+ .../android/server/compartments/Places.java   | 210 +++++++++++
+ .../server/compartments/PolicyStore.java      |  71 +++-
+ .../android/server/compartments/Profiles.java |  10 +-
+ 13 files changed, 1024 insertions(+), 36 deletions(-)
+ create mode 100644 core/java/com/android/internal/compartments/CompartmentsPlace.aidl
+ create mode 100644 services/core/java/com/android/server/compartments/ActivityEstimator.java
+ create mode 100644 services/core/java/com/android/server/compartments/CompartmentsInternal.java
+ create mode 100644 services/core/java/com/android/server/compartments/Geo.java
+ create mode 100644 services/core/java/com/android/server/compartments/PersonaFile.java
+ create mode 100644 services/core/java/com/android/server/compartments/PersonaTrack.java
+ create mode 100644 services/core/java/com/android/server/compartments/Places.java
+
+diff --git a/core/java/com/android/internal/compartments/CompartmentsAppPolicy.aidl b/core/java/com/android/internal/compartments/CompartmentsAppPolicy.aidl
+index f3d5b1e..a910baf 100644
+--- a/core/java/com/android/internal/compartments/CompartmentsAppPolicy.aidl
++++ b/core/java/com/android/internal/compartments/CompartmentsAppPolicy.aidl
+@@ -14,4 +14,6 @@ parcelable CompartmentsAppPolicy {
+     int settings;
+     /** The user has set this app. False for an app that follows the defaults. */
+     boolean configured;
++    /** The location class, one of ICompartmentsPolicy.VALUE_*; an app that follows the defaults has its real location. */
++    int location;
+ }
+diff --git a/core/java/com/android/internal/compartments/CompartmentsPlace.aidl b/core/java/com/android/internal/compartments/CompartmentsPlace.aidl
+new file mode 100644
+index 0000000..ac2bbee
+--- /dev/null
++++ b/core/java/com/android/internal/compartments/CompartmentsPlace.aidl
+@@ -0,0 +1,17 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.compartments;
++
++/** One place of the persona data (ADR-208): what the user sees when choosing where an Isolated app is. */
++parcelable CompartmentsPlace {
++    /** The number that setPlace takes; positive. */
++    int id;
++    /** The name of the place, as in the data. */
++    String name;
++    /** The ISO 3166-1 alpha-2 code of its country. */
++    String country;
++    double latitude;
++    double longitude;
++}
+diff --git a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+index 10a97ef..8d10f2f 100644
+--- a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
++++ b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+@@ -5,6 +5,7 @@
+ package com.android.internal.compartments;
+ 
+ import com.android.internal.compartments.CompartmentsAppPolicy;
++import com.android.internal.compartments.CompartmentsPlace;
+ 
+ /**
+  * The Binder interface of the Compartments policy service (ADR-208). Every call acts on the owner
+@@ -24,6 +25,7 @@ interface ICompartmentsPolicy {
+     const int CLASS_SENSORS = 0;
+     const int CLASS_LOOPBACK = 1;
+     const int CLASS_SETTINGS = 2;
++    const int CLASS_LOCATION = 3;
+ 
+     const int VALUE_REAL = 0;
+     const int VALUE_SUBSTITUTE = 1;
+@@ -55,4 +57,22 @@ interface ICompartmentsPolicy {
+ 
+     /** The profile of one package, as one of PROFILE_*. Nothing else about the app. */
+     int getProfile(String packageName);
++
++    /**
++     * The places whose name contains the query, the names that start with it first, at most limit of them (and at most 50);
++     * empty when the image has no place data. Needs MANAGE_COMPARTMENTS.
++     */
++    CompartmentsPlace[] searchPlaces(String query, int limit);
++
++    /** One place by its id, or null. Needs MANAGE_COMPARTMENTS. */
++    CompartmentsPlace getPlace(int placeId);
++
++    /**
++     * Sets the place of the persona of one app: a place id of searchPlaces, or 0 for Automatic. The app must substitute its
++     * location (an Isolated app, or location set to VALUE_SUBSTITUTE); an unknown place is refused.
++     */
++    void setPlace(String packageName, int placeId);
++
++    /** The place id that the user chose for one app, 0 for Automatic. */
++    int getPlaceId(String packageName);
+ }
+diff --git a/services/core/java/com/android/server/compartments/ActivityEstimator.java b/services/core/java/com/android/server/compartments/ActivityEstimator.java
+new file mode 100644
+index 0000000..f527753
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/ActivityEstimator.java
+@@ -0,0 +1,59 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++/**
++ * The activity of the phone from the speed of its real location fixes, for the invented sensor streams (spec section 4.4):
++ * STILL below 0.6 m/s, WALKING up to 2.5 m/s, DRIVING above 4.5 m/s, with a hysteresis so that one noisy fix does not change it,
++ * and STILL again when no fix has come for {@link #STALE_MS}.
++ */
++final class ActivityEstimator {
++    enum Activity { STILL, WALKING, DRIVING }
++
++    static final long STALE_MS = 60_000;
++    static final int CONFIRM = 3;
++
++    private Activity current = Activity.STILL;
++    private Activity candidate = Activity.STILL;
++    private int seen;
++    private long lastMs = Long.MIN_VALUE;
++
++    static Activity classify(double speedMps, Activity from) {
++        if (!(speedMps >= 0.0)) {
++            return from;  // NaN or negative: no information
++        }
++        switch (from) {
++            case DRIVING:
++                return speedMps >= 3.5 ? Activity.DRIVING : (speedMps >= 0.6 ? Activity.WALKING : Activity.STILL);
++            case WALKING:
++                return speedMps > 4.5 ? Activity.DRIVING : (speedMps >= 0.4 ? Activity.WALKING : Activity.STILL);
++            default:
++                return speedMps > 4.5 ? Activity.DRIVING : (speedMps > 0.6 ? Activity.WALKING : Activity.STILL);
++        }
++    }
++
++    /** Feeds one fix; returns the activity after it. Time goes backwards only by a clock change and is then ignored. */
++    synchronized Activity onFix(double speedMps, long nowMs) {
++        if (nowMs < lastMs) {
++            return current;
++        }
++        lastMs = nowMs;
++        Activity next = classify(speedMps, current);
++        if (next == current) {
++            candidate = current;
++            seen = 0;
++        } else if (next == candidate) {
++            if (++seen >= CONFIRM) {
++                current = next;
++                seen = 0;
++            }
++        } else {
++            candidate = next;
++            seen = 1;
++        }
++        return current;
++    }
++
++    synchronized Activity at(long nowMs) {
++        return lastMs != Long.MIN_VALUE && nowMs - lastMs > STALE_MS ? Activity.STILL : current;
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsInternal.java b/services/core/java/com/android/server/compartments/CompartmentsInternal.java
+new file mode 100644
+index 0000000..85f396b
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/CompartmentsInternal.java
+@@ -0,0 +1,36 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++/**
++ * What the other services of the system server ask the Compartments policy service (ADR-208): the persona of an app. It is
++ * registered with {@code LocalServices}, so it is never a Binder interface and no app can call it.
++ */
++public interface CompartmentsInternal {
++    /**
++     * The persona of the app that this uid belongs to (the same app in every user), or null when the app has none or the uid is
++     * not an app uid. An app has a persona when its location is substituted and a place can be chosen for it.
++     */
++    PersonaView personaFor(int uid);
++
++    /** The place of one app and the track that moves its real fixes there. The values never change after the view is made. */
++    final class PersonaView {
++        public final int placeId;
++        public final double lat;
++        public final double lon;
++        public final String timeZone;
++        public final String country;
++        public final int mcc;
++        /** The one track of this app: the same object for every call until the place of the app changes. */
++        public final PersonaTrack track;
++
++        PersonaView(int placeId, double lat, double lon, String timeZone, String country, int mcc, PersonaTrack track) {
++            this.placeId = placeId;
++            this.lat = lat;
++            this.lon = lon;
++            this.timeZone = timeZone;
++            this.country = country;
++            this.mcc = mcc;
++            this.track = track;
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index 44ae98d..cad9af3 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -7,21 +7,31 @@ import android.content.Intent;
+ import android.content.IntentFilter;
+ import android.content.pm.PackageInfo;
+ import android.content.pm.PackageManager;
++import android.location.Location;
++import android.location.LocationListener;
++import android.location.LocationManager;
++import android.location.LocationRequest;
+ import android.os.Binder;
+ import android.os.Environment;
+ import android.os.FileUtils;
+ import android.os.Handler;
++import android.os.HandlerExecutor;
++import android.os.SystemClock;
+ import android.os.UserHandle;
+ import android.os.UserManager;
+ import android.provider.Settings;
++import android.telephony.TelephonyManager;
+ import android.util.AtomicFile;
+ import android.util.Slog;
+ 
+ import com.android.internal.compartments.CompartmentsAppPolicy;
++import com.android.internal.compartments.CompartmentsPlace;
+ import com.android.internal.compartments.ICompartmentsPolicy;
+ import com.android.internal.os.BackgroundThread;
+ import com.android.server.EventLogTags;
++import com.android.server.LocalServices;
+ import com.android.server.SystemService;
++import com.android.server.compartments.ActivityEstimator.Activity;
+ import com.android.server.compartments.PolicyStore.AppPolicy;
+ import com.android.server.compartments.Profiles.Cls;
+ import com.android.server.compartments.Profiles.Profile;
+@@ -32,16 +42,22 @@ import java.io.FileOutputStream;
+ import java.io.IOException;
+ import java.nio.ByteBuffer;
+ import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
+ import java.security.SecureRandom;
++import java.util.ArrayList;
+ import java.util.List;
++import java.util.Locale;
+ import java.util.Set;
+ import java.util.TreeSet;
++import java.util.concurrent.ConcurrentHashMap;
+ 
+ /**
+  * The policy store of Compartments (ADR-208): one profile per app, written only by the exit app and
+- * mirrored to the three enforcement points that exist in the image: the global setting that lists
+- * the packages which read every settings key (ADR-175), the runtime permission
+- * USE_LOOPBACK_INTERFACE, and a file that the sensor service reads (ADR-167).
++ * mirrored to the enforcement points that exist in the image: the global setting that lists the
++ * packages which read every settings key (ADR-175), the runtime permission USE_LOOPBACK_INTERFACE,
++ * a file that the sensor service reads (ADR-167), the location permissions of the apps whose
++ * location is blocked, and the persona of the Isolated apps: a file for the processes that read it
++ * and {@link CompartmentsInternal} for the services of this process.
+  *
+  * <p>The store is the one of the owner user and belongs to packages, so a profile reaches an app in
+  * every user. A store that cannot be read at boot reads as Protected for every app. The event log
+@@ -55,16 +71,60 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     static final String EXIT_PACKAGE = "org.freeholdos.exit";
+     static final String SETTINGS_REAL_PACKAGES = "freeholdos_settings_real_packages";
+     private static final String LOOPBACK_PERMISSION = "android.permission.USE_LOOPBACK_INTERFACE";
++    static final String PLACES_FILE = "/product/etc/compartments/places.tsv";
++    private static final String[] LOCATION_PERMISSIONS = {
++        "android.permission.ACCESS_FINE_LOCATION",
++        "android.permission.ACCESS_COARSE_LOCATION",
++        "android.permission.ACCESS_BACKGROUND_LOCATION",
++    };
+     private static final int MAX_STORE_BYTES = 1024 * 1024;
++    private static final int MAX_PLACES_BYTES = 16 * 1024 * 1024;
++    private static final int MAX_SEARCH_RESULTS = 50;
++    private static final int MAX_QUERY_LENGTH = 64;
+ 
+     private final Context mContext;
+     private final Object mLock = new Object();
+     private final File mDir;
+     private final AtomicFile mPolicyFile;
+     private final AtomicFile mSensorFile;
++    private final AtomicFile mPersonaFile;
+     private final long mSalt;
++    private final Handler mHandler = BackgroundThread.getHandler();
+     private volatile PolicyStore mStore;
+ 
++    /** The place data, read once and lazily; null when the file is missing or is not exactly a file of the format. */
++    private final Object mPlacesLock = new Object();
++    private volatile boolean mPlacesRead;
++    private volatile Places mPlaces;
++
++    /** The persona table that was last made; the services of this process read it, the others read the file. */
++    private volatile PersonaFile mPersona;
++    private final ConcurrentHashMap<Integer, Track> mTracks = new ConcurrentHashMap<>();
++
++    /** What the phone is doing, from the real fixes that pass the passive provider; in the sensor file. */
++    private final ActivityEstimator mEstimator = new ActivityEstimator();
++    private Activity mActivity = Activity.STILL;  // guarded by mLock
++    private volatile double mRealLat = Double.NaN;
++    private volatile double mRealLon = Double.NaN;
++    private final LocationListener mFixListener = new LocationListener() {
++        @Override
++        public void onLocationChanged(Location location) {
++            onRealFix(location);
++        }
++    };
++    private final Runnable mStaleCheck = this::onStaleCheck;
++
++    /** The track of one app, for the place that it was made for. */
++    private static final class Track {
++        final int placeId;
++        final PersonaTrack track;
++
++        Track(int placeId, PersonaTrack track) {
++            this.placeId = placeId;
++            this.track = track;
++        }
++    }
++
+     CompartmentsPolicyService(Context context) {
+         mContext = context;
+         mDir = new File(Environment.getDataSystemDirectory(), "compartments");
+@@ -72,8 +132,11 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         FileUtils.setPermissions(mDir.getPath(), 0700, -1, -1);
+         mPolicyFile = new AtomicFile(new File(mDir, "policy.bin"));
+         mSensorFile = new AtomicFile(new File(mDir, "sensor_modes"));
++        mPersonaFile = new AtomicFile(new File(mDir, "persona"));
+         mSalt = loadSalt(new File(mDir, "salt"));
+         mStore = loadStore();
++        mPersona = loadPersona();
++        LocalServices.addService(CompartmentsInternal.class, new Internal());
+     }
+ 
+     // ---------------------------------------------------------------- interface
+@@ -83,13 +146,14 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         enforceManage();
+         requireValidName(packageName);
+         PolicyStore s = mStore;
+-        return toParcel(s.policyOf(packageName), s.hasEntry(packageName));
++        return toParcel(s.policyOf(packageName), s.hasEntry(packageName), s.value(packageName, Cls.LOCATION));
+     }
+ 
+     @Override
+     public CompartmentsAppPolicy getDefaults() {
+         enforceManage();
+-        return toParcel(mStore.defaults, false);
++        PolicyStore s = mStore;
++        return toParcel(s.defaults, false, s.valueWithoutEntry(Cls.LOCATION));
+     }
+ 
+     @Override
+@@ -129,6 +193,9 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         Cls c = clsOf(cls);
+         Value v = valueOf(value);
+         requireSettableApp(packageName);
++        if (c == Cls.LOCATION && v == Value.SUBSTITUTE) {
++            requirePersonaPossible(packageName);
++        }
+         change(cls, value, s -> s.withApp(packageName, s.policyOf(packageName).withValue(c, v)));
+     }
+ 
+@@ -149,6 +216,50 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         return mStore.policyOf(packageName).profile.ordinal();
+     }
+ 
++    @Override
++    public CompartmentsPlace[] searchPlaces(String query, int limit) {
++        enforceManage();
++        Places places = places();
++        if (places == null || query == null || query.length() > MAX_QUERY_LENGTH) {
++            return new CompartmentsPlace[0];
++        }
++        List<CompartmentsPlace> out = new ArrayList<>();
++        for (Places.Place p : places.search(query, Math.min(limit, MAX_SEARCH_RESULTS))) {
++            out.add(toParcel(p));
++        }
++        return out.toArray(new CompartmentsPlace[0]);
++    }
++
++    @Override
++    public CompartmentsPlace getPlace(int placeId) {
++        enforceManage();
++        Places places = places();
++        Places.Place p = places == null ? null : places.byId(placeId);
++        return p == null ? null : toParcel(p);
++    }
++
++    @Override
++    public void setPlace(String packageName, int placeId) {
++        enforceManage();
++        requireSettableApp(packageName);
++        Places places = places();
++        if (placeId < 0 || (placeId != 0 && (places == null || places.byId(placeId) == null))) {
++            throw new IllegalArgumentException("not a place");
++        }
++        if (mStore.value(packageName, Cls.LOCATION) != Value.SUBSTITUTE) {
++            throw new IllegalStateException("the location of this app is not substituted");
++        }
++        change(Cls.LOCATION.ordinal(), Value.SUBSTITUTE.ordinal(),
++                s -> s.withApp(packageName, s.policyOf(packageName).withPlace(placeId)));
++    }
++
++    @Override
++    public int getPlaceId(String packageName) {
++        enforceManage();
++        requireValidName(packageName);
++        return mStore.policyOf(packageName).place;
++    }
++
+     // ---------------------------------------------------------------- change and mirrors
+ 
+     private interface Edit {
+@@ -179,7 +290,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     }
+ 
+     /**
+-     * Brings the three enforcement points in line with {@code next}. Each mirror stands alone: a
++     * Brings the enforcement points in line with {@code next}. Each mirror stands alone: a
+      * failure in one is logged by class name and does not stop the others. {@code full} re-applies
+      * the permission of every configured package (boot, a package added), else only those whose
+      * loopback value changed.
+@@ -200,12 +311,70 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+             Slog.w(TAG, "loopback mirror failed: " + e.getClass().getSimpleName());
+         }
+         try {
+-            String file = MirrorPlan.sensorModeFile(next, this::ownerUidOf, mSalt);
+-            writeAtomic(mSensorFile, file.getBytes(StandardCharsets.US_ASCII));
+-            FileUtils.setPermissions(mSensorFile.getBaseFile().getPath(), 0644, -1, -1);
++            writeSensorFile(next);
+         } catch (RuntimeException e) {
+             Slog.w(TAG, "sensor mirror failed: " + e.getClass().getSimpleName());
+         }
++        try {
++            applyPersona(next);
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "persona mirror failed: " + e.getClass().getSimpleName());
++        }
++    }
++
++    /** The sensor file with the activity of the phone now; the caller holds mLock. */
++    private void writeSensorFile(PolicyStore s) {
++        String file = MirrorPlan.sensorModeFile(s, this::ownerUidOf, mSalt, mActivity);
++        writeAtomic(mSensorFile, file.getBytes(StandardCharsets.US_ASCII));
++        FileUtils.setPermissions(mSensorFile.getBaseFile().getPath(), 0644, -1, -1);
++    }
++
++    /**
++     * Makes the persona table of the apps whose location is substituted. The table of this process is set before the file is
++     * written, so a failed write cannot leave an app without a persona here. An app whose persona cannot be made (no place
++     * data, no country, a place that is not in the data) loses its location permissions, as an app with a blocked location
++     * does: it is never given the real position.
++     */
++    private void applyPersona(PolicyStore next) {
++        Places places = places();
++        String country = realCountry();
++        double lat = mRealLat;
++        double lon = mRealLon;
++        String file = MirrorPlan.personaFile(next, this::ownerUidOf, mSalt, places, country, lat, lon);
++        PersonaFile table = PersonaFile.parse(file);
++        mPersona = table;
++        mTracks.keySet().removeIf(appId -> table.placeOf(appId) == 0);
++        Set<String> deny = new TreeSet<>(MirrorPlan.locationBlocked(next));
++        deny.addAll(MirrorPlan.locationUnresolved(next, this::ownerUidOf, mSalt, places, country, lat, lon));
++        try {
++            writeAtomic(mPersonaFile, file.getBytes(StandardCharsets.US_ASCII));
++            FileUtils.setPermissions(mPersonaFile.getBaseFile().getPath(), 0644, -1, -1);
++        } finally {
++            revokeLocation(deny);
++        }
++    }
++
++    private void revokeLocation(Set<String> packages) {
++        PackageManager pm = mContext.getPackageManager();
++        List<UserHandle> users = mContext.getSystemService(UserManager.class).getUserHandles(true);
++        for (String pkg : packages) {
++            for (UserHandle user : users) {
++                try {
++                    pm.getPackageUidAsUser(pkg, 0, user.getIdentifier());
++                } catch (PackageManager.NameNotFoundException e) {
++                    continue;  // not installed for this user: nothing to take
++                }
++                for (String permission : LOCATION_PERMISSIONS) {
++                    try {
++                        pm.revokeRuntimePermission(pkg, permission, user);
++                    } catch (SecurityException | IllegalArgumentException e) {
++                        // the package does not request this permission
++                    } catch (RuntimeException e) {
++                        Slog.w(TAG, "location permission failed: " + e.getClass().getSimpleName());
++                    }
++                }
++            }
++        }
+     }
+ 
+     private void applyLoopback(PolicyStore previous, PolicyStore next, boolean full) {
+@@ -266,9 +435,56 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 reapply();
+             }
+         }, added, null, handler);
++        registerFixListener();
+         reapply();
+     }
+ 
++    /**
++     * Real fixes of any app pass the passive provider at no cost to the battery; the speed in them tells the sensor service what
++     * the phone is doing. The listener is the system's own, so no persona is applied to it.
++     */
++    private void registerFixListener() {
++        try {
++            LocationManager lm = mContext.getSystemService(LocationManager.class);
++            lm.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER,
++                    new LocationRequest.Builder(LocationRequest.PASSIVE_INTERVAL).build(), new HandlerExecutor(mHandler),
++                    mFixListener);
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "passive location listener failed: " + e.getClass().getSimpleName());
++        }
++    }
++
++    private void onRealFix(Location location) {
++        mRealLat = location.getLatitude();
++        mRealLon = location.getLongitude();
++        publishActivity(mEstimator.onFix(location.hasSpeed() ? location.getSpeed() : Double.NaN, SystemClock.elapsedRealtime()));
++        mHandler.removeCallbacks(mStaleCheck);
++        mHandler.postDelayed(mStaleCheck, ActivityEstimator.STALE_MS + 1000);
++    }
++
++    /** No fix for a minute: the phone is taken as still again. */
++    private void onStaleCheck() {
++        publishActivity(mEstimator.at(SystemClock.elapsedRealtime()));
++    }
++
++    /** The sensor file is written again only when the activity changes. */
++    private void publishActivity(Activity now) {
++        final long token = Binder.clearCallingIdentity();
++        try {
++            synchronized (mLock) {
++                if (now == mActivity) {
++                    return;
++                }
++                mActivity = now;
++                writeSensorFile(mStore);
++            }
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "activity mirror failed: " + e.getClass().getSimpleName());
++        } finally {
++            Binder.restoreCallingIdentity(token);
++        }
++    }
++
+     /** The entry of a package that is gone from every user is cleared; a profile is not kept for a name. */
+     private void onPackageRemoved(String pkg) {
+         if (pkg == null || !mStore.hasEntry(pkg)) {
+@@ -356,16 +572,110 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         return all[n];
+     }
+ 
+-    private static CompartmentsAppPolicy toParcel(AppPolicy p, boolean configured) {
++    /** {@code location} is what is enforced, which for an app without an entry is not what its defaults say. */
++    private static CompartmentsAppPolicy toParcel(AppPolicy p, boolean configured, Value location) {
+         CompartmentsAppPolicy out = new CompartmentsAppPolicy();
+         out.profile = p.profile.ordinal();
+         out.sensors = p.value(Cls.SENSORS).ordinal();
+         out.loopback = p.value(Cls.LOOPBACK).ordinal();
+         out.settings = p.value(Cls.SETTINGS).ordinal();
+         out.configured = configured;
++        out.location = location.ordinal();
+         return out;
+     }
+ 
++    private static CompartmentsPlace toParcel(Places.Place p) {
++        CompartmentsPlace out = new CompartmentsPlace();
++        out.id = p.id;
++        out.name = p.name;
++        out.country = p.country;
++        out.latitude = p.lat;
++        out.longitude = p.lon;
++        return out;
++    }
++
++    // ---------------------------------------------------------------- places and persona
++
++    /** The place data, read once; null when the image has none or the file is not exactly a file of the format. */
++    private Places places() {
++        if (!mPlacesRead) {
++            synchronized (mPlacesLock) {
++                if (!mPlacesRead) {
++                    mPlaces = readPlaces();
++                    mPlacesRead = true;
++                }
++            }
++        }
++        return mPlaces;
++    }
++
++    private static Places readPlaces() {
++        File f = new File(PLACES_FILE);
++        try {
++            if (!f.isFile() || f.length() > MAX_PLACES_BYTES) {
++                return null;
++            }
++            return Places.parse(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8));
++        } catch (IOException | RuntimeException e) {
++            Slog.w(TAG, "no place data: " + e.getClass().getSimpleName());
++            return null;
++        }
++    }
++
++    /**
++     * The country that the phone is in: the network's, else the SIM's; empty when neither is known. The system context asks, so
++     * this is never an answer that a persona has changed.
++     */
++    private String realCountry() {
++        try {
++            TelephonyManager tm = mContext.getSystemService(TelephonyManager.class);
++            String country = tm == null ? null : tm.getNetworkCountryIso();
++            if (country == null || country.isEmpty()) {
++                country = tm == null ? null : tm.getSimCountryIso();
++            }
++            return country == null ? "" : country.toUpperCase(Locale.ROOT);
++        } catch (RuntimeException e) {
++            return "";
++        }
++    }
++
++    /** A persona for the app can be made now, or the call says why not (the page shows the message). */
++    private void requirePersonaPossible(String packageName) {
++        Places places = places();
++        if (places == null) {
++            throw new IllegalStateException("this image has no place data");
++        }
++        if (mStore.policyOf(packageName).place != 0) {
++            return;  // the user chose a place; it was checked when it was set
++        }
++        String country = realCountry();
++        if (country.isEmpty()) {
++            throw new IllegalStateException("the country of the phone is not known (no network and no SIM): choose a place");
++        }
++        if (places.automaticFor(country, mRealLat, mRealLon, 0L) == 0) {
++            throw new IllegalStateException("the place data has no place in the country of the phone: choose a place");
++        }
++    }
++
++    private final class Internal implements CompartmentsInternal {
++        @Override
++        public PersonaView personaFor(int uid) {
++            PersonaFile table = mPersona;
++            if (table == null || !UserHandle.isApp(uid)) {
++                return null;
++            }
++            int placeId = table.placeOf(uid);
++            Places places = placeId == 0 ? null : places();
++            Places.Place place = places == null ? null : places.byId(placeId);
++            if (place == null) {
++                return null;
++            }
++            Track t = mTracks.compute(UserHandle.getAppId(uid),
++                    (appId, old) -> old != null && old.placeId == placeId ? old : new Track(placeId, new PersonaTrack(place.lat, place.lon)));
++            return new PersonaView(placeId, place.lat, place.lon, place.timeZone, place.country, place.mcc, t.track);
++        }
++    }
++
+     // ---------------------------------------------------------------- files
+ 
+     private PolicyStore loadStore() {
+@@ -381,6 +691,20 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         }
+     }
+ 
++    /** The table that the last run wrote, so that a persona survives a restart; null when there is none or it is unreadable. */
++    private PersonaFile loadPersona() {
++        try {
++            if (!mPersonaFile.exists()) {
++                return null;
++            }
++            byte[] data = mPersonaFile.readFully();
++            return data.length > MAX_STORE_BYTES ? null : PersonaFile.parse(new String(data, StandardCharsets.US_ASCII));
++        } catch (IOException | RuntimeException e) {
++            Slog.w(TAG, "persona file unreadable: " + e.getClass().getSimpleName());
++            return null;
++        }
++    }
++
+     private static long loadSalt(File f) {
+         AtomicFile af = new AtomicFile(f);
+         try {
+diff --git a/services/core/java/com/android/server/compartments/Geo.java b/services/core/java/com/android/server/compartments/Geo.java
+new file mode 100644
+index 0000000..0b785c7
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/Geo.java
+@@ -0,0 +1,31 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++/** Great-circle helpers on a sphere of the mean earth radius. Pure Java. */
++final class Geo {
++    private Geo() {}
++
++    static final double EARTH_RADIUS_M = 6371008.8;
++
++    /** Distance in metres between two points in degrees (haversine). */
++    static double distanceM(double lat1, double lon1, double lat2, double lon2) {
++        double p1 = Math.toRadians(lat1), p2 = Math.toRadians(lat2);
++        // haversine is periodic in the longitude difference, so it needs no wrapping
++        double dp = p2 - p1, dl = Math.toRadians(lon2 - lon1);
++        double a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
++        return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1.0, Math.sqrt(a)));
++    }
++
++    /** Longitude in [-180, 180). */
++    static double wrapLon(double lon) {
++        double x = (lon + 180.0) % 360.0;
++        if (x < 0) {
++            x += 360.0;
++        }
++        return x - 180.0;
++    }
++
++    static double clampLat(double lat) {
++        return Math.max(-90.0, Math.min(90.0, lat));
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/MirrorPlan.java b/services/core/java/com/android/server/compartments/MirrorPlan.java
+index df1ba6e..4e88bc2 100644
+--- a/services/core/java/com/android/server/compartments/MirrorPlan.java
++++ b/services/core/java/com/android/server/compartments/MirrorPlan.java
+@@ -71,16 +71,26 @@ final class MirrorPlan {
+      * every choice of the user would then be lost; two packages with one app id get the more protective mode.
+      */
+     static String sensorModeFile(PolicyStore s, UidResolver r, long salt) {
++        return sensorModeFile(s, r, salt, ActivityEstimator.Activity.STILL);
++    }
++
++    /**
++     * The same file with what the phone is doing, for the invented streams: a line "t ACTIVITY" after the default when the
++     * activity is not STILL (a file without the line reads as STILL).
++     */
++    static String sensorModeFile(PolicyStore s, UidResolver r, long salt, ActivityEstimator.Activity activity) {
+         SensorMode dflt = mode(s.defaults.profile, s.defaults.value(Cls.SENSORS));
+         Map<Integer, SensorMode> perApp = new TreeMap<>();
+         for (String pkg : s.configured()) {
+-            int uid = r.uidOf(pkg);
+-            int appId = uid % USER_OFFSET;
+-            if (appId >= FIRST_APP_ID && appId <= LAST_APP_ID) {  // -1 (not installed) is outside the range too
++            int appId = ordinaryAppId(r.uidOf(pkg));
++            if (appId >= 0) {
+                 perApp.merge(appId, mode(s.policyOf(pkg).profile, s.value(pkg, Cls.SENSORS)), MirrorPlan::stricter);
+             }
+         }
+         StringBuilder out = new StringBuilder(String.format("s %016x\n", salt)).append("d ").append(dflt).append('\n');
++        if (activity != ActivityEstimator.Activity.STILL) {
++            out.append("t ").append(activity).append('\n');
++        }
+         for (Map.Entry<Integer, SensorMode> e : perApp.entrySet()) {
+             if (e.getValue() != dflt) {
+                 out.append("a ").append(e.getKey()).append(' ').append(e.getValue()).append('\n');
+@@ -89,6 +99,79 @@ final class MirrorPlan {
+         return out.toString();
+     }
+ 
++    /** The packages whose location is blocked: the service takes the location permissions of these in every user. */
++    static Set<String> locationBlocked(PolicyStore s) {
++        Set<String> out = new TreeSet<>();
++        for (String pkg : s.configured()) {
++            if (s.value(pkg, Cls.LOCATION) == Value.BLOCKED) {
++                out.add(pkg);
++            }
++        }
++        return out;
++    }
++
++    /** The seed of the Automatic place of an app on this phone: the same every time, different for each app and each phone. */
++    static long personaSeed(long salt, int appId) {
++        return salt ^ (appId * 0x9E3779B97F4A7C15L);
++    }
++
++    /**
++     * The place of a substituted app: the one the user chose when {@code places} knows it, else the one chosen for the app in
++     * the real country; 0 when there is none (no place data, no country, a country without a place, an unknown chosen place).
++     */
++    private static int placeOf(PolicyStore.AppPolicy p, int appId, long salt, Places places, String country, double lat, double lon) {
++        if (places == null) {
++            return 0;
++        }
++        if (p.place != 0) {
++            return places.byId(p.place) != null ? p.place : 0;
++        }
++        return places.automaticFor(country, lat, lon, personaSeed(salt, appId));
++    }
++
++    /** The app id of an ordinary app, which every user shares; -1 for anything else (a platform or sandbox uid, -1: not installed). */
++    private static int ordinaryAppId(int uid) {
++        int appId = uid % USER_OFFSET;
++        return appId >= FIRST_APP_ID && appId <= LAST_APP_ID ? appId : -1;
++    }
++
++    /**
++     * The persona file ({@link PersonaFile}): a line for each app id of a configured app whose location is substituted and that
++     * has a place (see {@link #placeOf}); an app that has none is in {@link #locationUnresolved} instead. Two packages with one
++     * app id give the lower place. Pure: the real country and position are arguments (a NaN position is unknown).
++     */
++    static String personaFile(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat, double lon) {
++        Map<Integer, Integer> perApp = new TreeMap<>();
++        for (String pkg : s.configured()) {
++            int appId = ordinaryAppId(r.uidOf(pkg));
++            if (appId < 0 || s.value(pkg, Cls.LOCATION) != Value.SUBSTITUTE) {
++                continue;
++            }
++            int place = placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon);
++            if (place > 0) {
++                perApp.merge(appId, place, Math::min);
++            }
++        }
++        return PersonaFile.format(salt, perApp);
++    }
++
++    /**
++     * The installed packages whose location is substituted but for which no persona can be made. The service takes their
++     * location permissions, so that an app is never given the real position when its persona is missing.
++     */
++    static Set<String> locationUnresolved(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
++            double lon) {
++        Set<String> out = new TreeSet<>();
++        for (String pkg : s.configured()) {
++            int appId = ordinaryAppId(r.uidOf(pkg));
++            if (appId >= 0 && s.value(pkg, Cls.LOCATION) == Value.SUBSTITUTE
++                    && placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon) == 0) {
++                out.add(pkg);
++            }
++        }
++        return out;
++    }
++
+     private static SensorMode mode(Profiles.Profile p, Value v) {
+         return Profiles.sensorMode(p, v);
+     }
+diff --git a/services/core/java/com/android/server/compartments/PersonaFile.java b/services/core/java/com/android/server/compartments/PersonaFile.java
+new file mode 100644
+index 0000000..81c0d9a
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/PersonaFile.java
+@@ -0,0 +1,115 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.TreeMap;
++import java.util.regex.Pattern;
++
++/**
++ * The file that tells the processes which place an Isolated app is in (ADR-208). The system server writes it; the telephony,
++ * Wi-Fi and Bluetooth code read it, each with its own copy of this class, because they are other class loaders or processes
++ * (a check of the package keeps the copies equal). Pure Java, no import beyond {@code java.util}.
++ *
++ * <p>Format: {@code s} and the 16 lower-case hex digits of the salt, then one line {@code p APPID PLACE} for each app that has a
++ * persona, in app id order, every line ended by a newline, at most 8192 lines. An app id is of an ordinary app (10000 to 19999)
++ * and a place is a positive number of {@link Places}. A reader that gets anything else refuses the whole file.
++ */
++final class PersonaFile {
++    static final int MAX_LINES = 8192;
++    private static final int FIRST_APP_ID = 10000;
++    private static final int LAST_APP_ID = 19999;
++    private static final int USER_OFFSET = 100000;
++    private static final int SANDBOX_OFFSET = 10000;
++    private static final Pattern SALT = Pattern.compile("s [0-9a-f]{16}");
++    private static final Pattern LINE = Pattern.compile("p (0|[1-9][0-9]{0,9}) (0|[1-9][0-9]{0,9})");
++
++    private final long salt;
++    private final Map<Integer, Integer> places;
++
++    private PersonaFile(long salt, Map<Integer, Integer> places) {
++        this.salt = salt;
++        this.places = places;
++    }
++
++    /** The text of the file for the apps (by app id) that have a place. */
++    static String format(long salt, Map<Integer, Integer> appIdToPlace) {
++        if (appIdToPlace == null || appIdToPlace.size() > MAX_LINES - 1) {
++            throw new IllegalArgumentException("too many apps");
++        }
++        Map<Integer, Integer> sorted = new TreeMap<>();
++        for (Map.Entry<Integer, Integer> e : appIdToPlace.entrySet()) {
++            Integer appId = e.getKey();
++            Integer place = e.getValue();
++            if (appId == null || place == null || appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1) {
++                throw new IllegalArgumentException("an app id or a place is out of range");
++            }
++            sorted.put(appId, place);
++        }
++        StringBuilder b = new StringBuilder(String.format("s %016x\n", salt));
++        for (Map.Entry<Integer, Integer> e : sorted.entrySet()) {
++            b.append("p ").append(e.getKey()).append(' ').append(e.getValue()).append('\n');
++        }
++        return b.toString();
++    }
++
++    /** @throws IllegalArgumentException for any text that is not exactly a file of the format */
++    static PersonaFile parse(String text) {
++        if (text == null || text.isEmpty() || text.charAt(text.length() - 1) != '\n') {
++            throw new IllegalArgumentException("not a persona file");
++        }
++        Map<Integer, Integer> out = new HashMap<>();
++        long salt = 0;
++        int start = 0;
++        int lines = 0;
++        while (start < text.length()) {
++            int end = text.indexOf('\n', start);
++            String line = text.substring(start, end);
++            start = end + 1;
++            if (++lines > MAX_LINES) {
++                throw new IllegalArgumentException("too many lines");
++            }
++            if (lines == 1) {
++                if (!SALT.matcher(line).matches()) {
++                    throw new IllegalArgumentException("the salt line must come first");
++                }
++                salt = Long.parseUnsignedLong(line.substring(2), 16);
++                continue;
++            }
++            if (!LINE.matcher(line).matches()) {
++                throw new IllegalArgumentException("not a place line");
++            }
++            int space = line.indexOf(' ', 2);
++            long appId = Long.parseLong(line.substring(2, space));
++            long place = Long.parseLong(line.substring(space + 1));
++            if (appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1 || place > Integer.MAX_VALUE) {
++                throw new IllegalArgumentException("an app id or a place is out of range");
++            }
++            if (out.put((int) appId, (int) place) != null) {
++                throw new IllegalArgumentException("an app id is repeated");
++            }
++        }
++        return new PersonaFile(salt, Collections.unmodifiableMap(out));
++    }
++
++    long salt() {
++        return salt;
++    }
++
++    /**
++     * The place of the app that this uid belongs to (the same app in every user, and its SDK sandbox, 20000 to 29999, answers
++     * for the app 10000 below it), or 0 when the app has no persona.
++     */
++    int placeOf(int uid) {
++        if (uid < 0) {
++            return 0;
++        }
++        int appId = uid % USER_OFFSET;
++        if (appId >= FIRST_APP_ID + SANDBOX_OFFSET && appId <= LAST_APP_ID + SANDBOX_OFFSET) {
++            appId -= SANDBOX_OFFSET;
++        }
++        Integer place = places.get(appId);
++        return place == null ? 0 : place;
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/PersonaTrack.java b/services/core/java/com/android/server/compartments/PersonaTrack.java
+new file mode 100644
+index 0000000..5a90912
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/PersonaTrack.java
+@@ -0,0 +1,56 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++/**
++ * The fake position of one app: the real track, moved to another place (ADR-208, spec section 4.2). The first real fix is
++ * mapped to the place and every later fix keeps the real displacement in metres, so speed, stops and heading stay the real
++ * ones. After the real position has moved more than {@link #REANCHOR_M} from the anchor the anchor moves with it, to the fake
++ * position that the track has reached, so the fake track stays continuous and the east-west scaling stays accurate.
++ */
++public final class PersonaTrack {
++    static final double REANCHOR_M = 100_000.0;
++    private static final double MIN_COS = 0.05;
++
++    private final double placeLat;
++    private final double placeLon;
++    private boolean anchored;
++    private double realLat, realLon, fakeLat, fakeLon;
++
++    PersonaTrack(double placeLat, double placeLon) {
++        if (!(Math.abs(placeLat) <= 80.0) || Double.isNaN(placeLon)) {
++            throw new IllegalArgumentException("place");
++        }
++        this.placeLat = placeLat;
++        this.placeLon = Geo.wrapLon(placeLon);
++    }
++
++    /** The fake {latitude, longitude} for a real fix. A fix with a latitude or longitude that is not finite is refused. */
++    public synchronized double[] apply(double lat, double lon) {
++        if (!(Math.abs(lat) <= 90.0) || Double.isNaN(lon) || Double.isInfinite(lon)) {
++            throw new IllegalArgumentException("fix");
++        }
++        lon = Geo.wrapLon(lon);
++        if (!anchored) {
++            setAnchor(lat, lon, placeLat, placeLon);
++        } else if (Geo.distanceM(realLat, realLon, lat, lon) > REANCHOR_M) {
++            double[] here = translate(lat, lon);
++            setAnchor(lat, lon, here[0], here[1]);
++        }
++        return translate(lat, lon);
++    }
++
++    private void setAnchor(double rLat, double rLon, double fLat, double fLon) {
++        realLat = rLat;
++        realLon = rLon;
++        fakeLat = Geo.clampLat(fLat);
++        fakeLon = Geo.wrapLon(fLon);
++        anchored = true;
++    }
++
++    private double[] translate(double lat, double lon) {
++        double north = lat - realLat;
++        double east = Geo.wrapLon(lon - realLon);
++        double scale = Math.max(Math.cos(Math.toRadians(realLat)), MIN_COS) / Math.max(Math.cos(Math.toRadians(fakeLat)), MIN_COS);
++        return new double[] {Geo.clampLat(fakeLat + north), Geo.wrapLon(fakeLon + east * scale)};
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/Places.java b/services/core/java/com/android/server/compartments/Places.java
+new file mode 100644
+index 0000000..3743802
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/Places.java
+@@ -0,0 +1,210 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.Comparator;
++import java.util.List;
++import java.util.Locale;
++import java.util.regex.Pattern;
++
++/**
++ * The places of the persona (ADR-208): the offline list of cities that an Isolated app can be placed in. Read once from a
++ * read-only file of the image, parsed strictly: anything that is not exactly a file of the format makes the whole file unusable,
++ * and the service then reports "no place data" instead of a partial list. Pure Java.
++ *
++ * <p>Format: one line per place, seven tab-separated fields, a newline after every line, ids ascending from 1:
++ * {@code id name country latitude longitude timeZone mcc}. The country is two capital ASCII letters, the latitude is within 80
++ * degrees (the cities of the list stop there, and the track of the persona does not work near the poles), the longitude within
++ * 180, the time zone an Olson id, the mcc the mobile country code of the place (200 to 799).
++ */
++final class Places {
++    static final int MAX_LINES = 100000;
++    static final double MIN_AUTOMATIC_DISTANCE_M = 150000.0;
++    private static final int MAX_NAME = 100;
++    private static final Pattern NUMBER = Pattern.compile("0|[1-9][0-9]{0,8}");
++    private static final Pattern LAT = Pattern.compile("-?[0-9]{1,2}(\\.[0-9]{1,7})?");
++    private static final Pattern LON = Pattern.compile("-?[0-9]{1,3}(\\.[0-9]{1,7})?");
++    private static final Pattern COUNTRY = Pattern.compile("[A-Z]{2}");
++    private static final Pattern ZONE = Pattern.compile("[A-Za-z0-9_/+-]{1,64}");
++
++    static final class Place {
++        final int id;
++        final String name;
++        final String country;
++        final double lat;
++        final double lon;
++        final String timeZone;
++        final int mcc;
++
++        Place(int id, String name, String country, double lat, double lon, String timeZone, int mcc) {
++            this.id = id;
++            this.name = name;
++            this.country = country;
++            this.lat = lat;
++            this.lon = lon;
++            this.timeZone = timeZone;
++            this.mcc = mcc;
++        }
++    }
++
++    private final List<Place> places;
++
++    private Places(List<Place> places) {
++        this.places = Collections.unmodifiableList(places);
++    }
++
++    /** @throws IllegalArgumentException for any text that is not exactly a file of the format */
++    static Places parse(String tsv) {
++        if (tsv == null || tsv.isEmpty() || tsv.charAt(tsv.length() - 1) != '\n') {
++            throw new IllegalArgumentException("not a places file");
++        }
++        List<Place> out = new ArrayList<>();
++        int start = 0;
++        int lastId = 0;
++        while (start < tsv.length()) {
++            int end = tsv.indexOf('\n', start);
++            if (out.size() >= MAX_LINES) {
++                throw new IllegalArgumentException("too many lines");
++            }
++            String[] f = tsv.substring(start, end).split("\t", -1);
++            start = end + 1;
++            if (f.length != 7) {
++                throw new IllegalArgumentException("a line has " + f.length + " fields");
++            }
++            int id = number(f[0]);
++            if (id <= lastId) {
++                throw new IllegalArgumentException("ids must ascend from 1");
++            }
++            lastId = id;
++            if (!validName(f[1]) || !COUNTRY.matcher(f[2]).matches() || !ZONE.matcher(f[5]).matches()) {
++                throw new IllegalArgumentException("a name, country or time zone is not valid");
++            }
++            if (!LAT.matcher(f[3]).matches() || !LON.matcher(f[4]).matches()) {
++                throw new IllegalArgumentException("a coordinate is not valid");
++            }
++            double lat = Double.parseDouble(f[3]);
++            double lon = Double.parseDouble(f[4]);
++            if (Math.abs(lat) > 80.0 || Math.abs(lon) > 180.0) {
++                throw new IllegalArgumentException("a coordinate is out of range");
++            }
++            int mcc = number(f[6]);
++            if (mcc < 200 || mcc > 799) {
++                throw new IllegalArgumentException("mcc");
++            }
++            out.add(new Place(id, f[1], f[2], lat, lon, f[5], mcc));
++        }
++        return new Places(out);
++    }
++
++    private static int number(String s) {
++        if (!NUMBER.matcher(s).matches()) {
++            throw new IllegalArgumentException("not a number");
++        }
++        return Integer.parseInt(s);
++    }
++
++    private static boolean validName(String s) {
++        if (s.isEmpty() || s.length() > MAX_NAME) {
++            return false;
++        }
++        for (int i = 0; i < s.length(); i++) {
++            if (Character.isISOControl(s.charAt(i))) {
++                return false;
++            }
++        }
++        return true;
++    }
++
++    int size() {
++        return places.size();
++    }
++
++    /** The place with this id, or null. */
++    Place byId(int id) {
++        int lo = 0;
++        int hi = places.size() - 1;
++        while (lo <= hi) {
++            int mid = (lo + hi) >>> 1;
++            int v = places.get(mid).id;
++            if (v == id) {
++                return places.get(mid);
++            }
++            if (v < id) {
++                lo = mid + 1;
++            } else {
++                hi = mid - 1;
++            }
++        }
++        return null;
++    }
++
++    /** Places whose name contains the query, names that start with it first, then by name, then by id; at most {@code limit}. */
++    List<Place> search(String query, int limit) {
++        if (query == null || query.isEmpty() || limit <= 0) {
++            return Collections.emptyList();
++        }
++        final String q = query.toLowerCase(Locale.ROOT);
++        List<Place> starts = new ArrayList<>();
++        List<Place> inside = new ArrayList<>();
++        for (Place p : places) {
++            String name = p.name.toLowerCase(Locale.ROOT);
++            if (name.startsWith(q)) {
++                starts.add(p);
++            } else if (name.contains(q)) {
++                inside.add(p);
++            }
++        }
++        Comparator<Place> order = (a, b) -> {
++            int c = a.name.toLowerCase(Locale.ROOT).compareTo(b.name.toLowerCase(Locale.ROOT));
++            return c != 0 ? c : Integer.compare(a.id, b.id);
++        };
++        Collections.sort(starts, order);
++        Collections.sort(inside, order);
++        starts.addAll(inside);
++        return new ArrayList<>(starts.subList(0, Math.min(limit, starts.size())));
++    }
++
++    /**
++     * The place that an app is given when the user has not chosen one: a place of this country at least 150 km from the real
++     * position, picked by the seed, so the same app on the same phone gets the same place every time. When no place of the
++     * country is that far, the farthest one; 0 when the country has no place at all (or is not a country code), which the
++     * caller reports as "no persona possible". A real position that is not finite counts every place of the country as far
++     * enough.
++     */
++    int automaticFor(String countryIso, double realLat, double realLon, long seed) {
++        if (countryIso == null || !COUNTRY.matcher(countryIso).matches()) {
++            return 0;
++        }
++        boolean known = !Double.isNaN(realLat) && !Double.isInfinite(realLat) && !Double.isNaN(realLon) && !Double.isInfinite(realLon);
++        List<Place> far = new ArrayList<>();
++        Place farthest = null;
++        double farthestM = -1.0;
++        for (Place p : places) {
++            if (!p.country.equals(countryIso)) {
++                continue;
++            }
++            double d = known ? Geo.distanceM(realLat, realLon, p.lat, p.lon) : Double.MAX_VALUE;
++            if (d >= MIN_AUTOMATIC_DISTANCE_M) {
++                far.add(p);
++            }
++            if (d > farthestM) {
++                farthestM = d;
++                farthest = p;
++            }
++        }
++        if (far.isEmpty()) {
++            return farthest == null ? 0 : farthest.id;
++        }
++        long countryHash = countryIso.charAt(0) * 31L + countryIso.charAt(1);
++        return far.get((int) Math.floorMod(mix(seed ^ countryHash), (long) far.size())).id;
++    }
++
++    /** splitmix64, the function of SensorModeTable::mix, so that the choice is stable per app and phone. */
++    static long mix(long z) {
++        z += 0x9E3779B97F4A7C15L;
++        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
++        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
++        return z ^ (z >>> 31);
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/PolicyStore.java b/services/core/java/com/android/server/compartments/PolicyStore.java
+index 73863cf..87991ae 100644
+--- a/services/core/java/com/android/server/compartments/PolicyStore.java
++++ b/services/core/java/com/android/server/compartments/PolicyStore.java
+@@ -17,27 +17,35 @@ import java.util.TreeMap;
+ import java.util.regex.Pattern;
+ 
+ /**
+- * The policy of every app: a profile and per-class values, plus the defaults that an app the user has not set follows.
+- * Immutable. A store that cannot be read back reads as {@link #EMPTY}, in which every app is Protected.
++ * The policy of every app: a profile, per-class values and, for an Isolated app, a place, plus the defaults that an app the user
++ * has not set follows. Immutable. A store that cannot be read back reads as {@link #EMPTY}, in which every app is Protected.
+  */
+ final class PolicyStore {
+     static final int MAX_APPS = 4096;
+     private static final int MAGIC = 0x434D5031;
+-    private static final int VERSION = 1;
++    /** Version 2 added the location class and the place of an app; a version 1 file reads with the new parts at their defaults. */
++    private static final int VERSION = 2;
++    private static final int VERSION_1_CLASSES = 3;
+     private static final Pattern PACKAGE = Pattern.compile("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+");
+ 
+-    /** A profile and the classes the user set on top of it. */
++    /** A profile, the classes the user set on top of it and the place of the persona (0 is Automatic). */
+     static final class AppPolicy {
+-        static final AppPolicy PROTECTED = new AppPolicy(Profile.PROTECTED, new Value[Cls.values().length]);
++        static final AppPolicy PROTECTED = new AppPolicy(Profile.PROTECTED, new Value[Cls.values().length], 0);
+ 
+         final Profile profile;
++        /** The id of a place of {@link Places}, or 0 for the place that is chosen for the app (Automatic). */
++        final int place;
+         private final Value[] overrides;
+ 
+-        AppPolicy(Profile profile, Value[] overrides) {
++        AppPolicy(Profile profile, Value[] overrides, int place) {
++            if (place < 0) {
++                throw new IllegalArgumentException("a place is positive, or 0 for Automatic");
++            }
+             Value[] copy = new Value[Cls.values().length];
+             System.arraycopy(overrides, 0, copy, 0, Math.min(overrides.length, copy.length));
+             this.profile = profile;
+             this.overrides = copy;
++            this.place = place;
+         }
+ 
+         Value value(Cls c) {
+@@ -45,9 +53,13 @@ final class PolicyStore {
+             return o != null ? o : Profiles.defaultValue(profile, c);
+         }
+ 
+-        /** A new profile clears what the user set per class. */
++        /** A new profile clears what the user set per class, and the place unless the app stays Isolated. */
+         AppPolicy withProfile(Profile p) {
+-            return new AppPolicy(p, new Value[Cls.values().length]);
++            return new AppPolicy(p, new Value[Cls.values().length], profile == Profile.ISOLATED && p == Profile.ISOLATED ? place : 0);
++        }
++
++        AppPolicy withPlace(int id) {
++            return new AppPolicy(profile, overrides, id);
+         }
+ 
+         /** A value equal to the profile's own default is kept as no override. */
+@@ -57,7 +69,7 @@ final class PolicyStore {
+             }
+             Value[] next = overrides.clone();
+             next[c.ordinal()] = v == Profiles.defaultValue(profile, c) ? null : v;
+-            return new AppPolicy(profile, next);
++            return new AppPolicy(profile, next, place);
+         }
+     }
+ 
+@@ -75,9 +87,13 @@ final class PolicyStore {
+         return name != null && name.length() <= 255 && PACKAGE.matcher(name).matches();
+     }
+ 
+-    /** What an app without an entry of its own follows may be Protected or Isolated, with its sensors set; never more. */
++    /**
++     * What an app without an entry of its own follows may be Protected or Isolated, with its sensors set; never more. It has no
++     * place: a persona is made for an app that has an entry.
++     */
+     static boolean validDefaults(AppPolicy d) {
+         return d.profile != Profile.TRUSTED
++                && d.place == 0
+                 && d.value(Cls.LOOPBACK) == Profiles.defaultValue(d.profile, Cls.LOOPBACK)
+                 && d.value(Cls.SETTINGS) == Profiles.defaultValue(d.profile, Cls.SETTINGS);
+     }
+@@ -87,8 +103,18 @@ final class PolicyStore {
+         return p != null ? p : defaults;
+     }
+ 
++    /** What is enforced for the app: its own value, or what an app without an entry gets (see {@link #valueWithoutEntry}). */
+     Value value(String pkg, Cls c) {
+-        return policyOf(pkg).value(c);
++        AppPolicy p = apps.get(pkg);
++        return p != null ? p.value(c) : valueWithoutEntry(c);
++    }
++
++    /**
++     * The value of a class for an app that has no entry. The defaults give it, except that its location is real: a persona is
++     * made per app (the place is chosen for the app and the phone), so an app without an entry has none.
++     */
++    Value valueWithoutEntry(Cls c) {
++        return c == Cls.LOCATION ? Value.REAL : defaults.value(c);
+     }
+ 
+     boolean hasEntry(String pkg) {
+@@ -152,10 +178,14 @@ final class PolicyStore {
+             return EMPTY;
+         }
+         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+-            if (in.readInt() != MAGIC || in.readByte() != VERSION) {
++            if (in.readInt() != MAGIC) {
++                return EMPTY;
++            }
++            int version = in.readByte();
++            if (version != 1 && version != VERSION) {
+                 return EMPTY;
+             }
+-            AppPolicy d = readPolicy(in);
++            AppPolicy d = readPolicy(in, version);
+             if (d == null || !validDefaults(d)) {
+                 return EMPTY;
+             }
+@@ -166,7 +196,7 @@ final class PolicyStore {
+             TreeMap<String, AppPolicy> apps = new TreeMap<>();
+             for (int i = 0; i < n; i++) {
+                 String pkg = in.readUTF();
+-                AppPolicy p = readPolicy(in);
++                AppPolicy p = readPolicy(in, version);
+                 if (p == null || !validPackage(pkg) || apps.put(pkg, p) != null) {
+                     return EMPTY;
+                 }
+@@ -184,13 +214,17 @@ final class PolicyStore {
+             Value o = p.overrides[c.ordinal()];
+             out.writeByte(o == null ? -1 : o.ordinal());
+         }
++        out.writeInt(p.place);
+     }
+ 
+-    /** Null for a value that is not valid; a file written with fewer classes reads with the rest at their defaults. */
+-    private static AppPolicy readPolicy(DataInputStream in) throws IOException {
++    /**
++     * Null for a value that is not valid; a file written with fewer classes reads with the rest at their defaults. A version 1
++     * policy has three classes at most and no place.
++     */
++    private static AppPolicy readPolicy(DataInputStream in, int version) throws IOException {
+         int profile = in.readUnsignedByte();
+         int classes = in.readUnsignedByte();
+-        if (profile >= Profile.values().length || classes > Cls.values().length) {
++        if (profile >= Profile.values().length || classes > (version == 1 ? VERSION_1_CLASSES : Cls.values().length)) {
+             return null;
+         }
+         Value[] overrides = new Value[Cls.values().length];
+@@ -204,6 +238,7 @@ final class PolicyStore {
+             }
+             overrides[i] = Value.values()[v];
+         }
+-        return new AppPolicy(Profile.values()[profile], overrides);
++        int place = version == 1 ? 0 : in.readInt();
++        return place < 0 ? null : new AppPolicy(Profile.values()[profile], overrides, place);
+     }
+ }
+diff --git a/services/core/java/com/android/server/compartments/Profiles.java b/services/core/java/com/android/server/compartments/Profiles.java
+index d67c33d..d948859 100644
+--- a/services/core/java/com/android/server/compartments/Profiles.java
++++ b/services/core/java/com/android/server/compartments/Profiles.java
+@@ -10,8 +10,8 @@ final class Profiles {
+ 
+     enum Profile { TRUSTED, PROTECTED, ISOLATED }
+ 
+-    /** Classes of the first version. Location joins with the persona plan; the codec of PolicyStore tolerates a longer list. */
+-    enum Cls { SENSORS, LOOPBACK, SETTINGS }
++    /** The classes; the order is the wire format of the interface and of the store (version 2 added LOCATION). */
++    enum Cls { SENSORS, LOOPBACK, SETTINGS, LOCATION }
+ 
+     /** REAL: what the phone has. SUBSTITUTE: invented, per app. BLOCKED: refused (for SETTINGS: the 40 keys of ADR-175). */
+     enum Value { REAL, SUBSTITUTE, BLOCKED }
+@@ -19,14 +19,14 @@ final class Profiles {
+     /** What the sensor service does for an app: the unchanged event, the bias folded in (ADR-167), invented data, or nothing. */
+     enum SensorMode { FOLDED, RAW, SUBSTITUTE, BLOCKED }
+ 
+-    /** Only the sensors can be substituted; loopback and the settings tables are real or blocked. */
++    /** Only the sensors and the location can be substituted; loopback and the settings tables are real or blocked. */
+     static boolean isValid(Cls c, Value v) {
+-        return c == Cls.SENSORS || v != Value.SUBSTITUTE;
++        return c == Cls.SENSORS || c == Cls.LOCATION || v != Value.SUBSTITUTE;
+     }
+ 
+     /** The value a profile gives a class when the user has not set that class (spec section 3). */
+     static Value defaultValue(Profile p, Cls c) {
+-        if (c == Cls.SENSORS) {
++        if (c == Cls.SENSORS || c == Cls.LOCATION) {
+             return p == Profile.ISOLATED ? Value.SUBSTITUTE : Value.REAL;
+         }
+         return p == Profile.TRUSTED ? Value.REAL : Value.BLOCKED;
+-- 
+2.56.0
+

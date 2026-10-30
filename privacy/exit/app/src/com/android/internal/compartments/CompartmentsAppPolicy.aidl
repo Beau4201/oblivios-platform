@@ -14,4 +14,6 @@ parcelable CompartmentsAppPolicy {
     int settings;
     /** The user has set this app. False for an app that follows the defaults. */
     boolean configured;
+    /** The location class, one of ICompartmentsPolicy.VALUE_*; an app that follows the defaults has its real location. */
+    int location;
 }

@@ -1,0 +1,42 @@
+From dfd378689f4fd5ff6fe514da2f1ff17ad32414ec Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 17:42:56 +0100
+Subject: [PATCH] sepolicy: let the telephony and Bluetooth apps read the
+ persona file
+
+The radio and bluetooth domains may search /data/system/compartments and read the files under its type, and no other app domain may touch them (ADR-208). The directory is mode 0711 and the store and salt stay mode 0600, so the file mode keeps those two away from them.
+---
+ private/compartments_service.te | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/private/compartments_service.te b/private/compartments_service.te
+index 8945f98..11dd951 100644
+--- a/private/compartments_service.te
++++ b/private/compartments_service.te
+@@ -1,6 +1,6 @@
+ # SPDX-License-Identifier: Apache-2.0
+ # The policy service of Compartments (ADR-208) in system_server, and the files it keeps in /data/system/compartments:
+-# the store, the salt and the file that the sensor service reads (the sensor service runs inside system_server).
++# the store, the salt, the file that the sensor service reads (the sensor service runs inside system_server) and the persona file.
+ type compartments_data_file, file_type, data_file_type, core_data_file_type;
+ 
+ # system_server creates the directory with its own type instead of the type of /data/system, so no restorecon is needed.
+@@ -16,3 +16,15 @@ neverallow { appdomain -exit_app -system_app } compartments_service:service_mana
+ 
+ # Nothing but system_server writes the files.
+ neverallow { domain -system_server } compartments_data_file:file { write append create unlink rename setattr };
++
++# The telephony app (radio) and the Bluetooth app read the persona file (app ids and place ids, no package name), so that their
++# processes can answer an Isolated app with the cells and the devices of its place. The directory is mode 0711 for that. The
++# store and the salt are mode 0600 and owned by system_server, so they stay out of reach of those two uids by file mode; the
++# sensor service runs inside system_server and needs no rule. The rest of the app domains get nothing, and the two get no more
++# than reading.
++allow { radio bluetooth } compartments_data_file:dir search;
++allow { radio bluetooth } compartments_data_file:file r_file_perms;
++neverallow { appdomain -radio -bluetooth } compartments_data_file:dir *;
++neverallow { appdomain -radio -bluetooth } compartments_data_file:file *;
++neverallow { radio bluetooth } compartments_data_file:dir ~search;
++neverallow { radio bluetooth } compartments_data_file:file ~r_file_perms;
+-- 
+2.56.0
+

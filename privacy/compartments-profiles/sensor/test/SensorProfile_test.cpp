@@ -152,6 +152,67 @@ static void table() {
     CHECK(!directChannelRefused(SensorMode::SUBSTITUTE, SENSOR_TYPE_PRESSURE));
 }
 
+static void write(const std::string& path, const std::string& text, mode_t mode = 0600) {
+    unlink(path.c_str());
+    std::ofstream(path) << text;
+    chmod(path.c_str(), mode);
+}
+
+// The optional "t" line of the file: what the phone is doing, from the real speed, for the invented streams (ADR-208).
+static void activityLine() {
+    SensorModeTable t;
+    CHECK(t.activity() == Activity::STILL);  // before any file
+    CHECK(t.parse(kGood));
+    CHECK(t.activity() == Activity::STILL);  // a file without the line keeps STILL
+    CHECK(t.parse("s 0000000000000001\nd FOLDED\nt STILL\n"));
+    CHECK(t.activity() == Activity::STILL);
+    CHECK(t.parse("s 0000000000000001\nd FOLDED\nt WALKING\n"));
+    CHECK(t.activity() == Activity::WALKING);
+    CHECK(t.parse("s 0000000000000001\nd SUBSTITUTE\nt DRIVING\na 10100 RAW\na 10200 BLOCKED\n"));
+    CHECK(t.activity() == Activity::DRIVING);
+    CHECK(t.modeFor(10100) == SensorMode::RAW && t.modeFor(10200) == SensorMode::BLOCKED && t.modeFor(10400) == SensorMode::SUBSTITUTE);
+    SensorModeTable noLine;
+    CHECK(noLine.parse("s 0000000000000001\nd SUBSTITUTE\na 10100 RAW\na 10200 BLOCKED\n"));
+    CHECK(t.seedFor(10100) == noLine.seedFor(10100));  // the activity is not part of the seed
+    CHECK(t.parse(kGood));
+    CHECK(t.activity() == Activity::STILL);  // a file without the line puts it back
+
+    const char* bad[] = {
+        "s 0000000000000001\nt WALKING\nd FOLDED\n",                    // before the default
+        "t WALKING\ns 0000000000000001\nd FOLDED\n",                    // before the salt
+        "s 0000000000000001\nd FOLDED\nt WALKING\nt DRIVING\n",         // repeated
+        "s 0000000000000001\nd FOLDED\na 10100 RAW\nt WALKING\n",       // after an app line
+        "s 0000000000000001\nd FOLDED\nt walking\n",                    // not a name
+        "s 0000000000000001\nd FOLDED\nt RUNNING\n",
+        "s 0000000000000001\nd FOLDED\nt FOLDED\n",                     // a mode is not an activity
+        "s 0000000000000001\nd FOLDED\nt WALKING x\n",
+        "s 0000000000000001\nd FOLDED\nt \n",
+        "s 0000000000000001\nd FOLDED\nt\n",
+        "s 0000000000000001\nd FOLDED\nt WALKING",                      // no newline
+    };
+    for (const char* text : bad) {
+        SensorModeTable x;
+        CHECK(x.parse("s 0000000000000001\nd FOLDED\nt DRIVING\n"));
+        CHECK(!x.parse(text));
+        CHECK(x.activity() == Activity::STILL);                         // a refused file leaves the status quo
+        CHECK(x.modeFor(10100) == SensorMode::FOLDED);
+    }
+
+    // through the source, and a change of the line alone reaches the reader
+    char dir[] = "/tmp/sensor-activity-XXXXXX";
+    CHECK(mkdtemp(dir) != nullptr);
+    const std::string path = std::string(dir) + "/modes";
+    auto now = std::chrono::steady_clock::time_point{} + std::chrono::hours(1);
+    SensorModeSource src(path, getuid(), [&now] { return now; });
+    write(path, "s 0000000000000001\nd FOLDED\nt WALKING\n");
+    CHECK(src.table()->activity() == Activity::WALKING);
+    write(path, "s 0000000000000001\nd FOLDED\nt DRIVING\n");  // same size, a new modification time
+    now += std::chrono::seconds(2);
+    CHECK(src.table()->activity() == Activity::DRIVING);
+    unlink(path.c_str());
+    rmdir(dir);
+}
+
 static void stream() {
     const uint64_t seedA = SensorModeTable::mix(1), seedB = SensorModeTable::mix(2);
     for (int32_t type : kMotion) {
@@ -288,12 +349,6 @@ static void modes() {
     CHECK(memcmp(&out[1], &in[1], sizeof(out[1])) == 0);
 }
 
-static void write(const std::string& path, const std::string& text, mode_t mode = 0600) {
-    unlink(path.c_str());
-    std::ofstream(path) << text;
-    chmod(path.c_str(), mode);
-}
-
 static void source() {
     char dir[] = "/tmp/sensor-source-XXXXXX";
     CHECK(mkdtemp(dir) != nullptr);
@@ -354,6 +409,7 @@ static void source() {
 
 int main() {
     table();
+    activityLine();
     stream();
     modes();
     source();

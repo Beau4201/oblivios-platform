@@ -20,7 +20,6 @@ namespace android {
 
 // The activity the invented stream looks like. The first version always uses STILL; the location persona couples it to the
 // speed of the translated track (ADR-208, spec section 4.4).
-enum class Activity : uint8_t { STILL = 0, WALKING = 1, DRIVING = 2 };
 
 namespace substitute_detail {
 

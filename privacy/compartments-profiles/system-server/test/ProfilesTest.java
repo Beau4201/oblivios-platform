@@ -39,6 +39,10 @@ public final class ProfilesTest {
         policyBehaviour();
         codec();
         mirrors();
+        sensorActivity();
+        placeBehaviour();
+        codecVersion2();
+        personaMirrors();
         System.out.println("ok " + checks + " checks");
     }
 
@@ -56,6 +60,12 @@ public final class ProfilesTest {
         check(Profiles.isValid(Cls.SENSORS, Value.SUBSTITUTE), "sensors may be substituted");
         check(!Profiles.isValid(Cls.LOOPBACK, Value.SUBSTITUTE), "loopback is never substituted");
         check(!Profiles.isValid(Cls.SETTINGS, Value.SUBSTITUTE), "settings are never substituted");
+        check(Profiles.defaultValue(Profile.TRUSTED, Cls.LOCATION) == Value.REAL, "trusted location");
+        check(Profiles.defaultValue(Profile.PROTECTED, Cls.LOCATION) == Value.REAL, "protected location");
+        check(Profiles.defaultValue(Profile.ISOLATED, Cls.LOCATION) == Value.SUBSTITUTE, "isolated location");
+        check(Profiles.isValid(Cls.LOCATION, Value.REAL), "location may be real");
+        check(Profiles.isValid(Cls.LOCATION, Value.SUBSTITUTE), "location may be substituted");
+        check(Profiles.isValid(Cls.LOCATION, Value.BLOCKED), "location may be blocked");
     }
 
     /** The numbers of the Binder interface constants (ICompartmentsPolicy): the order of the enums is the wire format. */
@@ -66,10 +76,11 @@ public final class ProfilesTest {
         check(Cls.SENSORS.ordinal() == 0, "CLASS_SENSORS is 0");
         check(Cls.LOOPBACK.ordinal() == 1, "CLASS_LOOPBACK is 1");
         check(Cls.SETTINGS.ordinal() == 2, "CLASS_SETTINGS is 2");
+        check(Cls.LOCATION.ordinal() == 3, "CLASS_LOCATION is 3");
         check(Value.REAL.ordinal() == 0, "VALUE_REAL is 0");
         check(Value.SUBSTITUTE.ordinal() == 1, "VALUE_SUBSTITUTE is 1");
         check(Value.BLOCKED.ordinal() == 2, "VALUE_BLOCKED is 2");
-        check(Profile.values().length == 3 && Cls.values().length == 3 && Value.values().length == 3, "three of each");
+        check(Profile.values().length == 3 && Cls.values().length == 4 && Value.values().length == 3, "three profiles and values, four classes");
     }
 
     private static void sensorModes() {
@@ -297,5 +308,252 @@ public final class ProfilesTest {
                 pkg -> 19999, 1L).contains("a 19999 SUBSTITUTE"), "the last ordinary app id is written");
         check(MirrorPlan.sensorModeFile(PolicyStore.EMPTY.withApp("com.x.app", AppPolicy.PROTECTED.withProfile(Profile.ISOLATED)),
                 pkg -> 10000, 1L).contains("a 10000 SUBSTITUTE"), "the first ordinary app id is written");
+    }
+
+    private static final AppPolicy ISO = AppPolicy.PROTECTED.withProfile(Profile.ISOLATED);
+
+    /** The optional activity line of the sensor file: after the default, only when the phone is not still. */
+    private static void sensorActivity() {
+        PolicyStore s = PolicyStore.EMPTY
+                .withDefaults(ISO)
+                .withApp("com.bank.app", AppPolicy.PROTECTED.withProfile(Profile.TRUSTED))
+                .withApp("com.z.app", AppPolicy.PROTECTED);
+        Map<String, Integer> uids = Map.of("com.bank.app", 10200, "com.z.app", 10300);
+        MirrorPlan.UidResolver r = pkg -> uids.getOrDefault(pkg, -1);
+        String still = MirrorPlan.sensorModeFile(s, r, 1L);
+        check(still.equals("s 0000000000000001\nd SUBSTITUTE\na 10200 RAW\na 10300 FOLDED\n"), "no activity line: " + still);
+        check(MirrorPlan.sensorModeFile(s, r, 1L, ActivityEstimator.Activity.STILL).equals(still), "still writes no line");
+        check(MirrorPlan.sensorModeFile(s, r, 1L, ActivityEstimator.Activity.WALKING)
+                .equals("s 0000000000000001\nd SUBSTITUTE\nt WALKING\na 10200 RAW\na 10300 FOLDED\n"), "walking line");
+        check(MirrorPlan.sensorModeFile(s, r, 1L, ActivityEstimator.Activity.DRIVING)
+                .equals("s 0000000000000001\nd SUBSTITUTE\nt DRIVING\na 10200 RAW\na 10300 FOLDED\n"), "driving line");
+        check(MirrorPlan.sensorModeFile(PolicyStore.EMPTY, pkg -> -1, 1L, ActivityEstimator.Activity.DRIVING)
+                .equals("s 0000000000000001\nd FOLDED\nt DRIVING\n"), "the line stands without app lines");
+    }
+
+    private static void placeBehaviour() {
+        check(ISO.place == 0, "a policy starts Automatic");
+        check(ISO.withPlace(7).place == 7, "a place is kept");
+        check(throwsIllegal(() -> ISO.withPlace(-1)), "a negative place is refused");
+        check(ISO.withPlace(7).withPlace(0).place == 0, "back to Automatic");
+        check(ISO.withPlace(7).withProfile(Profile.ISOLATED).place == 7, "an app that stays Isolated keeps its place");
+        check(ISO.withPlace(7).withProfile(Profile.PROTECTED).place == 0, "leaving Isolated for Protected resets the place");
+        check(ISO.withPlace(7).withProfile(Profile.TRUSTED).place == 0, "leaving Isolated for Trusted resets the place");
+        check(AppPolicy.PROTECTED.withPlace(7).withProfile(Profile.ISOLATED).place == 0, "entering Isolated starts Automatic");
+        check(ISO.withPlace(7).withValue(Cls.SENSORS, Value.BLOCKED).place == 7, "a class value keeps the place");
+        check(ISO.withPlace(7).withValue(Cls.LOCATION, Value.BLOCKED).place == 7, "a blocked location keeps the place");
+        check(throwsIllegal(() -> PolicyStore.EMPTY.withDefaults(ISO.withPlace(7))), "the defaults stay Automatic");
+        check(PolicyStore.EMPTY.withDefaults(ISO).defaults.place == 0, "Isolated defaults are valid");
+
+        check(ISO.value(Cls.LOCATION) == Value.SUBSTITUTE, "an Isolated app substitutes its location");
+        check(AppPolicy.PROTECTED.withValue(Cls.LOCATION, Value.SUBSTITUTE).value(Cls.LOCATION) == Value.SUBSTITUTE,
+                "a Protected app may substitute its location");
+        check(AppPolicy.PROTECTED.withValue(Cls.LOCATION, Value.REAL).value(Cls.LOCATION) == Value.REAL, "real location");
+        check(ISO.withValue(Cls.LOCATION, Value.REAL).value(Cls.LOCATION) == Value.REAL, "an Isolated app may keep its real location");
+
+        // an app without an entry of its own has no persona, so its location is real whatever profile the defaults give
+        PolicyStore d = PolicyStore.EMPTY.withDefaults(ISO);
+        check(d.value("com.game.app", Cls.SENSORS) == Value.SUBSTITUTE, "default Isolated reaches the sensors of an unconfigured app");
+        check(d.value("com.game.app", Cls.LOCATION) == Value.REAL, "an unconfigured app has no persona, its location is real");
+        check(d.valueWithoutEntry(Cls.LOCATION) == Value.REAL && d.valueWithoutEntry(Cls.SENSORS) == Value.SUBSTITUTE,
+                "the value of an app without an entry");
+        check(d.withApp("com.game.app", ISO).value("com.game.app", Cls.LOCATION) == Value.SUBSTITUTE, "a configured app has its own");
+    }
+
+    private static byte[] hex(String h) {
+        byte[] out = new byte[h.length() / 2];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = (byte) Integer.parseInt(h.substring(2 * i, 2 * i + 2), 16);
+        }
+        return out;
+    }
+
+    /** The bytes of sample() as it stood at commit 5aeb09a, when the store was version 1 (three classes, no place). */
+    private static final String VERSION_1_SAMPLE = "434d5031010203ffffff00000002000c636f6d2e62616e6b2e6170700003ffffff"
+            + "000c636f6d2e67616d652e617070010302ffff";
+
+    /** A file with one app a.b whose policy has the given version, class bytes and place; the defaults have no override. */
+    private static byte[] app(int version, int[] classes, int place) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(bytes);
+        out.writeInt(0x434D5031);
+        out.writeByte(version);
+        out.writeByte(Profile.PROTECTED.ordinal());
+        out.writeByte(0);
+        if (version >= 2) {
+            out.writeInt(0);
+        }
+        out.writeInt(1);
+        out.writeUTF("a.b");
+        out.writeByte(Profile.ISOLATED.ordinal());
+        out.writeByte(classes.length);
+        for (int c : classes) {
+            out.writeByte(c);
+        }
+        if (version >= 2) {
+            out.writeInt(place);
+        }
+        return bytes.toByteArray();
+    }
+
+    private static void codecVersion2() throws Exception {
+        check(sample()[4] == 2, "a store is written as version 2");
+        PolicyStore old = PolicyStore.decode(hex(VERSION_1_SAMPLE));
+        check(old != PolicyStore.EMPTY, "a version 1 store is read");
+        check(old.defaults.profile == Profile.ISOLATED, "version 1 defaults");
+        check(old.value("com.bank.app", Cls.SETTINGS) == Value.REAL, "version 1 trusted app");
+        check(old.value("com.game.app", Cls.SENSORS) == Value.BLOCKED, "version 1 override");
+        check(old.value("com.game.app", Cls.LOCATION) == Value.REAL, "version 1 location is the default of the profile");
+        check(old.value("com.bank.app", Cls.LOCATION) == Value.REAL, "version 1 trusted location");
+        check(old.policyOf("com.bank.app").place == 0 && old.policyOf("com.game.app").place == 0, "version 1 has no place");
+        check(old.configured().size() == 2, "version 1 entries");
+        check(Arrays.equals(old.encode(), sample()), "version 1 is rewritten as the same store in version 2");
+
+        PolicyStore p = PolicyStore.EMPTY
+                .withApp("com.a.app", ISO.withPlace(12))
+                .withApp("com.b.app", ISO.withValue(Cls.LOCATION, Value.BLOCKED))
+                .withApp("com.c.app", AppPolicy.PROTECTED.withValue(Cls.LOCATION, Value.SUBSTITUTE));
+        PolicyStore back = PolicyStore.decode(p.encode());
+        check(back != PolicyStore.EMPTY, "a version 2 store is read");
+        check(back.policyOf("com.a.app").place == 12, "place round trip");
+        check(back.policyOf("com.b.app").place == 0, "no place round trip");
+        check(back.value("com.b.app", Cls.LOCATION) == Value.BLOCKED, "blocked location round trip");
+        check(back.value("com.c.app", Cls.LOCATION) == Value.SUBSTITUTE, "substituted location of a Protected app round trip");
+        check(back.value("com.a.app", Cls.LOCATION) == Value.SUBSTITUTE, "default location of an Isolated app round trip");
+        check(Arrays.equals(back.encode(), p.encode()), "version 2 encoding is stable");
+        byte[] good = p.encode();
+        for (int n = 0; n < good.length; n++) {
+            check(PolicyStore.decode(Arrays.copyOf(good, n)) == PolicyStore.EMPTY, "version 2 truncated at " + n);
+        }
+        check(PolicyStore.decode(Arrays.copyOf(good, good.length + 1)) == PolicyStore.EMPTY, "version 2 trailing byte");
+
+        int[] none = {-1, -1, -1, -1};
+        check(PolicyStore.decode(app(2, none, 5)) != PolicyStore.EMPTY, "a version 2 app with a place");
+        check(PolicyStore.decode(app(2, none, 0)) != PolicyStore.EMPTY, "a version 2 app without a place");
+        check(PolicyStore.decode(app(2, none, -1)) == PolicyStore.EMPTY, "a place of -1 is refused");
+        check(PolicyStore.decode(app(2, new int[] {-1, -1, -1, 9}, 0)) == PolicyStore.EMPTY, "an unknown location value is refused");
+        check(PolicyStore.decode(app(2, new int[] {-1, -1, -1, 2}, 0)) != PolicyStore.EMPTY, "a blocked location is valid");
+        check(PolicyStore.decode(app(2, new int[] {-1, -1, -1, 1}, 0)) != PolicyStore.EMPTY, "a substituted location is valid");
+        check(PolicyStore.decode(app(2, new int[] {-1, 1, -1, -1}, 0)) == PolicyStore.EMPTY, "a substituted loopback is refused in version 2");
+        check(PolicyStore.decode(app(2, new int[] {-1, -1, -1, -1, -1}, 0)) == PolicyStore.EMPTY, "a fifth class is refused");
+        check(PolicyStore.decode(app(2, new int[] {-1}, 0)) != PolicyStore.EMPTY, "a shorter class list is accepted in version 2");
+        check(PolicyStore.decode(app(3, none, 0)) == PolicyStore.EMPTY, "version 3 is refused");
+        check(PolicyStore.decode(app(0, none, 0)) == PolicyStore.EMPTY, "version 0 is refused");
+        for (int version : new int[] {0, 3, 9, 127, -1, -128}) {  // a version 2 layout under a version that is not 2
+            byte[] other = app(2, none, 0);
+            other[4] = (byte) version;
+            check(PolicyStore.decode(other) == PolicyStore.EMPTY, "version " + version + " is refused");
+        }
+        check(PolicyStore.decode(app(1, new int[] {-1, -1, -1}, 0)) != PolicyStore.EMPTY, "a version 1 app with three classes");
+        check(PolicyStore.decode(app(1, none, 0)) == PolicyStore.EMPTY, "a version 1 file with a fourth class byte is refused");
+
+        // the defaults carry no place, in the file as in the API
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(bytes);
+        out.writeInt(0x434D5031);
+        out.writeByte(2);
+        out.writeByte(Profile.ISOLATED.ordinal());
+        out.writeByte(4);
+        out.write(new byte[] {-1, -1, -1, -1});
+        out.writeInt(5);
+        out.writeInt(0);
+        check(PolicyStore.decode(bytes.toByteArray()) == PolicyStore.EMPTY, "defaults with a place are refused");
+    }
+
+    private static final String PLACES = "1\tAmsterdam\tNL\t52.37\t4.89\tEurope/Amsterdam\t204\n"
+            + "2\tMaastricht\tNL\t50.85\t5.69\tEurope/Amsterdam\t204\n"
+            + "3\tGroningen\tNL\t53.55\t6.57\tEurope/Amsterdam\t204\n"
+            + "4\tBerlin\tDE\t52.52\t13.40\tEurope/Berlin\t262\n";
+
+    private static boolean far(int place) {
+        return place == 2 || place == 3;
+    }
+
+    private static void personaMirrors() throws Exception {
+        Places places = Places.parse(PLACES);
+        PolicyStore s = PolicyStore.EMPTY
+                .withApp("com.a.app", ISO)
+                .withApp("com.b.app", ISO.withPlace(1))
+                .withApp("com.c.app", AppPolicy.PROTECTED)
+                .withApp("com.d.app", AppPolicy.PROTECTED.withValue(Cls.LOCATION, Value.SUBSTITUTE))
+                .withApp("com.e.app", ISO.withValue(Cls.LOCATION, Value.BLOCKED))
+                .withApp("com.f.app", AppPolicy.PROTECTED.withProfile(Profile.TRUSTED))
+                .withApp("com.gone.app", ISO)
+                .withApp("com.sys.app", ISO)
+                .withApp("com.g.app", ISO.withPlace(99));
+        Map<String, Integer> uids = Map.of("com.a.app", 10100, "com.b.app", 10200, "com.c.app", 10300, "com.d.app", 10400,
+                "com.e.app", 10500, "com.f.app", 10600, "com.sys.app", 1000, "com.g.app", 10700);
+        long salt = 0xABCDEF0123456789L;
+        String file = MirrorPlan.personaFile(s, pkg -> uids.getOrDefault(pkg, -1), salt, places, "NL", 52.37, 4.89);
+        PersonaFile pf = PersonaFile.parse(file);
+        check(pf.salt() == salt, "the persona file carries the salt");
+        check(far(pf.placeOf(10100)), "an Automatic place is far from the real position: " + pf.placeOf(10100));
+        check(pf.placeOf(10200) == 1, "the place the user chose is kept, even close to the real position");
+        check(pf.placeOf(10300) == 0, "a Protected app has no persona");
+        check(far(pf.placeOf(10400)), "a Protected app that substitutes its location has a persona");
+        check(pf.placeOf(10500) == 0, "a blocked location has no persona");
+        check(pf.placeOf(10600) == 0, "a Trusted app has no persona");
+        check(pf.placeOf(10700) == 0, "an unknown place is left out");
+        check(file.split("\n").length == 4, "one salt line and three apps: " + file);
+        check(pf.placeOf(110100) == pf.placeOf(10100), "the persona is the app's in every user");
+        check(MirrorPlan.personaFile(s, pkg -> uids.getOrDefault(pkg, -1), salt, places, "NL", 52.37, 4.89).equals(file),
+                "the choice is stable");
+        check(file.equals(MirrorPlan.personaFile(s, pkg -> uids.getOrDefault(pkg, -1) + (uids.containsKey(pkg) ? 100000 : 0), salt,
+                places, "NL", 52.37, 4.89)), "the file holds app ids, not uids");
+
+        // the Automatic choice is salt- and app-seeded: both far places are used, and a place is never a near one
+        boolean two = false;
+        boolean three = false;
+        for (int id = 10000; id < 10200; id++) {
+            final int appId = id;
+            int p = PersonaFile.parse(MirrorPlan.personaFile(PolicyStore.EMPTY.withApp("com.a.app", ISO), pkg -> appId, salt, places,
+                    "NL", 52.37, 4.89)).placeOf(appId);
+            check(far(p), "far place for app " + appId);
+            two |= p == 2;
+            three |= p == 3;
+        }
+        check(two && three, "the apps are spread over the far places");
+        check(MirrorPlan.personaSeed(salt, 10100) != MirrorPlan.personaSeed(salt, 10101), "the seed depends on the app");
+        check(MirrorPlan.personaSeed(salt, 10100) != MirrorPlan.personaSeed(salt + 1, 10100), "the seed depends on the phone");
+        check(MirrorPlan.personaSeed(salt, 10100) == MirrorPlan.personaSeed(salt, 10100), "the seed is stable");
+
+        // another real country gives another place; no country (and no place data) gives no Automatic persona
+        PolicyStore auto = PolicyStore.EMPTY.withApp("com.a.app", ISO);
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, places, "DE", 48.1, 11.5)).placeOf(10100) == 4,
+                "the place is in the real country");
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, places, "FR", 48.1, 2.3)).placeOf(10100) == 0,
+                "a country without a place has no persona");
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, places, null, 0, 0)).placeOf(10100) == 0,
+                "no country, no Automatic persona");
+        check(PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, null, "NL", 52.37, 4.89)).placeOf(10100) == 0,
+                "no place data, no persona");
+        check(PersonaFile.parse(MirrorPlan.personaFile(PolicyStore.EMPTY.withApp("com.b.app", ISO.withPlace(1)), pkg -> 10200, salt,
+                null, "NL", 52.37, 4.89)).placeOf(10200) == 0, "no place data, no chosen persona either");
+        check(MirrorPlan.personaFile(PolicyStore.EMPTY, pkg -> -1, 1L, places, "NL", 0, 0).equals("s 0000000000000001\n"),
+                "an empty store has a file with the salt only");
+
+        // two packages with one app id: the lower place wins, and a substituted package gives the id its persona
+        PolicyStore shared = PolicyStore.EMPTY
+                .withApp("com.x.app", ISO.withPlace(3))
+                .withApp("com.y.app", ISO.withPlace(2))
+                .withApp("com.z.app", AppPolicy.PROTECTED);
+        check(PersonaFile.parse(MirrorPlan.personaFile(shared, pkg -> 10800, salt, places, "NL", 52.37, 4.89)).placeOf(10800) == 2,
+                "a shared app id gets the lower place");
+        PolicyStore sharedReverse = PolicyStore.EMPTY
+                .withApp("com.x.app", ISO.withPlace(2))
+                .withApp("com.y.app", ISO.withPlace(3));
+        check(PersonaFile.parse(MirrorPlan.personaFile(sharedReverse, pkg -> 10800, salt, places, "NL", 52.37, 4.89)).placeOf(10800) == 2,
+                "a shared app id gets the lower place, whichever package comes first");
+
+        // locationBlocked: configured packages whose location is blocked; unresolved: substituted but without a persona
+        check(MirrorPlan.locationBlocked(s).toString().equals("[com.e.app]"), "blocked location: " + MirrorPlan.locationBlocked(s));
+        check(MirrorPlan.locationBlocked(PolicyStore.EMPTY).isEmpty(), "none blocked");
+        java.util.Set<String> unresolved = MirrorPlan.locationUnresolved(s, pkg -> uids.getOrDefault(pkg, -1), salt, places, "NL",
+                52.37, 4.89);
+        check(unresolved.toString().equals("[com.g.app]"), "only the unknown place has no persona: " + unresolved);
+        java.util.Set<String> noData = MirrorPlan.locationUnresolved(s, pkg -> uids.getOrDefault(pkg, -1), salt, null, "NL", 52.37, 4.89);
+        check(noData.toString().equals("[com.a.app, com.b.app, com.d.app, com.g.app]"), "no place data, every substituted app: " + noData);
+        java.util.Set<String> noCountry = MirrorPlan.locationUnresolved(s, pkg -> uids.getOrDefault(pkg, -1), salt, places, "", 0, 0);
+        check(noCountry.toString().equals("[com.a.app, com.d.app, com.g.app]"), "no country, every Automatic app: " + noCountry);
     }
 }

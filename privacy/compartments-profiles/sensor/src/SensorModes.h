@@ -7,8 +7,8 @@
  * folded events of ADR-167, the behaviour of an image without profiles.
  *
  * File format, every line ends with a newline: "s <16 hex digits>" (salt of the invented streams), "d <MODE>" (every app
- * without a line of its own), then any number of "a <app id> <MODE>" with an app id of an ordinary app (10000 to 19999). MODE is
- * FOLDED, RAW, SUBSTITUTE or BLOCKED. A line holds an app id, so it reaches the app in every user, and the reader maps the
+ * without a line of its own), then optionally "t <ACTIVITY>" (STILL, WALKING or DRIVING; without it STILL), then any number of
+ * "a <app id> <MODE>" with an app id of an ordinary app (10000 to 19999). MODE is FOLDED, RAW, SUBSTITUTE or BLOCKED. A line holds an app id, so it reaches the app in every user, and the reader maps the
  * SDK sandbox of an app (app id 20000 to 29999) back to its host app, so that the sandbox cannot read what the app may not.
  * An isolated process has no host app that the sensor service can see and follows the default.
  */
@@ -29,6 +29,9 @@
 namespace android {
 
 enum class SensorMode : uint8_t { FOLDED = 0, RAW = 1, SUBSTITUTE = 2, BLOCKED = 3 };
+
+// What the phone is doing, from the speed of its real location fixes: the character of the invented streams.
+enum class Activity : uint8_t { STILL = 0, WALKING = 1, DRIVING = 2 };
 
 constexpr uint32_t kFirstAppId = 10000;
 constexpr uint32_t kLastAppId = 19999;
@@ -67,7 +70,8 @@ public:
     bool parse(const std::string& text) {
         uint64_t salt = 0;
         SensorMode dflt = SensorMode::FOLDED;
-        bool haveSalt = false, haveDefault = false;
+        Activity activity = Activity::STILL;
+        bool haveSalt = false, haveDefault = false, haveActivity = false;
         std::map<uint32_t, SensorMode> perApp;
         size_t pos = 0, lines = 0;
         while (pos < text.size()) {
@@ -81,6 +85,9 @@ public:
             } else if (line.size() >= 3 && line[0] == 'd' && line[1] == ' ' && haveSalt && !haveDefault && perApp.empty()) {
                 if (!parseMode(line.substr(2), &dflt)) { reset(); return false; }
                 haveDefault = true;
+            } else if (line.size() >= 3 && line[0] == 't' && line[1] == ' ' && haveDefault && !haveActivity && perApp.empty()) {
+                if (!parseActivity(line.substr(2), &activity)) { reset(); return false; }
+                haveActivity = true;
             } else if (line.size() >= 3 && line[0] == 'a' && line[1] == ' ' && haveDefault) {
                 const size_t sp = line.find(' ', 2);
                 uint64_t appId = 0;
@@ -100,6 +107,7 @@ public:
         if (!haveDefault) { reset(); return false; }
         mSalt = salt;
         mDefault = dflt;
+        mActivity = activity;
         mPerApp = std::move(perApp);
         return true;
     }
@@ -116,6 +124,9 @@ public:
     // phone, different between apps and between phones.
     uint64_t seedFor(uid_t uid) const { return mix(mSalt ^ (static_cast<uint64_t>(hostAppId(uid)) * 0x9E3779B97F4A7C15ull)); }
 
+    // What the phone is doing now, the same for every app: STILL when the file has no "t" line or cannot be used.
+    Activity activity() const { return mActivity; }
+
     static uint64_t mix(uint64_t z) {
         z += 0x9E3779B97F4A7C15ull;
         z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
@@ -126,7 +137,15 @@ public:
 private:
     static constexpr size_t kMaxLines = 8192;
 
-    void reset() { mSalt = 0; mDefault = SensorMode::FOLDED; mPerApp.clear(); }
+    void reset() { mSalt = 0; mDefault = SensorMode::FOLDED; mActivity = Activity::STILL; mPerApp.clear(); }
+
+    static bool parseActivity(const std::string& s, Activity* out) {
+        if (s == "STILL") *out = Activity::STILL;
+        else if (s == "WALKING") *out = Activity::WALKING;
+        else if (s == "DRIVING") *out = Activity::DRIVING;
+        else return false;
+        return true;
+    }
 
     static bool parseMode(const std::string& s, SensorMode* out) {
         if (s == "FOLDED") *out = SensorMode::FOLDED;
@@ -164,6 +183,7 @@ private:
 
     uint64_t mSalt = 0;
     SensorMode mDefault = SensorMode::FOLDED;
+    Activity mActivity = Activity::STILL;
     std::map<uint32_t, SensorMode> mPerApp;
 };
 

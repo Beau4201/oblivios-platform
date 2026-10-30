@@ -7,7 +7,7 @@ package com.android.server.compartments;
  * ones. After the real position has moved more than {@link #REANCHOR_M} from the anchor the anchor moves with it, to the fake
  * position that the track has reached, so the fake track stays continuous and the east-west scaling stays accurate.
  */
-final class PersonaTrack {
+public final class PersonaTrack {
     static final double REANCHOR_M = 100_000.0;
     private static final double MIN_COS = 0.05;
 
@@ -25,7 +25,7 @@ final class PersonaTrack {
     }
 
     /** The fake {latitude, longitude} for a real fix. A fix with a latitude or longitude that is not finite is refused. */
-    synchronized double[] apply(double lat, double lon) {
+    public synchronized double[] apply(double lat, double lon) {
         if (!(Math.abs(lat) <= 90.0) || Double.isNaN(lon) || Double.isInfinite(lon)) {
             throw new IllegalArgumentException("fix");
         }
