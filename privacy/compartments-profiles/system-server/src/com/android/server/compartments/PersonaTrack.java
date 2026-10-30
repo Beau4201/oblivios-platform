@@ -26,7 +26,7 @@ public final class PersonaTrack {
 
     /** The fake {latitude, longitude} for a real fix. A fix with a latitude or longitude that is not finite is refused. */
     public synchronized double[] apply(double lat, double lon) {
-        if (!(Math.abs(lat) <= 90.0) || Double.isNaN(lon) || Double.isInfinite(lon)) {
+        if (!validFix(lat, lon)) {
             throw new IllegalArgumentException("fix");
         }
         lon = Geo.wrapLon(lon);
@@ -37,6 +37,15 @@ public final class PersonaTrack {
             setAnchor(lat, lon, here[0], here[1]);
         }
         return translate(lat, lon);
+    }
+
+    /** Like {@link #apply} but null for a fix that is not finite, so a delivery path never throws on a bad provider value. */
+    public double[] tryApply(double lat, double lon) {
+        return validFix(lat, lon) ? apply(lat, lon) : null;
+    }
+
+    private static boolean validFix(double lat, double lon) {
+        return Math.abs(lat) <= 90.0 && !Double.isNaN(lon) && !Double.isInfinite(lon);
     }
 
     private void setAnchor(double rLat, double rLon, double fLat, double fLon) {

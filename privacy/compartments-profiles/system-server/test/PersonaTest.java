@@ -113,6 +113,15 @@ public final class PersonaTest {
         check(throwsIllegal(() -> new PersonaTrack(10, 10).apply(Double.NaN, 0)), "a NaN fix is refused");
         check(throwsIllegal(() -> new PersonaTrack(10, 10).apply(91, 0)), "a latitude beyond 90 is refused");
         check(throwsIllegal(() -> new PersonaTrack(10, 10).apply(0, Double.POSITIVE_INFINITY)), "an infinite longitude is refused");
+
+        PersonaTrack safe = new PersonaTrack(40.4168, -3.7038);
+        check(safe.tryApply(Double.NaN, 0) == null, "tryApply: a NaN latitude gives null");
+        check(safe.tryApply(91, 0) == null, "tryApply: a latitude beyond 90 gives null");
+        check(safe.tryApply(0, Double.NaN) == null, "tryApply: a NaN longitude gives null");
+        check(safe.tryApply(0, Double.NEGATIVE_INFINITY) == null, "tryApply: an infinite longitude gives null");
+        double[] good = safe.tryApply(10.0, 10.0);
+        check(good != null && Math.abs(good[0] - 40.4168) < 1e-9 && Math.abs(good[1] + 3.7038) < 1e-9,
+                "tryApply: a good first fix is the place, and a refused one did not anchor");
     }
 
     private static void activity() {

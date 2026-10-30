@@ -1,0 +1,207 @@
+From 104abdcdd4a1765705404696d6e5567d5b7bf808 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Fri, 30 Oct 2026 17:59:53 +0100
+Subject: [PATCH] compartments: give an app with a persona the fixes of its place
+
+The location providers deliver a persona app the real fixes moved to its place
+(real displacement kept, altitude removed); the GNSS status, NMEA, measurement,
+navigation message and antenna info listeners are never called for it. The
+Compartments directory is 0711 so that the telephony and Bluetooth processes can
+open the persona file by name. PersonaTrack.tryApply returns null for a fix
+that is not finite.
+---
+ .../CompartmentsPolicyService.java            |  4 +-
+ .../server/compartments/PersonaTrack.java     | 11 +++-
+ .../gnss/GnssListenerMultiplexer.java         |  6 +++
+ .../location/gnss/GnssManagerService.java     | 12 +++++
+ .../provider/LocationProviderManager.java     | 52 +++++++++++++++++++
+ 5 files changed, 83 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index cad9af3..bd63e77 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -129,7 +129,9 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         mContext = context;
+         mDir = new File(Environment.getDataSystemDirectory(), "compartments");
+         mDir.mkdirs();
+-        FileUtils.setPermissions(mDir.getPath(), 0700, -1, -1);
++        // 0711: the telephony and Bluetooth processes open the persona file by name (ADR-208); every other file in
++        // here is 0600, and SELinux (system-sepolicy 0002) limits the persona file to those two domains.
++        FileUtils.setPermissions(mDir.getPath(), 0711, -1, -1);
+         mPolicyFile = new AtomicFile(new File(mDir, "policy.bin"));
+         mSensorFile = new AtomicFile(new File(mDir, "sensor_modes"));
+         mPersonaFile = new AtomicFile(new File(mDir, "persona"));
+diff --git a/services/core/java/com/android/server/compartments/PersonaTrack.java b/services/core/java/com/android/server/compartments/PersonaTrack.java
+index 5a90912..2446369 100644
+--- a/services/core/java/com/android/server/compartments/PersonaTrack.java
++++ b/services/core/java/com/android/server/compartments/PersonaTrack.java
+@@ -26,7 +26,7 @@ public final class PersonaTrack {
+ 
+     /** The fake {latitude, longitude} for a real fix. A fix with a latitude or longitude that is not finite is refused. */
+     public synchronized double[] apply(double lat, double lon) {
+-        if (!(Math.abs(lat) <= 90.0) || Double.isNaN(lon) || Double.isInfinite(lon)) {
++        if (!validFix(lat, lon)) {
+             throw new IllegalArgumentException("fix");
+         }
+         lon = Geo.wrapLon(lon);
+@@ -39,6 +39,15 @@ public final class PersonaTrack {
+         return translate(lat, lon);
+     }
+ 
++    /** Like {@link #apply} but null for a fix that is not finite, so a delivery path never throws on a bad provider value. */
++    public double[] tryApply(double lat, double lon) {
++        return validFix(lat, lon) ? apply(lat, lon) : null;
++    }
++
++    private static boolean validFix(double lat, double lon) {
++        return Math.abs(lat) <= 90.0 && !Double.isNaN(lon) && !Double.isInfinite(lon);
++    }
++
+     private void setAnchor(double rLat, double rLon, double fLat, double fLon) {
+         realLat = rLat;
+         realLon = rLon;
+diff --git a/services/core/java/com/android/server/location/gnss/GnssListenerMultiplexer.java b/services/core/java/com/android/server/location/gnss/GnssListenerMultiplexer.java
+index f21a9fe..84e049e 100644
+--- a/services/core/java/com/android/server/location/gnss/GnssListenerMultiplexer.java
++++ b/services/core/java/com/android/server/location/gnss/GnssListenerMultiplexer.java
+@@ -301,6 +301,12 @@ public abstract class GnssListenerMultiplexer<TRequest, TListener extends IInter
+         }
+ 
+         CallerIdentity identity = registration.getIdentity();
++        // FreeholdOS (ADR-208): the status, NMEA sentences, measurements and navigation messages carry the real satellites and
++        // position, so an app with a persona is never called (the registration stays, as for an app in the background); this
++        // is looked at again whenever the app changes between foreground and background
++        if (GnssManagerService.hasPersona(identity)) {
++            return false;
++        }
+         return registration.isPermitted()
+                 && (registration.isForeground() || isBackgroundRestrictionExempt(identity))
+                 && isActive(identity);
+diff --git a/services/core/java/com/android/server/location/gnss/GnssManagerService.java b/services/core/java/com/android/server/location/gnss/GnssManagerService.java
+index 6d59e1e..cd05565 100644
+--- a/services/core/java/com/android/server/location/gnss/GnssManagerService.java
++++ b/services/core/java/com/android/server/location/gnss/GnssManagerService.java
+@@ -47,6 +47,8 @@ import android.util.Log;
+ 
+ import com.android.internal.app.IBatteryStats;
+ import com.android.server.FgThread;
++import com.android.server.LocalServices;
++import com.android.server.compartments.CompartmentsInternal;
+ import com.android.server.location.gnss.hal.GnssNative;
+ import com.android.server.location.injector.Injector;
+ import com.android.server.location.provider.proxy.ProxyGnssAssistanceProvider;
+@@ -275,9 +277,19 @@ public class GnssManagerService implements GnssNative.GnssAssistanceCallbacks {
+ 
+         CallerIdentity identity = CallerIdentity.fromBinder(mContext, packageName, attributionTag,
+                 listenerId);
++        // FreeholdOS (ADR-208): accepted and never called, as the other GNSS listeners of an app with a persona
++        if (hasPersona(identity)) {
++            return;
++        }
+         mGnssAntennaInfoProvider.addListener(identity, listener);
+     }
+ 
++    /** FreeholdOS (ADR-208): whether the Compartments service gives this app a persona (an Isolated app with a place). */
++    static boolean hasPersona(CallerIdentity identity) {
++        CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
++        return compartments != null && compartments.personaFor(identity.getUid()) != null;
++    }
++
+     /**
+      * Removes a GNSS antenna info listener.
+      */
+diff --git a/services/core/java/com/android/server/location/provider/LocationProviderManager.java b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+index 76cf820..439d7d4 100644
+--- a/services/core/java/com/android/server/location/provider/LocationProviderManager.java
++++ b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+@@ -102,6 +102,7 @@ import com.android.internal.util.Preconditions;
+ import com.android.server.FgThread;
+ import com.android.server.IoThread;
+ import com.android.server.LocalServices;
++import com.android.server.compartments.CompartmentsInternal;
+ import com.android.server.location.LocationPermissions;
+ import com.android.server.location.LocationPermissions.PermissionLevel;
+ import com.android.server.location.fudger.LocationFudger;
+@@ -1046,6 +1047,8 @@ public class LocationProviderManager extends
+                     } else {
+                         deliverLocationResult = locationResult;
+                     }
++                    // FreeholdOS (ADR-208): an app with a persona is delivered the fixes moved to its place
++                    deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
+ 
+                     listener.deliverOnLocationChanged(deliverLocationResult,
+                             useWakeLock ? mWakeLockReleaser : null);
+@@ -1393,6 +1396,8 @@ public class LocationProviderManager extends
+                     } else {
+                         deliverLocationResult = locationResult;
+                     }
++                    // FreeholdOS (ADR-208): an app with a persona is delivered the fix moved to its place
++                    deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
+ 
+                     // we currently don't hold a wakelock for getCurrentLocation deliveries
+                     listener.deliverOnLocationChanged(deliverLocationResult, null);
+@@ -1794,6 +1799,50 @@ public class LocationProviderManager extends
+         }
+     }
+ 
++    /**
++     * FreeholdOS (ADR-208): the persona of the caller, or null when it has none or the phone is in an emergency, when the real
++     * position is what the user needs the app to have. The Compartments service decides who has a persona.
++     */
++    @Nullable private CompartmentsInternal.PersonaView persona(CallerIdentity identity) {
++        CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
++        CompartmentsInternal.PersonaView persona =
++                compartments == null ? null : compartments.personaFor(identity.getUid());
++        return persona == null || mEmergencyHelper.isInEmergency(0) ? null : persona;
++    }
++
++    /** The fixes of a result moved to the place of the persona of the caller; the result itself when it has none. */
++    @Nullable private LocationResult personaResult(@Nullable LocationResult result,
++            CallerIdentity identity) {
++        CompartmentsInternal.PersonaView persona = result == null ? null : persona(identity);
++        return persona == null ? result : result.map(location -> toPersona(location, persona));
++    }
++
++    @Nullable private Location personaLocation(@Nullable Location location,
++            CallerIdentity identity) {
++        CompartmentsInternal.PersonaView persona = location == null ? null : persona(identity);
++        return persona == null ? location : toPersona(location, persona);
++    }
++
++    /**
++     * A copy of the fix at the place of the persona: the real displacement is kept, so speed, stops and bearing stay the real ones.
++     * The altitude and its accuracies belong to the real place and are removed; accuracy, speed, bearing and the times are kept.
++     * A fix without a finite position is passed on as it is.
++     */
++    private static Location toPersona(Location real, CompartmentsInternal.PersonaView persona) {
++        double[] moved = persona.track.tryApply(real.getLatitude(), real.getLongitude());
++        if (moved == null) {
++            return real;
++        }
++        Location out = new Location(real);
++        out.setLatitude(moved[0]);
++        out.setLongitude(moved[1]);
++        out.removeAltitude();
++        out.removeVerticalAccuracy();
++        out.removeMslAltitude();
++        out.removeMslAltitudeAccuracy();
++        return out;
++    }
++
+     @Nullable public Location getLastLocation(LastLocationRequest request,
+             CallerIdentity identity, @PermissionLevel int permissionLevel) {
+         request = calculateLastLocationRequest(request, identity);
+@@ -1842,6 +1891,9 @@ public class LocationProviderManager extends
+                 return null;
+             }
+ 
++            // FreeholdOS (ADR-208): an app with a persona is given the last fix moved to its place
++            location = personaLocation(location, identity);
++
+             // if delivering to the same process, make a copy of the location first (since
+             // location is mutable)
+             if (identity.getPid() == Process.myPid()) {
+-- 
+2.56.0
+
