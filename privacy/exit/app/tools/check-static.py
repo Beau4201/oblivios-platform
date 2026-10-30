@@ -36,7 +36,21 @@ API_PERMISSIONS = [
     (r"\.registerReceiverForAllUsers\(", {"INTERACT_ACROSS_USERS_FULL"}),
     (r"\.createContextAsUser\(", {"INTERACT_ACROSS_USERS_FULL"}),
     (r"\.(getInstalledApplications|queryIntentActivities)\(", {"QUERY_ALL_PACKAGES"}),
+    # The Compartments policy service (ADR-208) checks MANAGE_COMPARTMENTS on every call but getProfile. A name with a dot is the full name.
+    (r"ServiceManager|ICompartmentsPolicy", {"org.freeholdos.permission.MANAGE_COMPARTMENTS"}),
 ]
+
+# ADR-206, ADR-208: no string claims what the image does not hold. Until the patches that move the location, the time zone and
+# the network strings are in the package (Task 19 of the plan replaces this rule by a check of the patches), no string of the app
+# names a location, a place, the time zone or a persona, except on the page of what stays visible. "takes the place of" is English
+# for a replacement, not a place.
+UNBUILT_NAME = re.compile(r"^(identity_location|persona|place)")
+UNBUILT_TEXT = re.compile(r"\b(location|time zone|persona)\b|\bplace\b(?! of\b)", re.I)
+
+# The policy core of the same package: the numbers of ProfileRows are the numbers of its enums (the interface constants).
+CORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "compartments-profiles", "system-server", "src",
+                    "com", "android", "server", "compartments", "Profiles.java")
+ROW_CONSTANTS = {"PROFILE": "Profile", "CLASS": "Cls", "VALUE": "Value"}
 
 
 def attr(el, name):
@@ -58,7 +72,7 @@ def check(app):
                 continue
             text = open(os.path.join(root, f)).read()
             for pattern, alternatives in API_PERMISSIONS:
-                if re.search(pattern, text) and not any("android.permission." + p in perms for p in alternatives):
+                if re.search(pattern, text) and not any((p if "." in p else "android.permission." + p) in perms for p in alternatives):
                     problems.append(f"{f} calls {pattern}: the manifest lacks {' or '.join(sorted(alternatives))}")
     application = manifest.find("application")
     if application is None:
@@ -94,6 +108,51 @@ def check(app):
     if granted != [(PKG, "android.permission.POST_NOTIFICATIONS")]:
         problems.append(f"default-permissions grants {granted}")
     problems += receiver_scopes(os.path.join(app, "src"))
+    problems += unbuilt_claims(os.path.join(app, "res", "values", "strings.xml"))
+    problems += row_numbers(os.path.join(app, "src", "org", "freeholdos", "exit", "ProfileRows.java"))
+    return problems
+
+
+def unbuilt_claims(strings):
+    """No string names a location, a place, the time zone or a persona (the patches are not in the package), except on the page
+    of what stays visible, whose names start with identity_visible_."""
+    problems = []
+    for s in ET.parse(strings).getroot().iter("string"):
+        name, text = s.get("name"), "".join(s.itertext())
+        if name.startswith("identity_visible_"):
+            continue
+        if UNBUILT_NAME.match(name) or UNBUILT_TEXT.search(text):
+            problems.append(f"string {name} claims a location, place, time zone or persona feature that is not built "
+                            f"(no patch of privacy/compartments-profiles holds it)")
+    return problems
+
+
+def row_numbers(rows_java):
+    """Every PROFILE_, CLASS_ and VALUE_ constant of ProfileRows names the member of the policy core's enum at the same number,
+    and none is missing: the row of a class that the core does not hold would be set through a number it reads differently."""
+    if not os.path.exists(rows_java):  # a copy of the app without src, as the tests of the other rules make
+        return []
+    try:
+        with open(CORE, encoding="utf-8") as f:
+            core = f.read()
+    except OSError as e:
+        return [f"cannot read the policy core {os.path.basename(CORE)}: {e.strerror}"]
+    enums = {}
+    for kind, names in re.findall(r"enum\s+(Profile|Cls|Value)\s*\{([^}]*)\}", core):
+        enums[kind] = [n.strip() for n in names.split(",") if n.strip()]
+    with open(rows_java, encoding="utf-8") as f:
+        text = f.read()
+    problems = []
+    seen = {k: 0 for k in ROW_CONSTANTS}
+    for prefix, name, number in re.findall(r"static final int (PROFILE|CLASS|VALUE)_([A-Z]+)\s*=\s*(\d+);", text):
+        kind = ROW_CONSTANTS[prefix]
+        seen[prefix] += 1
+        members = enums.get(kind, [])
+        if int(number) >= len(members) or members[int(number)] != name:
+            problems.append(f"ProfileRows.{prefix}_{name} = {number}: the policy core's {kind} has no {name} at that number")
+    for prefix, kind in ROW_CONSTANTS.items():
+        if seen[prefix] != len(enums.get(kind, [])):
+            problems.append(f"ProfileRows has {seen[prefix]} {prefix}_ constants and the policy core's {kind} has {len(enums.get(kind, []))}")
     return problems
 
 

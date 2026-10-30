@@ -40,7 +40,15 @@ android_app {
     required: [
         "privapp-permissions-org.freeholdos.exit.xml",
         "default-permissions-org.freeholdos.exit.xml",
+        "hidden-api-whitelisted-app-org.freeholdos.exit.xml",
     ],
+}
+
+// Read by SystemConfig only from /system/etc/sysconfig, as for DataMapApp and AirPodsApp (ADR-208, Compartments policy service).
+prebuilt_etc {
+    name: "hidden-api-whitelisted-app-org.freeholdos.exit.xml",
+    src: "hidden-api-whitelisted-app-org.freeholdos.exit.xml",
+    sub_dir: "sysconfig",
 }
 
 prebuilt_etc {

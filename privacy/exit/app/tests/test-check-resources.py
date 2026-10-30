@@ -20,10 +20,10 @@ CASES = [
     (STRINGS, '<string name="owner_only">', '<string name="unused_one">x</string>\n    <string name="owner_only">', "unused_one is defined and not used"),
     (ACT, "R.string.owner_only", "R.string.not_there", "not_there is used and not defined"),
     (STRINGS, '<string name="notif_consent_text">Choose', '<string name="notif_consent_text">' + "x" * 150 + ' Choose', "notif_consent_text has"),
-    (STRINGS, "%1$s uses Tor", "%s uses Tor", "placeholder without a number"),
-    (ACT, "setContentView(scroll);", 'setContentView(scroll); scroll.setBackgroundColor(android.graphics.Color.parseColor("#ffffff"));', "a colour is written into the code"),
+    (STRINGS, "%1$s is set to Extra private", "%s is set to Extra private", "placeholder without a number"),
+    (ACT, "setContentView(R.layout.settings_activity);", 'setContentView(R.layout.settings_activity); getWindow().getDecorView().setBackgroundColor(android.graphics.Color.parseColor("#ffffff"));', "a colour is written into the code"),
     ("res/drawable/ic_compartments.xml", "@android:color/white", "#ffffff", "a colour is written into the resource"),
-    (ACT, "R.string.status_idle", "R.string.status_running", "status_idle is defined and not used"),
+    (ACT, "R.string.status_idle_summary", "R.string.status_running_summary", "status_idle_summary is defined and not used"),
     # The rule of the review of 2026-10-22 (B1) had no case of its own: a call with too few arguments, and a qualified call.
     (NOTIFIER, "R.string.notif_promo_text, label(pkg), host", "R.string.notif_promo_text, host", "passes 1 arguments and the string has 2 placeholders"),
     (NOTIFIER, "ctx.getString(R.string.notif_promo_text, label(pkg), host)", "ctx.getString(R.string.notif_promo_text, label(pkg), host, host)", "passes 3 arguments"),
