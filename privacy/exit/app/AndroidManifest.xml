@@ -73,6 +73,13 @@
             android:excludeFromRecents="true"
             android:exported="false" />
 
+        <!-- The place of the persona of one app (ADR-208): opened by the page of the app, so not exported. -->
+        <activity
+            android:name=".ExitPlaceActivity"
+            android:label="@string/place_title"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
         <!-- The buttons of the notification. Not exported: only the pending intents of this app reach it. -->
         <receiver
             android:name=".ActionReceiver"

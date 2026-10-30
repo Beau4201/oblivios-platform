@@ -828,7 +828,7 @@ public final class HostChecks {
     static void profileRows() {
         // the numbers are those of ICompartmentsPolicy and are pinned by ProfilesTest of the policy core
         check(ProfileRows.PROFILE_TRUSTED == 0 && ProfileRows.PROFILE_PROTECTED == 1 && ProfileRows.PROFILE_ISOLATED == 2, "profile numbers");
-        check(ProfileRows.CLASS_SENSORS == 0 && ProfileRows.CLASS_LOOPBACK == 1 && ProfileRows.CLASS_SETTINGS == 2, "class numbers");
+        check(ProfileRows.CLASS_SENSORS == 0 && ProfileRows.CLASS_LOOPBACK == 1 && ProfileRows.CLASS_SETTINGS == 2 && ProfileRows.CLASS_LOCATION == 3, "class numbers");
         check(ProfileRows.VALUE_REAL == 0 && ProfileRows.VALUE_SUBSTITUTE == 1 && ProfileRows.VALUE_BLOCKED == 2, "value numbers");
         check(Arrays.equals(ProfileRows.profileChoices(true), new int[] {1, 2}), "the defaults are Protected or Isolated");
         check(Arrays.equals(ProfileRows.profileChoices(false), new int[] {0, 1, 2}), "an app may be any profile");
@@ -836,39 +836,52 @@ public final class HostChecks {
         ProfileRows.profileChoices(true)[0] = 9;
         check(Arrays.equals(ProfileRows.profileChoices(true), new int[] {1, 2}), "profileChoices returns a copy");
 
-        List<ProfileRows.Row> rows = ProfileRows.rowsFor(ProfileRows.PROFILE_PROTECTED, 0, 2, 2);
-        check(rows.size() == 3, "three classes");
+        List<ProfileRows.Row> rows = ProfileRows.rowsFor(ProfileRows.PROFILE_PROTECTED, 0, 2, 2, 0);
+        check(rows.size() == 4, "four classes and no place for real location: " + rows.size());
         check(rowText(rows.get(0)).equals("0:[0, 1, 2]=0"), "sensors row: " + rowText(rows.get(0)));
         check(rowText(rows.get(1)).equals("1:[0, 2]=2"), "loopback row: " + rowText(rows.get(1)));
         check(rowText(rows.get(2)).equals("2:[0, 2]=2"), "settings row: " + rowText(rows.get(2)));
-        ProfileRows.Row r = ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0).get(0);
+        check(rowText(rows.get(3)).equals("3:[0, 1, 2]=0"), "location row: " + rowText(rows.get(3)));
+        // A place is chosen only for an app whose location is substitute data (the service refuses setPlace otherwise).
+        check(ProfileRows.CLASS_LOCATION == 3 && ProfileRows.ROW_PLACE == 100, "location number, place row number");
+        List<ProfileRows.Row> iso = ProfileRows.rowsFor(ProfileRows.PROFILE_ISOLATED, 1, 2, 2, 1);
+        check(iso.size() == 5 && iso.get(4).cls == ProfileRows.ROW_PLACE && iso.get(4).values.length == 0, "substitute location has a place row");
+        check(rowText(iso.get(3)).equals("3:[0, 1, 2]=1"), "location row of an isolated app: " + rowText(iso.get(3)));
+        check(ProfileRows.rowsFor(ProfileRows.PROFILE_PROTECTED, 0, 2, 2, 2).size() == 4, "blocked location has no place row");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 0, 3), "location value 3");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 0, -1), "location value -1");
+        ProfileRows.Row r = ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0, 0).get(0);
         check(r.current == 1, "sensors may be substitute data");
         r.values[0] = 9;
-        check(ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0).get(0).values[0] == 0, "row values are copies");
+        check(ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0, 0).get(0).values[0] == 0, "row values are copies");
         for (int p = 0; p < 3; p++) {
-            for (ProfileRows.Row row : ProfileRows.rowsFor(p, 0, 0, 0)) {
+            for (ProfileRows.Row row : ProfileRows.rowsFor(p, 0, 0, 0, 0)) {
                 boolean substitute = false;
                 for (int v : row.values) {
                     substitute |= v == ProfileRows.VALUE_SUBSTITUTE;
                 }
-                check(substitute == (row.cls == ProfileRows.CLASS_SENSORS), "only the sensors offer substitute data");
+                check(substitute == (row.cls == ProfileRows.CLASS_SENSORS || row.cls == ProfileRows.CLASS_LOCATION),
+                        "only the sensors and the location offer substitute data");
             }
         }
-        throwsIae(() -> ProfileRows.rowsFor(3, 0, 0, 0), "profile 3");
-        throwsIae(() -> ProfileRows.rowsFor(-1, 0, 0, 0), "profile -1");
-        throwsIae(() -> ProfileRows.rowsFor(1, 3, 0, 0), "sensors value 3");
-        throwsIae(() -> ProfileRows.rowsFor(1, -1, 0, 0), "sensors value -1");
-        throwsIae(() -> ProfileRows.rowsFor(1, 0, 3, 0), "loopback value 3");
-        throwsIae(() -> ProfileRows.rowsFor(1, 0, 1, 0), "loopback cannot be substitute data");
-        throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 3), "settings value 3");
-        throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 1), "settings cannot be substitute data");
+        throwsIae(() -> ProfileRows.rowsFor(3, 0, 0, 0, 0), "profile 3");
+        throwsIae(() -> ProfileRows.rowsFor(-1, 0, 0, 0, 0), "profile -1");
+        throwsIae(() -> ProfileRows.rowsFor(1, 3, 0, 0, 0), "sensors value 3");
+        throwsIae(() -> ProfileRows.rowsFor(1, -1, 0, 0, 0), "sensors value -1");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 3, 0, 0), "loopback value 3");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 1, 0, 0), "loopback cannot be substitute data");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 3, 0), "settings value 3");
+        throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 1, 0), "settings cannot be substitute data");
 
-        List<ProfileRows.Row> defaults = ProfileRows.defaultRows(ProfileRows.PROFILE_ISOLATED, 1);
-        check(defaults.size() == 1 && rowText(defaults.get(0)).equals("0:[0, 1, 2]=1"), "the defaults hold one row, the sensors");
-        check(ProfileRows.defaultRows(ProfileRows.PROFILE_PROTECTED, 0).size() == 1, "defaults of Protected");
-        throwsIae(() -> ProfileRows.defaultRows(ProfileRows.PROFILE_TRUSTED, 0), "the defaults are never Trusted");
-        throwsIae(() -> ProfileRows.defaultRows(3, 0), "defaults of profile 3");
-        throwsIae(() -> ProfileRows.defaultRows(1, 3), "defaults with sensors value 3");
+        List<ProfileRows.Row> defaults = ProfileRows.defaultRows(ProfileRows.PROFILE_ISOLATED, 1, 1);
+        check(defaults.size() == 2 && rowText(defaults.get(0)).equals("0:[0, 1, 2]=1"), "the defaults hold the sensors row first");
+        check(rowText(defaults.get(1)).equals("3:[1]=1"), "and a location row that offers only its current value: " + rowText(defaults.get(1)));
+        check(rowText(ProfileRows.defaultRows(ProfileRows.PROFILE_PROTECTED, 0, 0).get(1)).equals("3:[0]=0"), "defaults of Protected");
+        throwsIae(() -> ProfileRows.defaultRows(1, 0, 3), "defaults with location value 3");
+        throwsIae(() -> ProfileRows.defaultRows(1, 0, -1), "defaults with location value -1");
+        throwsIae(() -> ProfileRows.defaultRows(ProfileRows.PROFILE_TRUSTED, 0, 0), "the defaults are never Trusted");
+        throwsIae(() -> ProfileRows.defaultRows(3, 0, 0), "defaults of profile 3");
+        throwsIae(() -> ProfileRows.defaultRows(1, 3, 0), "defaults with sensors value 3");
     }
 
     public static void main(String[] args) throws Exception {

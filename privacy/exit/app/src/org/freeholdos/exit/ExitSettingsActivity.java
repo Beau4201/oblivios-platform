@@ -244,7 +244,7 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
             }
             List<ProfileRows.Row> rows;
             try {
-                rows = ProfileRows.defaultRows(d.profile, d.sensors);
+                rows = ProfileRows.defaultRows(d.profile, d.sensors, d.location);
             } catch (IllegalArgumentException e) {
                 return false;
             }
@@ -268,6 +268,12 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
                 return false;
             });
             category.addPreference(defaultSensorsPref);
+
+            // No service call sets the location of apps that have no profile yet, so this row shows the value and offers none.
+            ProfileRows.Row location = rows.get(1);
+            category.addPreference(note(ctx, getString(R.string.class_location),
+                    getString(ProfileText.valueName(ProfileRows.CLASS_LOCATION, location.current))));
+            category.addPreference(note(ctx, null, getString(R.string.identity_defaults_location_note)));
 
             Preference visible = new Preference(ctx);
             visible.setPersistent(false);

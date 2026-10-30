@@ -18,6 +18,7 @@ import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceScreen;
 
 import com.android.internal.compartments.CompartmentsAppPolicy;
+import com.android.internal.compartments.CompartmentsPlace;
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 import com.android.settingslib.preference.PreferenceFragment;
 import com.android.settingslib.widget.FooterPreference;
@@ -25,6 +26,7 @@ import com.android.settingslib.widget.SelectorWithWidgetPreference;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * The "Compartments" page of one app: what the app is set to (trackers hidden, Tor, never hidden) and the hosts that see its real
@@ -69,6 +71,8 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         private String built = "";
         private final List<SelectorWithWidgetPreference> radios = new ArrayList<>();
         private ProfileClient profiles;
+        /** The place id of the app as the service reported it when the page was last built; -1 when it has no place. */
+        private int placeId = -1;
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -145,7 +149,9 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
             }
             if (policy != null) {
                 // a change of the profile or of a value builds the rows again: which rows exist and what they show follow it
-                shape.append("|i").append(policy.profile).append(policy.sensors).append(policy.loopback).append(policy.settings);
+                placeId = policy.location == ProfileRows.VALUE_SUBSTITUTE ? profiles.getPlaceId(pkg) : -1;
+                shape.append("|i").append(policy.profile).append(policy.sensors).append(policy.loopback).append(policy.settings)
+                        .append(policy.location).append('p').append(placeId).append(s.choices.choiceOf(pkg));
             }
             if (!shape.toString().equals(built)) {
                 build(ctx, screen, fixed, shown, promoted, policy);
@@ -236,7 +242,7 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         private void addIdentity(Context ctx, PreferenceScreen screen, CompartmentsAppPolicy policy) {
             List<ProfileRows.Row> rows;
             try {
-                rows = ProfileRows.rowsFor(policy.profile, policy.sensors, policy.loopback, policy.settings);
+                rows = ProfileRows.rowsFor(policy.profile, policy.sensors, policy.loopback, policy.settings, policy.location);
             } catch (IllegalArgumentException e) {
                 return;
             }
@@ -255,6 +261,10 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
 
             for (ProfileRows.Row row : rows) {
                 final int cls = row.cls;
+                if (cls == ProfileRows.ROW_PLACE) {
+                    category.addPreference(placeRow(ctx));
+                    continue;
+                }
                 ListPreference pref = ProfileText.choice(ctx, "app_class_" + cls, ProfileText.classTitle(cls), row.values,
                         v -> ProfileText.valueName(cls, v), row.current);
                 pref.setOnPreferenceChangeListener((p, v) -> {
@@ -264,9 +274,51 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 category.addPreference(pref);
             }
 
+            if (policy.location == ProfileRows.VALUE_SUBSTITUTE && personaExit(ctx) == Presenter.Exit.MISMATCH) {
+                category.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.persona_disagree)));
+                Preference tor = new Preference(ctx);
+                tor.setPersistent(false);
+                tor.setTitle(R.string.persona_use_tor);
+                tor.setOnPreferenceClickListener(x -> {
+                    choose(Choices.Choice.TOR);
+                    return true;
+                });
+                category.addPreference(tor);
+            }
+
             FooterPreference footer = new FooterPreference(ctx);
             footer.setSummary(ProfileText.profileFooter(policy.profile));
             screen.addPreference(footer);
+        }
+
+        /** The row that opens the place page: Automatic with the country it resolves to, the name of the place, or none. */
+        private Preference placeRow(Context ctx) {
+            Preference row = new Preference(ctx);
+            row.setPersistent(false);
+            row.setTitle(R.string.place_title);
+            CompartmentsPlace place = placeId > 0 ? profiles.getPlace(placeId) : null;
+            if (placeId == 0) {
+                row.setSummary(getString(R.string.place_summary_automatic, AndroidPlatform.ownCountry(ctx)));
+            } else if (place != null) {
+                row.setSummary(place.name);
+            } else {
+                row.setSummary(R.string.place_none);
+            }
+            row.setOnPreferenceClickListener(x -> {
+                startActivity(new Intent(ctx, ExitPlaceActivity.class).setData(Uri.fromParts("package", pkg, null)));
+                return true;
+            });
+            return row;
+        }
+
+        /** What the place of this app asks of its exit; Automatic is in the user's own country, so it asks nothing. */
+        private Presenter.Exit personaExit(Context ctx) {
+            CompartmentsPlace place = placeId > 0 ? profiles.getPlace(placeId) : null;
+            ExitRuntime.Snapshot s = rt.snapshot();
+            if (place == null || place.country == null || s == null) {
+                return Presenter.Exit.NONE;
+            }
+            return Presenter.exitFor(place.country.toUpperCase(Locale.ROOT), AndroidPlatform.ownCountry(ctx), s.choices.choiceOf(pkg));
         }
 
         /** A refused or failed change says so and changes nothing; the page is built again from the service either way. */

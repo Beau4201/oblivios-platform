@@ -40,16 +40,27 @@ API_PERMISSIONS = [
     (r"ServiceManager|ICompartmentsPolicy", {"org.freeholdos.permission.MANAGE_COMPARTMENTS"}),
 ]
 
-# ADR-206, ADR-208: no string claims what the image does not hold. Until the patches that move the location, the time zone and
-# the network strings are in the package (Task 19 of the plan replaces this rule by a check of the patches), no string of the app
-# names a location, a place, the time zone or a persona, except on the page of what stays visible. "takes the place of" is English
-# for a replacement, not a place.
-UNBUILT_NAME = re.compile(r"^(identity_location|persona|place)")
-UNBUILT_TEXT = re.compile(r"\b(location|time zone|persona)\b|\bplace\b(?! of\b)", re.I)
+# ADR-206, ADR-208: no string claims what the image does not hold. A string of the app that names a location, a place, the time
+# zone or a persona (except on the page of what stays visible) needs the patches that move them in the package of the same
+# service: the fixes of the persona (frameworks-base 0005) and the time zone and network strings (frameworks-base 0006).
+# "takes the place of" is English for a replacement, not a place.
+CLAIM_NAME = re.compile(r"^(class_location|value_location|identity_location|identity_time_zone|identity_defaults_location|persona|place)")
+CLAIM_TEXT = re.compile(r"\b(location|time zone|persona)\b|\bplace\b(?! of\b)", re.I)
+CLAIM_PATCHES = (("frameworks-base", "0005"), ("frameworks-base", "0006"))
+# The patch that enforces what each row of ProfileRows offers: a row whose patch is not in the package would be a control that
+# changes a value nothing reads.
+ROW_PATCHES = {
+    "CLASS_SENSORS": ("frameworks-native", "0003"),
+    "CLASS_LOOPBACK": ("frameworks-base", "0002"),
+    "CLASS_SETTINGS": ("frameworks-base", "0002"),
+    "CLASS_LOCATION": ("frameworks-base", "0005"),
+    "ROW_PLACE": ("frameworks-base", "0005"),
+}
 
-# The policy core of the same package: the numbers of ProfileRows are the numbers of its enums (the interface constants).
-CORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "compartments-profiles", "system-server", "src",
-                    "com", "android", "server", "compartments", "Profiles.java")
+# The policy package of the same service: the numbers of ProfileRows are the numbers of the enums of its policy core (the
+# interface constants), and its patches are what the strings and rows may claim.
+PACKAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "compartments-profiles")
+CORE = os.path.join(PACKAGE, "system-server", "src", "com", "android", "server", "compartments", "Profiles.java")
 ROW_CONSTANTS = {"PROFILE": "Profile", "CLASS": "Cls", "VALUE": "Value"}
 
 
@@ -57,7 +68,7 @@ def attr(el, name):
     return el.get(ANDROID + name)
 
 
-def check(app):
+def check(app, package=PACKAGE):
     problems = []
     manifest = ET.parse(os.path.join(app, "AndroidManifest.xml")).getroot()
     if manifest.get("package") != PKG:
@@ -108,22 +119,44 @@ def check(app):
     if granted != [(PKG, "android.permission.POST_NOTIFICATIONS")]:
         problems.append(f"default-permissions grants {granted}")
     problems += receiver_scopes(os.path.join(app, "src"))
-    problems += unbuilt_claims(os.path.join(app, "res", "values", "strings.xml"))
-    problems += row_numbers(os.path.join(app, "src", "org", "freeholdos", "exit", "ProfileRows.java"))
+    rows_java = os.path.join(app, "src", "org", "freeholdos", "exit", "ProfileRows.java")
+    problems += patch_claims(os.path.join(app, "res", "values", "strings.xml"), package)
+    problems += row_patches(rows_java, package)
+    problems += row_numbers(rows_java)
     return problems
 
 
-def unbuilt_claims(strings):
-    """No string names a location, a place, the time zone or a persona (the patches are not in the package), except on the page
-    of what stays visible, whose names start with identity_visible_."""
+def has_patch(package, repo, number):
+    """Whether the package holds the patch numbered `number` for `repo`."""
+    folder = os.path.join(package, "patches", repo)
+    return os.path.isdir(folder) and any(n.startswith(number + "-") and n.endswith(".patch") for n in os.listdir(folder))
+
+
+def patch_claims(strings, package):
+    """A string that names a location, a place, the time zone or a persona needs the patches of CLAIM_PATCHES in the package,
+    except on the page of what stays visible, whose names start with identity_visible_."""
+    missing = [f"{repo}/{n}" for repo, n in CLAIM_PATCHES if not has_patch(package, repo, n)]
     problems = []
     for s in ET.parse(strings).getroot().iter("string"):
         name, text = s.get("name"), "".join(s.itertext())
-        if name.startswith("identity_visible_"):
+        if name.startswith("identity_visible_") or not missing:
             continue
-        if UNBUILT_NAME.match(name) or UNBUILT_TEXT.search(text):
-            problems.append(f"string {name} claims a location, place, time zone or persona feature that is not built "
-                            f"(no patch of privacy/compartments-profiles holds it)")
+        if CLAIM_NAME.match(name) or CLAIM_TEXT.search(text):
+            problems.append(f"string {name} claims a location, place, time zone or persona feature and the package lacks "
+                            f"patch {', '.join(missing)} (not built)")
+    return problems
+
+
+def row_patches(rows_java, package):
+    """Every row that ProfileRows can offer needs the patch that enforces it."""
+    if not os.path.exists(rows_java):  # a copy of the app without src, as the tests of the other rules make
+        return []
+    with open(rows_java, encoding="utf-8") as f:
+        text = f.read()
+    problems = []
+    for const, (repo, number) in ROW_PATCHES.items():
+        if re.search(r"\b" + const + r"\b", text) and not has_patch(package, repo, number):
+            problems.append(f"ProfileRows offers {const} and the package lacks patch {repo}/{number}")
     return problems
 
 

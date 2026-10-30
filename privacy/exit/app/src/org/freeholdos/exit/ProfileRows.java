@@ -50,24 +50,45 @@ public final class ProfileRows {
                 : new int[] {PROFILE_TRUSTED, PROFILE_PROTECTED, PROFILE_ISOLATED};
     }
 
-    /** The class rows of one app, in the order of the page: motion sensors, other apps on this phone, phone settings. */
-    public static List<Row> rowsFor(int profile, int sensors, int loopback, int settings) {
+    /**
+     * The row of the place of the persona. It is not a class of the policy core (it is set by {@code setPlace}, not by
+     * {@code setClassValue}), so it has a number outside the classes and no values.
+     */
+    public static final int ROW_PLACE = 100;
+
+    /**
+     * The class rows of one app, in the order of the page: motion sensors, other apps on this phone, phone settings, location,
+     * and, for an app whose location is substitute data, the place of its persona.
+     */
+    public static List<Row> rowsFor(int profile, int sensors, int loopback, int settings, int location) {
         requireProfile(profile);
         List<Row> rows = new ArrayList<>();
         rows.add(row(CLASS_SENSORS, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, sensors));
         rows.add(row(CLASS_LOOPBACK, new int[] {VALUE_REAL, VALUE_BLOCKED}, loopback));
         rows.add(row(CLASS_SETTINGS, new int[] {VALUE_REAL, VALUE_BLOCKED}, settings));
+        rows.add(row(CLASS_LOCATION, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));
+        if (location == VALUE_SUBSTITUTE) {
+            rows.add(new Row(ROW_PLACE, new int[0], 0));
+        }
         return Collections.unmodifiableList(rows);
     }
 
-    /** The class rows of the defaults for apps the user has not set: only the sensors can be chosen. */
-    public static List<Row> defaultRows(int profile, int sensors) {
+    /**
+     * The class rows of the defaults for apps the user has not set: the sensors can be chosen. The location row offers only
+     * the value of the default profile: the service holds no default of its own for it (the default profile decides, and
+     * only for an app that has an entry, D5), so the page shows it and does not offer a choice that would do nothing.
+     */
+    public static List<Row> defaultRows(int profile, int sensors, int location) {
         requireProfile(profile);
         if (profile == PROFILE_TRUSTED) {
             throw new IllegalArgumentException("the defaults are never Trusted");
         }
         List<Row> rows = new ArrayList<>();
         rows.add(row(CLASS_SENSORS, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, sensors));
+        rows.add(row(CLASS_LOCATION, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));
+        // Only the current value is offered; the check above has already refused a value that does not exist.
+        Row shown = rows.remove(rows.size() - 1);
+        rows.add(new Row(shown.cls, new int[] {shown.current}, shown.current));
         return Collections.unmodifiableList(rows);
     }
 

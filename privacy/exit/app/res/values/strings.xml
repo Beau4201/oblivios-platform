@@ -88,16 +88,33 @@
     <string name="profile_isolated">Isolated</string>
     <string name="profile_trusted_footer">This app can recognise this phone and link itself to your other apps. Use it for an app that must know you, such as a bank.</string>
     <string name="profile_protected_footer">This app works as normal and cannot link itself to other apps or to this phone.</string>
-    <string name="profile_isolated_footer">This app gets invented motion data and keeps working; what it reads is not yours. An app may refuse to run if it notices.</string>
+    <string name="profile_isolated_footer">This app gets invented motion data and a place of its own, and keeps working; what it reads is not yours. An app may refuse to run if it notices. The place is not perfect: the magnetic field and the air pressure do not match it, the country of your SIM stays real, the cell details come from a small offline list, moves ignore roads, Wi-Fi scans are empty, and how you use the app is still visible.</string>
     <string name="class_sensors">Motion sensors</string>
     <string name="class_loopback">Other apps on this phone</string>
     <string name="class_settings">Phone settings</string>
     <string name="value_sensors_real">Real data</string>
     <string name="value_sensors_substitute">Substitute data</string>
+    <string name="class_location">Location</string>
+    <string name="value_location_real">Real data</string>
+    <string name="value_location_substitute">Substitute data</string>
     <string name="value_blocked">Blocked</string>
     <string name="value_loopback_real">Allowed</string>
     <string name="value_settings_real">All settings</string>
     <string name="value_settings_blocked">Only what apps need</string>
+
+    <string name="identity_defaults_location_note">New apps keep the real location. Give an app substitute location data on its own page.</string>
+
+    <!-- The place of the persona of one app (ADR-208). -->
+    <string name="place_title">Place</string>
+    <string name="place_automatic">Automatic</string>
+    <string name="place_automatic_summary">A place in your own country</string>
+    <string name="place_summary_automatic">Automatic · %1$s</string>
+    <string name="place_search_hint">Search for a place</string>
+    <string name="place_none">No place data on this phone</string>
+    <string name="place_error">Could not set the place</string>
+    <string name="identity_time_zone_note">The time zone changes when the app next starts.</string>
+    <string name="persona_disagree">This app is not on Tor, so its address still shows your country while its place is in another.</string>
+    <string name="persona_use_tor">Send this app through Tor</string>
 
     <string name="identity_visible_title">What stays visible</string>
     <string name="identity_visible_summary">What Compartments does not hide</string>

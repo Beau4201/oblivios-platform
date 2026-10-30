@@ -41,6 +41,8 @@ final class ProfileText {
                 return R.string.class_loopback;
             case ProfileRows.CLASS_SETTINGS:
                 return R.string.class_settings;
+            case ProfileRows.CLASS_LOCATION:
+                return R.string.class_location;
             default:
                 return R.string.class_sensors;
         }
@@ -55,6 +57,8 @@ final class ProfileText {
                 return R.string.value_loopback_real;
             case ProfileRows.CLASS_SETTINGS:
                 return R.string.value_settings_real;
+            case ProfileRows.CLASS_LOCATION:
+                return value == ProfileRows.VALUE_SUBSTITUTE ? R.string.value_location_substitute : R.string.value_location_real;
             default:
                 return value == ProfileRows.VALUE_SUBSTITUTE ? R.string.value_sensors_substitute : R.string.value_sensors_real;
         }

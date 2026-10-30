@@ -107,6 +107,29 @@ final class ProfileClient {
         }
     }
 
+    /** The places whose name contains the query, at most {@code limit}; empty when there is no place data or the call fails. */
+    CompartmentsPlace[] searchPlaces(String query, int limit) {
+        try {
+            CompartmentsPlace[] found = mService == null ? null : mService.searchPlaces(query, limit);
+            return found == null ? new CompartmentsPlace[0] : found;
+        } catch (RemoteException | RuntimeException e) {
+            return new CompartmentsPlace[0];
+        }
+    }
+
+    /** False when the service is absent or refuses (an app that does not substitute its location, an unknown place). */
+    boolean setPlace(String packageName, int placeId) {
+        try {
+            if (mService == null) {
+                return false;
+            }
+            mService.setPlace(packageName, placeId);
+            return true;
+        } catch (RemoteException | RuntimeException e) {
+            return false;
+        }
+    }
+
     /** One place by its id, or null. */
     CompartmentsPlace getPlace(int placeId) {
         try {

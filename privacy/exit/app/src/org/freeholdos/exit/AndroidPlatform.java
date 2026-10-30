@@ -116,6 +116,11 @@ final class AndroidPlatform implements PlatformApi {
 
     @Override
     public String ownCountry() {
+        return ownCountry(ctx);
+    }
+
+    /** The network country of the phone, else the SIM country, in capitals; empty when neither is known. */
+    static String ownCountry(Context ctx) {
         TelephonyManager tm = ctx.getSystemService(TelephonyManager.class);
         String c = tm == null ? "" : tm.getNetworkCountryIso();
         if (c == null || c.isEmpty()) {
