@@ -4,7 +4,7 @@ Host-checked cores of the profiles of Compartments (ADR-208, `docs/superpowers/s
 in `freeholdos-foundation`): the policy store and its mirrors in Java, and the sensor mode table, its file source and the
 invented motion streams in C++. State: written and checked on the host, not landed on the build server, no patch exported, in no
 image. The AOSP-side patches (`frameworks-base`, `frameworks-native`, `system-sepolicy`, `packages-apps-Settings`) and the exit
-app changes follow in `docs/superpowers/plans/2026-10-30-compartments-profiles-plan-1.md`, which names the files below as its
+app changes follow in `docs/superpowers/plans/2026-10-30-compartments-profiles.md`, which names the files below as its
 inputs.
 
 | Path | Content |
