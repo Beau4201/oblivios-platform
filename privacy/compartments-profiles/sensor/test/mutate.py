@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Mutation check for SensorModes.h and SubstituteStream.h: every mutant must make a test assertion fail.
+Usage: AOSP_ROOT=... mutate.py <dir that holds SensorModes.h, SubstituteStream.h and SensorBiasFold.h>"""
+import os, pathlib, shutil, subprocess, sys, tempfile
+
+HERE = pathlib.Path(__file__).resolve().parent
+SRC = pathlib.Path(sys.argv[1]).resolve()
+ROOT = os.environ["AOSP_ROOT"]
+INCLUDES = [f"-I{ROOT}/hardware/libhardware/include", f"-I{ROOT}/system/core/libcutils/include",
+            f"-I{ROOT}/system/core/include", f"-I{ROOT}/system/logging/liblog/include"]
+M, S, SRCH = "SensorModes.h", "SubstituteStream.h", "SensorModeSource.h"
+# The size guard of SensorModeSource bounds the allocation, not the outcome (the 8192-line limit of the parser refuses a larger file
+# anyway), so it has no mutant.
+MUTANTS = [
+    (M, "platform uids get the default", "if (!shouldFoldFor(uid)) return SensorMode::RAW;", ""),
+    (M, "the seed ignores the uid", "(static_cast<uint64_t>(uid) * 0x9E3779B97F4A7C15ull)", "(0 * static_cast<uint64_t>(uid))"),
+    (M, "the seed ignores the salt", "mix(mSalt ^ (", "mix(0 ^ ("),
+    (M, "a platform uid line is accepted", "!shouldFoldFor(static_cast<uid_t>(uid))", "false"),
+    (M, "a repeated uid is accepted", "!perUid.emplace(static_cast<uid_t>(uid), m).second", "(perUid.emplace(static_cast<uid_t>(uid), m), false)"),
+    (M, "the number of lines is unbounded", "++lines > kMaxLines", "++lines > 100000000"),
+    (M, "a short salt is accepted", "if (s.size() != 16) return false;", ""),
+    (M, "letters beyond f are hex digits", "else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;", "else if (c >= 'a' && c <= 'z') d = c - 'a' + 10;"),
+    (M, "the default line may come first", "line[0] == 'd' && line[1] == ' ' && haveSalt &&", "line[0] == 'd' && line[1] == ' ' &&"),
+    (M, "a refused file keeps the old table", "void reset() { mSalt = 0; mDefault = SensorMode::FOLDED; mPerUid.clear(); }", "void reset() {}"),
+    (M, "a substituted app keeps its direct channel", "case SensorMode::BLOCKED: return isMotionType(type);", "case SensorMode::BLOCKED: return false;"),
+    (M, "a folded app loses every motion direct channel", "case SensorMode::FOLDED: return eventCarriesBias(type);", "case SensorMode::FOLDED: return isMotionType(type);"),
+    (M, "a raw app loses its direct channels", "default: return false;\n    }\n}", "default: return true;\n    }\n}"),
+    (M, "an unknown mode name is accepted", 'else return false;\n        return true;\n    }\n\n    static bool parseDecimal', 'else *out = SensorMode::RAW;\n        return true;\n    }\n\n    static bool parseDecimal'),
+    (SRCH, "the file is read at every call", "if (now >= mNextCheck) {", "if (true) {"),
+    (SRCH, "the file is never read again", "mNextCheck = now + std::chrono::seconds(1);", "mNextCheck = now + std::chrono::hours(100000);"),
+    (SRCH, "the owner is not checked", "st.st_uid != mOwner ||", ""),
+    (SRCH, "a group-writable file is read", "(st.st_mode & (S_IWGRP | S_IWOTH)) != 0 ||", "(st.st_mode & S_IWOTH) != 0 ||"),
+    (SRCH, "a world-writable file is read", "(st.st_mode & (S_IWGRP | S_IWOTH)) != 0 ||", "(st.st_mode & S_IWGRP) != 0 ||"),
+    (SRCH, "a symbolic link is followed", "O_RDONLY | O_CLOEXEC | O_NOFOLLOW", "O_RDONLY | O_CLOEXEC"),
+    (SRCH, "a refused file keeps the old table", "if (got != st.st_size || !next->parse(text)) {\n            return setStatusQuoLocked();", "if (got != st.st_size || !next->parse(text)) {\n            return;"),
+    (SRCH, "an unchanged file is parsed again", "if (mHaveSignature && st.st_mtim.tv_sec == mSec && st.st_mtim.tv_nsec == mNsec && st.st_size == mSize) {", "if (false) {"),
+    (S, "gravity is wrong", "constexpr float kGravity = 9.80665f;", "constexpr float kGravity = 9.0f;"),
+    (S, "the bias of an invented event is not zeroed", "e->data[3] = e->data[4] = e->data[5] = 0.0f;", "(void)0;"),
+    (S, "a non-motion type is overwritten", "if (!substitutes(e->type)) return false;", ""),
+    (S, "walking has no steps", "const float step = 2.5f * std::sin(2.0f * kPi * 1.8f * t) + 1.0f * std::sin(2.0f * kPi * 3.6f * t);", "const float step = 0.0f;"),
+    (S, "driving has no sway", "+ drive * sway;", ";"),
+    (S, "the noise ignores the event time", "seed ^ static_cast<uint64_t>(t) ^", "seed ^"),
+    (S, "the noise ignores the seed", "SensorModeTable::mix(seed ^ static_cast<uint64_t>(t) ^", "SensorModeTable::mix(static_cast<uint64_t>(t) ^"),
+    (S, "a blocked app gets motion events", "return !isMotionType(e->type);", "return true;"),
+    (S, "a folded app is not folded", "if (eventCarriesBias(e->type)) foldBiasIntoReadings(e);", ""),
+    (S, "the copy writes the shared input", "out[count] = in[i];\n        if (applyMode(&out[count], m, seed, a)) count++;",
+     "if (applyMode(const_cast<sensors_event_t*>(&in[i]), m, seed, a)) out[count++] = in[i];"),
+    (S, "a raw mode touches events", "case SensorMode::RAW: return false;", "case SensorMode::RAW: return true;"),
+]
+survived = 0
+for name, what, old, new in MUTANTS:
+    with tempfile.TemporaryDirectory() as d:
+        d = pathlib.Path(d)
+        for h in (M, S, SRCH, "SensorBiasFold.h"):
+            shutil.copy(SRC / h, d / h)
+        text = (d / name).read_text()
+        assert text.count(old) == 1, f"{name}: {what!r}: pattern found {text.count(old)} times"
+        (d / name).write_text(text.replace(old, new))
+        c = subprocess.run(["g++", "-std=c++17", "-Wall", f"-I{d}"] + INCLUDES + [str(HERE / "SensorProfile_test.cpp"), "-o", str(d / "t")],
+                           capture_output=True, text=True)
+        if c.returncode != 0:
+            print("INVALID MUTANT (does not compile):", name, what, c.stderr[:300])
+            survived += 1
+            continue
+        r = subprocess.run([str(d / "t")], capture_output=True, text=True, timeout=60)
+        if r.returncode == 0:
+            print("SURVIVED:", name, what)
+            survived += 1
+        else:
+            print("killed:  ", name, what)
+print(f"{len(MUTANTS) - survived} of {len(MUTANTS)} mutants killed")
+sys.exit(1 if survived else 0)
