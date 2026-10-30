@@ -205,6 +205,12 @@ public final class PlacesTest {
         check(c.cellsFor(4).size() == 1 && c.cellsFor(4).get(0).cid == 4294967295L && c.cellsFor(4).get(0).mnc == 4, "the largest cid");
         check(c.cellsFor(7).get(0).tac == 65535 && c.cellsFor(7).get(0).mnc == 260 && c.cellsFor(7).get(0).cid == 0, "the largest tac, cid 0");
         check(c.cellsFor(2).isEmpty() && c.cellsFor(0).isEmpty() && c.cellsFor(-3).isEmpty(), "an unknown place has no cells");
+        CellSubset ops = CellSubset.parse(ln(1, 214, 7, 1, 1) + ln(1, 310, 260, 1, 2) + ln(2, 262, 99, 1, 3) + ln(3, 505, 100, 1, 4) + ln(4, 214, 0, 1, 5));
+        check(ops.operatorFor(1).equals("21407"), "the operator is mcc and a two-digit mnc of the FIRST cell");
+        check(ops.operatorFor(2).equals("26299"), "mnc 99 has two digits");
+        check(ops.operatorFor(3).equals("505100"), "mnc 100 has three digits");
+        check(ops.operatorFor(4).equals("21400"), "mnc 0 is padded to two digits");
+        check(ops.operatorFor(9).isEmpty() && ops.operatorFor(0).isEmpty(), "no cell, no operator");
         check(CellSubset.parse(cellLines(5, 64)).cellsFor(5).size() == 8, "64 lines of one place");
         check(throwsIllegal(() -> CellSubset.parse(cellLines(5, 65))), "65 lines of one place");
         check(CellSubset.parse(cellLines(5, 64) + cellLines(6, 64)).cellsFor(6).size() == 8, "the limit is per place");

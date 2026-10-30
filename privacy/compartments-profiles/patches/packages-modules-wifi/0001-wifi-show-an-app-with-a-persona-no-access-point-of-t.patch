@@ -1,0 +1,278 @@
+From d70b529f1b0821a644623469426abf03678a6dff Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Fri, 30 Oct 2026 18:28:30 +0100
+Subject: [PATCH] wifi: show an app with a persona no access point of the real place
+
+getScanResults and getMatchingScanResults return nothing for an app that has a persona (the persona file of the system server), and getConnectionInfo keeps the fine-location redaction for it. ADR-208.
+---
+ .../com/android/server/wifi/PersonaFile.java  | 115 ++++++++++++++++++
+ .../android/server/wifi/PersonaReader.java    |  87 +++++++++++++
+ .../android/server/wifi/WifiServiceImpl.java  |  15 ++-
+ 3 files changed, 216 insertions(+), 1 deletion(-)
+ create mode 100644 service/java/com/android/server/wifi/PersonaFile.java
+ create mode 100644 service/java/com/android/server/wifi/PersonaReader.java
+
+diff --git a/service/java/com/android/server/wifi/PersonaFile.java b/service/java/com/android/server/wifi/PersonaFile.java
+new file mode 100644
+index 0000000..d444e42
+--- /dev/null
++++ b/service/java/com/android/server/wifi/PersonaFile.java
+@@ -0,0 +1,115 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.wifi;
++
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.TreeMap;
++import java.util.regex.Pattern;
++
++/**
++ * The file that tells the processes which place an Isolated app is in (ADR-208). The system server writes it; the telephony,
++ * Wi-Fi and Bluetooth code read it, each with its own copy of this class, because they are other class loaders or processes
++ * (a check of the package keeps the copies equal). Pure Java, no import beyond {@code java.util}.
++ *
++ * <p>Format: {@code s} and the 16 lower-case hex digits of the salt, then one line {@code p APPID PLACE} for each app that has a
++ * persona, in app id order, every line ended by a newline, at most 8192 lines. An app id is of an ordinary app (10000 to 19999)
++ * and a place is a positive number of {@link Places}. A reader that gets anything else refuses the whole file.
++ */
++final class PersonaFile {
++    static final int MAX_LINES = 8192;
++    private static final int FIRST_APP_ID = 10000;
++    private static final int LAST_APP_ID = 19999;
++    private static final int USER_OFFSET = 100000;
++    private static final int SANDBOX_OFFSET = 10000;
++    private static final Pattern SALT = Pattern.compile("s [0-9a-f]{16}");
++    private static final Pattern LINE = Pattern.compile("p (0|[1-9][0-9]{0,9}) (0|[1-9][0-9]{0,9})");
++
++    private final long salt;
++    private final Map<Integer, Integer> places;
++
++    private PersonaFile(long salt, Map<Integer, Integer> places) {
++        this.salt = salt;
++        this.places = places;
++    }
++
++    /** The text of the file for the apps (by app id) that have a place. */
++    static String format(long salt, Map<Integer, Integer> appIdToPlace) {
++        if (appIdToPlace == null || appIdToPlace.size() > MAX_LINES - 1) {
++            throw new IllegalArgumentException("too many apps");
++        }
++        Map<Integer, Integer> sorted = new TreeMap<>();
++        for (Map.Entry<Integer, Integer> e : appIdToPlace.entrySet()) {
++            Integer appId = e.getKey();
++            Integer place = e.getValue();
++            if (appId == null || place == null || appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1) {
++                throw new IllegalArgumentException("an app id or a place is out of range");
++            }
++            sorted.put(appId, place);
++        }
++        StringBuilder b = new StringBuilder(String.format("s %016x\n", salt));
++        for (Map.Entry<Integer, Integer> e : sorted.entrySet()) {
++            b.append("p ").append(e.getKey()).append(' ').append(e.getValue()).append('\n');
++        }
++        return b.toString();
++    }
++
++    /** @throws IllegalArgumentException for any text that is not exactly a file of the format */
++    static PersonaFile parse(String text) {
++        if (text == null || text.isEmpty() || text.charAt(text.length() - 1) != '\n') {
++            throw new IllegalArgumentException("not a persona file");
++        }
++        Map<Integer, Integer> out = new HashMap<>();
++        long salt = 0;
++        int start = 0;
++        int lines = 0;
++        while (start < text.length()) {
++            int end = text.indexOf('\n', start);
++            String line = text.substring(start, end);
++            start = end + 1;
++            if (++lines > MAX_LINES) {
++                throw new IllegalArgumentException("too many lines");
++            }
++            if (lines == 1) {
++                if (!SALT.matcher(line).matches()) {
++                    throw new IllegalArgumentException("the salt line must come first");
++                }
++                salt = Long.parseUnsignedLong(line.substring(2), 16);
++                continue;
++            }
++            if (!LINE.matcher(line).matches()) {
++                throw new IllegalArgumentException("not a place line");
++            }
++            int space = line.indexOf(' ', 2);
++            long appId = Long.parseLong(line.substring(2, space));
++            long place = Long.parseLong(line.substring(space + 1));
++            if (appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1 || place > Integer.MAX_VALUE) {
++                throw new IllegalArgumentException("an app id or a place is out of range");
++            }
++            if (out.put((int) appId, (int) place) != null) {
++                throw new IllegalArgumentException("an app id is repeated");
++            }
++        }
++        return new PersonaFile(salt, Collections.unmodifiableMap(out));
++    }
++
++    long salt() {
++        return salt;
++    }
++
++    /**
++     * The place of the app that this uid belongs to (the same app in every user, and its SDK sandbox, 20000 to 29999, answers
++     * for the app 10000 below it), or 0 when the app has no persona.
++     */
++    int placeOf(int uid) {
++        if (uid < 0) {
++            return 0;
++        }
++        int appId = uid % USER_OFFSET;
++        if (appId >= FIRST_APP_ID + SANDBOX_OFFSET && appId <= LAST_APP_ID + SANDBOX_OFFSET) {
++            appId -= SANDBOX_OFFSET;
++        }
++        Integer place = places.get(appId);
++        return place == null ? 0 : place;
++    }
++}
+diff --git a/service/java/com/android/server/wifi/PersonaReader.java b/service/java/com/android/server/wifi/PersonaReader.java
+new file mode 100644
+index 0000000..cd677fd
+--- /dev/null
++++ b/service/java/com/android/server/wifi/PersonaReader.java
+@@ -0,0 +1,87 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.wifi;
++
++import android.system.ErrnoException;
++import android.system.Os;
++import android.system.OsConstants;
++import android.system.StructStat;
++
++import java.io.FileDescriptor;
++import java.io.IOException;
++import java.nio.charset.StandardCharsets;
++
++/**
++ * Reads the persona file of the system server for another process (ADR-208): the Telephony app, the Wi-Fi code and the
++ * Bluetooth app each have a copy of this class and of {@link PersonaFile}, and ask which place an app is in. The rules are those
++ * of the sensor service for {@code sensor_modes}: the file is opened without following a link, it must be a regular file owned
++ * by the system user and not writable by group or others, it must not be larger than {@link #MAX_BYTES}, and it is parsed
++ * strictly. A file that cannot be used means no persona for anyone (the answer is 0, the real data). The file is looked at
++ * again at most once a second, however often the question is asked.
++ */
++public final class PersonaReader {
++    static final String PATH = "/data/system/compartments/persona";
++    static final int SYSTEM_UID = 1000;
++    static final long INTERVAL_MS = 1000;
++    static final int MAX_BYTES = 262144;
++
++    private final String mPath;
++    private final int mOwnerUid;
++    private PersonaFile mFile;
++    private long mLoadedAtMs;
++    private boolean mLoaded;
++
++    public PersonaReader() {
++        this(PATH, SYSTEM_UID);
++    }
++
++    PersonaReader(String path, int ownerUid) {
++        mPath = path;
++        mOwnerUid = ownerUid;
++    }
++
++    /** The place of the app of this uid, or 0 when it has none or the file cannot be used. */
++    public int placeOf(int uid) {
++        return placeOf(uid, System.nanoTime() / 1_000_000L);
++    }
++
++    synchronized int placeOf(int uid, long nowMs) {
++        if (!mLoaded || nowMs - mLoadedAtMs >= INTERVAL_MS) {
++            mFile = load();
++            mLoadedAtMs = nowMs;
++            mLoaded = true;
++        }
++        return mFile == null ? 0 : mFile.placeOf(uid);
++    }
++
++    private PersonaFile load() {
++        FileDescriptor fd = null;
++        try {
++            fd = Os.open(mPath, OsConstants.O_RDONLY | OsConstants.O_NOFOLLOW | OsConstants.O_CLOEXEC, 0);
++            StructStat st = Os.fstat(fd);
++            if (!OsConstants.S_ISREG(st.st_mode) || st.st_uid != mOwnerUid || (st.st_mode & 0022) != 0
++                    || st.st_size < 0 || st.st_size > MAX_BYTES) {
++                return null;
++            }
++            byte[] buf = new byte[(int) st.st_size];
++            int n = 0;
++            while (n < buf.length) {
++                int r = Os.read(fd, buf, n, buf.length - n);
++                if (r <= 0) {
++                    return null;
++                }
++                n += r;
++            }
++            return PersonaFile.parse(new String(buf, StandardCharsets.UTF_8));
++        } catch (ErrnoException | IOException | RuntimeException e) {
++            return null;
++        } finally {
++            if (fd != null) {
++                try {
++                    Os.close(fd);
++                } catch (ErrnoException ignored) {
++                    // nothing to do for a descriptor that did not close
++                }
++            }
++        }
++    }
++}
+diff --git a/service/java/com/android/server/wifi/WifiServiceImpl.java b/service/java/com/android/server/wifi/WifiServiceImpl.java
+index 249c1ce..341d9bd 100644
+--- a/service/java/com/android/server/wifi/WifiServiceImpl.java
++++ b/service/java/com/android/server/wifi/WifiServiceImpl.java
+@@ -378,6 +378,8 @@ public class WifiServiceImpl extends IWifiManager.Stub {
+     private final FrameworkFacade mFrameworkFacade;
+ 
+     private final WifiPermissionsUtil mWifiPermissionsUtil;
++    /** FreeholdOS (ADR-208): which apps have a persona; they are shown no access point and no network name. */
++    private final PersonaReader mPersona = new PersonaReader();
+ 
+     private final TetheredSoftApTracker mTetheredSoftApTracker;
+ 
+@@ -5422,7 +5424,10 @@ public class WifiServiceImpl extends IWifiManager.Stub {
+                     Log.v(TAG, "Clearing REDACT_FOR_ACCESS_FINE_LOCATION for " + callingPackage
+                             + "(uid=" + uid + ")");
+                 }
+-                redactions &= ~NetworkCapabilities.REDACT_FOR_ACCESS_FINE_LOCATION;
++                // FreeholdOS (ADR-208): an app with a persona keeps the redaction, as an app without the permission does
++                if (mPersona.placeOf(uid) == 0) {
++                    redactions &= ~NetworkCapabilities.REDACT_FOR_ACCESS_FINE_LOCATION;
++                }
+             } catch (SecurityException ignored) {
+                 if (mVerboseLoggingEnabled) {
+                     Log.v(TAG, "Keeping REDACT_FOR_ACCESS_FINE_LOCATION:" + ignored);
+@@ -5468,6 +5473,10 @@ public class WifiServiceImpl extends IWifiManager.Stub {
+         try {
+             mWifiPermissionsUtil.enforceCanAccessScanResults(callingPackage, callingFeatureId,
+                     uid, null);
++            // FreeholdOS (ADR-208): an app with a persona sees no access point of the real place
++            if (mPersona.placeOf(uid) != 0) {
++                return new ParceledListSlice<>(Collections.emptyList());
++            }
+             List<ScanResult> scanResults = mWifiThreadRunner.call(
+                     mScanRequestProxy::getScanResults, Collections.emptyList(),
+                     TAG + "#getScanResults");
+@@ -5552,6 +5561,10 @@ public class WifiServiceImpl extends IWifiManager.Stub {
+         try {
+             mWifiPermissionsUtil.enforceCanAccessScanResults(callingPackage, callingFeatureId,
+                     uid, null);
++            // FreeholdOS (ADR-208): an app with a persona sees no access point of the real place
++            if (mPersona.placeOf(uid) != 0) {
++                return Collections.emptyMap();
++            }
+ 
+             return mWifiThreadRunner.call(
+                     () -> {
+-- 
+2.56.0
+

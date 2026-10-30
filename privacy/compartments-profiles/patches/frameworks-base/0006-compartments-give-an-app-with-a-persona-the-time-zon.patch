@@ -1,0 +1,537 @@
+From 6bde80700dfa49227d6509c8af35404fe7263ade Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Fri, 30 Oct 2026 18:28:52 +0100
+Subject: [PATCH] compartments: time zone and network strings of a persona app
+
+The system server hands the time zone, the network country and the operator of the
+place to the process of an app with a persona in its core settings; the process
+reads them once into PersonaProcess and TelephonyManager answers with them. The
+service loads the cell data for the operator, and the telephony registry treats
+such an app as one without location access, so no real cell or area reaches it
+through a listener.
+---
+ core/java/android/app/ActivityThread.java     |  13 +++
+ .../internal/compartments/PersonaProcess.java |  99 ++++++++++++++++
+ .../com/android/server/TelephonyRegistry.java |  15 ++-
+ .../server/am/ActivityManagerService.java     |  21 +++-
+ .../server/compartments/CellSubset.java       | 108 ++++++++++++++++++
+ .../compartments/CompartmentsInternal.java    |   6 +-
+ .../CompartmentsPolicyService.java            |  39 ++++++-
+ .../android/telephony/TelephonyManager.java   |  15 +++
+ 8 files changed, 309 insertions(+), 7 deletions(-)
+ create mode 100644 core/java/com/android/internal/compartments/PersonaProcess.java
+ create mode 100644 services/core/java/com/android/server/compartments/CellSubset.java
+
+diff --git a/core/java/android/app/ActivityThread.java b/core/java/android/app/ActivityThread.java
+index 2c9b544..054b15d 100644
+--- a/core/java/android/app/ActivityThread.java
++++ b/core/java/android/app/ActivityThread.java
+@@ -248,6 +248,7 @@ import com.android.internal.R;
+ import com.android.internal.annotations.GuardedBy;
+ import com.android.internal.annotations.VisibleForTesting;
+ import com.android.internal.app.IVoiceInteractor;
++import com.android.internal.compartments.PersonaProcess;
+ import com.android.internal.content.ReferrerIntent;
+ import com.android.internal.gmscompat.GmcDebug;
+ import com.android.internal.os.ApplicationSharedMemory;
+@@ -1604,6 +1605,8 @@ public final class ActivityThread extends ClientTransactionHandler
+         @Override
+         public void updateTimeZone() {
+             TimeZone.setDefault(null);
++            // FreeholdOS (ADR-208): an app with a persona stays in the time zone of its persona
++            PersonaProcess.applyTimeZone();
+         }
+ 
+         @Override
+@@ -8106,6 +8109,16 @@ public final class ActivityThread extends ClientTransactionHandler
+          */
+         TimeZone.setDefault(null);
+ 
++        /*
++         * FreeholdOS (ADR-208): an app with a persona lives in the time zone, the network country and the operator of its place.
++         * The system server put them in the core settings of this process; they are read here once (a later push of the core
++         * settings carries none), and the default time zone is the one of the persona.
++         */
++        synchronized (mCoreSettingsLock) {
++            PersonaProcess.setFrom(mCoreSettings);
++        }
++        PersonaProcess.applyTimeZone();
++
+         /*
+          * Set the LocaleList. This may change once we create the App Context.
+          */
+diff --git a/core/java/com/android/internal/compartments/PersonaProcess.java b/core/java/com/android/internal/compartments/PersonaProcess.java
+new file mode 100644
+index 0000000..0d474a4
+--- /dev/null
++++ b/core/java/com/android/internal/compartments/PersonaProcess.java
+@@ -0,0 +1,99 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.internal.compartments;
++
++import android.os.Bundle;
++
++import java.util.Arrays;
++import java.util.HashSet;
++import java.util.Set;
++import java.util.TimeZone;
++
++/**
++ * The persona of this process (ADR-208): the time zone and the network country and operator of the place of an Isolated app.
++ * The system server puts the three values in the core settings that it hands to the process when it binds the application;
++ * the process reads them once, when it binds, into this class. A later push of the core settings carries no persona and is not
++ * read, so the values stay what the process was started with. Every app without a persona has no values and nothing changes
++ * for it.
++ *
++ * @hide
++ */
++public final class PersonaProcess {
++    public static final String KEY_TIME_ZONE = "freeholdos_persona_tz";
++    public static final String KEY_COUNTRY = "freeholdos_persona_country";
++    public static final String KEY_OPERATOR = "freeholdos_persona_operator";
++
++    private static final Object LOCK = new Object();
++    private static boolean sSet;
++    private static volatile String sTimeZone;
++    private static volatile String sCountry;
++    private static volatile String sOperator;
++
++    private PersonaProcess() {}
++
++    /** The three keys for the core settings of a process; the system server adds them to a copy of the bundle. */
++    public static void putInto(Bundle coreSettings, String timeZone, String country, String operator) {
++        coreSettings.putString(KEY_TIME_ZONE, timeZone);
++        coreSettings.putString(KEY_COUNTRY, country);
++        coreSettings.putString(KEY_OPERATOR, operator);
++    }
++
++    /**
++     * Reads the persona from the core settings of the process, once. Without all three keys the process has no persona. A
++     * second call throws: a process is bound once.
++     */
++    public static void setFrom(Bundle coreSettings) {
++        String timeZone = coreSettings == null ? null : coreSettings.getString(KEY_TIME_ZONE);
++        String country = coreSettings == null ? null : coreSettings.getString(KEY_COUNTRY);
++        String operator = coreSettings == null ? null : coreSettings.getString(KEY_OPERATOR);
++        set(timeZone, country, operator);
++    }
++
++    /** One time only; null for all three means no persona. */
++    static void set(String timeZone, String country, String operator) {
++        synchronized (LOCK) {
++            if (sSet) {
++                throw new IllegalStateException("the persona of a process is set once");
++            }
++            sSet = true;
++            if (timeZone == null || country == null || operator == null) {
++                return;
++            }
++            sTimeZone = timeZone;
++            sCountry = country;
++            sOperator = operator;
++        }
++    }
++
++    /** The time zone id of the persona, or null. */
++    public static String timeZone() {
++        return sTimeZone;
++    }
++
++    /** The network country of the persona, a lower-case ISO 3166-1 alpha-2 code, or null. */
++    public static String country() {
++        return sCountry;
++    }
++
++    /** The numeric operator of the persona (mcc and mnc), "" when its place has no cell, or null when there is no persona. */
++    public static String operator() {
++        return sOperator;
++    }
++
++    /**
++     * Makes the default time zone of the process the one of the persona, when there is one and it is a time zone that this
++     * system knows; otherwise the default is left as it is.
++     */
++    public static void applyTimeZone() {
++        String id = sTimeZone;
++        if (id == null) {
++            return;
++        }
++        Set<String> known = new HashSet<>(Arrays.asList(TimeZone.getAvailableIDs()));
++        if (known.contains(id)) {
++            TimeZone.setDefault(TimeZone.getTimeZone(id));
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/TelephonyRegistry.java b/services/core/java/com/android/server/TelephonyRegistry.java
+index ee20dde..17e9488 100644
+--- a/services/core/java/com/android/server/TelephonyRegistry.java
++++ b/services/core/java/com/android/server/TelephonyRegistry.java
+@@ -116,6 +116,7 @@ import com.android.internal.util.DumpUtils;
+ import com.android.internal.util.FrameworkStatsLog;
+ import com.android.internal.util.IndentingPrintWriter;
+ import com.android.server.am.BatteryStatsService;
++import com.android.server.compartments.CompartmentsInternal;
+ 
+ import dalvik.annotation.optimization.NeverCompile;
+ 
+@@ -4844,13 +4845,23 @@ public class TelephonyRegistry extends ITelephonyRegistry.Stub {
+         return checkCoarseLocationAccess(r, Build.VERSION_CODES.BASE);
+     }
+ 
++    /**
++     * FreeholdOS (ADR-208): an app with a persona never gets the real cell or the real service area through a listener, as an
++     * app without the location permission does not: the service state is the copy without location information and the cell
++     * info and the cell location are not delivered. Its pull calls are answered by the Telephony app with the cells of its place.
++     */
++    private static boolean hasPersona(int uid) {
++        CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
++        return compartments != null && compartments.personaFor(uid) != null;
++    }
++
+     /**
+      * Note -- this method should only be used at the site of a permission check if you need to
+      * explicitly allow apps below a certain SDK level access regardless of location permissions.
+      * If you don't need app compat logic, use {@link #checkFineLocationAccess(Record)}.
+      */
+     private boolean checkFineLocationAccess(Record r, int minSdk) {
+-        if (r.renounceFineLocationAccess) {
++        if (r.renounceFineLocationAccess || hasPersona(r.callerUid)) {
+             return false;
+         }
+         LocationAccessPolicy.LocationPermissionQuery query =
+@@ -4879,7 +4890,7 @@ public class TelephonyRegistry extends ITelephonyRegistry.Stub {
+      * If you don't need app compat logic, use {@link #checkCoarseLocationAccess(Record)}.
+      */
+     private boolean checkCoarseLocationAccess(Record r, int minSdk) {
+-        if (r.renounceCoarseLocationAccess) {
++        if (r.renounceCoarseLocationAccess || hasPersona(r.callerUid)) {
+             return false;
+         }
+         LocationAccessPolicy.LocationPermissionQuery query =
+diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
+index cde8742..588f00c 100644
+--- a/services/core/java/com/android/server/am/ActivityManagerService.java
++++ b/services/core/java/com/android/server/am/ActivityManagerService.java
+@@ -468,6 +468,7 @@ import com.android.internal.app.ProcessMap;
+ import com.android.internal.app.SystemUserHomeActivity;
+ import com.android.internal.app.procstats.ProcessState;
+ import com.android.internal.app.procstats.ProcessStats;
++import com.android.internal.compartments.PersonaProcess;
+ import com.android.internal.content.InstallLocationUtils;
+ import com.android.internal.messages.nano.SystemMessageProto.SystemMessage;
+ import com.android.internal.notification.SystemNotificationChannels;
+@@ -503,6 +504,7 @@ import com.android.server.DisplayThread;
+ import com.android.server.IoThread;
+ import com.android.server.LocalManagerRegistry;
+ import com.android.server.LocalServices;
++import com.android.server.compartments.CompartmentsInternal;
+ import com.android.server.LockGuard;
+ import com.android.server.PackageWatchdog;
+ import com.android.server.ServiceThread;
+@@ -3348,6 +3350,23 @@ public class ActivityManagerService extends IActivityManager.Stub
+         }
+     }
+ 
++    /**
++     * FreeholdOS (ADR-208): the core settings of one process. An app with a persona gets a copy with the time zone, the network
++     * country and the operator of its place added; every other process gets the shared bundle as it was.
++     */
++    private Bundle coreSettingsFor(ProcessRecord app) {
++        Bundle core = mCoreSettingsObserver.getCoreSettings(app.userId);
++        CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
++        CompartmentsInternal.PersonaView persona =
++                compartments == null ? null : compartments.personaFor(app.getApplicationUid());
++        if (persona == null) {
++            return core;
++        }
++        Bundle withPersona = new Bundle(core);
++        PersonaProcess.putInto(withPersona, persona.timeZone, persona.country.toLowerCase(Locale.ROOT), persona.operator);
++        return withPersona;
++    }
++
+     /**
+      * Initialize the application bind args. These are passed to each
+      * process when the bindApplication() IPC is sent to the process. They're
+@@ -5476,7 +5495,7 @@ public class ActivityManagerService extends IActivityManager.Stub
+                         preBindInfo.configuration,
+                         app.getCompat(),
+                         getCommonServicesLocked(app.isolated),
+-                        mCoreSettingsObserver.getCoreSettings(app.userId),
++                        coreSettingsFor(app),
+                         buildSerial,
+                         autofillOptions,
+                         contentCaptureOptions,
+diff --git a/services/core/java/com/android/server/compartments/CellSubset.java b/services/core/java/com/android/server/compartments/CellSubset.java
+new file mode 100644
+index 0000000..b570e68
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/CellSubset.java
+@@ -0,0 +1,108 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.regex.Pattern;
++
++/**
++ * The cell towers of the persona (ADR-208): a few towers per place of {@link Places}, with the operator codes of the country,
++ * read once from a read-only file of the image. Parsed strictly, like {@link Places}. Pure Java.
++ *
++ * <p>Format: one line per cell, five tab-separated decimal fields and a newline after every line: {@code placeId mcc mnc tac
++ * cid}. The mcc is 200 to 799, the mnc 0 to 999, the tac 0 to 65535 and the cid 0 to 2^32-1. At most 64 lines belong to one
++ * place, and {@link #cellsFor} returns the first 8 of them.
++ */
++final class CellSubset {
++    static final int MAX_LINES = 1000000;
++    static final int MAX_PER_PLACE = 64;
++    static final int RETURNED = 8;
++    private static final Pattern NUMBER = Pattern.compile("0|[1-9][0-9]{0,9}");
++
++    static final class Cell {
++        final int mcc;
++        final int mnc;
++        final int tac;
++        final long cid;
++
++        Cell(int mcc, int mnc, int tac, long cid) {
++            this.mcc = mcc;
++            this.mnc = mnc;
++            this.tac = tac;
++            this.cid = cid;
++        }
++    }
++
++    private final Map<Integer, List<Cell>> byPlace;
++
++    private CellSubset(Map<Integer, List<Cell>> byPlace) {
++        this.byPlace = byPlace;
++    }
++
++    /** @throws IllegalArgumentException for any text that is not exactly a file of the format */
++    static CellSubset parse(String tsv) {
++        if (tsv == null || tsv.isEmpty() || tsv.charAt(tsv.length() - 1) != '\n') {
++            throw new IllegalArgumentException("not a cell file");
++        }
++        Map<Integer, List<Cell>> out = new HashMap<>();
++        int start = 0;
++        int lines = 0;
++        while (start < tsv.length()) {
++            int end = tsv.indexOf('\n', start);
++            if (++lines > MAX_LINES) {
++                throw new IllegalArgumentException("too many lines");
++            }
++            String[] f = tsv.substring(start, end).split("\t", -1);
++            start = end + 1;
++            if (f.length != 5) {
++                throw new IllegalArgumentException("a line has " + f.length + " fields");
++            }
++            long place = number(f[0]);
++            long mcc = number(f[1]);
++            long mnc = number(f[2]);
++            long tac = number(f[3]);
++            long cid = number(f[4]);
++            if (place < 1 || place > Integer.MAX_VALUE || mcc < 200 || mcc > 799 || mnc > 999 || tac > 65535 || cid > 4294967295L) {
++                throw new IllegalArgumentException("a value is out of range");
++            }
++            List<Cell> list = out.computeIfAbsent((int) place, k -> new ArrayList<>());
++            if (list.size() >= MAX_PER_PLACE) {
++                throw new IllegalArgumentException("too many cells for one place");
++            }
++            list.add(new Cell((int) mcc, (int) mnc, (int) tac, cid));
++        }
++        return new CellSubset(out);
++    }
++
++    private static long number(String s) {
++        if (!NUMBER.matcher(s).matches()) {
++            throw new IllegalArgumentException("not a number");
++        }
++        return Long.parseLong(s);
++    }
++
++    /**
++     * The numeric operator of the first cell of the place, as a real operator property holds it: the mcc and the mnc, the mnc
++     * with two digits below 100 and three otherwise; "" for a place without cells.
++     */
++    String operatorFor(int placeId) {
++        List<Cell> all = byPlace.get(placeId);
++        if (all == null) {
++            return "";
++        }
++        Cell first = all.get(0);
++        return first.mcc + String.format("%02d", first.mnc);
++    }
++
++    /** At most 8 cells of the place in file order; empty for a place without cells. */
++    List<Cell> cellsFor(int placeId) {
++        List<Cell> all = byPlace.get(placeId);
++        if (all == null) {
++            return Collections.emptyList();
++        }
++        return Collections.unmodifiableList(new ArrayList<>(all.subList(0, Math.min(RETURNED, all.size()))));
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsInternal.java b/services/core/java/com/android/server/compartments/CompartmentsInternal.java
+index 85f396b..ed9aff3 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsInternal.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsInternal.java
+@@ -20,16 +20,20 @@ public interface CompartmentsInternal {
+         public final String timeZone;
+         public final String country;
+         public final int mcc;
++        /** The numeric operator (mcc and mnc) of the first cell of the place, "" when the place has no cell. */
++        public final String operator;
+         /** The one track of this app: the same object for every call until the place of the app changes. */
+         public final PersonaTrack track;
+ 
+-        PersonaView(int placeId, double lat, double lon, String timeZone, String country, int mcc, PersonaTrack track) {
++        PersonaView(int placeId, double lat, double lon, String timeZone, String country, int mcc, String operator,
++                PersonaTrack track) {
+             this.placeId = placeId;
+             this.lat = lat;
+             this.lon = lon;
+             this.timeZone = timeZone;
+             this.country = country;
+             this.mcc = mcc;
++            this.operator = operator;
+             this.track = track;
+         }
+     }
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index bd63e77..d2df6af 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -72,6 +72,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     static final String SETTINGS_REAL_PACKAGES = "freeholdos_settings_real_packages";
+     private static final String LOOPBACK_PERMISSION = "android.permission.USE_LOOPBACK_INTERFACE";
+     static final String PLACES_FILE = "/product/etc/compartments/places.tsv";
++    static final String CELLS_FILE = "/product/etc/compartments/cells.tsv";
+     private static final String[] LOCATION_PERMISSIONS = {
+         "android.permission.ACCESS_FINE_LOCATION",
+         "android.permission.ACCESS_COARSE_LOCATION",
+@@ -96,6 +97,8 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     private final Object mPlacesLock = new Object();
+     private volatile boolean mPlacesRead;
+     private volatile Places mPlaces;
++    private volatile boolean mCellsRead;
++    private volatile CellSubset mCells;
+ 
+     /** The persona table that was last made; the services of this process read it, the others read the file. */
+     private volatile PersonaFile mPersona;
+@@ -118,10 +121,12 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     private static final class Track {
+         final int placeId;
+         final PersonaTrack track;
++        final String operator;
+ 
+-        Track(int placeId, PersonaTrack track) {
++        Track(int placeId, PersonaTrack track, String operator) {
+             this.placeId = placeId;
+             this.track = track;
++            this.operator = operator;
+         }
+     }
+ 
+@@ -611,6 +616,33 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         return mPlaces;
+     }
+ 
++    /** The numeric operator of a place from the cell data, "" when the image has none or the place has no cell. */
++    private String operatorOf(int placeId) {
++        if (!mCellsRead) {
++            synchronized (mPlacesLock) {
++                if (!mCellsRead) {
++                    mCells = readCells();
++                    mCellsRead = true;
++                }
++            }
++        }
++        CellSubset cells = mCells;
++        return cells == null ? "" : cells.operatorFor(placeId);
++    }
++
++    private static CellSubset readCells() {
++        File f = new File(CELLS_FILE);
++        try {
++            if (!f.isFile() || f.length() > MAX_PLACES_BYTES) {
++                return null;
++            }
++            return CellSubset.parse(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8));
++        } catch (IOException | RuntimeException e) {
++            Slog.w(TAG, "no cell data: " + e.getClass().getSimpleName());
++            return null;
++        }
++    }
++
+     private static Places readPlaces() {
+         File f = new File(PLACES_FILE);
+         try {
+@@ -673,8 +705,9 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 return null;
+             }
+             Track t = mTracks.compute(UserHandle.getAppId(uid),
+-                    (appId, old) -> old != null && old.placeId == placeId ? old : new Track(placeId, new PersonaTrack(place.lat, place.lon)));
+-            return new PersonaView(placeId, place.lat, place.lon, place.timeZone, place.country, place.mcc, t.track);
++                    (appId, old) -> old != null && old.placeId == placeId ? old
++                            : new Track(placeId, new PersonaTrack(place.lat, place.lon), operatorOf(placeId)));
++            return new PersonaView(placeId, place.lat, place.lon, place.timeZone, place.country, place.mcc, t.operator, t.track);
+         }
+     }
+ 
+diff --git a/telephony/java/android/telephony/TelephonyManager.java b/telephony/java/android/telephony/TelephonyManager.java
+index 8c6ec20..28c2e60 100644
+--- a/telephony/java/android/telephony/TelephonyManager.java
++++ b/telephony/java/android/telephony/TelephonyManager.java
+@@ -121,6 +121,7 @@ import android.util.Pair;
+ 
+ import com.android.internal.annotations.GuardedBy;
+ import com.android.internal.annotations.VisibleForTesting;
++import com.android.internal.compartments.PersonaProcess;
+ import com.android.internal.gmscompat.gcarriersettings.GCarrierSettingsApp;
+ import com.android.internal.os.BackgroundThread;
+ import com.android.internal.telephony.CellNetworkScanResult;
+@@ -2817,6 +2818,10 @@ public class TelephonyManager {
+      */
+     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
+     public String getNetworkOperatorName(int subId) {
++        // FreeholdOS (ADR-208): an app with a persona is on a network of its place, whose name is not known
++        if (PersonaProcess.operator() != null) {
++            return "";
++        }
+         int phoneId = SubscriptionManager.getPhoneId(subId);
+         return getTelephonyProperty(phoneId, TelephonyProperties.operator_alpha(), "");
+     }
+@@ -2852,6 +2857,11 @@ public class TelephonyManager {
+      **/
+     @UnsupportedAppUsage
+     public String getNetworkOperatorForPhone(int phoneId) {
++        // FreeholdOS (ADR-208): the operator of the place of an app with a persona
++        String persona = PersonaProcess.operator();
++        if (persona != null) {
++            return persona;
++        }
+         return getTelephonyProperty(phoneId, TelephonyProperties.operator_numeric(), "");
+     }
+ 
+@@ -2959,6 +2969,11 @@ public class TelephonyManager {
+     @RequiresFeature(PackageManager.FEATURE_TELEPHONY_RADIO_ACCESS)
+     @NonNull
+     public String getNetworkCountryIso(int slotIndex) {
++        // FreeholdOS (ADR-208): the country of the place of an app with a persona
++        String persona = PersonaProcess.country();
++        if (persona != null) {
++            return persona;
++        }
+         try {
+             if (slotIndex != SubscriptionManager.DEFAULT_SIM_SLOT_INDEX
+                     && !SubscriptionManager.isValidSlotIndex(slotIndex)) {
+-- 
+2.56.0
+

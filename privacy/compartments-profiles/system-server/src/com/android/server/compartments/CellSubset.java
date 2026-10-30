@@ -84,6 +84,19 @@ final class CellSubset {
         return Long.parseLong(s);
     }
 
+    /**
+     * The numeric operator of the first cell of the place, as a real operator property holds it: the mcc and the mnc, the mnc
+     * with two digits below 100 and three otherwise; "" for a place without cells.
+     */
+    String operatorFor(int placeId) {
+        List<Cell> all = byPlace.get(placeId);
+        if (all == null) {
+            return "";
+        }
+        Cell first = all.get(0);
+        return first.mcc + String.format("%02d", first.mnc);
+    }
+
     /** At most 8 cells of the place in file order; empty for a place without cells. */
     List<Cell> cellsFor(int placeId) {
         List<Cell> all = byPlace.get(placeId);
