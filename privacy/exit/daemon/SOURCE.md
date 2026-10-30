@@ -4,14 +4,14 @@
 
 | Item | Value |
 | --- | --- |
-| Source | `freeholdos-services`, directory `exit-daemon`, commit `f38113c` (`master`) |
+| Source | `freeholdos-services`, directory `exit-daemon`, commit `8603139` (`master`) |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `cargo build --release --locked --offline`, `panic = "abort"`, `lto`, `opt-level = "z"`, the AOSP clang as linker (`tools/env.sh`) |
 | Build command | `exit-daemon/tools/build-android.sh` (copies the tree to the build server, builds, then checks the binary itself) |
-| SHA-256 | `0e3d50b943b5f37aa216e9b88e98b295a3d206d0da57b54d7747ff896e4b1323` |
-| Size | 19 375 800 bytes |
-| Control protocol | 3 |
-| Built | 2026-10-29, after `NET-009` and `IMG-018` of `lynx` `2026102303`: the route helper reads an interface index by `RTM_GETLINK` on its netlink socket and not by `if_nametoindex`, which opened an `AF_INET` socket in a domain that has none (ADR-199). `strace` of this binary on the phone: no `AF_INET` socket in an apply, 14 rules, the link up, two addresses, and a clear that restores `ip rule` and `ip route`. |
-| Reproduced | built twice from the files of the commit above, from a clean tree, into two cargo target directories: same SHA-256 and size (`0e3d50b9…`, 19 375 800 bytes) |
+| SHA-256 | `1583618148c8c7d2b06cb2073c4c72e1c6f25327ab5910894426a76d37da197c` |
+| Size | 19 379 336 bytes |
+| Control protocol | 4 |
+| Built | 2026-10-30, for the exit country of an Isolated app (ADR-208): control protocol 4 adds `SetCountry`, which the exit app sends for each app whose persona place is in another country; the daemon picks the Tor exit country of that app from it. Before this build: 2026-10-29, after `NET-009` and `IMG-018` of `lynx` `2026102303`, the route helper reads an interface index by `RTM_GETLINK` on its netlink socket and not by `if_nametoindex`, which opened an `AF_INET` socket in a domain that has none (ADR-199); `strace` of that binary on the phone showed no `AF_INET` socket in an apply. The Tor exit country of this build is not run on a phone yet (a device row). |
+| Reproduced | built twice from the files of the commit above, from the committed tree, into two cargo target directories: same SHA-256 and size (`15836181…`, 19 379 336 bytes, `cmp` identical) |
 | Needed libraries | `libc.so`, `libdl.so`, `libm.so`, interpreter `/system/bin/linker64` (`llvm-readelf`, read by the build script) |
 | Contents | the Tor client (`tor-proto`), the packet layer (`smoltcp`), `aws_lc` and the daemon itself; no build-machine path (the build script reads the binary for each) |
 | Dependencies | `exit-daemon/Cargo.lock`; versions, checksums and licences in `exit-daemon/NOTICE` and `RISKS.md` |
