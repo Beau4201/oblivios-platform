@@ -24,6 +24,24 @@ MUTANTS = [
     ("PolicyStore.java", "an invalid value is accepted when read", "|| !Profiles.isValid(Cls.values()[i], Value.values()[v])", ""),
     ("PolicyStore.java", "the version is not checked", "|| in.readByte() != VERSION", "|| in.readByte() < 0"),
     ("PolicyStore.java", "a Trusted default is accepted when read", "if (d == null || !validDefaults(d)) {", "if (d == null) {"),
+    ("Geo.java", "a negative longitude is not wrapped", "if (x < 0) {\n            x += 360.0;\n        }", ""),
+    ("Geo.java", "the latitude is not clamped", "return Math.max(-90.0, Math.min(90.0, lat));", "return lat;"),
+    ("PersonaTrack.java", "the first fix is not the place", "setAnchor(lat, lon, placeLat, placeLon);\n        } else if", "setAnchor(lat, lon, lat, lon);\n        } else if"),
+    ("PersonaTrack.java", "a re-anchor jumps to the place", "setAnchor(lat, lon, here[0], here[1]);", "setAnchor(lat, lon, placeLat, placeLon);"),
+    ("PersonaTrack.java", "the north displacement is dropped", "fakeLat + north", "fakeLat"),
+    ("PersonaTrack.java", "the east displacement is not scaled", "east * scale", "east"),
+    ("PersonaTrack.java", "the east scale is inverted", "Math.max(Math.cos(Math.toRadians(realLat)), MIN_COS) / Math.max(Math.cos(Math.toRadians(fakeLat)), MIN_COS)",
+     "Math.max(Math.cos(Math.toRadians(fakeLat)), MIN_COS) / Math.max(Math.cos(Math.toRadians(realLat)), MIN_COS)"),
+    ("PersonaTrack.java", "the east displacement is not wrapped", "double east = Geo.wrapLon(lon - realLon);", "double east = lon - realLon;"),
+    ("PersonaTrack.java", "the cosine is not guarded", "private static final double MIN_COS = 0.05;", "private static final double MIN_COS = 0.0;"),
+    ("PersonaTrack.java", "a NaN fix is accepted", "|| Double.isNaN(lon) || Double.isInfinite(lon)) {\n            throw new IllegalArgumentException(\"fix\");", ") {\n            throw new IllegalArgumentException(\"fix\");"),
+    ("PersonaTrack.java", "a place near the pole is accepted", "!(Math.abs(placeLat) <= 80.0)", "!(Math.abs(placeLat) <= 90.0)"),
+    ("ActivityEstimator.java", "one fix changes the activity", "static final int CONFIRM = 3;", "static final int CONFIRM = 1;"),
+    ("ActivityEstimator.java", "stale one tick early", "nowMs - lastMs > STALE_MS", "nowMs - lastMs >= STALE_MS"),
+    ("ActivityEstimator.java", "a fix from the past counts", "if (nowMs < lastMs) {\n            return current;\n        }", ""),
+    ("ActivityEstimator.java", "driving has no hysteresis", "speedMps >= 3.5 ? Activity.DRIVING", "speedMps >= 4.6 ? Activity.DRIVING"),
+    ("ActivityEstimator.java", "walking has no hysteresis", "speedMps >= 0.4 ? Activity.WALKING", "speedMps >= 0.7 ? Activity.WALKING"),
+    ("ActivityEstimator.java", "a NaN speed counts", "if (!(speedMps >= 0.0)) {\n            return from;  // NaN or negative: no information\n        }", ""),
     ("MirrorPlan.java", "the settings list holds every app", "if (s.value(pkg, Cls.SETTINGS) == Value.REAL) {", "if (true) {"),
     ("MirrorPlan.java", "the settings list has no separator", 'out.append(out.length() == 0 ? "" : ",")', 'out.append("")'),
     ("MirrorPlan.java", "every configured app holds loopback", "if (s.value(pkg, Cls.LOOPBACK) == Value.REAL) {", "if (true) {"),
@@ -54,7 +72,9 @@ for name, what, old, new in MUTANTS:
             print("INVALID MUTANT (does not compile):", name, what, c.stderr[:200])
             survived += 1
             continue
-        r = subprocess.run(["java", "-ea", "-cp", str(d / "out"), "com.android.server.compartments.ProfilesTest"], capture_output=True, text=True)
+        runs = [subprocess.run(["java", "-ea", "-cp", str(d / "out"), "com.android.server.compartments." + test], capture_output=True, text=True)
+                for test in ("ProfilesTest", "PersonaTest")]
+        r = max(runs, key=lambda x: x.returncode)
         if r.returncode == 0:
             print("SURVIVED:", name, what)
             survived += 1
