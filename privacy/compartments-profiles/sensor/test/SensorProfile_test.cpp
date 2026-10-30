@@ -44,16 +44,28 @@ static float magnitude(const sensors_event_t& e) {
     return std::sqrt(e.data[0] * e.data[0] + e.data[1] * e.data[1] + e.data[2] * e.data[2]);
 }
 
-static const char* kGood = "s 00112233445566ff\nd SUBSTITUTE\nu 10100 RAW\nu 1010200 BLOCKED\nu 10300 FOLDED\n";
+static const char* kGood = "s 00112233445566ff\nd SUBSTITUTE\na 10100 RAW\na 10200 BLOCKED\na 10300 FOLDED\n";
 
 static void table() {
     SensorModeTable t;
     CHECK(t.parse(kGood));
     CHECK(t.modeFor(10100) == SensorMode::RAW);
-    CHECK(t.modeFor(1010200) == SensorMode::BLOCKED);  // an app of user 10
+    CHECK(t.modeFor(1010200) == SensorMode::BLOCKED);  // the same app in user 10: a line holds an app id
+    CHECK(t.modeFor(110200) == SensorMode::BLOCKED);   // and in user 1
     CHECK(t.modeFor(10300) == SensorMode::FOLDED);
     CHECK(t.modeFor(10400) == SensorMode::SUBSTITUTE);       // no line: the default
     CHECK(t.modeFor(110400) == SensorMode::SUBSTITUTE);      // an app of user 1, no line: the default
+    // the SDK sandbox of an app answers to its host app, in every user
+    CHECK(t.modeFor(20100) == SensorMode::RAW);
+    CHECK(t.modeFor(120100) == SensorMode::RAW);
+    CHECK(t.modeFor(20200) == SensorMode::BLOCKED);
+    CHECK(t.modeFor(1020200) == SensorMode::BLOCKED);
+    CHECK(t.modeFor(20400) == SensorMode::SUBSTITUTE);       // the sandbox of an app without a line: the default
+    CHECK(t.modeFor(29999) == SensorMode::SUBSTITUTE);
+    // ids beyond the sandbox range and isolated uids have no host app: the default
+    CHECK(t.modeFor(30100) == SensorMode::SUBSTITUTE);
+    CHECK(t.modeFor(90001) == SensorMode::SUBSTITUTE);
+    CHECK(t.modeFor(99999) == SensorMode::SUBSTITUTE);
     // platform uids and native daemons are never touched, whatever the default is
     CHECK(t.modeFor(0) == SensorMode::RAW);
     CHECK(t.modeFor(1000) == SensorMode::RAW);
@@ -64,9 +76,18 @@ static void table() {
     CHECK(blocked.modeFor(1000) == SensorMode::RAW);
     CHECK(blocked.modeFor(10000) == SensorMode::BLOCKED);
 
+    // the edges of the app id range are valid
+    SensorModeTable edges;
+    CHECK(edges.parse("s 0000000000000001\nd FOLDED\na 10000 BLOCKED\na 19999 BLOCKED\n"));
+    CHECK(edges.modeFor(10000) == SensorMode::BLOCKED && edges.modeFor(19999) == SensorMode::BLOCKED);
+    CHECK(edges.modeFor(20000) == SensorMode::BLOCKED && edges.modeFor(29999) == SensorMode::BLOCKED);  // sandboxes of both
+
     // the seed is stable for an app, differs between apps and between phones
     CHECK(t.seedFor(10100) == t.seedFor(10100));
     CHECK(t.seedFor(10100) != t.seedFor(10400));
+    CHECK(t.seedFor(10100) == t.seedFor(110100));  // one app, one stream, in every user
+    CHECK(t.seedFor(10100) == t.seedFor(20100));   // and in its sandbox
+    CHECK(t.seedFor(10100) != t.seedFor(20400));
     SensorModeTable other;
     CHECK(other.parse("s 00112233445566fe\nd SUBSTITUTE\n"));
     CHECK(other.seedFor(10100) != t.seedFor(10100));
@@ -86,20 +107,26 @@ static void table() {
         "s 0000000000000001\ns 0000000000000002\nd FOLDED\n",    // repeated salt
         "s 0000000000000001\nd FOLDED\nd RAW\n",                 // repeated default
         "s 0000000000000001\nd folded\n",                        // unknown mode
-        "s 0000000000000001\nd FOLDED\nu 1000 RAW\n",            // a platform uid
-        "s 0000000000000001\nd FOLDED\nu x RAW\n",
-        "s 0000000000000001\nd FOLDED\nu 99999999999 RAW\n",
-        "s 0000000000000001\nd FOLDED\nu -5 RAW\n",
-        "s 0000000000000001\nd FOLDED\nu 10100 RAW\nu 10100 BLOCKED\n",  // repeated uid
-        "s 0000000000000001\nd FOLDED\nu 10100 RAW x\n",
-        "s 0000000000000001\nd FOLDED\nu 10100\n",
+        "s 0000000000000001\nd FOLDED\na 1000 RAW\n",            // a platform id
+        "s 0000000000000001\nd FOLDED\na 9999 RAW\n",
+        "s 0000000000000001\nd FOLDED\na 20000 RAW\n",           // a sandbox id: the reader maps those, the file holds hosts
+        "s 0000000000000001\nd FOLDED\na 20100 RAW\n",
+        "s 0000000000000001\nd FOLDED\na 90000 RAW\n",           // an isolated uid
+        "s 0000000000000001\nd FOLDED\na 110100 RAW\n",          // a uid, not an app id
+        "s 0000000000000001\nd FOLDED\na 10100 RAW\na 10100 BLOCKED\n",  // repeated app id
+        "s 0000000000000001\nd FOLDED\nu 10100 RAW\n",           // the old line type
+        "s 0000000000000001\nd FOLDED\na x RAW\n",
+        "s 0000000000000001\nd FOLDED\na 99999999999 RAW\n",
+        "s 0000000000000001\nd FOLDED\na -5 RAW\n",
+        "s 0000000000000001\nd FOLDED\na 10100 RAW x\n",
+        "s 0000000000000001\nd FOLDED\na 10100\n",
         "s 0000000000000001\nd FOLDED",                          // no newline
         "s 0000000000000001\r\nd FOLDED\r\n",
         "s 000000000000001\nd FOLDED\n",                         // 15 digits
         "s 000000000000000G\nd FOLDED\n",
         "s 000000000000000A\nd FOLDED\n",                        // upper case
         "s 000000000000000g\nd FOLDED\n",
-        "u 10100 RAW\ns 0000000000000001\nd FOLDED\n",           // a uid line before the header
+        "a 10100 RAW\ns 0000000000000001\nd FOLDED\n",           // an app line before the header
     };
     for (const char* text : bad) {
         SensorModeTable x;
@@ -107,10 +134,10 @@ static void table() {
         CHECK(x.modeFor(10100) == SensorMode::FOLDED);
     }
     std::string many = "s 0000000000000001\nd FOLDED\n";
-    for (int i = 0; i < 8190; i++) many += "u " + std::to_string(10000 + i) + " RAW\n";
+    for (int i = 0; i < 8190; i++) many += "a " + std::to_string(10000 + i) + " RAW\n";
     SensorModeTable full;
     CHECK(full.parse(many));                       // 8192 lines
-    many += "u 20000 RAW\n";
+    many += "a 19999 RAW\n";
     CHECK(!full.parse(many));                      // 8193 lines
     CHECK(!full.parse(std::string(1u << 20, 'x') + "\n"));
 

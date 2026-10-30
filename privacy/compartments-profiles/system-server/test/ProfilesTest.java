@@ -246,12 +246,41 @@ public final class ProfilesTest {
         String file = MirrorPlan.sensorModeFile(s, pkg -> uids.getOrDefault(pkg, -1), 0xABCDEF0123456789L);
         // default is Isolated -> SUBSTITUTE; com.a.app and com.bank.app are Trusted -> RAW; com.z.app is Protected -> FOLDED;
         // com.gone.app is not installed and has no line
-        check(file.equals("s abcdef0123456789\nd SUBSTITUTE\nu 10100 RAW\nu 10200 RAW\nu 10300 FOLDED\n"), "sensor file: " + file);
+        check(file.equals("s abcdef0123456789\nd SUBSTITUTE\na 10100 RAW\na 10200 RAW\na 10300 FOLDED\n"), "sensor file: " + file);
 
         String plain = MirrorPlan.sensorModeFile(PolicyStore.EMPTY, pkg -> -1, 1L);
         check(plain.equals("s 0000000000000001\nd FOLDED\n"), "an empty store gives the status quo: " + plain);
         // a configured app whose mode equals the default has no line
         PolicyStore same = PolicyStore.EMPTY.withApp("com.z.app", AppPolicy.PROTECTED);
         check(MirrorPlan.sensorModeFile(same, pkg -> 10300, 1L).equals("s 0000000000000001\nd FOLDED\n"), "no line equal to the default");
+
+        // an app id of the second user is the same app: the line holds the app id, not the uid of one user
+        check(MirrorPlan.sensorModeFile(s, pkg -> pkg.equals("com.bank.app") ? 110200 : -1, 1L)
+                .equals("s 0000000000000001\nd SUBSTITUTE\na 10200 RAW\n"), "an app id is written, not a uid");
+
+        // two packages with one app id get the more protective mode, whatever their names are
+        PolicyStore shared = PolicyStore.EMPTY
+                .withApp("com.a.shared", AppPolicy.PROTECTED.withProfile(Profile.TRUSTED))
+                .withApp("com.b.shared", AppPolicy.PROTECTED.withValue(Cls.SENSORS, Value.SUBSTITUTE));
+        check(MirrorPlan.sensorModeFile(shared, pkg -> 10400, 1L).equals("s 0000000000000001\nd FOLDED\na 10400 SUBSTITUTE\n"),
+                "shared app id, loose first");
+        PolicyStore sharedReverse = PolicyStore.EMPTY
+                .withApp("com.a.shared", AppPolicy.PROTECTED.withValue(Cls.SENSORS, Value.BLOCKED))
+                .withApp("com.b.shared", AppPolicy.PROTECTED.withProfile(Profile.TRUSTED));
+        check(MirrorPlan.sensorModeFile(sharedReverse, pkg -> 10400, 1L).equals("s 0000000000000001\nd FOLDED\na 10400 BLOCKED\n"),
+                "shared app id, strict first");
+        check(MirrorPlan.stricter(Profiles.SensorMode.RAW, Profiles.SensorMode.FOLDED) == Profiles.SensorMode.FOLDED, "raw < folded");
+        check(MirrorPlan.stricter(Profiles.SensorMode.BLOCKED, Profiles.SensorMode.SUBSTITUTE) == Profiles.SensorMode.BLOCKED, "blocked > substitute");
+        check(MirrorPlan.stricter(Profiles.SensorMode.SUBSTITUTE, Profiles.SensorMode.FOLDED) == Profiles.SensorMode.SUBSTITUTE, "substitute > folded");
+
+        // a package that is not an ordinary app (a platform uid, a sandbox or isolated uid) is left out and the file stays valid
+        for (int uid : new int[] {0, 1000, 9999, 20000, 25000, 90000, 99999}) {
+            PolicyStore one = PolicyStore.EMPTY.withApp("com.x.app", AppPolicy.PROTECTED.withProfile(Profile.ISOLATED));
+            check(MirrorPlan.sensorModeFile(one, pkg -> uid, 1L).equals("s 0000000000000001\nd FOLDED\n"), "uid " + uid + " has no line");
+        }
+        check(MirrorPlan.sensorModeFile(PolicyStore.EMPTY.withApp("com.x.app", AppPolicy.PROTECTED.withProfile(Profile.ISOLATED)),
+                pkg -> 19999, 1L).contains("a 19999 SUBSTITUTE"), "the last ordinary app id is written");
+        check(MirrorPlan.sensorModeFile(PolicyStore.EMPTY.withApp("com.x.app", AppPolicy.PROTECTED.withProfile(Profile.ISOLATED)),
+                pkg -> 10000, 1L).contains("a 10000 SUBSTITUTE"), "the first ordinary app id is written");
     }
 }

@@ -27,8 +27,16 @@ MUTANTS = [
     ("MirrorPlan.java", "the settings list holds every app", "if (s.value(pkg, Cls.SETTINGS) == Value.REAL) {", "if (true) {"),
     ("MirrorPlan.java", "the settings list has no separator", 'out.append(out.length() == 0 ? "" : ",")', 'out.append("")'),
     ("MirrorPlan.java", "every configured app holds loopback", "if (s.value(pkg, Cls.LOOPBACK) == Value.REAL) {", "if (true) {"),
-    ("MirrorPlan.java", "a line equal to the default is written", "if (uid >= 0 && m != dflt) {", "if (uid >= 0) {"),
-    ("MirrorPlan.java", "an app that is not installed gets a line", "if (uid >= 0 && m != dflt) {", "if (m != dflt) {"),
+    ("MirrorPlan.java", "a line equal to the default is written", "if (e.getValue() != dflt) {", "if (true) {"),
+    ("MirrorPlan.java", "a platform app id gets a line", "appId >= FIRST_APP_ID && appId <= LAST_APP_ID", "appId <= LAST_APP_ID"),
+    ("MirrorPlan.java", "a sandbox app id gets a line", "appId >= FIRST_APP_ID && appId <= LAST_APP_ID", "appId >= FIRST_APP_ID"),
+    ("MirrorPlan.java", "the first app id is left out", "appId >= FIRST_APP_ID && appId <= LAST_APP_ID", "appId > FIRST_APP_ID && appId <= LAST_APP_ID"),
+    ("MirrorPlan.java", "the last app id is left out", "appId >= FIRST_APP_ID && appId <= LAST_APP_ID", "appId >= FIRST_APP_ID && appId < LAST_APP_ID"),
+    ("MirrorPlan.java", "the line holds the uid of one user", "int appId = uid % USER_OFFSET;", "int appId = uid;"),
+    ("MirrorPlan.java", "a later package with the same app id wins", "MirrorPlan::stricter", "(old, next) -> next"),
+    ("MirrorPlan.java", "the looser of two modes wins", "return rank(a) >= rank(b) ? a : b;", "return rank(a) >= rank(b) ? b : a;"),
+    ("MirrorPlan.java", "blocked is not the strictest", "            default:\n                return 3;", "            default:\n                return 1;"),
+    ("MirrorPlan.java", "substitute is not stricter than folded", "            case RAW:\n                return 0;", "            case RAW:\n                return 5;"),
     ("MirrorPlan.java", "the default line ignores the defaults", "mode(s.defaults.profile, s.defaults.value(Cls.SENSORS))", "mode(Profiles.Profile.PROTECTED, Value.REAL)"),
 ]
 survived = 0

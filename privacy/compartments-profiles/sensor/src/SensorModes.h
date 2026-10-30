@@ -7,7 +7,10 @@
  * folded events of ADR-167, the behaviour of an image without profiles.
  *
  * File format, every line ends with a newline: "s <16 hex digits>" (salt of the invented streams), "d <MODE>" (every app
- * uid without a line of its own), then any number of "u <uid> <MODE>" with an app uid. MODE is FOLDED, RAW, SUBSTITUTE or BLOCKED.
+ * without a line of its own), then any number of "a <app id> <MODE>" with an app id of an ordinary app (10000 to 19999). MODE is
+ * FOLDED, RAW, SUBSTITUTE or BLOCKED. A line holds an app id, so it reaches the app in every user, and the reader maps the
+ * SDK sandbox of an app (app id 20000 to 29999) back to its host app, so that the sandbox cannot read what the app may not.
+ * An isolated process has no host app that the sensor service can see and follows the default.
  */
 #ifndef ANDROID_SENSOR_MODES_H
 #define ANDROID_SENSOR_MODES_H
@@ -26,6 +29,17 @@
 namespace android {
 
 enum class SensorMode : uint8_t { FOLDED = 0, RAW = 1, SUBSTITUTE = 2, BLOCKED = 3 };
+
+constexpr uint32_t kFirstAppId = 10000;
+constexpr uint32_t kLastAppId = 19999;
+constexpr uint32_t kFirstSandboxId = 20000;
+constexpr uint32_t kLastSandboxId = 29999;
+
+// The app id that a uid answers to: its id without the user, and for the SDK sandbox of an app the id of the host app.
+inline uint32_t hostAppId(uid_t uid) {
+    const uint32_t appId = uid % AID_USER_OFFSET;
+    return (appId >= kFirstSandboxId && appId <= kLastSandboxId) ? appId - (kFirstSandboxId - kFirstAppId) : appId;
+}
 
 // The types that SUBSTITUTE replaces and BLOCKED drops: the three motion sensors and their uncalibrated variants.
 inline bool isMotionType(int32_t type) {
@@ -48,33 +62,33 @@ inline bool directChannelRefused(SensorMode m, int32_t type) {
 class SensorModeTable {
 public:
     // Replaces the table with what text holds. Any text that is not exactly a file of the format above (a missing or repeated
-    // "s" or "d" line, an unknown mode, a uid that is not an app uid, a line without a newline, more than 8192 lines) leaves
+    // "s" or "d" line, an unknown mode, an app id outside 10000 to 19999, a line without a newline, more than 8192 lines) leaves
     // the status quo and returns false.
     bool parse(const std::string& text) {
         uint64_t salt = 0;
         SensorMode dflt = SensorMode::FOLDED;
         bool haveSalt = false, haveDefault = false;
-        std::map<uid_t, SensorMode> perUid;
+        std::map<uint32_t, SensorMode> perApp;
         size_t pos = 0, lines = 0;
         while (pos < text.size()) {
             const size_t nl = text.find('\n', pos);
             if (nl == std::string::npos || ++lines > kMaxLines) { reset(); return false; }
             const std::string line = text.substr(pos, nl - pos);
             pos = nl + 1;
-            if (line.size() >= 3 && line[0] == 's' && line[1] == ' ' && !haveSalt && !haveDefault && perUid.empty()) {
+            if (line.size() >= 3 && line[0] == 's' && line[1] == ' ' && !haveSalt && !haveDefault && perApp.empty()) {
                 if (!parseHex(line.substr(2), &salt)) { reset(); return false; }
                 haveSalt = true;
-            } else if (line.size() >= 3 && line[0] == 'd' && line[1] == ' ' && haveSalt && !haveDefault && perUid.empty()) {
+            } else if (line.size() >= 3 && line[0] == 'd' && line[1] == ' ' && haveSalt && !haveDefault && perApp.empty()) {
                 if (!parseMode(line.substr(2), &dflt)) { reset(); return false; }
                 haveDefault = true;
-            } else if (line.size() >= 3 && line[0] == 'u' && line[1] == ' ' && haveDefault) {
+            } else if (line.size() >= 3 && line[0] == 'a' && line[1] == ' ' && haveDefault) {
                 const size_t sp = line.find(' ', 2);
-                uint64_t uid = 0;
+                uint64_t appId = 0;
                 SensorMode m;
-                if (sp == std::string::npos || !parseDecimal(line.substr(2, sp - 2), &uid) ||
-                    uid > 0xFFFFFFFFull || !shouldFoldFor(static_cast<uid_t>(uid)) ||
+                if (sp == std::string::npos || !parseDecimal(line.substr(2, sp - 2), &appId) ||
+                    appId < kFirstAppId || appId > kLastAppId ||
                     !parseMode(line.substr(sp + 1), &m) ||
-                    !perUid.emplace(static_cast<uid_t>(uid), m).second) {
+                    !perApp.emplace(static_cast<uint32_t>(appId), m).second) {
                     reset();
                     return false;
                 }
@@ -86,19 +100,21 @@ public:
         if (!haveDefault) { reset(); return false; }
         mSalt = salt;
         mDefault = dflt;
-        mPerUid = std::move(perUid);
+        mPerApp = std::move(perApp);
         return true;
     }
 
-    // Native daemons and platform uids keep the unchanged event; an app follows its own line or the default.
+    // Native daemons and platform uids keep the unchanged event; an app, in any user, and its SDK sandbox follow the line of the
+    // app or the default.
     SensorMode modeFor(uid_t uid) const {
         if (!shouldFoldFor(uid)) return SensorMode::RAW;
-        auto it = mPerUid.find(uid);
-        return it != mPerUid.end() ? it->second : mDefault;
+        auto it = mPerApp.find(hostAppId(uid));
+        return it != mPerApp.end() ? it->second : mDefault;
     }
 
-    // The seed of the invented streams of one app: stable for the app on this phone, different between apps.
-    uint64_t seedFor(uid_t uid) const { return mix(mSalt ^ (static_cast<uint64_t>(uid) * 0x9E3779B97F4A7C15ull)); }
+    // The seed of the invented streams of one app: the same for the app, its sandbox and its copies in other users on this
+    // phone, different between apps and between phones.
+    uint64_t seedFor(uid_t uid) const { return mix(mSalt ^ (static_cast<uint64_t>(hostAppId(uid)) * 0x9E3779B97F4A7C15ull)); }
 
     static uint64_t mix(uint64_t z) {
         z += 0x9E3779B97F4A7C15ull;
@@ -110,7 +126,7 @@ public:
 private:
     static constexpr size_t kMaxLines = 8192;
 
-    void reset() { mSalt = 0; mDefault = SensorMode::FOLDED; mPerUid.clear(); }
+    void reset() { mSalt = 0; mDefault = SensorMode::FOLDED; mPerApp.clear(); }
 
     static bool parseMode(const std::string& s, SensorMode* out) {
         if (s == "FOLDED") *out = SensorMode::FOLDED;
@@ -148,7 +164,7 @@ private:
 
     uint64_t mSalt = 0;
     SensorMode mDefault = SensorMode::FOLDED;
-    std::map<uid_t, SensorMode> mPerUid;
+    std::map<uint32_t, SensorMode> mPerApp;
 };
 
 }  // namespace android

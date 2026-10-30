@@ -10,9 +10,9 @@ inputs.
 | Path | Content |
 | --- | --- |
 | `system-server/src/com/android/server/compartments/` | `Profiles` (profiles, classes, values, defaults), `PolicyStore` (immutable store and its codec; a store that cannot be read reads as Protected for every app), `MirrorPlan` (what the enforcement points are told). No `android.*` import. |
-| `system-server/test/` | `ProfilesTest.java` (125 checks), `run.sh`, `mutate.py` (25 mutants, every one must fail a check). |
-| `sensor/src/` | `SensorModes.h` (the table, the file format, direct-channel rule), `SensorModeSource.h` (reads the file at most once per second, refuses a file of another owner or one writable by group or others), `SubstituteStream.h` (invented motion events, `applyMode`). They include `SensorBiasFold.h` of `privacy/identity-surface`. |
-| `sensor/test/` | `SensorProfile_test.cpp`, `run.sh`, `mutate.py` (33 mutants). |
+| `system-server/test/` | `ProfilesTest.java` (140 checks), `run.sh`, `mutate.py` (33 mutants, every one must fail a check). |
+| `sensor/src/` | `SensorModes.h` (the table keyed by app id, the file format, the mapping of an SDK sandbox to its host app, the direct-channel rule), `SensorModeSource.h` (reads the file at most once per second, refuses a file of another owner or one writable by group or others), `SubstituteStream.h` (invented motion events, `applyMode`). They include `SensorBiasFold.h` of `privacy/identity-surface`. |
+| `sensor/test/` | `SensorProfile_test.cpp`, `run.sh`, `mutate.py` (39 mutants). |
 
 Run (the sensor tests need the real `hardware/sensors.h`; the tree of the build server has it):
 
