@@ -34,6 +34,7 @@ public final class ProfilesTest {
 
     public static void main(String[] args) throws Exception {
         defaultsTable();
+        pinnedNumbers();
         sensorModes();
         policyBehaviour();
         codec();
@@ -55,6 +56,20 @@ public final class ProfilesTest {
         check(Profiles.isValid(Cls.SENSORS, Value.SUBSTITUTE), "sensors may be substituted");
         check(!Profiles.isValid(Cls.LOOPBACK, Value.SUBSTITUTE), "loopback is never substituted");
         check(!Profiles.isValid(Cls.SETTINGS, Value.SUBSTITUTE), "settings are never substituted");
+    }
+
+    /** The numbers of the Binder interface constants (ICompartmentsPolicy): the order of the enums is the wire format. */
+    private static void pinnedNumbers() {
+        check(Profile.TRUSTED.ordinal() == 0, "PROFILE_TRUSTED is 0");
+        check(Profile.PROTECTED.ordinal() == 1, "PROFILE_PROTECTED is 1");
+        check(Profile.ISOLATED.ordinal() == 2, "PROFILE_ISOLATED is 2");
+        check(Cls.SENSORS.ordinal() == 0, "CLASS_SENSORS is 0");
+        check(Cls.LOOPBACK.ordinal() == 1, "CLASS_LOOPBACK is 1");
+        check(Cls.SETTINGS.ordinal() == 2, "CLASS_SETTINGS is 2");
+        check(Value.REAL.ordinal() == 0, "VALUE_REAL is 0");
+        check(Value.SUBSTITUTE.ordinal() == 1, "VALUE_SUBSTITUTE is 1");
+        check(Value.BLOCKED.ordinal() == 2, "VALUE_BLOCKED is 2");
+        check(Profile.values().length == 3 && Cls.values().length == 3 && Value.values().length == 3, "three of each");
     }
 
     private static void sensorModes() {

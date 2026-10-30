@@ -5,6 +5,9 @@ import pathlib, shutil, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MUTANTS = [
+    ("Profiles.java", "the order of Profile is changed", "enum Profile { TRUSTED, PROTECTED, ISOLATED }", "enum Profile { PROTECTED, TRUSTED, ISOLATED }"),
+    ("Profiles.java", "the order of Cls is changed", "enum Cls { SENSORS, LOOPBACK, SETTINGS }", "enum Cls { LOOPBACK, SENSORS, SETTINGS }"),
+    ("Profiles.java", "the order of Value is changed", "enum Value { REAL, SUBSTITUTE, BLOCKED }", "enum Value { REAL, BLOCKED, SUBSTITUTE }"),
     ("Profiles.java", "Isolated sensors are not substituted", "return p == Profile.ISOLATED ? Value.SUBSTITUTE : Value.REAL;", "return Value.REAL;"),
     ("Profiles.java", "Trusted loopback and settings are blocked", "return p == Profile.TRUSTED ? Value.REAL : Value.BLOCKED;", "return Value.BLOCKED;"),
     ("Profiles.java", "everything is valid", "return c == Cls.SENSORS || v != Value.SUBSTITUTE;", "return true;"),
