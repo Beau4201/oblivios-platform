@@ -5,6 +5,97 @@ import pathlib, shutil, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MUTANTS = [
+    # Places
+    ("Places.java", "a repeated id is accepted", "if (id <= lastId) {", "if (id < lastId) {"),
+    ("Places.java", "ids may descend", "if (id <= lastId) {", "if (id == lastId) {"),
+    ("Places.java", "id 0 is accepted", "int lastId = 0;", "int lastId = -1;"),
+    ("Places.java", "one line too many is accepted", "if (out.size() >= MAX_LINES) {", "if (out.size() > MAX_LINES) {"),
+    ("Places.java", "a line with more fields is accepted", "if (f.length != 7) {", "if (f.length < 7) {"),
+    ("Places.java", "a line with fewer fields is accepted", "if (f.length != 7) {", "if (f.length > 7) {"),
+    ("Places.java", "the name is not checked", "if (!validName(f[1]) || ", "if ("),
+    ("Places.java", "the country is not checked", "!COUNTRY.matcher(f[2]).matches() || ", ""),
+    ("Places.java", "the time zone is not checked", " || !ZONE.matcher(f[5]).matches()) {", ") {"),
+    ("Places.java", "the latitude is not checked for its form", "if (!LAT.matcher(f[3]).matches() || ", "if ("),
+    ("Places.java", "the longitude is not checked for its form", " || !LON.matcher(f[4]).matches()) {", ") {"),
+    ("Places.java", "latitude 80.5 is accepted", "Math.abs(lat) > 80.0", "Math.abs(lat) > 81.0"),
+    ("Places.java", "latitude 80 is refused", "Math.abs(lat) > 80.0", "Math.abs(lat) >= 80.0"),
+    ("Places.java", "longitude 181 is accepted", "Math.abs(lon) > 180.0", "Math.abs(lon) > 181.0"),
+    ("Places.java", "longitude 180 is refused", "Math.abs(lon) > 180.0", "Math.abs(lon) >= 180.0"),
+    ("Places.java", "mcc 199 is accepted", "if (mcc < 200 || mcc > 799) {", "if (mcc < 199 || mcc > 799) {"),
+    ("Places.java", "mcc 800 is accepted", "if (mcc < 200 || mcc > 799) {", "if (mcc < 200 || mcc > 800) {"),
+    ("Places.java", "a number with a leading zero is accepted", 'Pattern.compile("0|[1-9][0-9]{0,8}")', 'Pattern.compile("0|[0-9]{1,9}")'),
+    ("Places.java", "a number in another script is accepted", 'Pattern.compile("0|[1-9][0-9]{0,8}")', 'Pattern.compile("0|\\\\p{Nd}{1,9}")'),
+    ("Places.java", "an empty name is accepted", "if (s.isEmpty() || s.length() > MAX_NAME) {", "if (s.length() > MAX_NAME) {"),
+    ("Places.java", "a name of 101 characters is accepted", "s.length() > MAX_NAME", "s.length() > MAX_NAME + 1"),
+    ("Places.java", "delete is accepted in a name", "if (Character.isISOControl(s.charAt(i))) {", "if (s.charAt(i) < 0x20) {"),
+    ("Places.java", "a control character is accepted in a name", "if (Character.isISOControl(s.charAt(i))) {", "if (s.charAt(i) == 0x7f) {"),
+    ("Places.java", "byId looks in the wrong half", "if (v < id) {", "if (v > id) {"),
+    ("Places.java", "search is case-sensitive", "final String q = query.toLowerCase(Locale.ROOT);", "final String q = query;"),
+    ("Places.java", "search finds only names that start with the query", "} else if (name.contains(q)) {", "} else if (false) {"),
+    ("Places.java", "search does not sort the names that start with the query", "Collections.sort(starts, order);", ""),
+    ("Places.java", "search does not sort the other names", "Collections.sort(inside, order);", ""),
+    ("Places.java", "search puts the other names first", "starts.addAll(inside);\n        return new ArrayList<>(starts.subList",
+     "inside.addAll(starts);\n        starts = inside;\n        return new ArrayList<>(starts.subList"),
+    ("Places.java", "search sorts by id first", "int c = a.name.toLowerCase(Locale.ROOT).compareTo(b.name.toLowerCase(Locale.ROOT));\n            return c != 0 ? c : Integer.compare(a.id, b.id);",
+     "int c = Integer.compare(a.id, b.id);\n            return c != 0 ? c : a.name.compareTo(b.name);"),
+    ("Places.java", "search ignores the limit", "Math.min(limit, starts.size())", "starts.size()"),
+    ("Places.java", "search takes a negative limit", "if (query == null || query.isEmpty() || limit <= 0) {", "if (query == null || query.isEmpty()) {"),
+    ("Places.java", "search takes a null query", "if (query == null || query.isEmpty() || limit <= 0) {", "if (query.isEmpty() || limit <= 0) {"),
+    ("Places.java", "the automatic place is nearer", "MIN_AUTOMATIC_DISTANCE_M = 150000.0;", "MIN_AUTOMATIC_DISTANCE_M = 15000.0;"),
+    ("Places.java", "the automatic place is farther", "MIN_AUTOMATIC_DISTANCE_M = 150000.0;", "MIN_AUTOMATIC_DISTANCE_M = 1500000.0;"),
+    ("Places.java", "the automatic place is of any country", "if (!p.country.equals(countryIso)) {", "if (false) {"),
+    ("Places.java", "the seed does not change the automatic place", "mix(seed ^ countryHash)", "mix(countryHash)"),
+    ("Places.java", "the farthest place is the nearest", "if (d > farthestM) {", "if (d < farthestM || farthest == null) {"),
+    ("Places.java", "no fallback to the farthest place", "if (far.isEmpty()) {\n            return farthest == null ? 0 : farthest.id;", "if (far.isEmpty()) {\n            return 0;"),
+    ("Places.java", "a country without a place gives a place", "return farthest == null ? 0 : farthest.id;", "return farthest == null ? 1 : farthest.id;"),
+    ("Places.java", "a position that is not finite is trusted", "boolean known = !Double.isNaN(realLat) && ", "boolean known = "),
+    ("Places.java", "mix drops its increment", "z += 0x9E3779B97F4A7C15L;", ""),
+    ("Places.java", "mix drops its last step", "return z ^ (z >>> 31);", "return z;"),
+    ("Places.java", "mix uses another shift", "z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;", "z = (z ^ (z >>> 28)) * 0x94D049BB133111EBL;"),
+    # CellSubset
+    ("CellSubset.java", "a cell line with more fields is accepted", "if (f.length != 5) {", "if (f.length < 5) {"),
+    ("CellSubset.java", "a cell line with fewer fields is accepted", "if (f.length != 5) {", "if (f.length > 5) {"),
+    ("CellSubset.java", "place 0 is accepted for a cell", "place < 1 ||", "place < 0 ||"),
+    ("CellSubset.java", "mcc 199 is accepted for a cell", "mcc < 200 ||", "mcc < 199 ||"),
+    ("CellSubset.java", "mcc 800 is accepted for a cell", "mcc > 799 ||", "mcc > 800 ||"),
+    ("CellSubset.java", "mnc 1000 is accepted", "mnc > 999", "mnc > 1000"),
+    ("CellSubset.java", "tac 65536 is accepted", "tac > 65535", "tac > 65536"),
+    ("CellSubset.java", "cid 2^32 is accepted", "cid > 4294967295L", "cid > 4294967296L"),
+    ("CellSubset.java", "65 cells of a place are accepted", "if (list.size() >= MAX_PER_PLACE) {", "if (list.size() > MAX_PER_PLACE) {"),
+    ("CellSubset.java", "63 cells of a place are the limit", "if (list.size() >= MAX_PER_PLACE) {", "if (list.size() >= MAX_PER_PLACE - 1) {"),
+    ("CellSubset.java", "one line too many is accepted for the cells", "if (++lines > MAX_LINES) {", "if (lines++ > MAX_LINES) {"),
+    ("CellSubset.java", "more than 8 cells are returned", "static final int RETURNED = 8;", "static final int RETURNED = 9;"),
+    ("CellSubset.java", "fewer than 8 cells are returned", "static final int RETURNED = 8;", "static final int RETURNED = 7;"),
+    ("CellSubset.java", "all the cells are returned", "Math.min(RETURNED, all.size())", "all.size()"),
+    ("CellSubset.java", "an unknown place gives null", "if (all == null) {\n            return Collections.emptyList();\n        }", ""),
+    ("CellSubset.java", "a cell number in another script is accepted", 'Pattern.compile("0|[1-9][0-9]{0,9}")', 'Pattern.compile("0|\\\\p{Nd}{1,10}")'),
+    ("CellSubset.java", "a cell number with a leading zero is accepted", 'Pattern.compile("0|[1-9][0-9]{0,9}")', 'Pattern.compile("0|[0-9]{1,10}")'),
+    ("CellSubset.java", "a cell file without a final newline is accepted", "|| tsv.charAt(tsv.length() - 1) != '\\n'", "|| tsv.charAt(tsv.length() - 1) == 'x'"),
+    # PersonaFile
+    ("PersonaFile.java", "the file is not in app id order", "Map<Integer, Integer> sorted = new TreeMap<>();", "Map<Integer, Integer> sorted = new java.util.LinkedHashMap<>();"),
+    ("PersonaFile.java", "app id 9999 is written", "if (appId == null || place == null || appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1) {", "if (appId == null || place == null || appId < FIRST_APP_ID - 1 || appId > LAST_APP_ID || place < 1) {"),
+    ("PersonaFile.java", "app id 20000 is written", "if (appId == null || place == null || appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1) {", "if (appId == null || place == null || appId < FIRST_APP_ID || appId > LAST_APP_ID + 1 || place < 1) {"),
+    ("PersonaFile.java", "place 0 is written", "if (appId == null || place == null || appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1) {", "if (appId == null || place == null || appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 0) {"),
+    ("PersonaFile.java", "too many apps are written", "appIdToPlace.size() > MAX_LINES - 1", "appIdToPlace.size() > MAX_LINES"),
+    ("PersonaFile.java", "the salt is written short", 'String.format("s %016x\\n", salt)', 'String.format("s %x\\n", salt)'),
+    ("PersonaFile.java", "upper-case hex is read", 'Pattern.compile("s [0-9a-f]{16}")', 'Pattern.compile("s [0-9a-fA-F]{16}")'),
+    ("PersonaFile.java", "15 hex digits are read", 'Pattern.compile("s [0-9a-f]{16}")', 'Pattern.compile("s [0-9a-f]{15,16}")'),
+    ("PersonaFile.java", "17 hex digits are read", 'Pattern.compile("s [0-9a-f]{16}")', 'Pattern.compile("s [0-9a-f]{16,17}")'),
+    ("PersonaFile.java", "the salt need not come first", "if (lines == 1) {", "if (lines == 1 && line.startsWith(\"s \")) {"),
+    ("PersonaFile.java", "a repeated app id is read", "if (out.put((int) appId, (int) place) != null) {", "if (out.put((int) appId, (int) place) == Integer.valueOf(-1)) {"),
+    ("PersonaFile.java", "app id 9999 is read", "if (appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1 || place > Integer.MAX_VALUE) {", "if (appId < FIRST_APP_ID - 1 || appId > LAST_APP_ID || place < 1 || place > Integer.MAX_VALUE) {"),
+    ("PersonaFile.java", "app id 20000 is read", "if (appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1 || place > Integer.MAX_VALUE) {", "if (appId < FIRST_APP_ID || appId > LAST_APP_ID + 1 || place < 1 || place > Integer.MAX_VALUE) {"),
+    ("PersonaFile.java", "place 0 is read", "if (appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1 || place > Integer.MAX_VALUE) {", "if (appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 0 || place > Integer.MAX_VALUE) {"),
+    ("PersonaFile.java", "a place beyond int is read", "|| place > Integer.MAX_VALUE) {", ") {"),
+    ("PersonaFile.java", "one line too many is read", "if (++lines > MAX_LINES) {", "if (lines++ > MAX_LINES) {"),
+    ("PersonaFile.java", "a number with a leading zero is read", 'Pattern.compile("p (0|[1-9][0-9]{0,9}) (0|[1-9][0-9]{0,9})")', 'Pattern.compile("p ([0-9]{1,10}) ([0-9]{1,10})")'),
+    ("PersonaFile.java", "a line type other than p is read", 'Pattern.compile("p (0|', 'Pattern.compile("[px] (0|'),
+    ("PersonaFile.java", "the file need not end with a newline", "|| text.charAt(text.length() - 1) != '\\n'", "|| text.charAt(text.length() - 1) == 'x'"),
+    ("PersonaFile.java", "the places of another user are not found", "int appId = uid % USER_OFFSET;", "int appId = uid;"),
+    ("PersonaFile.java", "the first sandbox has no place", "appId >= FIRST_APP_ID + SANDBOX_OFFSET &&", "appId > FIRST_APP_ID + SANDBOX_OFFSET &&"),
+    ("PersonaFile.java", "the last sandbox has no place", "appId <= LAST_APP_ID + SANDBOX_OFFSET", "appId < LAST_APP_ID + SANDBOX_OFFSET"),
+    ("PersonaFile.java", "a sandbox answers for the wrong app", "appId -= SANDBOX_OFFSET;", "appId += SANDBOX_OFFSET;"),
+    ("PersonaFile.java", "an app without a place gets one", "return place == null ? 0 : place;", "return place == null ? 1 : place;"),
     ("Profiles.java", "the order of Profile is changed", "enum Profile { TRUSTED, PROTECTED, ISOLATED }", "enum Profile { PROTECTED, TRUSTED, ISOLATED }"),
     ("Profiles.java", "the order of Cls is changed", "enum Cls { SENSORS, LOOPBACK, SETTINGS }", "enum Cls { LOOPBACK, SENSORS, SETTINGS }"),
     ("Profiles.java", "the order of Value is changed", "enum Value { REAL, SUBSTITUTE, BLOCKED }", "enum Value { REAL, BLOCKED, SUBSTITUTE }"),
@@ -60,6 +151,26 @@ MUTANTS = [
     ("MirrorPlan.java", "substitute is not stricter than folded", "            case RAW:\n                return 0;", "            case RAW:\n                return 5;"),
     ("MirrorPlan.java", "the default line ignores the defaults", "mode(s.defaults.profile, s.defaults.value(Cls.SENSORS))", "mode(Profiles.Profile.PROTECTED, Value.REAL)"),
 ]
+def run_tests(src_dir, test_dir):
+    """Compiles the sources with the tests and runs every test class; the worst exit status, or the compiler's."""
+    out = test_dir.parent / "out"
+    c = subprocess.run(["javac", "-d", str(out)] + [str(p) for p in src_dir.glob("*.java")] + [str(p) for p in test_dir.glob("*.java")], capture_output=True, text=True)
+    if c.returncode != 0:
+        return c
+    runs = [subprocess.run(["java", "-ea", "-cp", str(out), "com.android.server.compartments." + test], capture_output=True, text=True)
+            for test in ("ProfilesTest", "PersonaTest", "PlacesTest")]
+    return max(runs, key=lambda x: x.returncode)
+
+
+# The unmutated tree must pass first: with a failing baseline every mutant would count as killed and prove nothing.
+with tempfile.TemporaryDirectory() as d:
+    d = pathlib.Path(d)
+    shutil.copytree(ROOT / "src" / "com" / "android" / "server" / "compartments", d / "src")
+    shutil.copytree(ROOT / "test", d / "test", ignore=shutil.ignore_patterns("*.py", "*.sh"))
+    base = run_tests(d / "src", d / "test")
+    if base.returncode != 0:
+        print("BASELINE FAILS, no mutant counts:", (base.stdout + base.stderr)[:400])
+        sys.exit(2)
 survived = 0
 for name, what, old, new in MUTANTS:
     with tempfile.TemporaryDirectory() as d:
@@ -76,7 +187,7 @@ for name, what, old, new in MUTANTS:
             survived += 1
             continue
         runs = [subprocess.run(["java", "-ea", "-cp", str(d / "out"), "com.android.server.compartments." + test], capture_output=True, text=True)
-                for test in ("ProfilesTest", "PersonaTest")]
+                for test in ("ProfilesTest", "PersonaTest", "PlacesTest")]
         r = max(runs, key=lambda x: x.returncode)
         if r.returncode == 0:
             print("SURVIVED:", name, what)
