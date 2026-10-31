@@ -1,0 +1,479 @@
+From 9ed59f888d2693ae6646cf72426a0d650ce382a7 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 31 Oct 2026 00:42:45 +0100
+Subject: [PATCH] compartments: withhold the position of a blocked app at
+ delivery, persona properties, review fixes
+
+An app whose location is blocked, or substituted without a persona, is delivered no
+fix and no GNSS data, whatever permission it holds (the service keeps the set of
+withheld app ids with the persona table). A persona fix loses its extras and a fix
+without a finite position is put at the place. The network operator and time zone
+properties are answered from the persona in SystemProperties.get. The SDK sandbox
+of an app follows the app. Places with a time zone the image does not know are left
+out. A stale gap resets the activity estimator. The passive fix listener is
+registered again after a failure. The place and cell data are read on the handler
+thread. The store limit is the size of the largest legal store. A new method
+getPersonaPlaceId returns the place a persona has now.
+---
+ core/java/android/os/SystemProperties.java    |  7 ++++
+ .../compartments/ICompartmentsPolicy.aidl     |  6 +++
+ .../internal/compartments/PersonaProcess.java | 27 +++++++++++++
+ .../compartments/ActivityEstimator.java       | 10 ++++-
+ .../compartments/CompartmentsInternal.java    |  7 ++++
+ .../CompartmentsPolicyService.java            | 40 ++++++++++++++++++-
+ .../server/compartments/MirrorPlan.java       | 20 ++++++++++
+ .../android/server/compartments/Places.java   | 14 ++++++-
+ .../server/compartments/PolicyStore.java      |  6 +++
+ .../location/gnss/GnssManagerService.java     |  8 +++-
+ .../provider/LocationProviderManager.java     | 35 ++++++++++++----
+ 11 files changed, 164 insertions(+), 16 deletions(-)
+
+diff --git a/core/java/android/os/SystemProperties.java b/core/java/android/os/SystemProperties.java
+index 18b207a..3127968 100644
+--- a/core/java/android/os/SystemProperties.java
++++ b/core/java/android/os/SystemProperties.java
+@@ -25,6 +25,7 @@ import android.util.Log;
+ import android.util.MutableInt;
+ 
+ import com.android.internal.annotations.GuardedBy;
++import com.android.internal.compartments.PersonaProcess;
+ 
+ import dalvik.annotation.optimization.CriticalNative;
+ import dalvik.annotation.optimization.FastNative;
+@@ -148,6 +149,9 @@ public class SystemProperties {
+     @SystemApi
+     public static String get(@NonNull String key) {
+         if (TRACK_KEY_ACCESS) onKeyAccess(key);
++        // FreeholdOS (ADR-208): an app with a persona reads the time zone and network operator of its place
++        String persona = PersonaProcess.property(key);
++        if (persona != null) return persona;
+         return native_get(key);
+     }
+ 
+@@ -164,6 +168,9 @@ public class SystemProperties {
+     @SystemApi
+     public static String get(@NonNull String key, @Nullable String def) {
+         if (TRACK_KEY_ACCESS) onKeyAccess(key);
++        // FreeholdOS (ADR-208): as in get(String)
++        String persona = PersonaProcess.property(key);
++        if (persona != null) return persona;
+         return native_get(key, def);
+     }
+ 
+diff --git a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+index 8d10f2f..48da73b 100644
+--- a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
++++ b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+@@ -75,4 +75,10 @@ interface ICompartmentsPolicy {
+ 
+     /** The place id that the user chose for one app, 0 for Automatic. */
+     int getPlaceId(String packageName);
++
++    /**
++     * The place that the persona of one app has now: the one the user chose, or the one made for an Automatic app; 0 when the
++     * app has no persona (its location is not substituted, or no place can be made). Needs MANAGE_COMPARTMENTS.
++     */
++    int getPersonaPlaceId(String packageName);
+ }
+diff --git a/core/java/com/android/internal/compartments/PersonaProcess.java b/core/java/com/android/internal/compartments/PersonaProcess.java
+index 0d474a4..54fb165 100644
+--- a/core/java/com/android/internal/compartments/PersonaProcess.java
++++ b/core/java/com/android/internal/compartments/PersonaProcess.java
+@@ -82,6 +82,33 @@ public final class PersonaProcess {
+         return sOperator;
+     }
+ 
++    /**
++     * The value of a system property that an app with a persona reads in its own place, or null when the property is not one of
++     * those or the process has no persona (P7): the network operator properties of the telephony stack and the time zone. The
++     * hook in {@code SystemProperties.get} calls this on every read, so a process without a persona costs one volatile read.
++     * Native reads (bionic, a shell) do not pass here; they stay a residual channel.
++     */
++    public static String property(String key) {
++        String zone = sTimeZone;
++        if (zone == null || key == null) {
++            return null;
++        }
++        switch (key) {
++            case "persist.sys.timezone":
++                return zone;
++            case "gsm.operator.numeric":
++                return sOperator;
++            case "gsm.operator.iso-country":
++                return sCountry;
++            case "gsm.operator.alpha":
++                return "";
++            case "gsm.operator.isroaming":
++                return "false";
++            default:
++                return null;
++        }
++    }
++
+     /**
+      * Makes the default time zone of the process the one of the persona, when there is one and it is a time zone that this
+      * system knows; otherwise the default is left as it is.
+diff --git a/services/core/java/com/android/server/compartments/ActivityEstimator.java b/services/core/java/com/android/server/compartments/ActivityEstimator.java
+index f527753..0b50120 100644
+--- a/services/core/java/com/android/server/compartments/ActivityEstimator.java
++++ b/services/core/java/com/android/server/compartments/ActivityEstimator.java
+@@ -3,8 +3,9 @@ package com.android.server.compartments;
+ 
+ /**
+  * The activity of the phone from the speed of its real location fixes, for the invented sensor streams (spec section 4.4):
+- * STILL below 0.6 m/s, WALKING up to 2.5 m/s, DRIVING above 4.5 m/s, with a hysteresis so that one noisy fix does not change it,
+- * and STILL again when no fix has come for {@link #STALE_MS}.
++ * a speed above 0.6 m/s is WALKING and above 4.5 m/s DRIVING; going back, DRIVING holds down to 3.5 m/s and WALKING down to
++ * 0.4 m/s (see {@link #classify}), and a change needs {@link #CONFIRM} fixes in a row so that one noisy fix does not change it.
++ * STILL again when no fix has come for {@link #STALE_MS}.
+  */
+ final class ActivityEstimator {
+     enum Activity { STILL, WALKING, DRIVING }
+@@ -36,6 +37,11 @@ final class ActivityEstimator {
+         if (nowMs < lastMs) {
+             return current;
+         }
++        if (lastMs != Long.MIN_VALUE && nowMs - lastMs > STALE_MS) {
++            current = Activity.STILL;  // the old activity is over: the hysteresis must not carry it across the gap
++            candidate = Activity.STILL;
++            seen = 0;
++        }
+         lastMs = nowMs;
+         Activity next = classify(speedMps, current);
+         if (next == current) {
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsInternal.java b/services/core/java/com/android/server/compartments/CompartmentsInternal.java
+index ed9aff3..3236f7c 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsInternal.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsInternal.java
+@@ -12,6 +12,13 @@ public interface CompartmentsInternal {
+      */
+     PersonaView personaFor(int uid);
+ 
++    /**
++     * Whether the app that this uid belongs to is given no position at all: its location is Blocked, or Substituted without a
++     * persona. The location permissions of such an app are taken, but a permission can be given again, so the delivery paths ask
++     * this as well (the emergency exception does not apply: an emergency call does not need the position of an app that is blocked).
++     */
++    boolean locationWithheld(int uid);
++
+     /** The place of one app and the track that moves its real fixes there. The values never change after the view is made. */
+     final class PersonaView {
+         public final int placeId;
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index 41e3c7d..9f86687 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -17,6 +17,7 @@ import android.os.Environment;
+ import android.os.FileUtils;
+ import android.os.Handler;
+ import android.os.HandlerExecutor;
++import android.os.Process;
+ import android.os.SystemClock;
+ import android.os.UserHandle;
+ import android.os.UserManager;
+@@ -48,6 +49,7 @@ import java.nio.charset.StandardCharsets;
+ import java.nio.file.Files;
+ import java.security.SecureRandom;
+ import java.util.ArrayList;
++import java.util.Collections;
+ import java.util.List;
+ import java.util.Locale;
+ import java.util.Set;
+@@ -112,6 +114,8 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     /** The persona table that was last made; the services of this process read it, the others read the file. */
+     private volatile PersonaFile mPersona;
+     private final ConcurrentHashMap<Integer, Track> mTracks = new ConcurrentHashMap<>();
++    /** App ids that are given no position at delivery (P4); set with the persona table, before the permissions are taken. */
++    private volatile Set<Integer> mWithheld = Collections.emptySet();
+ 
+     /** What the phone is doing, from the real fixes that pass the passive provider; in the sensor file. */
+     private final ActivityEstimator mEstimator = new ActivityEstimator();
+@@ -125,6 +129,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         }
+     };
+     private final Runnable mStaleCheck = this::onStaleCheck;
++    private static final long FIX_LISTENER_RETRY_MS = 30_000;
+ 
+     /** The track of one app, for the place that it was made for. */
+     private static final class Track {
+@@ -276,6 +281,15 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         return mStore.policyOf(packageName).place;
+     }
+ 
++    @Override
++    public int getPersonaPlaceId(String packageName) {
++        enforceManage();
++        requireValidName(packageName);
++        PersonaFile table = mPersona;
++        int uid = ownerUidOf(packageName);
++        return table == null || uid < 0 ? 0 : table.placeOf(uid);
++    }
++
+     // ---------------------------------------------------------------- change and mirrors
+ 
+     private interface Edit {
+@@ -418,6 +432,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         mTracks.keySet().removeIf(appId -> table.placeOf(appId) == 0);
+         Set<String> deny = new TreeSet<>(MirrorPlan.locationBlocked(next));
+         deny.addAll(MirrorPlan.locationUnresolved(next, this::ownerUidOf, mSalt, places, country, lat, lon, previous, last));
++        mWithheld = MirrorPlan.locationWithheldAppIds(next, this::ownerUidOf, mSalt, places, country, lat, lon, previous, last);
+         try {
+             writeAtomic(mPersonaFile, file.getBytes(StandardCharsets.US_ASCII), 0644);
+         } finally {
+@@ -508,6 +523,11 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         }, added, null, handler);
+         registerFixListener();
+         reapply();
++        // read the place and cell data on the handler thread, so that no Binder call has to parse them (P24)
++        handler.post(() -> {
++            places();
++            operatorOf(0);
++        });
+     }
+ 
+     /**
+@@ -521,7 +541,9 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                     new LocationRequest.Builder(LocationRequest.PASSIVE_INTERVAL).build(), new HandlerExecutor(mHandler),
+                     mFixListener);
+         } catch (RuntimeException e) {
++            // the location service may not be ready at boot (P20): try again
+             Slog.w(TAG, "passive location listener failed: " + e.getClass().getSimpleName());
++            mHandler.postDelayed(this::registerFixListener, FIX_LISTENER_RETRY_MS);
+         }
+     }
+ 
+@@ -739,7 +761,9 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+             if (!f.isFile() || f.length() > MAX_PLACES_BYTES) {
+                 return null;
+             }
+-            return Places.parse(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8));
++            // only places whose time zone this image knows (B1): the process would otherwise keep the real zone
++            return Places.parse(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8),
++                    new java.util.HashSet<>(java.util.Arrays.asList(java.util.TimeZone.getAvailableIDs())));
+         } catch (IOException | RuntimeException e) {
+             Slog.w(TAG, "no place data: " + e.getClass().getSimpleName());
+             return null;
+@@ -785,6 +809,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         @Override
+         public PersonaView personaFor(int uid) {
+             PersonaFile table = mPersona;
++            uid = appUidOf(uid);
+             if (table == null || !UserHandle.isApp(uid)) {
+                 return null;
+             }
+@@ -799,6 +824,17 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                             : new Track(placeId, new PersonaTrack(place.lat, place.lon), operatorOf(placeId)));
+             return new PersonaView(placeId, place.lat, place.lon, place.timeZone, place.country, place.mcc, t.operator, t.track);
+         }
++
++        @Override
++        public boolean locationWithheld(int uid) {
++            uid = appUidOf(uid);
++            return UserHandle.isApp(uid) && mWithheld.contains(UserHandle.getAppId(uid));
++        }
++
++        /** The SDK sandbox of an app runs under a uid of its own (P21); its persona and its withheld location are the app's. */
++        private int appUidOf(int uid) {
++            return Process.isSdkSandboxUid(uid) ? Process.getAppUidForSdkSandboxUid(uid) : uid;
++        }
+     }
+ 
+     // ---------------------------------------------------------------- files
+@@ -809,7 +845,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 return PolicyStore.EMPTY;
+             }
+             byte[] data = mPolicyFile.readFully();
+-            return data.length > MAX_STORE_BYTES ? PolicyStore.EMPTY : PolicyStore.decode(data);
++            return data.length > PolicyStore.MAX_ENCODED_BYTES ? PolicyStore.EMPTY : PolicyStore.decode(data);
+         } catch (IOException | RuntimeException e) {
+             Slog.w(TAG, "policy store unreadable, every app is Protected: " + e.getClass().getSimpleName());
+             return PolicyStore.EMPTY;
+diff --git a/services/core/java/com/android/server/compartments/MirrorPlan.java b/services/core/java/com/android/server/compartments/MirrorPlan.java
+index e03d36a..8fe0481 100644
+--- a/services/core/java/com/android/server/compartments/MirrorPlan.java
++++ b/services/core/java/com/android/server/compartments/MirrorPlan.java
+@@ -231,6 +231,26 @@ final class MirrorPlan {
+         return out;
+     }
+ 
++    /**
++     * The app ids that are given no position at delivery: the packages of {@link #locationBlocked} and of
++     * {@link #locationUnresolved}. The location permissions of these packages are taken as well, but a permission can be given
++     * again by the user or a script, and the delivery path must not then hand out the real fix (P4). A permission is per uid,
++     * so one withheld package withholds the app id it shares.
++     */
++    static Set<Integer> locationWithheldAppIds(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
++            double lon, PolicyStore before, PersonaFile table) {
++        Set<String> packages = new TreeSet<>(locationBlocked(s));
++        packages.addAll(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));
++        Set<Integer> out = new TreeSet<>();
++        for (String pkg : packages) {
++            int appId = ordinaryAppId(r.uidOf(pkg));
++            if (appId >= 0) {
++                out.add(appId);
++            }
++        }
++        return out;
++    }
++
+     private static SensorMode mode(Profiles.Profile p, Value v) {
+         return Profiles.sensorMode(p, v);
+     }
+diff --git a/services/core/java/com/android/server/compartments/Places.java b/services/core/java/com/android/server/compartments/Places.java
+index 3743802..2034efd 100644
+--- a/services/core/java/com/android/server/compartments/Places.java
++++ b/services/core/java/com/android/server/compartments/Places.java
+@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
+  * read-only file of the image, parsed strictly: anything that is not exactly a file of the format makes the whole file unusable,
+  * and the service then reports "no place data" instead of a partial list. Pure Java.
+  *
+- * <p>Format: one line per place, seven tab-separated fields, a newline after every line, ids ascending from 1:
++ * <p>Format: one line per place, seven tab-separated fields, a newline after every line, ids ascending (the GeoNames id of the city, at most nine digits):
+  * {@code id name country latitude longitude timeZone mcc}. The country is two capital ASCII letters, the latitude is within 80
+  * degrees (the cities of the list stop there, and the track of the persona does not work near the poles), the longitude within
+  * 180, the time zone an Olson id, the mcc the mobile country code of the place (200 to 799).
+@@ -56,6 +56,14 @@ final class Places {
+ 
+     /** @throws IllegalArgumentException for any text that is not exactly a file of the format */
+     static Places parse(String tsv) {
++        return parse(tsv, null);
++    }
++
++    /**
++     * Like {@link #parse(String)}, but a well-formed place whose time zone is not in {@code zones} is left out (null: keep every
++     * place). The persona must never have a zone that the image does not know: the process would then keep the real one (B1).
++     */
++    static Places parse(String tsv, java.util.Set<String> zones) {
+         if (tsv == null || tsv.isEmpty() || tsv.charAt(tsv.length() - 1) != '\n') {
+             throw new IllegalArgumentException("not a places file");
+         }
+@@ -92,7 +100,9 @@ final class Places {
+             if (mcc < 200 || mcc > 799) {
+                 throw new IllegalArgumentException("mcc");
+             }
+-            out.add(new Place(id, f[1], f[2], lat, lon, f[5], mcc));
++            if (zones == null || zones.contains(f[5])) {
++                out.add(new Place(id, f[1], f[2], lat, lon, f[5], mcc));
++            }
+         }
+         return new Places(out);
+     }
+diff --git a/services/core/java/com/android/server/compartments/PolicyStore.java b/services/core/java/com/android/server/compartments/PolicyStore.java
+index 87991ae..fce0ece 100644
+--- a/services/core/java/com/android/server/compartments/PolicyStore.java
++++ b/services/core/java/com/android/server/compartments/PolicyStore.java
+@@ -22,6 +22,12 @@ import java.util.regex.Pattern;
+  */
+ final class PolicyStore {
+     static final int MAX_APPS = 4096;
++    /**
++     * The size in bytes of the largest store that can be legal (G6): the header, the defaults, the count, and for each of
++     * {@link #MAX_APPS} apps a name of 255 characters (two bytes of length) and a policy of ten bytes. The service reads a file
++     * up to this size; a smaller limit would turn a full store into "every app is Protected" at the next start.
++     */
++    static final int MAX_ENCODED_BYTES = 5 + 10 + 4 + MAX_APPS * (2 + 255 + 10);
+     private static final int MAGIC = 0x434D5031;
+     /** Version 2 added the location class and the place of an app; a version 1 file reads with the new parts at their defaults. */
+     private static final int VERSION = 2;
+diff --git a/services/core/java/com/android/server/location/gnss/GnssManagerService.java b/services/core/java/com/android/server/location/gnss/GnssManagerService.java
+index cd05565..9ccc221 100644
+--- a/services/core/java/com/android/server/location/gnss/GnssManagerService.java
++++ b/services/core/java/com/android/server/location/gnss/GnssManagerService.java
+@@ -284,10 +284,14 @@ public class GnssManagerService implements GnssNative.GnssAssistanceCallbacks {
+         mGnssAntennaInfoProvider.addListener(identity, listener);
+     }
+ 
+-    /** FreeholdOS (ADR-208): whether the Compartments service gives this app a persona (an Isolated app with a place). */
++    /**
++     * FreeholdOS (ADR-208): whether the Compartments service gives this app a persona (an Isolated app with a place), or no
++     * position at all (a blocked location, or a substituted one without a place): the real GNSS data are never called for it.
++     */
+     static boolean hasPersona(CallerIdentity identity) {
+         CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
+-        return compartments != null && compartments.personaFor(identity.getUid()) != null;
++        return compartments != null && (compartments.personaFor(identity.getUid()) != null
++                || compartments.locationWithheld(identity.getUid()));
+     }
+ 
+     /**
+diff --git a/services/core/java/com/android/server/location/provider/LocationProviderManager.java b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+index 439d7d4..7b51f52 100644
+--- a/services/core/java/com/android/server/location/provider/LocationProviderManager.java
++++ b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+@@ -1007,6 +1007,12 @@ public class LocationProviderManager extends
+                 return null;
+             }
+ 
++            // FreeholdOS (ADR-208): an app whose location is blocked, or substituted without a persona, is given nothing, whatever
++            // permission it holds
++            if (locationWithheld(getIdentity())) {
++                return null;
++            }
++
+             // note app ops
+             int op =
+                     isOnlyBypassPermitted()
+@@ -1375,6 +1381,10 @@ public class LocationProviderManager extends
+                     }
+                     fineLocationResult = null;
+                 }
++                // FreeholdOS (ADR-208): as for the registrations of the other kind, nothing for a withheld app
++                if (fineLocationResult != null && locationWithheld(getIdentity())) {
++                    fineLocationResult = null;
++                }
+             }
+ 
+             if (fineLocationResult != null) {
+@@ -1799,6 +1809,12 @@ public class LocationProviderManager extends
+         }
+     }
+ 
++    /** FreeholdOS (ADR-208): whether the Compartments service gives the caller no position at all (see {@code locationWithheld}). */
++    private static boolean locationWithheld(CallerIdentity identity) {
++        CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
++        return compartments != null && compartments.locationWithheld(identity.getUid());
++    }
++
+     /**
+      * FreeholdOS (ADR-208): the persona of the caller, or null when it has none or the phone is in an emergency, when the real
+      * position is what the user needs the app to have. The Compartments service decides who has a persona.
+@@ -1825,17 +1841,16 @@ public class LocationProviderManager extends
+ 
+     /**
+      * A copy of the fix at the place of the persona: the real displacement is kept, so speed, stops and bearing stay the real ones.
+-     * The altitude and its accuracies belong to the real place and are removed; accuracy, speed, bearing and the times are kept.
+-     * A fix without a finite position is passed on as it is.
++     * The altitude and its accuracies belong to the real place and are removed, and so are the extras (they can hold the satellite
++     * count or a second, unfudged location); accuracy, speed, bearing and the times are kept. A fix without a finite position
++     * is put at the place itself, never passed on as it is (P13).
+      */
+     private static Location toPersona(Location real, CompartmentsInternal.PersonaView persona) {
+         double[] moved = persona.track.tryApply(real.getLatitude(), real.getLongitude());
+-        if (moved == null) {
+-            return real;
+-        }
+         Location out = new Location(real);
+-        out.setLatitude(moved[0]);
+-        out.setLongitude(moved[1]);
++        out.setExtras(null);
++        out.setLatitude(moved == null ? persona.lat : moved[0]);
++        out.setLongitude(moved == null ? persona.lon : moved[1]);
+         out.removeAltitude();
+         out.removeVerticalAccuracy();
+         out.removeMslAltitude();
+@@ -1891,7 +1906,11 @@ public class LocationProviderManager extends
+                 return null;
+             }
+ 
+-            // FreeholdOS (ADR-208): an app with a persona is given the last fix moved to its place
++            // FreeholdOS (ADR-208): nothing for an app whose location is blocked or has no persona; the others are given the
++            // last fix moved to the place of their persona
++            if (locationWithheld(identity)) {
++                return null;
++            }
+             location = personaLocation(location, identity);
+ 
+             // if delivering to the same process, make a copy of the location first (since
+-- 
+2.56.0
+

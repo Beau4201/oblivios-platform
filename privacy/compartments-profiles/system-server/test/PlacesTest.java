@@ -70,6 +70,18 @@ public final class PlacesTest {
         check(Places.parse(ln(1, "Pole", "AQ", "80", "180", "Antarctica/Troll", 799)).size() == 1, "latitude 80, longitude 180, mcc 799");
         check(Places.parse(ln(1, "Pole", "AQ", "-80", "-180", "Etc/GMT+12", 200)).size() == 1, "latitude -80, longitude -180, mcc 200, plus sign");
         check(Places.parse(ln(1, "A", "AA", "0", "0", "UTC", 214) + ln(3, "B", "AA", "1", "1", "UTC", 214)).byId(3) != null, "ids may have gaps");
+        // B1: a place whose time zone the image does not know is left out, the others keep their ids
+        Places zoned = Places.parse(ln(1, "A", "AA", "0", "0", "UTC", 214) + ln(2, "B", "AA", "1", "1", "Europe/Nowhere", 214)
+                + ln(3, "C", "AA", "2", "2", "Europe/Paris", 214), java.util.Set.of("UTC", "Europe/Paris"));
+        check(zoned.size() == 2 && zoned.byId(1) != null && zoned.byId(2) == null && zoned.byId(3) != null, "a place with an unknown zone is left out");
+        check(Places.parse(ln(1, "A", "AA", "0", "0", "UTC", 214), java.util.Set.of()).size() == 0, "no known zone, no place");
+        check(Places.parse(ln(1, "A", "AA", "0", "0", "Anywhere/Else", 214), null).size() == 1, "null zones keep every place");
+        try {
+            Places.parse(ln(1, "A", "AA", "0", "0", "bad zone!", 214), java.util.Set.of("bad zone!"));
+            check(false, "a malformed zone is refused even when listed");
+        } catch (IllegalArgumentException e) {
+            check(true, "malformed zone refused");
+        }
 
         // search: names that start with the query first, then by name, then by id; case does not matter
         List<Place> s = p.search("mad", 5);

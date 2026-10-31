@@ -41,6 +41,11 @@ CITIES = "\n".join([
     city(10, "Bad\x01Name", "NL", 52.0, 5.0, 50000, "Europe/Amsterdam"),           # control character: dropped
     city(11, "Nowhere", "XX", 10.0, 10.0, 50000, "Africa/Lagos"),                   # no cell in the country: dropped
     city(12, "Odd Zone", "NL", 52.1, 5.1, 50000, "Europe/Am sterdam"),              # a space in the time zone: dropped
+    city(1, "Madrid Again", "ES", 40.5, -3.7, 3000000, "Europe/Madrid"),            # the GeoNames id of Madrid again: the first line stays
+    city(0, "Zero Id", "ES", 40.41, -3.70, 50000, "Europe/Madrid"),                 # id 0: dropped
+    city(1234567890, "Ten Digits", "ES", 40.42, -3.70, 50000, "Europe/Madrid"),     # ten digits: dropped
+    city(13, "Eastside", "FJ", -16.5, 179.95, 50000, "Pacific/Fiji"),               # either side of the antimeridian ...
+    city(14, "Westside", "FJ", -16.5, -179.95, 50000, "Pacific/Fiji"),              # ... each finds the cells of the other
 ]) + "\n"
 
 
@@ -66,6 +71,8 @@ def cells_fixture():
     rows.append(cell("LTE", 242, 1, 500, 21, 80.0, 20.0))                       # Edge, Norway
     rows.append(cell("LTE", 242, 1, 500, 22, 80.001, 20.0))
     rows.append(cell("LTE", 214, 1, 600, 23, 39.0, -3.0))                       # Exactly
+    rows.append(cell("LTE", 542, 1, 800, 41, -16.5, 179.99))                    # east of the line, 5 km from both fiji cities
+    rows.append(cell("LTE", 542, 1, 800, 42, -16.5, -179.99))                   # west of the line
     for i, bad in enumerate((100, 199, 800)):                                   # only out-of-range mcc near Nowhere: the city stays dropped
         rows.append(cell("LTE", bad, 1, 700, 30 + i, 10.0, 10.0))
     return "radio,mcc,net,area,cell,unit,lon,lat,range,samples,changeable,created,updated,averageSignal\n" + "\n".join(rows) + "\n"
@@ -103,18 +110,21 @@ public final class Check {
 
 def run_all(bpd):
     places, cells = bpd.build(CITIES, cells_fixture())
+    shuffled = "\n".join(reversed([l for l in CITIES.split("\n") if l and "Madrid Again" not in l])) + "\n"
+    assert bpd.build(shuffled, cells_fixture()) == (places, cells), "the output does not depend on the order of the input"
     again = bpd.build(CITIES, cells_fixture())
     assert (places, cells) == again, "a second run gives other bytes"
     p = lines(places)
     names = [x[1] for x in p]
     # kept: Barcelona, Exactly, Madrid, Zaragoza (ES), Amsterdam, Rotterdam (NL), Edge (NO); dropped: the other five
-    # ids ascend from 1 in the order of (country, name, latitude): ES (Barcelona, Exactly, Madrid, Zaragoza), NL, NO
-    assert names == ["Barcelona", "Exactly", "Madrid", "Zaragoza", "Amsterdam", "Rotterdam", "Edge"], names
-    assert [x[0] for x in p] == [str(i) for i in range(1, 8)], "ids"
+    # the id of a place is its GeoNames id, so the file is in the order of those
+    assert names == ["Madrid", "Barcelona", "Zaragoza", "Exactly", "Amsterdam", "Rotterdam", "Edge", "Eastside", "Westside"], names
+    assert [x[0] for x in p] == ["1", "2", "3", "5", "6", "7", "9", "13", "14"], "ids are the GeoNames ids"
     by = {x[1]: x for x in p}
     assert by["Madrid"][2] == "ES" and by["Madrid"][5] == "Europe/Madrid" and by["Madrid"][6] == "214", by["Madrid"]
     assert by["Amsterdam"][6] == "204" and by["Rotterdam"][6] == "204", "the country's mcc is the common one, not 202"
     assert by["Edge"][6] == "242" and by["Edge"][3] == "80.00000", by["Edge"]
+    assert not any(n in names for n in ("Madrid Again", "Zero Id", "Ten Digits")), "repeated, zero and ten-digit ids are dropped"
     assert "Tiny" not in names, "population 14999 is dropped"
     assert "Exactly" in names, "population 15000 is kept"
     assert "Polar" not in names, "latitude 80.5 is dropped"
@@ -137,10 +147,13 @@ def run_all(bpd):
     assert all(200 <= int(x[1]) <= 799 for x in c), "mcc range"
     assert [int(x[0]) for x in c] == sorted(int(x[0]) for x in c), "cells in the order of the places"
     assert len([x for x in c if x[0] == by["Edge"][0]]) == 2, "Edge has its two cells"
+    for side in ("Eastside", "Westside"):
+        got = sorted(int(x[4]) for x in c if x[0] == by[side][0])
+        assert got == [41, 42], "%s finds the cells on both sides of the antimeridian: %s" % (side, got)
     assert places.endswith("\n") and cells.endswith("\n")
     assert all(len(x) == 7 for x in p) and all(len(x) == 5 for x in c)
     parsed = check_java(places, cells)
-    assert parsed[0] == "7", parsed
+    assert parsed[0] == "9", parsed
 
 
 def main():

@@ -5,6 +5,17 @@ import pathlib, shutil, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MUTANTS = [
+    # P4, P20, B1 (review fixes of 2026-10-30, second round)
+    ("MirrorPlan.java", "the withheld set leaves out the blocked apps", "Set<String> packages = new TreeSet<>(locationBlocked(s));", "Set<String> packages = new TreeSet<>();"),
+    ("MirrorPlan.java", "the withheld set leaves out the unresolved apps", "        packages.addAll(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));\n        Set<Integer> out", "        Set<Integer> out"),
+    ("MirrorPlan.java", "the withheld set ignores the kept place", "locationUnresolved(s, r, salt, places, country, lat, lon, before, table));\n        Set<Integer> out", "locationUnresolved(s, r, salt, places, country, lat, lon, null, null));\n        Set<Integer> out"),
+    ("MirrorPlan.java", "the withheld set takes a platform uid", "            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId >= 0) {\n                out.add(appId);", "            int appId = r.uidOf(pkg) % USER_OFFSET;\n            if (appId >= 0) {\n                out.add(appId);"),
+    ("ActivityEstimator.java", "the estimator keeps its state across a gap", "if (lastMs != Long.MIN_VALUE && nowMs - lastMs > STALE_MS) {", "if (false) {"),
+    ("ActivityEstimator.java", "the gap resets only the activity", "            candidate = Activity.STILL;\n            seen = 0;\n        }\n        lastMs = nowMs;", "        }\n        lastMs = nowMs;"),
+    ("ActivityEstimator.java", "a gap of the stale limit resets", "nowMs - lastMs > STALE_MS) {\n            current", "nowMs - lastMs >= STALE_MS) {\n            current"),
+    ("Places.java", "a place with an unknown zone is kept", "if (zones == null || zones.contains(f[5])) {", "if (true) {"),
+    ("Places.java", "every place is dropped when zones are given", "if (zones == null || zones.contains(f[5])) {", "if (zones == null) {"),
+    ("Places.java", "null zones drop every place", "if (zones == null || zones.contains(f[5])) {", "if (zones != null && zones.contains(f[5])) {"),
     # Places
     ("Places.java", "a repeated id is accepted", "if (id <= lastId) {", "if (id < lastId) {"),
     ("Places.java", "ids may descend", "if (id <= lastId) {", "if (id == lastId) {"),
@@ -173,7 +184,7 @@ MUTANTS = [
     ("PersonaTrack.java", "apply accepts a bad fix", "if (!validFix(lat, lon)) {\n            throw", "if (false) {\n            throw"),
     ("PersonaTrack.java", "a place near the pole is accepted", "!(Math.abs(placeLat) <= 80.0)", "!(Math.abs(placeLat) <= 90.0)"),
     ("ActivityEstimator.java", "one fix changes the activity", "static final int CONFIRM = 3;", "static final int CONFIRM = 1;"),
-    ("ActivityEstimator.java", "stale one tick early", "nowMs - lastMs > STALE_MS", "nowMs - lastMs >= STALE_MS"),
+    ("ActivityEstimator.java", "stale one tick early", "return lastMs != Long.MIN_VALUE && nowMs - lastMs > STALE_MS", "return lastMs != Long.MIN_VALUE && nowMs - lastMs >= STALE_MS"),
     ("ActivityEstimator.java", "a fix from the past counts", "if (nowMs < lastMs) {\n            return current;\n        }", ""),
     ("ActivityEstimator.java", "driving has no hysteresis", "speedMps >= 3.5 ? Activity.DRIVING", "speedMps >= 4.6 ? Activity.DRIVING"),
     ("ActivityEstimator.java", "walking has no hysteresis", "speedMps >= 0.4 ? Activity.WALKING", "speedMps >= 0.7 ? Activity.WALKING"),

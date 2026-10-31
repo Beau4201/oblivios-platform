@@ -22,6 +22,12 @@ import java.util.regex.Pattern;
  */
 final class PolicyStore {
     static final int MAX_APPS = 4096;
+    /**
+     * The size in bytes of the largest store that can be legal (G6): the header, the defaults, the count, and for each of
+     * {@link #MAX_APPS} apps a name of 255 characters (two bytes of length) and a policy of ten bytes. The service reads a file
+     * up to this size; a smaller limit would turn a full store into "every app is Protected" at the next start.
+     */
+    static final int MAX_ENCODED_BYTES = 5 + 10 + 4 + MAX_APPS * (2 + 255 + 10);
     private static final int MAGIC = 0x434D5031;
     /** Version 2 added the location class and the place of an app; a version 1 file reads with the new parts at their defaults. */
     private static final int VERSION = 2;

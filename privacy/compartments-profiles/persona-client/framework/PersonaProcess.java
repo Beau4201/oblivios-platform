@@ -83,6 +83,33 @@ public final class PersonaProcess {
     }
 
     /**
+     * The value of a system property that an app with a persona reads in its own place, or null when the property is not one of
+     * those or the process has no persona (P7): the network operator properties of the telephony stack and the time zone. The
+     * hook in {@code SystemProperties.get} calls this on every read, so a process without a persona costs one volatile read.
+     * Native reads (bionic, a shell) do not pass here; they stay a residual channel.
+     */
+    public static String property(String key) {
+        String zone = sTimeZone;
+        if (zone == null || key == null) {
+            return null;
+        }
+        switch (key) {
+            case "persist.sys.timezone":
+                return zone;
+            case "gsm.operator.numeric":
+                return sOperator;
+            case "gsm.operator.iso-country":
+                return sCountry;
+            case "gsm.operator.alpha":
+                return "";
+            case "gsm.operator.isroaming":
+                return "false";
+            default:
+                return null;
+        }
+    }
+
+    /**
      * Makes the default time zone of the process the one of the persona, when there is one and it is a time zone that this
      * system knows; otherwise the default is left as it is.
      */

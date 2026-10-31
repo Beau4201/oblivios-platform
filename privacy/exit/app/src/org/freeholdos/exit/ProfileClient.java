@@ -20,6 +20,7 @@ final class ProfileClient {
     static final String SERVICE_NAME = "compartments";
 
     private final ICompartmentsPolicy mService;
+    private volatile String mRefusal;
 
     private ProfileClient(ICompartmentsPolicy service) {
         mService = service;
@@ -36,8 +37,22 @@ final class ProfileClient {
         }
     }
 
+    /**
+     * Why the last change was refused, in the words of the service (a message of at most 120 characters), or null when the
+     * last failure was not a refusal (the service is gone, an unexpected error). Cleared by the next successful change.
+     */
+    String refusal() {
+        return mRefusal;
+    }
+
+    private void note(Exception e) {
+        String m = e instanceof IllegalArgumentException || e instanceof IllegalStateException ? e.getMessage() : null;
+        mRefusal = m == null || m.isEmpty() ? null : m.length() > 120 ? m.substring(0, 120) : m;
+    }
+
+    /** False without a service and after the system server has restarted (the binder is dead), so a caller finds the service again. */
     boolean available() {
-        return mService != null;
+        return mService != null && mService.asBinder().isBinderAlive();
     }
 
     CompartmentsAppPolicy getApp(String packageName) {
@@ -80,8 +95,10 @@ final class ProfileClient {
                 return false;
             }
             mService.setDefaultProfile(profile);
+            mRefusal = null;
             return true;
         } catch (RemoteException | RuntimeException e) {
+            note(e);
             return false;
         }
     }
@@ -92,8 +109,10 @@ final class ProfileClient {
                 return false;
             }
             mService.setDefaultSensors(value);
+            mRefusal = null;
             return true;
         } catch (RemoteException | RuntimeException e) {
+            note(e);
             return false;
         }
     }
@@ -102,6 +121,15 @@ final class ProfileClient {
     int getPlaceId(String packageName) {
         try {
             return mService == null ? -1 : mService.getPlaceId(packageName);
+        } catch (RemoteException | RuntimeException e) {
+            return -1;
+        }
+    }
+
+    /** The place that the persona of one app has now (chosen or Automatic), 0 when it has none, -1 when the call fails. */
+    int getPersonaPlaceId(String packageName) {
+        try {
+            return mService == null ? -1 : mService.getPersonaPlaceId(packageName);
         } catch (RemoteException | RuntimeException e) {
             return -1;
         }
@@ -124,8 +152,10 @@ final class ProfileClient {
                 return false;
             }
             mService.setPlace(packageName, placeId);
+            mRefusal = null;
             return true;
         } catch (RemoteException | RuntimeException e) {
+            note(e);
             return false;
         }
     }
@@ -145,8 +175,10 @@ final class ProfileClient {
                 return false;
             }
             mService.setProfile(packageName, profile);
+            mRefusal = null;
             return true;
         } catch (RemoteException | RuntimeException e) {
+            note(e);
             return false;
         }
     }
@@ -157,8 +189,10 @@ final class ProfileClient {
                 return false;
             }
             mService.setClassValue(packageName, cls, value);
+            mRefusal = null;
             return true;
         } catch (RemoteException | RuntimeException e) {
+            note(e);
             return false;
         }
     }

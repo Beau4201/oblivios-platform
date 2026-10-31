@@ -231,6 +231,26 @@ final class MirrorPlan {
         return out;
     }
 
+    /**
+     * The app ids that are given no position at delivery: the packages of {@link #locationBlocked} and of
+     * {@link #locationUnresolved}. The location permissions of these packages are taken as well, but a permission can be given
+     * again by the user or a script, and the delivery path must not then hand out the real fix (P4). A permission is per uid,
+     * so one withheld package withholds the app id it shares.
+     */
+    static Set<Integer> locationWithheldAppIds(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
+            double lon, PolicyStore before, PersonaFile table) {
+        Set<String> packages = new TreeSet<>(locationBlocked(s));
+        packages.addAll(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));
+        Set<Integer> out = new TreeSet<>();
+        for (String pkg : packages) {
+            int appId = ordinaryAppId(r.uidOf(pkg));
+            if (appId >= 0) {
+                out.add(appId);
+            }
+        }
+        return out;
+    }
+
     private static SensorMode mode(Profiles.Profile p, Value v) {
         return Profiles.sensorMode(p, v);
     }

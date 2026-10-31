@@ -32,6 +32,13 @@ inline float noise(uint64_t seed, int64_t t, uint32_t channel) {
     return static_cast<float>(static_cast<double>(h >> 11) / 4503599627370496.0 - 1.0);
 }
 
+// The phase in radians of a sine of `hz` Hertz at event time `ts` (nanoseconds). The cycles are reduced in double before the
+// float conversion: a float of seconds has 24 bits, so after a day of uptime a 3.6 Hz sine would step in 8 ms jumps (SN4).
+inline float phase(int64_t ts, double hz) {
+    const double cycles = std::fmod(static_cast<double>(ts) * 1e-9 * hz, 1.0);
+    return static_cast<float>(2.0 * static_cast<double>(kPi) * cycles);
+}
+
 // A float in [lo, hi) fixed for a seed.
 inline float perSeed(uint64_t seed, uint32_t slot, float lo, float hi) {
     const float u = noise(seed, 0, 0xF0 + slot) * 0.5f + 0.5f;
@@ -50,7 +57,6 @@ inline bool substitutes(int32_t type) {
 inline bool substituteEvent(sensors_event_t* e, uint64_t seed, Activity a) {
     using namespace substitute_detail;
     if (!substitutes(e->type)) return false;
-    const float t = static_cast<float>(static_cast<double>(e->timestamp) * 1e-9);
     const float walk = (a == Activity::WALKING) ? 1.0f : 0.0f;
     const float drive = (a == Activity::DRIVING) ? 1.0f : 0.0f;
     float v[3];
@@ -60,8 +66,8 @@ inline bool substituteEvent(sensors_event_t* e, uint64_t seed, Activity a) {
             const float tx = perSeed(seed, 0, -0.08f, 0.08f);   // tilt of a held phone, radians
             const float ty = perSeed(seed, 1, -0.08f, 0.08f);
             const float sigma = 0.035f + 0.4f * drive + 0.6f * walk;
-            const float step = 2.5f * std::sin(2.0f * kPi * 1.8f * t) + 1.0f * std::sin(2.0f * kPi * 3.6f * t);
-            const float sway = 0.8f * std::sin(2.0f * kPi * 0.25f * t);
+            const float step = 2.5f * std::sin(phase(e->timestamp, 1.8)) + 1.0f * std::sin(phase(e->timestamp, 3.6));
+            const float sway = 0.8f * std::sin(phase(e->timestamp, 0.25));
             v[0] = kGravity * std::sin(ty) + sigma * noise(seed, e->timestamp, 1) + drive * sway;
             v[1] = -kGravity * std::sin(tx) * std::cos(ty) + sigma * noise(seed, e->timestamp, 2);
             v[2] = kGravity * std::cos(tx) * std::cos(ty) + sigma * noise(seed, e->timestamp, 3) + walk * step;
@@ -70,7 +76,7 @@ inline bool substituteEvent(sensors_event_t* e, uint64_t seed, Activity a) {
         case SENSOR_TYPE_GYROSCOPE:
         case SENSOR_TYPE_GYROSCOPE_UNCALIBRATED: {
             const float sigma = 0.002f + 0.03f * drive + 0.05f * walk;
-            const float swing = 0.4f * std::sin(2.0f * kPi * 1.8f * t + perSeed(seed, 2, 0.0f, 6.28f));
+            const float swing = 0.4f * std::sin(phase(e->timestamp, 1.8) + perSeed(seed, 2, 0.0f, 6.28f));
             v[0] = sigma * noise(seed, e->timestamp, 4) + walk * swing;
             v[1] = sigma * noise(seed, e->timestamp, 5) + walk * 0.5f * swing;
             v[2] = sigma * noise(seed, e->timestamp, 6);

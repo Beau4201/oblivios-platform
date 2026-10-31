@@ -44,6 +44,8 @@ public final class ProfilesTest {
         codecVersion2();
         personaMirrors();
         keptPlacesAndRestarts();
+        withheldAppIds();
+        largestStore();
         System.out.println("ok " + checks + " checks");
     }
 
@@ -556,6 +558,53 @@ public final class ProfilesTest {
         check(noData.toString().equals("[com.a.app, com.b.app, com.d.app, com.g.app]"), "no place data, every substituted app: " + noData);
         java.util.Set<String> noCountry = MirrorPlan.locationUnresolved(s, pkg -> uids.getOrDefault(pkg, -1), salt, places, "", 0, 0);
         check(noCountry.toString().equals("[com.a.app, com.d.app, com.g.app]"), "no country, every Automatic app: " + noCountry);
+    }
+
+    /** P4: the app ids that get no position at delivery, whatever permission an app holds (blocked, or substituted without a persona). */
+    private static void withheldAppIds() throws Exception {
+        Places places = Places.parse(PLACES);
+        long salt = 0xABCDEF0123456789L;
+        PolicyStore s = PolicyStore.EMPTY
+                .withApp("com.blocked.app", ISO.withValue(Cls.LOCATION, Value.BLOCKED))
+                .withApp("com.nope.app", ISO.withPlace(99))        // a place that is not in the data
+                .withApp("com.ok.app", ISO.withPlace(2))
+                .withApp("com.real.app", AppPolicy.PROTECTED)
+                .withApp("com.sys.app", ISO.withValue(Cls.LOCATION, Value.BLOCKED));
+        Map<String, Integer> uids = Map.of("com.blocked.app", 10100, "com.nope.app", 10200, "com.ok.app", 10300,
+                "com.real.app", 10400, "com.sys.app", 1000);
+        MirrorPlan.UidResolver r = pkg -> uids.getOrDefault(pkg, -1);
+        java.util.Set<Integer> w = MirrorPlan.locationWithheldAppIds(s, r, salt, places, "NL", 52.37, 4.89, null, null);
+        check(w.toString().equals("[10100, 10200]"), "blocked and unresolved are withheld, nothing else: " + w);
+        check(MirrorPlan.locationWithheldAppIds(s, r, salt, null, "NL", 52.37, 4.89, null, null).toString().equals("[10100, 10200, 10300]"),
+                "without place data every substituted app is withheld");
+        check(MirrorPlan.locationWithheldAppIds(PolicyStore.EMPTY, r, salt, places, "NL", 52.37, 4.89, null, null).isEmpty(),
+                "no entries, nothing withheld");
+        // two packages with one app id: one withheld package withholds the id (the permission is per uid)
+        PolicyStore shared = PolicyStore.EMPTY.withApp("com.x.app", ISO.withPlace(2))
+                .withApp("com.y.app", ISO.withValue(Cls.LOCATION, Value.BLOCKED));
+        check(MirrorPlan.locationWithheldAppIds(shared, pkg -> 10500, salt, places, "NL", 52.37, 4.89, null, null).contains(10500),
+                "a shared app id is withheld when one package is");
+        // a kept Automatic place is a resolved place
+        PolicyStore auto = PolicyStore.EMPTY.withApp("com.a.app", ISO);
+        PersonaFile first = PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10600, salt, places, "NL", 52.37, 4.89));
+        check(MirrorPlan.locationWithheldAppIds(auto, pkg -> 10600, salt, places, "", Double.NaN, Double.NaN, null, null).contains(10600),
+                "Automatic without a country or a kept place is withheld");
+        check(MirrorPlan.locationWithheldAppIds(auto, pkg -> 10600, salt, places, "", Double.NaN, Double.NaN, auto, first).isEmpty(),
+                "Automatic with a kept place is not");
+    }
+
+    /** G6: the largest legal store fits the limit that the service reads, and reads back. */
+    private static void largestStore() {
+        PolicyStore full = PolicyStore.EMPTY;
+        String pad = "a".repeat(240);
+        for (int i = 0; i < PolicyStore.MAX_APPS; i++) {
+            full = full.withApp(String.format("p%04d.%s", i, pad), ISO.withPlace(2147483647).withValue(Cls.LOCATION, Value.BLOCKED));
+        }
+        byte[] data = full.encode();
+        check(data.length <= PolicyStore.MAX_ENCODED_BYTES, "the largest store is " + data.length);
+        check(data.length > PolicyStore.MAX_ENCODED_BYTES - PolicyStore.MAX_APPS * 20, "and the limit is not far above it: " + data.length);
+        check(PolicyStore.decode(data).configured().size() == PolicyStore.MAX_APPS, "and reads back");
+        check(PolicyStore.MAX_ENCODED_BYTES > 1024 * 1024, "the old limit of 1 MiB was below the largest store");
     }
 
     private static void keptPlacesAndRestarts() throws Exception {

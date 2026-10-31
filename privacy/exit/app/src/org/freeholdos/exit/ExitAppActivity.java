@@ -311,9 +311,11 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
             return row;
         }
 
-        /** What the place of this app asks of its exit; Automatic is in the user's own country, so it asks nothing. */
+        /** What the place of this app asks of its exit; a place in the country the phone is in asks nothing. */
         private Presenter.Exit personaExit(Context ctx) {
-            CompartmentsPlace place = placeId > 0 ? profiles.getPlace(placeId) : null;
+            // the place the persona has now, also an Automatic one that was kept from before a trip (X5)
+            int effective = profiles.getPersonaPlaceId(pkg);
+            CompartmentsPlace place = effective > 0 ? profiles.getPlace(effective) : null;
             ExitRuntime.Snapshot s = rt.snapshot();
             if (place == null || place.country == null || s == null) {
                 return Presenter.Exit.NONE;
@@ -324,7 +326,8 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         /** A refused or failed change says so and changes nothing; the page is built again from the service either way. */
         private void changed(boolean ok) {
             if (!ok) {
-                Toast.makeText(requireContext(), R.string.identity_error, Toast.LENGTH_LONG).show();
+                String why = profiles.refusal();  // the reason of the service, when it gave one (X2)
+                Toast.makeText(requireContext(), why != null ? why : getString(R.string.identity_error), Toast.LENGTH_LONG).show();
             }
             main.post(() -> {
                 built = "";

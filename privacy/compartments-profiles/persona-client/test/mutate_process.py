@@ -6,6 +6,13 @@ import pathlib, shutil, subprocess, sys, tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCENARIOS = ("none", "null", "full", "badzone", "partial", "twice")
 MUTANTS = [
+    ("the zone property is not the persona zone", 'return zone;', 'return null;'),
+    ("the operator property is the country", 'case "gsm.operator.numeric":\n                return sOperator;', 'case "gsm.operator.numeric":\n                return sCountry;'),
+    ("the country property is the operator", 'case "gsm.operator.iso-country":\n                return sCountry;', 'case "gsm.operator.iso-country":\n                return sOperator;'),
+    ("the operator name is not emptied", 'case "gsm.operator.alpha":\n                return "";', 'case "gsm.operator.alpha":\n                return null;'),
+    ("roaming is not false", 'return "false";', 'return "true";'),
+    ("the SIM operator is touched", 'case "gsm.operator.isroaming":', 'case "gsm.sim.operator.numeric":\n                return sOperator;\n            case "gsm.operator.isroaming":'),
+    ("a process without a persona answers", 'if (zone == null || key == null) {', 'if (key == null) {'),
     ("a second call is accepted", "if (sSet) {", "if (false) {"),
     ("a bundle with one key is a persona", "if (timeZone == null || country == null || operator == null) {", "if (timeZone == null && country == null && operator == null) {"),
     ("the time zone is not stored", "sTimeZone = timeZone;", ""),

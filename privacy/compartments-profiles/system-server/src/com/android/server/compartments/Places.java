@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  * read-only file of the image, parsed strictly: anything that is not exactly a file of the format makes the whole file unusable,
  * and the service then reports "no place data" instead of a partial list. Pure Java.
  *
- * <p>Format: one line per place, seven tab-separated fields, a newline after every line, ids ascending from 1:
+ * <p>Format: one line per place, seven tab-separated fields, a newline after every line, ids ascending (the GeoNames id of the city, at most nine digits):
  * {@code id name country latitude longitude timeZone mcc}. The country is two capital ASCII letters, the latitude is within 80
  * degrees (the cities of the list stop there, and the track of the persona does not work near the poles), the longitude within
  * 180, the time zone an Olson id, the mcc the mobile country code of the place (200 to 799).
@@ -56,6 +56,14 @@ final class Places {
 
     /** @throws IllegalArgumentException for any text that is not exactly a file of the format */
     static Places parse(String tsv) {
+        return parse(tsv, null);
+    }
+
+    /**
+     * Like {@link #parse(String)}, but a well-formed place whose time zone is not in {@code zones} is left out (null: keep every
+     * place). The persona must never have a zone that the image does not know: the process would then keep the real one (B1).
+     */
+    static Places parse(String tsv, java.util.Set<String> zones) {
         if (tsv == null || tsv.isEmpty() || tsv.charAt(tsv.length() - 1) != '\n') {
             throw new IllegalArgumentException("not a places file");
         }
@@ -92,7 +100,9 @@ final class Places {
             if (mcc < 200 || mcc > 799) {
                 throw new IllegalArgumentException("mcc");
             }
-            out.add(new Place(id, f[1], f[2], lat, lon, f[5], mcc));
+            if (zones == null || zones.contains(f[5])) {
+                out.add(new Place(id, f[1], f[2], lat, lon, f[5], mcc));
+            }
         }
         return new Places(out);
     }

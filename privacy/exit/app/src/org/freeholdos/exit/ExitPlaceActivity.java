@@ -124,6 +124,12 @@ public final class ExitPlaceActivity extends CollapsingToolbarBaseActivity {
             screen.addPreference(footer);
         }
 
+        /** The reason that the service gave for a refused change, else the generic text (X2). */
+        private CharSequence refusalOr(int generic) {
+            String why = profiles.refusal();
+            return why != null ? why : getString(generic);
+        }
+
         private SelectorWithWidgetPreference radio(Context ctx, CharSequence title, CharSequence summary, boolean checked, int id) {
             SelectorWithWidgetPreference radio = new SelectorWithWidgetPreference(ctx);
             radio.setPersistent(false);
@@ -132,7 +138,7 @@ public final class ExitPlaceActivity extends CollapsingToolbarBaseActivity {
             radio.setChecked(checked);
             radio.setOnClickListener(p -> {
                 if (!profiles.setPlace(pkg, id)) {
-                    Toast.makeText(requireContext(), R.string.place_error, Toast.LENGTH_LONG).show();
+                    Toast.makeText(requireContext(), refusalOr(R.string.place_error), Toast.LENGTH_LONG).show();
                 }
                 render();
             });

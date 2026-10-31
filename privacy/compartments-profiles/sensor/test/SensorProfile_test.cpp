@@ -267,6 +267,16 @@ static void stream() {
     substituteEvent(&t2, seedA, Activity::STILL);
     CHECK(t1.data[0] != t2.data[0] && t1.data[2] != t2.data[2]);
 
+    // SN4: the phase of a sine keeps its resolution after days of uptime (a float of seconds would step by 62 ms at ten days)
+    {
+        const int64_t tenDays = 864000LL * 1000000000LL;
+        const float a0 = substitute_detail::phase(tenDays + 123456789LL, 3.6);
+        const float a1 = substitute_detail::phase(tenDays + 124456789LL, 3.6);  // 1 ms later
+        CHECK(std::fabs((a1 - a0) - 2.0f * 3.14159265f * 3.6f * 0.001f) < 1e-3f);
+        CHECK(substitute_detail::phase(0, 1.8) == 0.0f);
+        CHECK(substitute_detail::phase(250000000LL, 1.0) > 1.57f && substitute_detail::phase(250000000LL, 1.0) < 1.5709f);  // a quarter cycle
+    }
+
     // the character follows the activity
     auto spread = [&](Activity a) {
         double sum = 0, sq = 0;

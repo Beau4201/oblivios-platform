@@ -12,6 +12,9 @@ SOURCES = {
     "PersonaReader.java": "persona-client/src/PersonaReader.java",
     "PersonaProcess.java": "persona-client/framework/PersonaProcess.java",
     "PersonaCells.java": "persona-client/telephony/PersonaCells.java",
+    "ICompartmentsPolicy.aidl": "../exit/app/src/com/android/internal/compartments/ICompartmentsPolicy.aidl",
+    "CompartmentsAppPolicy.aidl": "../exit/app/src/com/android/internal/compartments/CompartmentsAppPolicy.aidl",
+    "CompartmentsPlace.aidl": "../exit/app/src/com/android/internal/compartments/CompartmentsPlace.aidl",
 }
 PACKAGE = re.compile(r"^package [\w.]+;$", re.M)
 

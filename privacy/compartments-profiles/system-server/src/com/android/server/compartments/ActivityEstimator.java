@@ -3,8 +3,9 @@ package com.android.server.compartments;
 
 /**
  * The activity of the phone from the speed of its real location fixes, for the invented sensor streams (spec section 4.4):
- * STILL below 0.6 m/s, WALKING up to 2.5 m/s, DRIVING above 4.5 m/s, with a hysteresis so that one noisy fix does not change it,
- * and STILL again when no fix has come for {@link #STALE_MS}.
+ * a speed above 0.6 m/s is WALKING and above 4.5 m/s DRIVING; going back, DRIVING holds down to 3.5 m/s and WALKING down to
+ * 0.4 m/s (see {@link #classify}), and a change needs {@link #CONFIRM} fixes in a row so that one noisy fix does not change it.
+ * STILL again when no fix has come for {@link #STALE_MS}.
  */
 final class ActivityEstimator {
     enum Activity { STILL, WALKING, DRIVING }
@@ -35,6 +36,11 @@ final class ActivityEstimator {
     synchronized Activity onFix(double speedMps, long nowMs) {
         if (nowMs < lastMs) {
             return current;
+        }
+        if (lastMs != Long.MIN_VALUE && nowMs - lastMs > STALE_MS) {
+            current = Activity.STILL;  // the old activity is over: the hysteresis must not carry it across the gap
+            candidate = Activity.STILL;
+            seen = 0;
         }
         lastMs = nowMs;
         Activity next = classify(speedMps, current);

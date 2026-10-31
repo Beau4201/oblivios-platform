@@ -290,7 +290,8 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
         /** A refused or failed change says so and changes nothing; the rows are read back from the service either way. */
         private void changeDefault(BooleanSupplier change) {
             if (!change.getAsBoolean()) {
-                Toast.makeText(requireContext(), R.string.identity_error, Toast.LENGTH_LONG).show();
+                String why = profiles.refusal();  // the reason of the service, when it gave one (X2)
+                Toast.makeText(requireContext(), why != null ? why : getString(R.string.identity_error), Toast.LENGTH_LONG).show();
             }
             CompartmentsAppPolicy d = profiles.getDefaults();
             if (d != null && defaultProfilePref != null && defaultSensorsPref != null) {

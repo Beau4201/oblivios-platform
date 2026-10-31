@@ -156,5 +156,31 @@ public final class PersonaTest {
         check(a.at(now + ActivityEstimator.STALE_MS) == Activity.DRIVING, "not stale at the limit");
         check(a.at(now + ActivityEstimator.STALE_MS + 1) == Activity.STILL, "still when no fix has come");
         check(new ActivityEstimator().at(0) == Activity.STILL, "still before any fix");
+
+        // P20: a fix after a stale gap starts from STILL again, so the hysteresis of the old state does not carry over
+        ActivityEstimator b = new ActivityEstimator();
+        long tb = 1000;
+        for (int i = 0; i < 3; i++) {
+            b.onFix(10.0, tb += 1000);
+        }
+        check(b.at(tb) == Activity.DRIVING, "driving before the gap");
+        tb += ActivityEstimator.STALE_MS + 1;
+        check(b.onFix(3.8, tb) == Activity.STILL, "the first fix after a gap does not keep driving by hysteresis");
+        check(b.onFix(3.8, tb += 1000) == Activity.STILL && b.onFix(3.8, tb += 1000) == Activity.WALKING,
+                "and three confirm the new activity from still");
+        // a gap of exactly STALE_MS is not stale: the state stays
+        ActivityEstimator c = new ActivityEstimator();
+        long tc = 1000;
+        for (int i = 0; i < 3; i++) {
+            c.onFix(10.0, tc += 1000);
+        }
+        check(c.onFix(3.8, tc + ActivityEstimator.STALE_MS) == Activity.DRIVING, "a gap of exactly the stale limit keeps the state");
+        // the half-confirmed change is dropped by a gap too: two walking fixes, a gap, one walking fix is not three in a row
+        ActivityEstimator d = new ActivityEstimator();
+        long td = 1000;
+        d.onFix(1.5, td += 1000);
+        d.onFix(1.5, td += 1000);
+        td += ActivityEstimator.STALE_MS + 1;
+        check(d.onFix(1.5, td) == Activity.STILL, "a half-confirmed change does not survive a gap");
     }
 }

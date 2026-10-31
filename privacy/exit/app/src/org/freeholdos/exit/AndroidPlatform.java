@@ -49,6 +49,7 @@ final class AndroidPlatform implements PlatformApi {
     private final Notifier notifier;
     private final StatusSink sink;
     private ProfileClient profiles;
+    private final Map<Integer, String> placeCountry = new HashMap<>();
     private NetworkProvider provider;
     private NetworkAgent agent;
 
@@ -107,14 +108,32 @@ final class AndroidPlatform implements PlatformApi {
             if (app.location != ProfileRows.VALUE_SUBSTITUTE) {
                 continue;
             }
-            int id = profiles.getPlaceId(pkg);
-            CompartmentsPlace place = id > 0 ? profiles.getPlace(id) : null;
-            String country = place == null || place.country == null ? "" : place.country.toUpperCase(Locale.ROOT);
+            // the place the persona has now, also for an Automatic app (X5): the exit must follow the position it is given
+            int id = profiles.getPersonaPlaceId(pkg);
+            if (id < 0) {
+                return null;
+            }
+            String country = id == 0 ? "" : countryOfPlace(id);
             if (ControlCodec.validCountry(country)) {
                 out.put(pkg, country);
             }
         }
         return out;
+    }
+
+    /** The country of a place in capitals, "" when unknown. A place never changes, so it is asked once (X3). */
+    private String countryOfPlace(int id) {
+        String known = placeCountry.get(id);
+        if (known != null) {
+            return known;
+        }
+        CompartmentsPlace place = profiles.getPlace(id);
+        if (place == null || place.country == null) {
+            return "";
+        }
+        String country = place.country.toUpperCase(Locale.ROOT);
+        placeCountry.put(id, country);
+        return country;
     }
 
     @Override

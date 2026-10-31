@@ -75,4 +75,10 @@ interface ICompartmentsPolicy {
 
     /** The place id that the user chose for one app, 0 for Automatic. */
     int getPlaceId(String packageName);
+
+    /**
+     * The place that the persona of one app has now: the one the user chose, or the one made for an Automatic app; 0 when the
+     * app has no persona (its location is not substituted, or no place can be made). Needs MANAGE_COMPARTMENTS.
+     */
+    int getPersonaPlaceId(String packageName);
 }

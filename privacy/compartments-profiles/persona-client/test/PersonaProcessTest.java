@@ -25,6 +25,10 @@ public final class PersonaProcessTest {
             case "none": // an app without a persona: nothing changes
                 PersonaProcess.setFrom(new Bundle());
                 check(PersonaProcess.timeZone() == null && PersonaProcess.country() == null && PersonaProcess.operator() == null, "no values");
+                for (String key : new String[] {"persist.sys.timezone", "gsm.operator.numeric", "gsm.operator.iso-country",
+                        "gsm.operator.alpha", "gsm.operator.isroaming"}) {
+                    check(PersonaProcess.property(key) == null, "no persona, no property " + key);
+                }
                 PersonaProcess.applyTimeZone();
                 check(TimeZone.getDefault().getID().equals("America/Los_Angeles"), "the time zone is left alone");
                 break;
@@ -36,6 +40,13 @@ public final class PersonaProcessTest {
                 PersonaProcess.setFrom(persona("Europe/Madrid"));
                 check("Europe/Madrid".equals(PersonaProcess.timeZone()) && "es".equals(PersonaProcess.country())
                         && "21407".equals(PersonaProcess.operator()), "the three values");
+                check("Europe/Madrid".equals(PersonaProcess.property("persist.sys.timezone")), "the zone property");
+                check("21407".equals(PersonaProcess.property("gsm.operator.numeric")), "the operator property");
+                check("es".equals(PersonaProcess.property("gsm.operator.iso-country")), "the country property");
+                check("".equals(PersonaProcess.property("gsm.operator.alpha")), "the operator name is empty");
+                check("false".equals(PersonaProcess.property("gsm.operator.isroaming")), "never roaming");
+                check(PersonaProcess.property("ro.build.id") == null && PersonaProcess.property("gsm.sim.operator.numeric") == null
+                        && PersonaProcess.property(null) == null, "other properties are not touched");
                 PersonaProcess.applyTimeZone();
                 check(TimeZone.getDefault().getID().equals("Europe/Madrid"), "the persona time zone is the default");
                 TimeZone.setDefault(null); // what a time zone change does
