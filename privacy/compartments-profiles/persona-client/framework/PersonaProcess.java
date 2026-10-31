@@ -4,6 +4,7 @@
 
 package com.android.internal.compartments;
 
+import android.content.Intent;
 import android.os.Bundle;
 
 import java.util.Arrays;
@@ -106,6 +107,17 @@ public final class PersonaProcess {
                 return "false";
             default:
                 return null;
+        }
+    }
+
+    /**
+     * A TIMEZONE_CHANGED broadcast reports the real time zone of the phone in its extra (P7); an app with a persona is told the
+     * zone of its persona instead. Called on the copy of the intent that this process received, before the receiver sees it.
+     */
+    public static void timeZoneChanged(Intent intent) {
+        String zone = sTimeZone;
+        if (zone != null && intent != null && Intent.ACTION_TIMEZONE_CHANGED.equals(intent.getAction())) {
+            intent.putExtra(Intent.EXTRA_TIMEZONE, zone);
         }
     }
 

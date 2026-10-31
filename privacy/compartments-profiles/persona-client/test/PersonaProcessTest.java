@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.android.internal.compartments;
 
+import android.content.Intent;
 import android.os.Bundle;
 
 import java.util.TimeZone;
@@ -31,6 +32,9 @@ public final class PersonaProcessTest {
                 }
                 PersonaProcess.applyTimeZone();
                 check(TimeZone.getDefault().getID().equals("America/Los_Angeles"), "the time zone is left alone");
+                Intent real = new Intent(Intent.ACTION_TIMEZONE_CHANGED).putExtra(Intent.EXTRA_TIMEZONE, "Asia/Tokyo");
+                PersonaProcess.timeZoneChanged(real);
+                check("Asia/Tokyo".equals(real.getStringExtra(Intent.EXTRA_TIMEZONE)), "no persona: the broadcast is left alone");
                 break;
             case "null": // a process with no core settings at all
                 PersonaProcess.setFrom(null);
@@ -52,6 +56,16 @@ public final class PersonaProcessTest {
                 TimeZone.setDefault(null); // what a time zone change does
                 PersonaProcess.applyTimeZone();
                 check(TimeZone.getDefault().getID().equals("Europe/Madrid"), "and stays after a time zone change");
+                Intent changed = new Intent(Intent.ACTION_TIMEZONE_CHANGED).putExtra(Intent.EXTRA_TIMEZONE, "Asia/Tokyo");
+                PersonaProcess.timeZoneChanged(changed);
+                check("Europe/Madrid".equals(changed.getStringExtra(Intent.EXTRA_TIMEZONE)), "the broadcast reports the persona zone");
+                Intent other = new Intent("android.intent.action.TIME_SET");
+                PersonaProcess.timeZoneChanged(other);
+                check(!other.hasExtra(Intent.EXTRA_TIMEZONE), "another broadcast gets no zone");
+                Intent noAction = new Intent(null);
+                PersonaProcess.timeZoneChanged(noAction);
+                PersonaProcess.timeZoneChanged(null);
+                check(!noAction.hasExtra(Intent.EXTRA_TIMEZONE), "no action, no null intent trouble");
                 break;
             case "badzone": // an id this system does not know leaves the default
                 PersonaProcess.setFrom(persona("Mars/Olympus"));

@@ -1,0 +1,195 @@
+From 243adcc3ea01c87736d98b99ca21146ebaede9d5 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 31 Oct 2026 21:01:33 +0100
+Subject: [PATCH] compartments: give an app with a persona no real operator in
+ its service state or time zone broadcast
+
+P7. A service state for a listener or caller with a persona loses the cell identities and registered PLMN of its registrations (they kept the real MCC, MNC and names after the location sanitizing), the channel number and the bandwidths. Every sanitized copy without coarse location now also drops the raw operator names, which stayed in toString and in the sticky SERVICE_STATE broadcast. A TIMEZONE_CHANGED broadcast reaches a persona process with the zone of its persona in the extra.
+---
+ core/java/android/app/ActivityThread.java     |  2 ++
+ core/java/android/app/LoadedApk.java          |  3 +++
+ .../internal/compartments/PersonaProcess.java | 12 +++++++++
+ .../com/android/server/TelephonyRegistry.java | 15 ++++++++---
+ .../telephony/NetworkRegistrationInfo.java    | 13 ++++++++++
+ .../java/android/telephony/ServiceState.java  | 26 +++++++++++++++++++
+ 6 files changed, 68 insertions(+), 3 deletions(-)
+
+diff --git a/core/java/android/app/ActivityThread.java b/core/java/android/app/ActivityThread.java
+index 054b15d..28a2f26 100644
+--- a/core/java/android/app/ActivityThread.java
++++ b/core/java/android/app/ActivityThread.java
+@@ -5403,6 +5403,8 @@ public final class ActivityThread extends ClientTransactionHandler
+                 + ", comp=" + data.intent.getComponent().toShortString()
+                 + ", dir=" + packageInfo.getAppDir());
+ 
++            // FreeholdOS (ADR-208): an app with a persona is not told the real time zone
++            PersonaProcess.timeZoneChanged(data.intent);
+             sCurrentBroadcastIntent.set(data.intent);
+             receiver.setPendingResult(data);
+             if (GmsCompat.isEnabled()) {
+diff --git a/core/java/android/app/LoadedApk.java b/core/java/android/app/LoadedApk.java
+index 13637ec..c9f0fe6 100644
+--- a/core/java/android/app/LoadedApk.java
++++ b/core/java/android/app/LoadedApk.java
+@@ -73,6 +73,7 @@ import android.view.DisplayAdjustments;
+ 
+ import com.android.internal.R;
+ import com.android.internal.annotations.GuardedBy;
++import com.android.internal.compartments.PersonaProcess;
+ import com.android.internal.gmscompat.GmcDebug;
+ import com.android.internal.os.DebugStore;
+ import com.android.internal.os.RuntimeInit;
+@@ -2048,6 +2049,8 @@ public final class LoadedApk {
+                         intent.prepareToEnterProcess(ActivityThread.isProtectedBroadcast(intent),
+                                 mContext.getAttributionSource());
+                         setExtrasClassLoader(cl);
++                        // FreeholdOS (ADR-208): an app with a persona is not told the real time zone
++                        PersonaProcess.timeZoneChanged(intent);
+                         receiver.setPendingResult(this);
+                         if (GmsCompat.isEnabled()) {
+                             GmcDebug.maybeLogReceiveBroadcast(receiver, intent, false);
+diff --git a/core/java/com/android/internal/compartments/PersonaProcess.java b/core/java/com/android/internal/compartments/PersonaProcess.java
+index 54fb165..4199ad8 100644
+--- a/core/java/com/android/internal/compartments/PersonaProcess.java
++++ b/core/java/com/android/internal/compartments/PersonaProcess.java
+@@ -4,6 +4,7 @@
+ 
+ package com.android.internal.compartments;
+ 
++import android.content.Intent;
+ import android.os.Bundle;
+ 
+ import java.util.Arrays;
+@@ -109,6 +110,17 @@ public final class PersonaProcess {
+         }
+     }
+ 
++    /**
++     * A TIMEZONE_CHANGED broadcast reports the real time zone of the phone in its extra (P7); an app with a persona is told the
++     * zone of its persona instead. Called on the copy of the intent that this process received, before the receiver sees it.
++     */
++    public static void timeZoneChanged(Intent intent) {
++        String zone = sTimeZone;
++        if (zone != null && intent != null && Intent.ACTION_TIMEZONE_CHANGED.equals(intent.getAction())) {
++            intent.putExtra(Intent.EXTRA_TIMEZONE, zone);
++        }
++    }
++
+     /**
+      * Makes the default time zone of the process the one of the persona, when there is one and it is a time zone that this
+      * system knows; otherwise the default is left as it is.
+diff --git a/services/core/java/com/android/server/TelephonyRegistry.java b/services/core/java/com/android/server/TelephonyRegistry.java
+index 17e9488..24956d5 100644
+--- a/services/core/java/com/android/server/TelephonyRegistry.java
++++ b/services/core/java/com/android/server/TelephonyRegistry.java
+@@ -1264,7 +1264,7 @@ public class TelephonyRegistry extends ITelephonyRegistry.Stub {
+                                     rawSs.createLocationInfoSanitizedCopy(false));
+                         } else {
+                             r.callback.onServiceStateChanged(
+-                                    rawSs.createLocationInfoSanitizedCopy(true));
++                                    noLocationCopy(r, rawSs));
+                         }
+                     } catch (RemoteException ex) {
+                         remove(r.binder);
+@@ -1906,7 +1906,7 @@ public class TelephonyRegistry extends ITelephonyRegistry.Stub {
+                                             r, Build.VERSION_CODES.Q)) {
+                                         stateToSend = state.createLocationInfoSanitizedCopy(false);
+                                     } else {
+-                                        stateToSend = state.createLocationInfoSanitizedCopy(true);
++                                        stateToSend = noLocationCopy(r, state);
+                                     }
+                                     if (DBG) {
+                                         log("notifyServiceStateForSubscriber: callback.onSSC r=" + r
+@@ -4855,6 +4855,15 @@ public class TelephonyRegistry extends ITelephonyRegistry.Stub {
+         return compartments != null && compartments.personaFor(uid) != null;
+     }
+ 
++    /**
++     * The service state for a listener that has no location access. An app with a persona also loses the cell identities and
++     * the registered PLMN of the registrations, which keep the real MCC and MNC (P7).
++     */
++    private static ServiceState noLocationCopy(Record r, ServiceState state) {
++        return hasPersona(r.callerUid)
++                ? state.createPersonaCopy() : state.createLocationInfoSanitizedCopy(true);
++    }
++
+     /**
+      * Note -- this method should only be used at the site of a permission check if you need to
+      * explicitly allow apps below a certain SDK level access regardless of location permissions.
+@@ -4933,7 +4942,7 @@ public class TelephonyRegistry extends ITelephonyRegistry.Stub {
+                             ss.createLocationInfoSanitizedCopy(false));
+                 } else {
+                     r.callback.onServiceStateChanged(
+-                            ss.createLocationInfoSanitizedCopy(true));
++                            noLocationCopy(r, ss));
+                 }
+             } catch (RemoteException ex) {
+                 mRemoveList.add(r.binder);
+diff --git a/telephony/java/android/telephony/NetworkRegistrationInfo.java b/telephony/java/android/telephony/NetworkRegistrationInfo.java
+index 59045cf..d7acdba 100644
+--- a/telephony/java/android/telephony/NetworkRegistrationInfo.java
++++ b/telephony/java/android/telephony/NetworkRegistrationInfo.java
+@@ -1034,6 +1034,19 @@ public final class NetworkRegistrationInfo implements Parcelable {
+         return result;
+     }
+ 
++    /**
++     * FreeholdOS (ADR-208): the copy for an app with a persona. The cell identity (which keeps the MCC, MNC and the operator
++     * names after {@link #sanitizeLocationInfo}) and the registered PLMN are dropped.
++     *
++     * @hide
++     */
++    public NetworkRegistrationInfo sanitizePlmnInfo() {
++        NetworkRegistrationInfo result = copy();
++        result.mCellIdentity = null;
++        result.mRplmn = "";
++        return result;
++    }
++
+     private NetworkRegistrationInfo copy() {
+         Parcel p = Parcel.obtain();
+         this.writeToParcel(p, 0);
+diff --git a/telephony/java/android/telephony/ServiceState.java b/telephony/java/android/telephony/ServiceState.java
+index cda465c..87524c8 100644
+--- a/telephony/java/android/telephony/ServiceState.java
++++ b/telephony/java/android/telephony/ServiceState.java
+@@ -2009,10 +2009,36 @@ public class ServiceState implements Parcelable {
+         state.mOperatorAlphaLong = null;
+         state.mOperatorAlphaShort = null;
+         state.mOperatorNumeric = null;
++        // FreeholdOS: the raw names are the same operator names; they stayed in the copy, in toString and in the
++        // notifier bundle of the sticky SERVICE_STATE broadcast
++        state.mOperatorAlphaLongRaw = null;
++        state.mOperatorAlphaShortRaw = null;
+ 
+         return state;
+     }
+ 
++    /**
++     * FreeholdOS (ADR-208): the copy for an app with a persona (P7). Besides what {@link #createLocationInfoSanitizedCopy}
++     * removes, the registrations lose their cell identities and registered PLMN, which still carry the real MCC, MNC and
++     * operator names, and the channel number and bandwidths of the real radio go.
++     *
++     * @hide
++     */
++    public ServiceState createPersonaCopy() {
++        ServiceState state = createLocationInfoSanitizedCopy(true);
++        synchronized (state.mNetworkRegistrationInfos) {
++            List<NetworkRegistrationInfo> stripped =
++                    state.mNetworkRegistrationInfos.stream()
++                            .map(NetworkRegistrationInfo::sanitizePlmnInfo)
++                            .collect(Collectors.toList());
++            state.mNetworkRegistrationInfos.clear();
++            state.mNetworkRegistrationInfos.addAll(stripped);
++        }
++        state.mChannelNumber = UNKNOWN_ID;
++        state.mCellBandwidths = new int[0];
++        return state;
++    }
++
+     /**
+      * @hide
+      */
+-- 
+2.56.0
+

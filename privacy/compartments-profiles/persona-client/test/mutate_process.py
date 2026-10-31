@@ -24,12 +24,16 @@ MUTANTS = [
     # allocation, not a behaviour)
     ("the country key is read as the operator", "String operator = coreSettings == null ? null : coreSettings.getString(KEY_OPERATOR);", "String operator = coreSettings == null ? null : coreSettings.getString(KEY_COUNTRY);"),
     ("a null bundle is not survived", "String timeZone = coreSettings == null ? null :", "String timeZone ="),
+    ("the broadcast does not report the persona zone", "intent.putExtra(Intent.EXTRA_TIMEZONE, zone);", 'intent.putExtra(Intent.EXTRA_TIMEZONE, "UTC");'),
+    ("another broadcast gets the zone", " && Intent.ACTION_TIMEZONE_CHANGED.equals(intent.getAction())", ""),
+    ("a null intent is not survived", "zone != null && intent != null &&", "zone != null &&"),
+    ("a process without a persona changes the broadcast", "if (zone != null && intent != null", "if (intent != null"),
 ]
 
 
 def run(d):
     out = d / "out"
-    c = subprocess.run(["javac", "-d", str(out), str(d / "PersonaProcess.java"), str(d / "PersonaProcessTest.java"), str(d / "Bundle.java")], capture_output=True, text=True)
+    c = subprocess.run(["javac", "-d", str(out), str(d / "PersonaProcess.java"), str(d / "PersonaProcessTest.java"), str(d / "Bundle.java"), str(d / "Intent.java")], capture_output=True, text=True)
     if c.returncode != 0:
         return c
     runs = [subprocess.run(["java", "-ea", "-cp", str(out), "com.android.internal.compartments.PersonaProcessTest", s], capture_output=True, text=True) for s in SCENARIOS]
@@ -40,6 +44,7 @@ def fresh(d):
     shutil.copy(ROOT / "framework" / "PersonaProcess.java", d / "PersonaProcess.java")
     shutil.copy(ROOT / "test" / "PersonaProcessTest.java", d / "PersonaProcessTest.java")
     shutil.copy(ROOT / "test" / "stubs" / "android" / "os" / "Bundle.java", d / "Bundle.java")
+    shutil.copy(ROOT / "test" / "stubs" / "android" / "content" / "Intent.java", d / "Intent.java")
 
 
 # The unmutated tree must pass first: with a failing baseline every mutant would count as killed and prove nothing.

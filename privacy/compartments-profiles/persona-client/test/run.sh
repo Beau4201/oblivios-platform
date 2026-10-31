@@ -12,7 +12,7 @@ java -ea -cp "$OUT" com.android.server.compartments.PersonaReaderTest
 # PersonaProcess: one JVM per scenario, because a process is bound once
 OUT2=$(mktemp -d)
 trap 'rm -rf "$OUT" "$OUT2"' EXIT
-javac -Xlint:all -d "$OUT2" "$T"/../framework/PersonaProcess.java "$T"/PersonaProcessTest.java "$T"/stubs/android/os/Bundle.java
+javac -Xlint:all -d "$OUT2" "$T"/../framework/PersonaProcess.java "$T"/PersonaProcessTest.java "$T"/stubs/android/os/Bundle.java "$T"/stubs/android/content/Intent.java
 for s in none null full badzone partial twice; do
   java -ea -cp "$OUT2" com.android.internal.compartments.PersonaProcessTest "$s"
 done

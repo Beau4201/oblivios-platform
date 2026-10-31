@@ -1,0 +1,38 @@
+From f4a6c5b72f0d9413874f7bd97635d1e0a299963d Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 31 Oct 2026 21:01:33 +0100
+Subject: [PATCH] telephony: give a persona caller a service state without the
+ real registrations
+
+getServiceStateForSlot answers an app with a persona with ServiceState.createPersonaCopy (frameworks-base 0011): no cell identities, no registered PLMN.
+---
+ src/com/android/phone/PhoneInterfaceManager.java | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/com/android/phone/PhoneInterfaceManager.java b/src/com/android/phone/PhoneInterfaceManager.java
+index 439a74f..ed0d422 100644
+--- a/src/com/android/phone/PhoneInterfaceManager.java
++++ b/src/com/android/phone/PhoneInterfaceManager.java
+@@ -8543,7 +8543,8 @@ public class PhoneInterfaceManager extends ITelephony.Stub {
+         }
+ 
+         // FreeholdOS (ADR-208): the service state of an app with a persona carries no cell and no area of the real radio
+-        if (mPersonaCells.placeOf(Binder.getCallingUid()) != 0) {
++        final boolean persona = mPersonaCells.placeOf(Binder.getCallingUid()) != 0;
++        if (persona) {
+             renounceFineLocationAccess = true;
+             renounceCoarseLocationAccess = true;
+         }
+@@ -8612,7 +8613,8 @@ public class PhoneInterfaceManager extends ITelephony.Stub {
+             // the caller has.
+             if (hasFinePermission || isCallingPackageDataService) return ss;
+             if (hasCoarsePermission) return ss.createLocationInfoSanitizedCopy(false);
+-            return ss.createLocationInfoSanitizedCopy(true);
++            // FreeholdOS (ADR-208): an app with a persona also loses the cell identities and the registered PLMN (P7)
++            return persona ? ss.createPersonaCopy() : ss.createLocationInfoSanitizedCopy(true);
+         } finally {
+             Binder.restoreCallingIdentity(identity);
+         }
+-- 
+2.56.0
+
