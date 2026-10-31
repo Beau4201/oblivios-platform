@@ -626,7 +626,15 @@ public final class ProfilesTest {
         check(MirrorPlan.personaFile(iso, r, salt, null, "NL", 52.37, 4.89).equals(PersonaFile.format(salt, Map.of())),
                 "without place data nobody has a persona");
         check(MirrorPlan.locationUnresolved(iso, r, salt, null, "NL", 52.37, 4.89).equals(java.util.Set.of("com.set.app")),
-                "and only the app with an entry is unresolved: the apps without one keep what they had until place data is installed");
+                "and only the app with an entry is unresolved: the permissions of the apps without one are kept until place data is installed");
+        check(MirrorPlan.locationWithheldAppIds(iso, r, salt, null, "NL", 52.37, 4.89, null, null).toString().equals("[10100, 10200]"),
+                "but the apps without an entry are withheld the position at delivery, which the store reports as substituted");
+        check(MirrorPlan.locationWithheldAppIds(PolicyStore.EMPTY.withDefaults(ISO).withApp("com.set.app", AppPolicy.PROTECTED), r, salt, null, "NL", 52.37, 4.89, null, null).toString().equals("[10200]"),
+                "an app with a Protected entry is not withheld by the rule for apps without one");
+        check(MirrorPlan.locationWithheldAppIds(iso, r, salt, places, "NL", 52.37, 4.89, null, null).isEmpty(),
+                "with place data and a country nobody is withheld: every app has a persona");
+        check(MirrorPlan.locationWithheldAppIds(PolicyStore.EMPTY.withDefaults(AppPolicy.PROTECTED).withApp("com.set.app", ISO), r, salt, null, "NL", 52.37, 4.89, null, null).toString().equals("[10100]"),
+                "Protected defaults withhold only the app with an entry");
         PolicyStore prot = PolicyStore.EMPTY.withDefaults(AppPolicy.PROTECTED).withApp("com.set.app", ISO);
         PersonaFile p = PersonaFile.parse(MirrorPlan.personaFile(prot, r, salt, places, "NL", 52.37, 4.89));
         check(far(p.placeOf(10100)) && p.placeOf(10200) == 0, "Protected defaults give the app without an entry no persona");

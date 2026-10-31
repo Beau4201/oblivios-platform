@@ -103,7 +103,7 @@
     <string name="value_settings_blocked">Only what apps need</string>
 
     <string name="identity_defaults_location_note">New apps keep the real location. Give an app substitute location data on its own page.</string>
-    <string name="identity_defaults_location_isolated_note">Apps you have not set get a place of their own, as an app you set to Isolated does. An app that is running gets it when it starts again. If no place can be made for an app, its location permission is taken and stays off until you give it back.</string>
+    <string name="identity_defaults_location_isolated_note">Apps you have not set get a place of their own, as an app you set to Isolated does. An app that is running gets it when it starts again. If no place can be made for an app, it gets no location.</string>
 
     <!-- The place of the persona of one app (ADR-208). -->
     <string name="place_title">Place</string>

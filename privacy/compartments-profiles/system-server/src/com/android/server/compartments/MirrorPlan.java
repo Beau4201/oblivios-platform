@@ -120,8 +120,8 @@ final class MirrorPlan {
     /**
      * The packages that the persona plan covers: those with an entry, and, when the defaults are Isolated and the image has
      * place data, every installed package, because an app without an entry follows the defaults (D5). Without place data no
-     * persona can be made for anyone, and the permissions of every app would be taken at once, so those apps keep what they
-     * had until data is installed.
+     * persona can be made for anyone, and the permissions of every app would be taken at once, so these apps keep their
+     * permissions and are only withheld the position at delivery (see {@link #locationWithheldAppIds}) until data is installed.
      */
     static Set<String> locationPackages(PolicyStore s, UidResolver r, Places places) {
         Set<String> out = new TreeSet<>(s.configured());
@@ -262,6 +262,15 @@ final class MirrorPlan {
             double lon, PolicyStore before, PersonaFile table) {
         Set<String> packages = new TreeSet<>(locationBlocked(s));
         packages.addAll(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));
+        if (s.defaults.profile == Profiles.Profile.ISOLATED && places == null) {
+            // no place data: no persona can be made for an app without an entry, which the store still reports as substituted,
+            // so the real fix is not delivered to it; its permissions are left alone (they are not taken from every app at once)
+            for (String pkg : r.installedPackages()) {
+                if (!s.hasEntry(pkg)) {
+                    packages.add(pkg);
+                }
+            }
+        }
         Set<Integer> out = new TreeSet<>();
         for (String pkg : packages) {
             int appId = ordinaryAppId(r.uidOf(pkg));

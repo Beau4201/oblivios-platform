@@ -7,6 +7,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MUTANTS = [
     # D5 (Isolated defaults give an app without an entry a persona)
     ("PolicyStore.java", "Isolated defaults leave the location of an unconfigured app real", "c == Cls.LOCATION && defaults.profile != Profile.ISOLATED ? Value.REAL", "c == Cls.LOCATION ? Value.REAL"),
+    ("MirrorPlan.java", "the apps without an entry are not withheld without place data", "if (s.defaults.profile == Profiles.Profile.ISOLATED && places == null) {", "if (false) {"),
+    ("MirrorPlan.java", "Protected defaults withhold the apps without an entry", "if (s.defaults.profile == Profiles.Profile.ISOLATED && places == null) {", "if (places == null) {"),
+    ("MirrorPlan.java", "the apps without an entry are withheld with place data too", "if (s.defaults.profile == Profiles.Profile.ISOLATED && places == null) {", "if (s.defaults.profile == Profiles.Profile.ISOLATED) {"),
+    ("MirrorPlan.java", "an app with an entry is withheld by the default rule", "                if (!s.hasEntry(pkg)) {", "                if (true) {"),
     ("MirrorPlan.java", "the plan leaves out the installed packages", "            out.addAll(r.installedPackages());", ""),
     ("MirrorPlan.java", "Protected defaults cover the installed packages", "s.defaults.profile == Profiles.Profile.ISOLATED && places != null", "places != null"),
     ("MirrorPlan.java", "the installed packages are covered without place data", "s.defaults.profile == Profiles.Profile.ISOLATED && places != null", "s.defaults.profile == Profiles.Profile.ISOLATED"),
@@ -14,8 +18,8 @@ MUTANTS = [
     ("MirrorPlan.java", "the unresolved set covers only the entries", "for (String pkg : locationPackages(s, r, places)) {\n            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId >= 0 && s.value", "for (String pkg : s.configured()) {\n            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId >= 0 && s.value"),
     # P4, P20, B1 (review fixes of 2026-10-30, second round)
     ("MirrorPlan.java", "the withheld set leaves out the blocked apps", "Set<String> packages = new TreeSet<>(locationBlocked(s));", "Set<String> packages = new TreeSet<>();"),
-    ("MirrorPlan.java", "the withheld set leaves out the unresolved apps", "        packages.addAll(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));\n        Set<Integer> out", "        Set<Integer> out"),
-    ("MirrorPlan.java", "the withheld set ignores the kept place", "locationUnresolved(s, r, salt, places, country, lat, lon, before, table));\n        Set<Integer> out", "locationUnresolved(s, r, salt, places, country, lat, lon, null, null));\n        Set<Integer> out"),
+    ("MirrorPlan.java", "the withheld set leaves out the unresolved apps", "        packages.addAll(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));\n        if (s.defaults", "        if (s.defaults"),
+    ("MirrorPlan.java", "the withheld set ignores the kept place", "locationUnresolved(s, r, salt, places, country, lat, lon, before, table));\n        if (s.defaults", "locationUnresolved(s, r, salt, places, country, lat, lon, null, null));\n        if (s.defaults"),
     ("MirrorPlan.java", "the withheld set takes a platform uid", "            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId >= 0) {\n                out.add(appId);", "            int appId = r.uidOf(pkg) % USER_OFFSET;\n            if (appId >= 0) {\n                out.add(appId);"),
     ("ActivityEstimator.java", "the estimator keeps its state across a gap", "if (lastMs != Long.MIN_VALUE && nowMs - lastMs > STALE_MS) {", "if (false) {"),
     ("ActivityEstimator.java", "the gap resets only the activity", "            candidate = Activity.STILL;\n            seen = 0;\n        }\n        lastMs = nowMs;", "        }\n        lastMs = nowMs;"),
