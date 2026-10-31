@@ -1,0 +1,77 @@
+From 6b7c5f3c7f11512409feeb42d7ab208023a3b1f1 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 31 Oct 2026 02:04:07 +0100
+Subject: [PATCH] bluetooth: give an app with a persona no discovery and no
+ periodic sync
+
+Classic discovery (AdapterService.startDiscovery) answers false and the periodic advertising sync (ScanBinder.registerSync) is not registered for the uid of an app with a persona, so it receives no device or report of the real place.
+---
+ .../com/android/bluetooth/btservice/AdapterService.java    | 7 +++++++
+ .../app/src/com/android/bluetooth/le_scan/ScanBinder.kt    | 5 +++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/android/app/src/com/android/bluetooth/btservice/AdapterService.java b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+index dffa5e5..ef7caa9 100644
+--- a/android/app/src/com/android/bluetooth/btservice/AdapterService.java
++++ b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
+@@ -159,6 +159,7 @@ import com.android.bluetooth.le_audio.LeAudioPeripheralService;
+ import com.android.bluetooth.le_audio.LeAudioService;
+ import com.android.bluetooth.le_audio.LeAudioTmapService;
+ import com.android.bluetooth.le_scan.PeriodicScanNativeInterface;
++import com.android.bluetooth.le_scan.PersonaReader;
+ import com.android.bluetooth.le_scan.ScanController;
+ import com.android.bluetooth.le_scan.ScanNativeInterface;
+ import com.android.bluetooth.le_scan.ScanUtil;
+@@ -259,6 +260,9 @@ public class AdapterService extends Service {
+ 
+     private final Map<CallingPackage, DiscoveringPackageInfo> mDiscoveringPackages = new HashMap<>();
+ 
++    /** FreeholdOS (ADR-208): an app with a persona discovers no device of the real place. */
++    private final PersonaReader mPersona = new PersonaReader();
++
+     // Used to broadcast discovered devices to new packages starting discovery.
+     @GuardedBy("mDiscoveringPackages")
+     private final Set<BluetoothDevice> mDiscoveredDevices = new HashSet<>();
+@@ -3007,6 +3011,9 @@ public class AdapterService extends Service {
+         Log.d(TAG, "startDiscovery");
+         var callingPackage = new CallingPackage(source.getPackageName(), callingUser);
+         mAppOps.checkPackage(Binder.getCallingUid(), callingPackage.packageName);
++        if (mPersona.placeOf(Binder.getCallingUid()) != 0) {
++            return false;
++        }
+         boolean isQApp = Util.checkCallerTargetSdk(this, source, Build.VERSION_CODES.Q);
+         boolean hasDisavowedLocation =
+                 Util.hasDisavowedLocationForScan(this, source, mTestModeEnabled);
+diff --git a/android/app/src/com/android/bluetooth/le_scan/ScanBinder.kt b/android/app/src/com/android/bluetooth/le_scan/ScanBinder.kt
+index 03ef2ab..64f654e 100644
+--- a/android/app/src/com/android/bluetooth/le_scan/ScanBinder.kt
++++ b/android/app/src/com/android/bluetooth/le_scan/ScanBinder.kt
+@@ -33,6 +33,7 @@ import android.bluetooth.le.ScanFilter
+ import android.bluetooth.le.ScanResult
+ import android.bluetooth.le.ScanSettings
+ import android.content.AttributionSource
++import android.os.Binder
+ import android.os.Build
+ import android.os.WorkSource
+ import android.util.Log
+@@ -57,6 +58,9 @@ class ScanBinder(
+ 
+     @Volatile private var isAvailable = true
+ 
++    // FreeholdOS (ADR-208): an app with a persona syncs to no periodic advertiser of the real place.
++    private val persona = PersonaReader()
++
+     fun cleanup() {
+         isAvailable = false
+     }
+@@ -171,6 +175,7 @@ class ScanBinder(
+         callback: IPeriodicAdvertisingCallback,
+         source: AttributionSource,
+     ) {
++        if (persona.placeOf(Binder.getCallingUid()) != 0) return
+         withControllerRunOnScanThread(source, "registerSync") {
+             registerSync(scanResult, skip, timeout, callback)
+         }
+-- 
+2.56.0
+
