@@ -1,0 +1,21 @@
+From d9d1be451dfff9df5a2e37f898e97ca6b8daef96 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 31 Oct 2026 20:52:12 +0100
+Subject: [PATCH] wifi: drop a work note that 0004 added by mistake
+
+The commit of 0004 carried .claude/work/compartments-profiles.md, a note of the authoring session, into the module tree. Nothing reads it.
+---
+ .claude/work/compartments-profiles.md | 1 -
+ 1 file changed, 1 deletion(-)
+ delete mode 100644 .claude/work/compartments-profiles.md
+
+diff --git a/.claude/work/compartments-profiles.md b/.claude/work/compartments-profiles.md
+deleted file mode 100644
+index 1650364..0000000
+--- a/.claude/work/compartments-profiles.md
++++ /dev/null
+@@ -1 +0,0 @@
+-2026-10-31T02:02 [DECISION] 2026-10-31 P8 Wi-Fi: persona guard (PersonaReader.placeOf(uid)!=0 -> SecurityException / false) added centrally in WifiPermissionsUtil enforceLocationPermission, enforceFine/CoarseLocationPermission, enforceCanAccessScanResults, enforceCanAccessScanResultsForWifiScanner, enforceNearbyDevicesPermission(checkForLocation only), checkCanAccessWifiDirect; repo .worktrees/rest-fixes/wifi; rejected: per-feature hooks in Aware/RTT/P2P (all route through these). Next: bluetooth same way, then format-patch + git am.
+-- 
+2.56.0
+

@@ -1,0 +1,79 @@
+From d5b4486898118bc602853b2934237eb75a6d0517 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 31 Oct 2026 20:54:51 +0100
+Subject: [PATCH] compartments: clear the entries of packages that are gone at
+ boot
+
+A package removed while system_server was not running kept its entry, because the removal broadcast was missed. Once the boot is completed the entries of packages that no user has (also not with kept data) are cleared in one change, as onPackageRemoved does for one.
+---
+ .../CompartmentsPolicyService.java            | 35 +++++++++++++++++--
+ 1 file changed, 32 insertions(+), 3 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index 9f86687..392c811 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -585,7 +585,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+      */
+     private void onPackageRemoved(String pkg) {
+         try {
+-            if (pkg == null || !mStore.hasEntry(pkg) || installedForAnyUser(pkg)) {
++            if (pkg == null || !mStore.hasEntry(pkg) || installedForAnyUser(pkg, 0)) {
+                 return;
+             }
+             change(-1, Profile.PROTECTED.ordinal(), s -> s.without(pkg));
+@@ -594,13 +594,41 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         }
+     }
+ 
+-    private boolean installedForAnyUser(String pkg) {
++    /**
++     * The entries of packages that were removed while the service was not running are cleared once the boot is completed
++     * (P17). A package that is uninstalled with its data kept still counts as present, as the removal broadcast is not sent
++     * for it either. Nothing may escape: the entries then stay until the next boot.
++     */
++    private void pruneAbsent() {
++        try {
++            List<String> gone = new ArrayList<>();
++            for (String pkg : mStore.configured()) {
++                if (!installedForAnyUser(pkg, PackageManager.MATCH_UNINSTALLED_PACKAGES)) {
++                    gone.add(pkg);
++                }
++            }
++            if (gone.isEmpty()) {
++                return;
++            }
++            change(-1, Profile.PROTECTED.ordinal(), s -> {
++                PolicyStore next = s;
++                for (String pkg : gone) {
++                    next = next.without(pkg);
++                }
++                return next;
++            });
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "pruning absent packages failed: " + e.getClass().getSimpleName());
++        }
++    }
++
++    private boolean installedForAnyUser(String pkg, int flags) {
+         final long token = Binder.clearCallingIdentity();
+         try {
+             PackageManager pm = mContext.getPackageManager();
+             for (UserHandle user : mContext.getSystemService(UserManager.class).getUserHandles(true)) {
+                 try {
+-                    pm.getPackageUidAsUser(pkg, 0, user.getIdentifier());
++                    pm.getPackageUidAsUser(pkg, flags, user.getIdentifier());
+                     return true;
+                 } catch (PackageManager.NameNotFoundException e) {
+                     // not installed for this user
+@@ -931,6 +959,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 mService.systemReady();
+             } else if (phase == PHASE_BOOT_COMPLETED) {
+                 mService.reapply();
++                BackgroundThread.getHandler().post(mService::pruneAbsent);
+             }
+         }
+     }
+-- 
+2.56.0
+
