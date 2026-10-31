@@ -1,0 +1,30 @@
+From 7d0566e62abefd64813eedba5b534b111283a8c3 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 31 Oct 2026 21:11:38 +0100
+Subject: [PATCH] wifi: refuse nearby Wi-Fi devices to an app with a persona
+
+enforceNearbyDevicesPermission refused only a caller that requires location. An app that renounces location (neverForLocation) kept ranging, Aware and Wi-Fi Direct, which give it distances to access points whose place it knows; a persona app is refused there as well (D6). The app loses those nearby features.
+---
+ .../com/android/server/wifi/util/WifiPermissionsUtil.java   | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/service/java/com/android/server/wifi/util/WifiPermissionsUtil.java b/service/java/com/android/server/wifi/util/WifiPermissionsUtil.java
+index 5327094..b833c83 100644
+--- a/service/java/com/android/server/wifi/util/WifiPermissionsUtil.java
++++ b/service/java/com/android/server/wifi/util/WifiPermissionsUtil.java
+@@ -226,8 +226,10 @@ public class WifiPermissionsUtil {
+         String packageName = attributionSource.getPackageName();
+         int uid = attributionSource.getUid();
+         checkPackage(uid, packageName);
+-        if (checkForLocation && mPersona.placeOf(uid) != 0) {
+-            throw new SecurityException("UID " + uid + " has a persona: no location access");
++        // Compartments (D6): also an app that renounces location (neverForLocation) is refused; ranging, Aware and Wi-Fi Direct
++        // would still give it distances to access points whose place it knows.
++        if (mPersona.placeOf(uid) != 0) {
++            throw new SecurityException("UID " + uid + " has a persona: no nearby Wi-Fi devices");
+         }
+         // Apps with NETWORK_SETTINGS, NETWORK_SETUP_WIZARD, NETWORK_MANAGED_PROVISIONING,
+         // NETWORK_STACK & MAINLINE_NETWORK_STACK, RADIO_SCAN_WITHOUT_LOCATION are granted a bypass.
+-- 
+2.56.0
+

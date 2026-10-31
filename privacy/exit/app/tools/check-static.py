@@ -57,6 +57,15 @@ ROW_PATCHES = {
     "ROW_PLACE": ("frameworks-base", "0005"),
 }
 
+# The file that each of those patches must change, for the claim to be built: the policy service, the location delivery, the
+# process side of the persona and the sensor modes (G1).
+PATCH_TOUCHES = {
+    ("frameworks-base", "0002"): "services/core/java/com/android/server/compartments/CompartmentsPolicyService.java",
+    ("frameworks-base", "0005"): "services/core/java/com/android/server/location/provider/LocationProviderManager.java",
+    ("frameworks-base", "0006"): "core/java/com/android/internal/compartments/PersonaProcess.java",
+    ("frameworks-native", "0003"): "services/sensorservice/SensorModes.h",
+}
+
 # The policy package of the same service: the numbers of ProfileRows are the numbers of the enums of its policy core (the
 # interface constants), and its patches are what the strings and rows may claim.
 PACKAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "compartments-profiles")
@@ -127,9 +136,21 @@ def check(app, package=PACKAGE):
 
 
 def has_patch(package, repo, number):
-    """Whether the package holds the patch numbered `number` for `repo`."""
+    """Whether the package holds the patch numbered `number` for `repo`, and the patch changes the file that enforces what
+    the app claims (PATCH_TOUCHES): an empty or unrelated file of that name does not count (G1)."""
     folder = os.path.join(package, "patches", repo)
-    return os.path.isdir(folder) and any(n.startswith(number + "-") and n.endswith(".patch") for n in os.listdir(folder))
+    if not os.path.isdir(folder):
+        return False
+    touched = PATCH_TOUCHES.get((repo, number))
+    for n in os.listdir(folder):
+        if not (n.startswith(number + "-") and n.endswith(".patch")):
+            continue
+        if touched is None:
+            return True
+        with open(os.path.join(folder, n), encoding="utf-8", errors="replace") as f:
+            if any(line.startswith("diff --git ") and line.rstrip().endswith(" b/" + touched) for line in f):
+                return True
+    return False
 
 
 def patch_claims(strings, package):

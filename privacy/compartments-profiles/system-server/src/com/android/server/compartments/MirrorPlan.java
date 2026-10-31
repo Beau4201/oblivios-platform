@@ -5,6 +5,8 @@ import com.android.server.compartments.Profiles.Cls;
 import com.android.server.compartments.Profiles.SensorMode;
 import com.android.server.compartments.Profiles.Value;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -17,6 +19,11 @@ final class MirrorPlan {
     /** The uid of a package in the owner user, or -1 when the package is not installed there. */
     interface UidResolver {
         int uidOf(String pkg);
+
+        /** The packages installed in the owner user; an app without an entry is one of them (D5). None by default. */
+        default Collection<String> installedPackages() {
+            return Collections.emptySet();
+        }
     }
 
     static final int USER_OFFSET = 100000;
@@ -110,6 +117,20 @@ final class MirrorPlan {
         return out;
     }
 
+    /**
+     * The packages that the persona plan covers: those with an entry, and, when the defaults are Isolated and the image has
+     * place data, every installed package, because an app without an entry follows the defaults (D5). Without place data no
+     * persona can be made for anyone, and the permissions of every app would be taken at once, so those apps keep what they
+     * had until data is installed.
+     */
+    static Set<String> locationPackages(PolicyStore s, UidResolver r, Places places) {
+        Set<String> out = new TreeSet<>(s.configured());
+        if (s.defaults.profile == Profiles.Profile.ISOLATED && places != null) {
+            out.addAll(r.installedPackages());
+        }
+        return out;
+    }
+
     /** The seed of the Automatic place of an app on this phone: the same every time, different for each app and each phone. */
     static long personaSeed(long salt, int appId) {
         return salt ^ (appId * 0x9E3779B97F4A7C15L);
@@ -195,7 +216,7 @@ final class MirrorPlan {
     static String personaFile(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat, double lon,
             PolicyStore before, PersonaFile table) {
         Map<Integer, Integer> perApp = new TreeMap<>();
-        for (String pkg : s.configured()) {
+        for (String pkg : locationPackages(s, r, places)) {
             int appId = ordinaryAppId(r.uidOf(pkg));
             if (appId < 0 || s.value(pkg, Cls.LOCATION) != Value.SUBSTITUTE) {
                 continue;
@@ -221,7 +242,7 @@ final class MirrorPlan {
     static Set<String> locationUnresolved(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
             double lon, PolicyStore before, PersonaFile table) {
         Set<String> out = new TreeSet<>();
-        for (String pkg : s.configured()) {
+        for (String pkg : locationPackages(s, r, places)) {
             int appId = ordinaryAppId(r.uidOf(pkg));
             if (appId >= 0 && s.value(pkg, Cls.LOCATION) == Value.SUBSTITUTE
                     && placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon, keptPlace(before, table, pkg, appId, places)) == 0) {

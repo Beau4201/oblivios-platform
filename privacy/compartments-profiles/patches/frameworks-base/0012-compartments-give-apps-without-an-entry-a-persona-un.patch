@@ -1,0 +1,170 @@
+From fd48a68e46b1033c31cedfed1e8f51977675270f Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 31 Oct 2026 21:27:10 +0100
+Subject: [PATCH] compartments: give apps without an entry a persona under
+ Isolated defaults
+
+An app without an entry follows the defaults, but the persona plan only
+listed apps with an entry, so under Isolated defaults those apps kept
+their real location (D5). With place data present the plan now covers
+every installed package of the owner user; without place data the apps
+keep their real location, so no permission is revoked from all apps at
+once. Protected defaults leave the location of an unconfigured app real.
+---
+ .../CompartmentsPolicyService.java            | 29 ++++++++++++++++---
+ .../server/compartments/MirrorPlan.java       | 25 ++++++++++++++--
+ .../server/compartments/PolicyStore.java      |  7 +++--
+ 3 files changed, 52 insertions(+), 9 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index 392c811..176b7d2 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -49,6 +49,7 @@ import java.nio.charset.StandardCharsets;
+ import java.nio.file.Files;
+ import java.security.SecureRandom;
+ import java.util.ArrayList;
++import java.util.Collection;
+ import java.util.Collections;
+ import java.util.List;
+ import java.util.Locale;
+@@ -409,7 +410,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+ 
+     /** The sensor file with the activity of the phone now; the caller holds mLock. */
+     private void writeSensorFile(PolicyStore s) {
+-        String file = MirrorPlan.sensorModeFile(s, this::ownerUidOf, mSalt, mActivity);
++        String file = MirrorPlan.sensorModeFile(s, mResolver, mSalt, mActivity);
+         writeAtomic(mSensorFile, file.getBytes(StandardCharsets.US_ASCII), 0644);
+     }
+ 
+@@ -426,13 +427,13 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         double lat = mRealLat;
+         double lon = mRealLon;
+         PersonaFile last = mPersona;
+-        String file = MirrorPlan.personaFile(next, this::ownerUidOf, mSalt, places, country, lat, lon, previous, last);
++        String file = MirrorPlan.personaFile(next, mResolver, mSalt, places, country, lat, lon, previous, last);
+         PersonaFile table = PersonaFile.parse(file);
+         mPersona = table;
+         mTracks.keySet().removeIf(appId -> table.placeOf(appId) == 0);
+         Set<String> deny = new TreeSet<>(MirrorPlan.locationBlocked(next));
+-        deny.addAll(MirrorPlan.locationUnresolved(next, this::ownerUidOf, mSalt, places, country, lat, lon, previous, last));
+-        mWithheld = MirrorPlan.locationWithheldAppIds(next, this::ownerUidOf, mSalt, places, country, lat, lon, previous, last);
++        deny.addAll(MirrorPlan.locationUnresolved(next, mResolver, mSalt, places, country, lat, lon, previous, last));
++        mWithheld = MirrorPlan.locationWithheldAppIds(next, mResolver, mSalt, places, country, lat, lon, previous, last);
+         try {
+             writeAtomic(mPersonaFile, file.getBytes(StandardCharsets.US_ASCII), 0644);
+         } finally {
+@@ -490,6 +491,26 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         }
+     }
+ 
++    /**
++     * The packages and uids of the owner user for the plans. The installed packages are asked only when the defaults are
++     * Isolated and the place data is there (D5), so a plan without that need does not list them.
++     */
++    private final MirrorPlan.UidResolver mResolver = new MirrorPlan.UidResolver() {
++        @Override
++        public int uidOf(String pkg) {
++            return ownerUidOf(pkg);
++        }
++
++        @Override
++        public Collection<String> installedPackages() {
++            List<String> out = new ArrayList<>();
++            for (PackageInfo info : mContext.getPackageManager().getInstalledPackagesAsUser(0, UserHandle.USER_SYSTEM)) {
++                out.add(info.packageName);
++            }
++            return out;
++        }
++    };
++
+     private int ownerUidOf(String pkg) {
+         try {
+             return mContext.getPackageManager().getPackageUidAsUser(pkg, 0, UserHandle.USER_SYSTEM);
+diff --git a/services/core/java/com/android/server/compartments/MirrorPlan.java b/services/core/java/com/android/server/compartments/MirrorPlan.java
+index 8fe0481..19f379b 100644
+--- a/services/core/java/com/android/server/compartments/MirrorPlan.java
++++ b/services/core/java/com/android/server/compartments/MirrorPlan.java
+@@ -5,6 +5,8 @@ import com.android.server.compartments.Profiles.Cls;
+ import com.android.server.compartments.Profiles.SensorMode;
+ import com.android.server.compartments.Profiles.Value;
+ 
++import java.util.Collection;
++import java.util.Collections;
+ import java.util.Map;
+ import java.util.Set;
+ import java.util.TreeMap;
+@@ -17,6 +19,11 @@ final class MirrorPlan {
+     /** The uid of a package in the owner user, or -1 when the package is not installed there. */
+     interface UidResolver {
+         int uidOf(String pkg);
++
++        /** The packages installed in the owner user; an app without an entry is one of them (D5). None by default. */
++        default Collection<String> installedPackages() {
++            return Collections.emptySet();
++        }
+     }
+ 
+     static final int USER_OFFSET = 100000;
+@@ -110,6 +117,20 @@ final class MirrorPlan {
+         return out;
+     }
+ 
++    /**
++     * The packages that the persona plan covers: those with an entry, and, when the defaults are Isolated and the image has
++     * place data, every installed package, because an app without an entry follows the defaults (D5). Without place data no
++     * persona can be made for anyone, and the permissions of every app would be taken at once, so those apps keep what they
++     * had until data is installed.
++     */
++    static Set<String> locationPackages(PolicyStore s, UidResolver r, Places places) {
++        Set<String> out = new TreeSet<>(s.configured());
++        if (s.defaults.profile == Profiles.Profile.ISOLATED && places != null) {
++            out.addAll(r.installedPackages());
++        }
++        return out;
++    }
++
+     /** The seed of the Automatic place of an app on this phone: the same every time, different for each app and each phone. */
+     static long personaSeed(long salt, int appId) {
+         return salt ^ (appId * 0x9E3779B97F4A7C15L);
+@@ -195,7 +216,7 @@ final class MirrorPlan {
+     static String personaFile(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat, double lon,
+             PolicyStore before, PersonaFile table) {
+         Map<Integer, Integer> perApp = new TreeMap<>();
+-        for (String pkg : s.configured()) {
++        for (String pkg : locationPackages(s, r, places)) {
+             int appId = ordinaryAppId(r.uidOf(pkg));
+             if (appId < 0 || s.value(pkg, Cls.LOCATION) != Value.SUBSTITUTE) {
+                 continue;
+@@ -221,7 +242,7 @@ final class MirrorPlan {
+     static Set<String> locationUnresolved(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
+             double lon, PolicyStore before, PersonaFile table) {
+         Set<String> out = new TreeSet<>();
+-        for (String pkg : s.configured()) {
++        for (String pkg : locationPackages(s, r, places)) {
+             int appId = ordinaryAppId(r.uidOf(pkg));
+             if (appId >= 0 && s.value(pkg, Cls.LOCATION) == Value.SUBSTITUTE
+                     && placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon, keptPlace(before, table, pkg, appId, places)) == 0) {
+diff --git a/services/core/java/com/android/server/compartments/PolicyStore.java b/services/core/java/com/android/server/compartments/PolicyStore.java
+index fce0ece..e0b29a6 100644
+--- a/services/core/java/com/android/server/compartments/PolicyStore.java
++++ b/services/core/java/com/android/server/compartments/PolicyStore.java
+@@ -116,11 +116,12 @@ final class PolicyStore {
+     }
+ 
+     /**
+-     * The value of a class for an app that has no entry. The defaults give it, except that its location is real: a persona is
+-     * made per app (the place is chosen for the app and the phone), so an app without an entry has none.
++     * The value of a class for an app that has no entry. The defaults give it; only Isolated defaults reach its location
++     * (D5): {@link MirrorPlan#locationPackages} then lists every installed app, so each gets a persona of its own, and Protected
++     * defaults leave the location real.
+      */
+     Value valueWithoutEntry(Cls c) {
+-        return c == Cls.LOCATION ? Value.REAL : defaults.value(c);
++        return c == Cls.LOCATION && defaults.profile != Profile.ISOLATED ? Value.REAL : defaults.value(c);
+     }
+ 
+     boolean hasEntry(String pkg) {
+-- 
+2.56.0
+

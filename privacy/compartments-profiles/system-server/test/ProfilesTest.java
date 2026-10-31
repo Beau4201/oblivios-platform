@@ -44,6 +44,7 @@ public final class ProfilesTest {
         codecVersion2();
         personaMirrors();
         keptPlacesAndRestarts();
+        isolatedDefaults();
         withheldAppIds();
         largestStore();
         System.out.println("ok " + checks + " checks");
@@ -354,12 +355,15 @@ public final class ProfilesTest {
         check(AppPolicy.PROTECTED.withValue(Cls.LOCATION, Value.REAL).value(Cls.LOCATION) == Value.REAL, "real location");
         check(ISO.withValue(Cls.LOCATION, Value.REAL).value(Cls.LOCATION) == Value.REAL, "an Isolated app may keep its real location");
 
-        // an app without an entry of its own has no persona, so its location is real whatever profile the defaults give
+        // an app without an entry follows the defaults; only Isolated defaults reach its location (D5)
         PolicyStore d = PolicyStore.EMPTY.withDefaults(ISO);
         check(d.value("com.game.app", Cls.SENSORS) == Value.SUBSTITUTE, "default Isolated reaches the sensors of an unconfigured app");
-        check(d.value("com.game.app", Cls.LOCATION) == Value.REAL, "an unconfigured app has no persona, its location is real");
-        check(d.valueWithoutEntry(Cls.LOCATION) == Value.REAL && d.valueWithoutEntry(Cls.SENSORS) == Value.SUBSTITUTE,
+        check(d.value("com.game.app", Cls.LOCATION) == Value.SUBSTITUTE, "default Isolated substitutes the location of an unconfigured app");
+        check(d.valueWithoutEntry(Cls.LOCATION) == Value.SUBSTITUTE && d.valueWithoutEntry(Cls.SENSORS) == Value.SUBSTITUTE,
                 "the value of an app without an entry");
+        PolicyStore p = PolicyStore.EMPTY.withDefaults(AppPolicy.PROTECTED);
+        check(p.value("com.game.app", Cls.LOCATION) == Value.REAL && PolicyStore.EMPTY.valueWithoutEntry(Cls.LOCATION) == Value.REAL,
+                "Protected defaults leave the location of an unconfigured app real");
         check(d.withApp("com.game.app", ISO).value("com.game.app", Cls.LOCATION) == Value.SUBSTITUTE, "a configured app has its own");
     }
 
@@ -591,6 +595,43 @@ public final class ProfilesTest {
                 "Automatic without a country or a kept place is withheld");
         check(MirrorPlan.locationWithheldAppIds(auto, pkg -> 10600, salt, places, "", Double.NaN, Double.NaN, auto, first).isEmpty(),
                 "Automatic with a kept place is not");
+    }
+
+    /** D5: under Isolated defaults an app without an entry gets a persona of its own, like an app with one. */
+    private static void isolatedDefaults() throws Exception {
+        Places places = Places.parse(PLACES);
+        long salt = 0xABCDEF0123456789L;
+        Map<String, Integer> uids = Map.of("com.set.app", 10100, "com.free.app", 10200, "com.sys.app", 1000, "com.gone.app", -1);
+        java.util.List<String> installed = java.util.List.of("com.set.app", "com.free.app", "com.sys.app", "com.gone.app");
+        MirrorPlan.UidResolver r = new MirrorPlan.UidResolver() {
+            @Override
+            public int uidOf(String pkg) {
+                return uids.getOrDefault(pkg, -1);
+            }
+
+            @Override
+            public java.util.Collection<String> installedPackages() {
+                return installed;
+            }
+        };
+        PolicyStore iso = PolicyStore.EMPTY.withDefaults(ISO).withApp("com.set.app", ISO);
+        PersonaFile t = PersonaFile.parse(MirrorPlan.personaFile(iso, r, salt, places, "NL", 52.37, 4.89));
+        check(far(t.placeOf(10100)), "an app with an entry has a persona");
+        check(far(t.placeOf(10200)), "an app without an entry has one under Isolated defaults");
+        check(t.placeOf(1000) == 0, "a platform uid has none");
+        check(MirrorPlan.locationUnresolved(iso, r, salt, places, "", Double.NaN, Double.NaN).equals(
+                java.util.Set.of("com.set.app", "com.free.app")), "without a country both are unresolved, the platform uid and the missing package are not");
+        check(MirrorPlan.locationWithheldAppIds(iso, r, salt, places, "", Double.NaN, Double.NaN, null, null).toString().equals("[10100, 10200]"),
+                "and both are withheld");
+        check(MirrorPlan.personaFile(iso, r, salt, null, "NL", 52.37, 4.89).equals(PersonaFile.format(salt, Map.of())),
+                "without place data nobody has a persona");
+        check(MirrorPlan.locationUnresolved(iso, r, salt, null, "NL", 52.37, 4.89).equals(java.util.Set.of("com.set.app")),
+                "and only the app with an entry is unresolved: the apps without one keep what they had until place data is installed");
+        PolicyStore prot = PolicyStore.EMPTY.withDefaults(AppPolicy.PROTECTED).withApp("com.set.app", ISO);
+        PersonaFile p = PersonaFile.parse(MirrorPlan.personaFile(prot, r, salt, places, "NL", 52.37, 4.89));
+        check(far(p.placeOf(10100)) && p.placeOf(10200) == 0, "Protected defaults give the app without an entry no persona");
+        check(MirrorPlan.locationPackages(iso, r, places).size() == 4 && MirrorPlan.locationPackages(prot, r, places).equals(java.util.Set.of("com.set.app")),
+                "the packages the plan covers");
     }
 
     /** G6: the largest legal store fits the limit that the service reads, and reads back. */

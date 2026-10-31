@@ -89,13 +89,16 @@ shutil.rmtree(d)
 PATCHES = {"frameworks-base": ("0002", "0005", "0006"), "frameworks-native": ("0003",)}
 
 
-def package(without=()):
+def package(without=(), empty=()):
     d = tempfile.mkdtemp()
     for repo, numbers in PATCHES.items():
         os.makedirs(os.path.join(d, "patches", repo))
         for n in numbers:
             if (repo, n) not in without:
-                open(os.path.join(d, "patches", repo, f"{n}-x.patch"), "w").close()
+                with open(os.path.join(d, "patches", repo, f"{n}-x.patch"), "w") as f:
+                    if (repo, n) not in empty:
+                        path = cs.PATCH_TOUCHES[(repo, n)]
+                        f.write(f"diff --git a/{path} b/{path}\n")
     return d
 
 
@@ -158,6 +161,21 @@ for gone, row in ((("frameworks-native", "0003"), "CLASS_SENSORS"), (("framework
     problems = cs.check(APP, pkg)
     assert any(row in x and "/".join(gone) in x and "offers" in x for x in problems), (gone, row, problems)
     shutil.rmtree(pkg)
+# A patch of that number that does not change the file that enforces the claim does not count either (G1): an empty file, a
+# patch of another file, a path that only ends like it.
+for gone, row in (((("frameworks-native", "0003"), "CLASS_SENSORS"), ((("frameworks-base", "0002"), "CLASS_LOOPBACK")),
+                   ((("frameworks-base", "0005"), "CLASS_LOCATION")))):
+    pkg = package(empty=(gone,))
+    problems = cs.check(APP, pkg)
+    assert any(row in x and "/".join(gone) in x and "offers" in x for x in problems), (gone, row, problems)
+    shutil.rmtree(pkg)
+pkg = package()
+other = os.path.join(pkg, "patches", "frameworks-base", "0005-x.patch")
+open(other, "w").write("diff --git a/other/LocationProviderManager.java b/other/LocationProviderManager.java\n")
+assert any("CLASS_LOCATION" in x for x in cs.check(APP, pkg)), cs.check(APP, pkg)
+open(other, "w").write("diff --git a/x/" + cs.PATCH_TOUCHES[("frameworks-base", "0005")] + " b/x/" + cs.PATCH_TOUCHES[("frameworks-base", "0005")] + "\n")
+assert any("CLASS_LOCATION" in x for x in cs.check(APP, pkg)), "a longer path that ends like the file"
+shutil.rmtree(pkg)
 # A file that is not a patch does not count.
 pkg = package()
 os.rename(os.path.join(pkg, "patches", "frameworks-base", "0005-x.patch"), os.path.join(pkg, "patches", "frameworks-base", "0005-x.txt"))

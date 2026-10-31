@@ -5,6 +5,13 @@ import pathlib, shutil, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MUTANTS = [
+    # D5 (Isolated defaults give an app without an entry a persona)
+    ("PolicyStore.java", "Isolated defaults leave the location of an unconfigured app real", "c == Cls.LOCATION && defaults.profile != Profile.ISOLATED ? Value.REAL", "c == Cls.LOCATION ? Value.REAL"),
+    ("MirrorPlan.java", "the plan leaves out the installed packages", "            out.addAll(r.installedPackages());", ""),
+    ("MirrorPlan.java", "Protected defaults cover the installed packages", "s.defaults.profile == Profiles.Profile.ISOLATED && places != null", "places != null"),
+    ("MirrorPlan.java", "the installed packages are covered without place data", "s.defaults.profile == Profiles.Profile.ISOLATED && places != null", "s.defaults.profile == Profiles.Profile.ISOLATED"),
+    ("MirrorPlan.java", "the persona file covers only the entries", "for (String pkg : locationPackages(s, r, places)) {\n            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId < 0 ||", "for (String pkg : s.configured()) {\n            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId < 0 ||"),
+    ("MirrorPlan.java", "the unresolved set covers only the entries", "for (String pkg : locationPackages(s, r, places)) {\n            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId >= 0 && s.value", "for (String pkg : s.configured()) {\n            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId >= 0 && s.value"),
     # P4, P20, B1 (review fixes of 2026-10-30, second round)
     ("MirrorPlan.java", "the withheld set leaves out the blocked apps", "Set<String> packages = new TreeSet<>(locationBlocked(s));", "Set<String> packages = new TreeSet<>();"),
     ("MirrorPlan.java", "the withheld set leaves out the unresolved apps", "        packages.addAll(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));\n        Set<Integer> out", "        Set<Integer> out"),
@@ -139,8 +146,7 @@ MUTANTS = [
     ("PolicyStore.java", "a negative place is accepted", "if (place < 0) {\n                throw new IllegalArgumentException(\"a place is positive, or 0 for Automatic\");", "if (place < -1000) {\n                throw new IllegalArgumentException(\"a place is positive, or 0 for Automatic\");"),
     ("PolicyStore.java", "withPlace sets another place", "return new AppPolicy(profile, overrides, id);", "return new AppPolicy(profile, overrides, id + 1);"),
     ("PolicyStore.java", "the defaults may have a place", "\n                && d.place == 0", ""),
-    ("PolicyStore.java", "an app without an entry has a substituted location", "return c == Cls.LOCATION ? Value.REAL : defaults.value(c);", "return defaults.value(c);"),
-    ("PolicyStore.java", "an app without an entry has a real motion sensor", "return c == Cls.LOCATION ? Value.REAL : defaults.value(c);", "return Value.REAL;"),
+    ("PolicyStore.java", "an app without an entry has a real motion sensor", "c == Cls.LOCATION && defaults.profile != Profile.ISOLATED ? Value.REAL : defaults.value(c);", "Value.REAL;"),
     ("PolicyStore.java", "value() ignores the entry", "return p != null ? p.value(c) : valueWithoutEntry(c);", "return valueWithoutEntry(c);"),
     ("PolicyStore.java", "value() ignores the defaults", "return p != null ? p.value(c) : valueWithoutEntry(c);", "return p != null ? p.value(c) : Value.REAL;"),
     ("PolicyStore.java", "the file is written as version 1", "private static final int VERSION = 2;", "private static final int VERSION = 1;"),

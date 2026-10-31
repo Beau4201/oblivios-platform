@@ -103,6 +103,7 @@
     <string name="value_settings_blocked">Only what apps need</string>
 
     <string name="identity_defaults_location_note">New apps keep the real location. Give an app substitute location data on its own page.</string>
+    <string name="identity_defaults_location_isolated_note">Apps you have not set get a place of their own, as an app you set to Isolated does. An app that is running gets it when it starts again. If no place can be made for an app, its location permission is taken and stays off until you give it back.</string>
 
     <!-- The place of the persona of one app (ADR-208). -->
     <string name="place_title">Place</string>
@@ -114,6 +115,7 @@
     <string name="place_error">Could not set the place</string>
     <string name="identity_time_zone_note">The app is stopped when you change its place, and starts again with the new one.</string>
     <string name="identity_restart_note">An app that has its own settings here is stopped when you change them, and starts again with them.</string>
+    <string name="persona_none">No place can be made for this app yet, so it has no location. It gets one when the phone has place data and knows its country, or when you choose a place.</string>
     <string name="persona_disagree">This app is not on Tor, so its address still shows your country while its place is in another.</string>
     <string name="persona_use_tor">Send this app through Tor</string>
 

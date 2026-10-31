@@ -116,11 +116,12 @@ final class PolicyStore {
     }
 
     /**
-     * The value of a class for an app that has no entry. The defaults give it, except that its location is real: a persona is
-     * made per app (the place is chosen for the app and the phone), so an app without an entry has none.
+     * The value of a class for an app that has no entry. The defaults give it; only Isolated defaults reach its location
+     * (D5): {@link MirrorPlan#locationPackages} then lists every installed app, so each gets a persona of its own, and Protected
+     * defaults leave the location real.
      */
     Value valueWithoutEntry(Cls c) {
-        return c == Cls.LOCATION ? Value.REAL : defaults.value(c);
+        return c == Cls.LOCATION && defaults.profile != Profile.ISOLATED ? Value.REAL : defaults.value(c);
     }
 
     boolean hasEntry(String pkg) {

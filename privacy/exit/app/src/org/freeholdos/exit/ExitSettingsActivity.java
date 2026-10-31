@@ -78,6 +78,8 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
         private ProfileClient profiles;
         private ListPreference defaultProfilePref;
         private ListPreference defaultSensorsPref;
+        private Preference defaultLocationPref;
+        private Preference defaultLocationNotePref;
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -241,6 +243,8 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
         private boolean addIdentity(Context ctx, PreferenceScreen screen) {
             defaultProfilePref = null;
             defaultSensorsPref = null;
+            defaultLocationPref = null;
+            defaultLocationNotePref = null;
             CompartmentsAppPolicy d = profiles.available() ? profiles.getDefaults() : null;
             if (d == null) {
                 return false;
@@ -274,9 +278,11 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
 
             // No service call sets the location of apps that have no profile yet, so this row shows the value and offers none.
             ProfileRows.Row location = rows.get(1);
-            category.addPreference(note(ctx, getString(R.string.class_location),
-                    getString(ProfileText.valueName(ProfileRows.CLASS_LOCATION, location.current))));
-            category.addPreference(note(ctx, null, getString(R.string.identity_defaults_location_note)));
+            defaultLocationPref = note(ctx, getString(R.string.class_location),
+                    getString(ProfileText.valueName(ProfileRows.CLASS_LOCATION, location.current)));
+            category.addPreference(defaultLocationPref);
+            defaultLocationNotePref = note(ctx, null, getString(locationNote(d.profile)));
+            category.addPreference(defaultLocationNotePref);
 
             Preference visible = new Preference(ctx);
             visible.setPersistent(false);
@@ -297,7 +303,23 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
             if (d != null && defaultProfilePref != null && defaultSensorsPref != null) {
                 defaultProfilePref.setValue(Integer.toString(d.profile));
                 defaultSensorsPref.setValue(Integer.toString(d.sensors));
+                // the location of apps without a profile follows the default profile (D5)
+                if (defaultLocationPref != null && defaultLocationNotePref != null) {
+                    try {
+                        defaultLocationPref.setSummary(getString(ProfileText.valueName(ProfileRows.CLASS_LOCATION,
+                                ProfileRows.defaultRows(d.profile, d.sensors, d.location).get(1).current)));
+                    } catch (IllegalArgumentException e) {
+                        // the page was built from a valid answer; a service that now answers otherwise changes nothing here
+                    }
+                    defaultLocationNotePref.setSummary(locationNote(d.profile));
+                }
             }
+        }
+
+        /** The note under the location of apps without a profile: Isolated defaults give them a place, other defaults leave it real. */
+        private static int locationNote(int profile) {
+            return profile == ProfileRows.PROFILE_ISOLATED
+                    ? R.string.identity_defaults_location_isolated_note : R.string.identity_defaults_location_note;
         }
 
         /** The values that change often, set in place so that the list does not flicker when the status is polled. */

@@ -73,6 +73,8 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         private ProfileClient profiles;
         /** The place id of the app as the service reported it when the page was last built; -1 when it has no place. */
         private int placeId = -1;
+        /** The place the persona has now (also an Automatic one), 0 when none can be made, -1 when the location is not substituted. */
+        private int personaPlaceId = -1;
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -150,8 +152,10 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
             if (policy != null) {
                 // a change of the profile or of a value builds the rows again: which rows exist and what they show follow it
                 placeId = policy.location == ProfileRows.VALUE_SUBSTITUTE ? profiles.getPlaceId(pkg) : -1;
+                personaPlaceId = policy.location == ProfileRows.VALUE_SUBSTITUTE ? profiles.getPersonaPlaceId(pkg) : -1;
                 shape.append("|i").append(policy.profile).append(policy.sensors).append(policy.loopback).append(policy.settings)
-                        .append(policy.location).append('p').append(placeId).append(s.choices.choiceOf(pkg));
+                        .append(policy.location).append('p').append(placeId).append('q').append(personaPlaceId)
+                        .append(s.choices.choiceOf(pkg));
             }
             if (!shape.toString().equals(built)) {
                 build(ctx, screen, fixed, shown, promoted, policy);
@@ -272,6 +276,11 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                     return false;
                 });
                 category.addPreference(pref);
+            }
+
+            // P11: no place can be made, so the service took the location permissions of this app; say so
+            if (policy.location == ProfileRows.VALUE_SUBSTITUTE && personaPlaceId == 0) {
+                category.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.persona_none)));
             }
 
             if (policy.location == ProfileRows.VALUE_SUBSTITUTE && personaExit(ctx) == Presenter.Exit.MISMATCH) {
