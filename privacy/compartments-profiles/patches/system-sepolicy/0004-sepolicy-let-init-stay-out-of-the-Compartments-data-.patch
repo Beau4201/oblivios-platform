@@ -1,0 +1,30 @@
+From def727a63a352b02fda0c66590ebb0793724e839 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sat, 31 Oct 2026 23:18:25 +0100
+Subject: [PATCH] sepolicy: let init stay out of the Compartments data file
+ neverallow
+
+---
+ private/compartments_service.te | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/private/compartments_service.te b/private/compartments_service.te
+index 11dd951..73e9f0a 100644
+--- a/private/compartments_service.te
++++ b/private/compartments_service.te
+@@ -14,8 +14,10 @@ allow exit_app compartments_service:service_manager find;
+ allow system_app compartments_service:service_manager find;
+ neverallow { appdomain -exit_app -system_app } compartments_service:service_manager find;
+ 
+-# Nothing but system_server writes the files.
+-neverallow { domain -system_server } compartments_data_file:file { write append create unlink rename setattr };
++# Nothing but system_server writes the files. init is excluded as for every other data file type (credstore_data_file, apex_data_file):
++# its broad allow on file_type in init.te covers a new type until the type is listed there, and the neverallow check of the platform
++# policy failed on it (image 2026103101).
++neverallow { domain -system_server -init } compartments_data_file:file { write append create unlink rename setattr };
+ 
+ # The telephony app (radio) and the Bluetooth app read the persona file (app ids and place ids, no package name), so that their
+ # processes can answer an Isolated app with the cells and the devices of its place. The directory is mode 0711 for that. The
+-- 
+2.56.0
+
