@@ -9,7 +9,6 @@ import androidx.preference.PreferenceScreen;
 
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 import com.android.settingslib.preference.PreferenceFragment;
-import com.android.settingslib.widget.FooterPreference;
 
 /**
  * "What stays visible" (ADR-206, ADR-208): what an app can still learn about this phone, as read-only rows. The page reads no
@@ -44,13 +43,11 @@ public final class ExitVisibleActivity extends CollapsingToolbarBaseActivity {
                 {R.string.identity_visible_processes_title, R.string.identity_visible_processes_summary},
                 {R.string.identity_visible_uptime_title, R.string.identity_visible_uptime_summary},
                 {R.string.identity_visible_downloads_title, R.string.identity_visible_downloads_summary},
+                {R.string.identity_visible_input_title, R.string.identity_visible_input_summary},
             };
             for (int[] r : rows) {
                 screen.addPreference(ExitSettingsActivity.note(ctx, getString(r[0]), getString(r[1])));
             }
-            FooterPreference footer = new FooterPreference(ctx);
-            footer.setSummary(R.string.identity_footer);
-            screen.addPreference(footer);
         }
     }
 }

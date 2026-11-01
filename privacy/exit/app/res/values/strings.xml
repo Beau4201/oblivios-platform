@@ -75,7 +75,6 @@
     <!-- Profiles (ADR-208): what each app learns about this phone. -->
     <string name="identity_title">Device identity</string>
     <string name="identity_defaults_profile">Default for new apps</string>
-    <string name="identity_footer">Compartments keeps apps apart. It does not make your phone invisible.</string>
     <string name="identity_error">Could not change this setting</string>
     <string name="identity_custom">Custom</string>
     <string name="details_title">Details</string>
@@ -123,16 +122,18 @@
 
     <string name="identity_visible_title">What stays visible</string>
     <string name="identity_visible_summary">What Compartments does not hide</string>
-    <string name="identity_visible_address_title">Your internet address</string>
-    <string name="identity_visible_address_summary">The servers of an app see it, unless the app sends all traffic via Tor.</string>
-    <string name="identity_visible_model_title">Phone model and screen</string>
-    <string name="identity_visible_model_summary">The model, the Android version, the screen and the graphics chip.</string>
-    <string name="identity_visible_installed_title">Which apps are installed</string>
-    <string name="identity_visible_installed_summary">An app that asks for it, or that was made for an old Android version, can see whether another app is installed.</string>
-    <string name="identity_visible_processes_title">Other processes</string>
-    <string name="identity_visible_processes_summary">An app can see that other processes exist and how much graphics memory they use.</string>
-    <string name="identity_visible_uptime_title">Time since the phone started</string>
-    <string name="identity_visible_uptime_summary">An app can read it, and a few battery and processor counters.</string>
-    <string name="identity_visible_downloads_title">The Downloads folder</string>
-    <string name="identity_visible_downloads_summary">An app can check whether a file with a known name is in the shared Downloads folder.</string>
+    <string name="identity_visible_address_title">Network address</string>
+    <string name="identity_visible_address_summary">What the servers of an app see, unless the app uses Tor.</string>
+    <string name="identity_visible_model_title">Phone model and software</string>
+    <string name="identity_visible_model_summary">Model, Android version, screen and graphics chip.</string>
+    <string name="identity_visible_installed_title">Installed apps</string>
+    <string name="identity_visible_installed_summary">Whether another app is installed, for apps that ask.</string>
+    <string name="identity_visible_processes_title">Running apps</string>
+    <string name="identity_visible_processes_summary">That other apps are running, and their graphics memory.</string>
+    <string name="identity_visible_uptime_title">Time since start</string>
+    <string name="identity_visible_uptime_summary">How long the phone has run, and a few battery and processor counters.</string>
+    <string name="identity_visible_downloads_title">Shared files</string>
+    <string name="identity_visible_downloads_summary">Whether a file of a known name is in the Downloads folder.</string>
+    <string name="identity_visible_input_title">What you enter</string>
+    <string name="identity_visible_input_summary">An account, a phone number, anything you type into an app.</string>
 </resources>
