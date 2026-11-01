@@ -50,27 +50,74 @@ public final class ProfileRows {
                 : new int[] {PROFILE_TRUSTED, PROFILE_PROTECTED, PROFILE_ISOLATED};
     }
 
-    /**
-     * The row of the place of the persona. It is not a class of the policy core (it is set by {@code setPlace}, not by
-     * {@code setClassValue}), so it has a number outside the classes and no values.
-     */
-    public static final int ROW_PLACE = 100;
+    /** What {@link #identityOf} returns when one detail of an app differs from what its profile gives. */
+    public static final int IDENTITY_CUSTOM = -1;
+
+    /** What {@link #selectedChoice} returns for an app that has no entry and so follows the defaults. */
+    public static final int CHOICE_FOLLOW_DEFAULT = -1;
 
     /**
-     * The class rows of one app, in the order of the page: motion sensors, other apps on this phone, phone settings, location,
-     * and, for an app whose location is substitute data, the place of its persona.
+     * The class rows of one app, in the order of the page (ADR-209): location, motion sensors, other apps on this phone, phone
+     * settings. The place of the persona is not a class (it is set by {@code setPlace}, not by {@code setClassValue}); see
+     * {@link #placeRow}.
      */
     public static List<Row> rowsFor(int profile, int sensors, int loopback, int settings, int location) {
         requireProfile(profile);
         List<Row> rows = new ArrayList<>();
+        rows.add(row(CLASS_LOCATION, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));
         rows.add(row(CLASS_SENSORS, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, sensors));
         rows.add(row(CLASS_LOOPBACK, new int[] {VALUE_REAL, VALUE_BLOCKED}, loopback));
         rows.add(row(CLASS_SETTINGS, new int[] {VALUE_REAL, VALUE_BLOCKED}, settings));
-        rows.add(row(CLASS_LOCATION, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));
-        if (location == VALUE_SUBSTITUTE) {
-            rows.add(new Row(ROW_PLACE, new int[0], 0));
-        }
         return Collections.unmodifiableList(rows);
+    }
+
+    /**
+     * The value a profile gives a class, the same table as {@code Profiles.defaultValue} of the policy core: sensors and
+     * location are substitute data for Isolated and real otherwise; loopback and phone settings are real for Trusted and
+     * blocked otherwise.
+     */
+    public static int profileDefault(int profile, int cls) {
+        requireProfile(profile);
+        switch (cls) {
+            case CLASS_SENSORS:
+            case CLASS_LOCATION:
+                return profile == PROFILE_ISOLATED ? VALUE_SUBSTITUTE : VALUE_REAL;
+            case CLASS_LOOPBACK:
+            case CLASS_SETTINGS:
+                return profile == PROFILE_TRUSTED ? VALUE_REAL : VALUE_BLOCKED;
+            default:
+                throw new IllegalArgumentException("class " + cls);
+        }
+    }
+
+    /**
+     * The identity an app shows: its profile when all four values are those the profile gives, else {@link #IDENTITY_CUSTOM}.
+     * A value that cannot exist for its class is refused as in {@link #rowsFor}.
+     */
+    public static int identityOf(int profile, int sensors, int loopback, int settings, int location) {
+        rowsFor(profile, sensors, loopback, settings, location);
+        boolean plain = sensors == profileDefault(profile, CLASS_SENSORS) && loopback == profileDefault(profile, CLASS_LOOPBACK)
+                && settings == profileDefault(profile, CLASS_SETTINGS) && location == profileDefault(profile, CLASS_LOCATION);
+        return plain ? profile : IDENTITY_CUSTOM;
+    }
+
+    /** The row selected on the identity page of an app: only an app without an entry follows the defaults. */
+    public static int selectedChoice(boolean configured, int profile) {
+        return configured ? profile : CHOICE_FOLLOW_DEFAULT;
+    }
+
+    /** Whether the page of an app shows the row of its place, and whether that row can be used. */
+    public enum PlaceRow { HIDDEN, NOT_AVAILABLE, SHOWN }
+
+    /**
+     * The place row exists only for an app whose location is substitute data (the service refuses {@code setPlace}
+     * otherwise); with no place for its persona (id 0 or below, the image carries no place data) it is shown as not available.
+     */
+    public static PlaceRow placeRow(int location, int personaPlaceId) {
+        if (location != VALUE_SUBSTITUTE) {
+            return PlaceRow.HIDDEN;
+        }
+        return personaPlaceId <= 0 ? PlaceRow.NOT_AVAILABLE : PlaceRow.SHOWN;
     }
 
     /**

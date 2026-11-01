@@ -155,8 +155,7 @@ shutil.rmtree(pkg)
 shutil.rmtree(d)
 # Each row that ProfileRows offers needs the patch that enforces it, and names the row.
 for gone, row in ((("frameworks-native", "0003"), "CLASS_SENSORS"), (("frameworks-base", "0002"), "CLASS_LOOPBACK"),
-                  (("frameworks-base", "0002"), "CLASS_SETTINGS"), (("frameworks-base", "0005"), "CLASS_LOCATION"),
-                  (("frameworks-base", "0005"), "ROW_PLACE")):
+                  (("frameworks-base", "0002"), "CLASS_SETTINGS"), (("frameworks-base", "0005"), "CLASS_LOCATION")):
     pkg = package((gone,))
     problems = cs.check(APP, pkg)
     assert any(row in x and "/".join(gone) in x and "offers" in x for x in problems), (gone, row, problems)

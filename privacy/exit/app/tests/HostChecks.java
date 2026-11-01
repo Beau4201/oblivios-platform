@@ -838,23 +838,62 @@ public final class HostChecks {
         check(Arrays.equals(ProfileRows.profileChoices(true), new int[] {1, 2}), "profileChoices returns a copy");
 
         List<ProfileRows.Row> rows = ProfileRows.rowsFor(ProfileRows.PROFILE_PROTECTED, 0, 2, 2, 0);
-        check(rows.size() == 4, "four classes and no place for real location: " + rows.size());
-        check(rowText(rows.get(0)).equals("0:[0, 1, 2]=0"), "sensors row: " + rowText(rows.get(0)));
-        check(rowText(rows.get(1)).equals("1:[0, 2]=2"), "loopback row: " + rowText(rows.get(1)));
-        check(rowText(rows.get(2)).equals("2:[0, 2]=2"), "settings row: " + rowText(rows.get(2)));
-        check(rowText(rows.get(3)).equals("3:[0, 1, 2]=0"), "location row: " + rowText(rows.get(3)));
-        // A place is chosen only for an app whose location is substitute data (the service refuses setPlace otherwise).
-        check(ProfileRows.CLASS_LOCATION == 3 && ProfileRows.ROW_PLACE == 100, "location number, place row number");
+        // the page order (ADR-209): location, sensors, other apps on this phone, phone settings; the place is no class row
+        check(rows.size() == 4, "four classes: " + rows.size());
+        check(rowText(rows.get(0)).equals("3:[0, 1, 2]=0"), "location row: " + rowText(rows.get(0)));
+        check(rowText(rows.get(1)).equals("0:[0, 1, 2]=0"), "sensors row: " + rowText(rows.get(1)));
+        check(rowText(rows.get(2)).equals("1:[0, 2]=2"), "loopback row: " + rowText(rows.get(2)));
+        check(rowText(rows.get(3)).equals("2:[0, 2]=2"), "settings row: " + rowText(rows.get(3)));
+        for (int p = 0; p < 3; p++) {
+            List<ProfileRows.Row> order = ProfileRows.rowsFor(p, 0, 0, 0, 1);
+            check(order.size() == 4 && order.get(0).cls == 3 && order.get(1).cls == 0 && order.get(2).cls == 1
+                    && order.get(3).cls == 2, "class order for profile " + p);
+        }
         List<ProfileRows.Row> iso = ProfileRows.rowsFor(ProfileRows.PROFILE_ISOLATED, 1, 2, 2, 1);
-        check(iso.size() == 5 && iso.get(4).cls == ProfileRows.ROW_PLACE && iso.get(4).values.length == 0, "substitute location has a place row");
-        check(rowText(iso.get(3)).equals("3:[0, 1, 2]=1"), "location row of an isolated app: " + rowText(iso.get(3)));
-        check(ProfileRows.rowsFor(ProfileRows.PROFILE_PROTECTED, 0, 2, 2, 2).size() == 4, "blocked location has no place row");
+        check(iso.size() == 4, "substitute location adds no row, the place has its own row type: " + iso.size());
+        check(rowText(iso.get(0)).equals("3:[0, 1, 2]=1"), "location row of an isolated app: " + rowText(iso.get(0)));
+        check(ProfileRows.rowsFor(ProfileRows.PROFILE_PROTECTED, 0, 2, 2, 2).size() == 4, "blocked location has four rows");
+
+        // the value each profile gives a class (the same table as Profiles.defaultValue of the core)
+        for (int p = 0; p < 3; p++) {
+            check(ProfileRows.profileDefault(p, ProfileRows.CLASS_SENSORS) == (p == 2 ? 1 : 0), "sensors default of " + p);
+            check(ProfileRows.profileDefault(p, ProfileRows.CLASS_LOCATION) == (p == 2 ? 1 : 0), "location default of " + p);
+            check(ProfileRows.profileDefault(p, ProfileRows.CLASS_LOOPBACK) == (p == 0 ? 0 : 2), "loopback default of " + p);
+            check(ProfileRows.profileDefault(p, ProfileRows.CLASS_SETTINGS) == (p == 0 ? 0 : 2), "settings default of " + p);
+        }
+        throwsIae(() -> ProfileRows.profileDefault(3, 0), "default of profile 3");
+        throwsIae(() -> ProfileRows.profileDefault(-1, 0), "default of profile -1");
+        throwsIae(() -> ProfileRows.profileDefault(1, 4), "default of class 4");
+        throwsIae(() -> ProfileRows.profileDefault(1, -1), "default of class -1");
+
+        // the identity of an app: its profile, or Custom when one detail differs from what the profile gives
+        check(ProfileRows.identityOf(1, 0, 2, 2, 0) == 1, "Protected as set");
+        check(ProfileRows.identityOf(2, 1, 2, 2, 1) == 2, "Isolated as set");
+        check(ProfileRows.identityOf(0, 0, 0, 0, 0) == 0, "Trusted as set");
+        check(ProfileRows.identityOf(1, 0, 2, 2, 1) == ProfileRows.IDENTITY_CUSTOM, "location substituted under Protected is Custom");
+        check(ProfileRows.identityOf(1, 0, 0, 2, 0) == ProfileRows.IDENTITY_CUSTOM, "loopback real under Protected is Custom");
+        check(ProfileRows.identityOf(2, 0, 2, 2, 1) == ProfileRows.IDENTITY_CUSTOM, "sensors real under Isolated is Custom");
+        check(ProfileRows.identityOf(1, 1, 2, 2, 0) == ProfileRows.IDENTITY_CUSTOM, "sensors substituted under Protected is Custom");
+        check(ProfileRows.identityOf(1, 0, 2, 0, 0) == ProfileRows.IDENTITY_CUSTOM, "settings real under Protected is Custom");
+        throwsIae(() -> ProfileRows.identityOf(3, 0, 0, 0, 0), "identity of profile 3");
+        throwsIae(() -> ProfileRows.identityOf(1, 0, 1, 0, 0), "identity with substitute loopback");
+
+        // only an app without an entry follows the default
+        check(ProfileRows.selectedChoice(false, 2) == ProfileRows.CHOICE_FOLLOW_DEFAULT, "no entry follows the default");
+        check(ProfileRows.selectedChoice(true, 1) == 1 && ProfileRows.selectedChoice(true, 0) == 0, "an entry shows its profile");
+
+        // the place row: hidden unless the location is substitute data, not available without a place
+        check(ProfileRows.placeRow(0, 0) == ProfileRows.PlaceRow.HIDDEN, "real location has no place row");
+        check(ProfileRows.placeRow(2, 0) == ProfileRows.PlaceRow.HIDDEN, "blocked location has no place row");
+        check(ProfileRows.placeRow(1, 0) == ProfileRows.PlaceRow.NOT_AVAILABLE, "no place can be made");
+        check(ProfileRows.placeRow(1, -1) == ProfileRows.PlaceRow.NOT_AVAILABLE, "persona place unknown");
+        check(ProfileRows.placeRow(1, 5) == ProfileRows.PlaceRow.SHOWN, "a place exists");
         throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 0, 3), "location value 3");
         throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 0, -1), "location value -1");
-        ProfileRows.Row r = ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0, 0).get(0);
-        check(r.current == 1, "sensors may be substitute data");
+        ProfileRows.Row r = ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0, 0).get(1);
+        check(r.cls == ProfileRows.CLASS_SENSORS && r.current == 1, "sensors may be substitute data");
         r.values[0] = 9;
-        check(ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0, 0).get(0).values[0] == 0, "row values are copies");
+        check(ProfileRows.rowsFor(ProfileRows.PROFILE_TRUSTED, 1, 0, 0, 0).get(1).values[0] == 0, "row values are copies");
         for (int p = 0; p < 3; p++) {
             for (ProfileRows.Row row : ProfileRows.rowsFor(p, 0, 0, 0, 0)) {
                 boolean substitute = false;

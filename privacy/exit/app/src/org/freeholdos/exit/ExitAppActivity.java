@@ -265,10 +265,6 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
 
             for (ProfileRows.Row row : rows) {
                 final int cls = row.cls;
-                if (cls == ProfileRows.ROW_PLACE) {
-                    category.addPreference(placeRow(ctx));
-                    continue;
-                }
                 ListPreference pref = ProfileText.choice(ctx, "app_class_" + cls, ProfileText.classTitle(cls), row.values,
                         v -> ProfileText.valueName(cls, v), row.current);
                 pref.setOnPreferenceChangeListener((p, v) -> {
@@ -276,6 +272,9 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                     return false;
                 });
                 category.addPreference(pref);
+                if (cls == ProfileRows.CLASS_LOCATION && ProfileRows.placeRow(policy.location, personaPlaceId) != ProfileRows.PlaceRow.HIDDEN) {
+                    category.addPreference(placeRow(ctx)); // reworked with the page in ADR-209 Task 4
+                }
             }
 
             // P11: no place can be made, so the service took the location permissions of this app; say so

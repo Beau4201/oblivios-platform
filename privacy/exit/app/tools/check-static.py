@@ -54,7 +54,6 @@ ROW_PATCHES = {
     "CLASS_LOOPBACK": ("frameworks-base", "0002"),
     "CLASS_SETTINGS": ("frameworks-base", "0002"),
     "CLASS_LOCATION": ("frameworks-base", "0005"),
-    "ROW_PLACE": ("frameworks-base", "0005"),
 }
 
 # The file that each of those patches must change, for the claim to be built: the policy service, the location delivery, the
