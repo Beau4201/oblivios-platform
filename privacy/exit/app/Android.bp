@@ -24,7 +24,7 @@ android_app {
     sdk_version: "module_current",
     libs: ["framework-connectivity.stubs.module_lib"],
     // The screens are built like those of the Settings app, with the widgets and the theme of SettingsLib, as the Updater does
-    // (packages/apps/Updater/Android.bp): the collapsing toolbar, the preference rows, the main switch, the button and the footer.
+    // (packages/apps/Updater/Android.bp): the collapsing toolbar, the preference rows, the intro line, the button and the footer.
     static_libs: [
         "androidx.appcompat_appcompat",
         "androidx.preference_preference",
@@ -32,8 +32,8 @@ android_app {
         "SettingsLibCategory",
         "SettingsLibCollapsingToolbarBaseActivity",
         "SettingsLibFooterPreference",
-        "SettingsLibMainSwitchPreference",
         "SettingsLibSelectorWithWidgetPreference",
+        "SettingsLibTopIntroPreference",
     ],
     certificate: "platform",
     privileged: true,

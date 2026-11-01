@@ -21,13 +21,9 @@
 
     <string name="owner_only">Compartments is set up by the owner of this phone.</string>
 
-    <string name="status_idle">Off</string>
     <string name="status_idle_summary">Trackers can see your address.</string>
-    <string name="status_connecting">Starting</string>
     <string name="status_connecting_summary">This takes a few seconds.</string>
-    <string name="status_running">On</string>
     <string name="status_running_summary">Trackers do not see your address.</string>
-    <string name="status_paused">Paused</string>
     <string name="status_paused_summary">Apps that send all traffic via Tor have no internet until it is back.</string>
     <string name="status_error_title">Not working yet</string>
     <string name="status_error">Compartments could not start and tries again by itself. If this stays, restart the phone.</string>
@@ -54,6 +50,9 @@
     <string name="apps_title">Apps</string>
     <string name="apps_summary">%1$d via Tor, %2$d direct</string>
     <string name="apps_summary_none">Trackers only for every app</string>
+    <string name="apps_identity_summary">Set what each app can learn</string>
+    <string name="compartments_intro">Choose what apps can learn about your phone and whether their network address stays hidden from trackers.</string>
+    <string name="compartments_explanation">Apps try to recognise your phone and to follow you from one app to another. Compartments gives each app its own view of your phone, so an app cannot tell that other apps run on the same phone and cannot recognise the phone itself. For apps you choose, it can also supply substitute location and sensor data, or send their traffic through Tor. It does not make you invisible: apps and their servers still see your network address (unless the app uses Tor), the phone model, and what you enter yourself, such as an account.</string>
     <string name="apps_search_hint">Search apps</string>
     <string name="apps_footer">An app follows the default for new apps until you set it. When the network address of an app is not Trackers only, the list says so after the dot.</string>
     <string name="app_tor_hint">All traffic via Tor</string>
@@ -76,9 +75,8 @@
     <!-- Profiles (ADR-208): what each app learns about this phone. -->
     <string name="identity_title">Device identity</string>
     <string name="identity_defaults_profile">Default for new apps</string>
-    <string name="identity_defaults_sensors">Motion sensors for those apps</string>
-    <string name="identity_error">Could not change this setting</string>
     <string name="identity_footer">Compartments keeps apps apart. It does not make your phone invisible.</string>
+    <string name="identity_error">Could not change this setting</string>
     <string name="identity_custom">Custom</string>
     <string name="details_title">Details</string>
     <string name="address_title">Network address</string>
@@ -110,8 +108,6 @@
     <string name="value_settings_real">All settings</string>
     <string name="value_settings_blocked">Only what apps need</string>
 
-    <string name="identity_defaults_location_note">New apps keep the real location. Give an app substitute location data on its own page.</string>
-    <string name="identity_defaults_location_isolated_note">New apps get a place of their own, as an app you set to Substituted does. An app that is running gets it when it starts again. If no place can be made for an app, it gets no location.</string>
 
     <!-- The place of the persona of one app (ADR-208). -->
     <string name="place_title">Place</string>
@@ -122,7 +118,6 @@
     <string name="place_none">No place data on this phone</string>
     <string name="place_error">Could not set the place</string>
     <string name="identity_time_zone_note">The app is stopped when you change its place, and starts again with the new one.</string>
-    <string name="identity_restart_note">An app that has its own settings here is stopped when you change them, and starts again with them.</string>
     <string name="persona_disagree">This app is not on Tor, so its address still shows your country while its place is in another.</string>
     <string name="persona_use_tor">Send this app through Tor</string>
 

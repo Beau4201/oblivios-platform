@@ -332,8 +332,6 @@ MUTATIONS = [
     ("profiles: a profile below Trusted is accepted", PR, "profile < PROFILE_TRUSTED ||", "profile < -1 ||"),
     ("profiles: a profile above Isolated is accepted", PR, "profile > PROFILE_ISOLATED", "profile > PROFILE_ISOLATED + 1"),
     ("profiles: rowsFor does not check the profile", PR, "requireProfile(profile);\n        List<Row> rows = new ArrayList<>();\n        rows.add(row(CLASS_LOCATION", "List<Row> rows = new ArrayList<>();\n        rows.add(row(CLASS_LOCATION"),
-    ("profiles: defaultRows does not check the profile", PR, "requireProfile(profile);\n        if (profile == PROFILE_TRUSTED) {", "if (profile == PROFILE_TRUSTED) {"),
-    ("profiles: the defaults may be Trusted in defaultRows", PR, "if (profile == PROFILE_TRUSTED) {", "if (false) {"),
     ("location: the location row is not offered", PR, "rows.add(row(CLASS_LOCATION, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));\n        rows.add(row(CLASS_SENSORS", "rows.add(row(CLASS_SENSORS"),
     ("location: the location row names the settings class", PR, "row(CLASS_LOCATION, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));\n        rows.add(row(CLASS_SENSORS",
      "row(CLASS_SETTINGS, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));\n        rows.add(row(CLASS_SENSORS"),
@@ -367,14 +365,6 @@ MUTATIONS = [
     ("rows: a place id below 0 counts as a place", PR, "personaPlaceId <= 0 ?", "personaPlaceId == 0 ?"),
     ("rows: the place row is never available", PR, "personaPlaceId <= 0 ?", "false ?"),
     ("rows: the place row is never usable", PR, "personaPlaceId <= 0 ?", "true ?"),
-    ("location: the default location row offers every value", PR, "new Row(shown.cls, new int[] {shown.current}, shown.current)",
-     "new Row(shown.cls, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, shown.current)"),
-    ("location: the default location row forgets its value", PR, "new Row(shown.cls, new int[] {shown.current}, shown.current)",
-     "new Row(shown.cls, new int[] {VALUE_REAL}, VALUE_REAL)"),
-    ("location: the default location is not checked", PR, "rows.add(row(CLASS_LOCATION, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));\n        // Only",
-     "rows.add(new Row(CLASS_LOCATION, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));\n        // Only"),
-    ("location: the default location row is missing", PR, "        // Only the current value is offered; the check above has already refused a value that does not exist.\n        Row shown = rows.remove(rows.size() - 1);\n        rows.add(new Row(shown.cls, new int[] {shown.current}, shown.current));\n",
-     "        rows.remove(rows.size() - 1);\n"),
 ]
 
 _CONST = re.compile(r"^(?P<head>\s*(?:public |private )?static final (?:int|long) (?P<name>[A-Z0-9_]+) = )(?P<val>0x[0-9a-fA-F]+|[0-9]+)(?P<tail>L?;.*)$", re.M)

@@ -913,15 +913,6 @@ public final class HostChecks {
         throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 3, 0), "settings value 3");
         throwsIae(() -> ProfileRows.rowsFor(1, 0, 0, 1, 0), "settings cannot be substitute data");
 
-        List<ProfileRows.Row> defaults = ProfileRows.defaultRows(ProfileRows.PROFILE_ISOLATED, 1, 1);
-        check(defaults.size() == 2 && rowText(defaults.get(0)).equals("0:[0, 1, 2]=1"), "the defaults hold the sensors row first");
-        check(rowText(defaults.get(1)).equals("3:[1]=1"), "and a location row that offers only its current value: " + rowText(defaults.get(1)));
-        check(rowText(ProfileRows.defaultRows(ProfileRows.PROFILE_PROTECTED, 0, 0).get(1)).equals("3:[0]=0"), "defaults of Protected");
-        throwsIae(() -> ProfileRows.defaultRows(1, 0, 3), "defaults with location value 3");
-        throwsIae(() -> ProfileRows.defaultRows(1, 0, -1), "defaults with location value -1");
-        throwsIae(() -> ProfileRows.defaultRows(ProfileRows.PROFILE_TRUSTED, 0, 0), "the defaults are never Trusted");
-        throwsIae(() -> ProfileRows.defaultRows(3, 0, 0), "defaults of profile 3");
-        throwsIae(() -> ProfileRows.defaultRows(1, 3, 0), "defaults with sensors value 3");
     }
 
     public static void main(String[] args) throws Exception {

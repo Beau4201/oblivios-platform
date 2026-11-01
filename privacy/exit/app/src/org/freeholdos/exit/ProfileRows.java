@@ -120,25 +120,6 @@ public final class ProfileRows {
         return personaPlaceId <= 0 ? PlaceRow.NOT_AVAILABLE : PlaceRow.SHOWN;
     }
 
-    /**
-     * The class rows of the defaults for apps the user has not set: the sensors can be chosen. The location row offers only
-     * the value of the default profile: the service holds no default of its own for it (the default profile decides, and
-     * only for an app that has an entry, D5), so the page shows it and does not offer a choice that would do nothing.
-     */
-    public static List<Row> defaultRows(int profile, int sensors, int location) {
-        requireProfile(profile);
-        if (profile == PROFILE_TRUSTED) {
-            throw new IllegalArgumentException("the defaults are never Trusted");
-        }
-        List<Row> rows = new ArrayList<>();
-        rows.add(row(CLASS_SENSORS, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, sensors));
-        rows.add(row(CLASS_LOCATION, new int[] {VALUE_REAL, VALUE_SUBSTITUTE, VALUE_BLOCKED}, location));
-        // Only the current value is offered; the check above has already refused a value that does not exist.
-        Row shown = rows.remove(rows.size() - 1);
-        rows.add(new Row(shown.cls, new int[] {shown.current}, shown.current));
-        return Collections.unmodifiableList(rows);
-    }
-
     private static Row row(int cls, int[] values, int current) {
         for (int v : values) {
             if (v == current) {
