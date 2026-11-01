@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: Apache-2.0
+package {
+    default_applicable_licenses: ["compartments-persona-data_license"],
+}
+
+// The data of the two files is not Apache-2.0: NOTICE names the sources and the licences (ADR-208). places.tsv is
+// adapted from GeoNames (CC BY 4.0); cells.tsv from OpenCelliD (CC BY-SA 4.0), so the second licence reaches that file.
+license {
+    name: "compartments-persona-data_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-CC-BY-4.0",
+        "SPDX-license-identifier-CC-BY-SA-4.0",
+    ],
+    license_text: ["NOTICE"],
+}
+
+// ADR-208. The offline place data of the Isolated persona, read by the policy service in the system server and by the
+// Telephony app, at /product/etc/compartments. An image in which a file is missing still boots; a persona then has no place
+// (places.tsv) or no operator and no cells (cells.tsv). The files are built by tools/build-persona-data.py (SOURCES.md).
+prebuilt_etc {
+    name: "compartments-places.tsv",
+    src: "places.tsv",
+    filename: "places.tsv",
+    sub_dir: "compartments",
+    product_specific: true,
+}
+
+prebuilt_etc {
+    name: "compartments-cells.tsv",
+    src: "cells.tsv",
+    filename: "cells.tsv",
+    sub_dir: "compartments",
+    product_specific: true,
+}

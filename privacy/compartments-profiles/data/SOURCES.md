@@ -1,6 +1,22 @@
 # Sources of the persona data (ADR-208)
 
-The two offline files of the Isolated persona, `places.tsv` and `cells.tsv`, are built by `../tools/build-persona-data.py` from two downloads. **Not built yet:** the owner has not supplied the files, so no size, source hash or output hash is recorded here. Nothing is downloaded by the assistant.
+The two offline files of the Isolated persona, `places.tsv` and `cells.tsv`, are built by `../tools/build-persona-data.py` from two downloads. Built on 2026-11-01 from the two downloads below; the hashes of all inputs and outputs are in `PINS.sha256`. The builder never touches the network.
+
+## Build of 2026-11-01
+
+| Input | Source | Bytes | Note |
+| --- | --- | --- | --- |
+| `cities15000.zip` (34195 cities) | GeoNames, fetched by the assistant from `download.geonames.org/export/dump/` (public, no account) | 3 365 242 | GeoNames states the file changes daily; this is the copy of 2026-11-01 |
+| `cell_towers.csv.gz` (5 535 038 cells, 3 675 566 of them LTE, 198 mobile country codes) | OpenCelliD export "full", downloaded by the owner with their own account | 120 320 455 | The export holds only cells observed in the last 18 months |
+
+| Output | Lines | Bytes | Note |
+| --- | --- | --- | --- |
+| `places.tsv` | 33925 | 1 991 582 | 270 of the 34195 cities are left out by the rules of the builder; 191 countries |
+| `cells.tsv` | 400374 | 11 707 497 | 22171 places have cells, 11754 have none (they are kept; the persona has no operator there) |
+
+- The builder gave the same two files in two runs (byte-identical, `cmp`), the first in 491 s. `Places.parse` and `CellSubset.parse` of the package accept both files; every time zone is known to the JDK; every cell belongs to a listed place.
+- Places without cells are concentrated where OpenCelliD has little LTE coverage near a city centre (for example India 3769, China 1023, Brazil 920 of the places). Every city of the Netherlands, Germany and France has cells; Spain (4 places), Italy (5) and the United Kingdom (3) have a few without. `Places.automaticFor` does not look at cells, so an Automatic place can be one without an operator; whether it should prefer places with cells is an open choice for the owner.
+- The size is about 13.7 MB, close to the estimate of the design (about 25000 places, 15 MB).
 
 ## Licences read on 2026-10-30 (publishers' own pages)
 

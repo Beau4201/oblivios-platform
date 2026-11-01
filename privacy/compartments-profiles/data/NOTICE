@@ -1,0 +1,16 @@
+places.tsv and cells.tsv (the offline place data of the Compartments persona) contain data from these sources.
+
+- GeoNames, https://www.geonames.org/, "cities15000" (cities with at least 15000 inhabitants), licensed under Creative
+  Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). places.tsv keeps, per city, the GeoNames
+  identifier, the name, the country, the coordinates rounded to 0.00001 degree and the time zone. It adds the mobile
+  country code of the country. Cities that lie beyond 80 degrees of latitude, that have no cell data in their country
+  or whose name has a control character were left out.
+
+- Cell tower data from OpenCelliD, https://opencellid.org/, licensed under CC BY-SA 4.0
+  (https://creativecommons.org/licenses/by-sa/4.0/). cells.tsv is adapted material: only LTE cells were kept, each
+  of the country's mobile network code that lies within 25 km of a city was listed for that city, nearest to the
+  city centre first, at most 20 per city; the radio type, the coordinates, the range, the sample count and every other
+  column were removed. cells.tsv is shared under the same
+  licence, CC BY-SA 4.0. The rest of the image is not part of this adaptation.
+
+The files say which cell identities and which time zone belong to a city in this data. They are not a map of the world.

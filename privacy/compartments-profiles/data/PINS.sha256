@@ -1,0 +1,7 @@
+# SHA-256 of the inputs and outputs of tools/build-persona-data.py, fetched and built 2026-11-01 (SOURCES.md).
+1d1a86cc57a641387453beae0a0f89a59cbea636143fccb17368580df23776eb  cities15000.zip
+a97e931157b541c8e621776afb4a66e81384c11d34acc5537767097cc9f6247c  cities15000.txt
+fce5c04bef8c532d5e80dfc23747d89877961b3f93ad7e954fb4634d4244bd39  cell_towers.csv.gz
+143b00cfec3059a9b04011b506ada5ea1b7a5b682ef3e10cdcb1f3887e273e68  cell_towers.csv
+e54dabaa25d9286d3c8191f2901ae01e37fbd5dc57ee23cb17f10d4721935a07  places.tsv
+7cbc42a6c618b0df46adfcd41a11f0a4099a055361ce6e43eb4b24e9f8344095  cells.tsv
