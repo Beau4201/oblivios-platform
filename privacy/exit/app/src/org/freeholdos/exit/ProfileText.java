@@ -23,6 +23,18 @@ final class ProfileText {
         }
     }
 
+    /** The sentence under a profile on the radio page. */
+    static int profileSummary(int profile) {
+        switch (profile) {
+            case ProfileRows.PROFILE_TRUSTED:
+                return R.string.identity_identified_summary;
+            case ProfileRows.PROFILE_ISOLATED:
+                return R.string.identity_substituted_summary;
+            default:
+                return R.string.identity_unlinked_summary;
+        }
+    }
+
     /** The footer of the page of one app: what the app gets under its current profile. */
     static int profileFooter(int profile) {
         switch (profile) {

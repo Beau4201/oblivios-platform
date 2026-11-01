@@ -66,6 +66,13 @@
             android:label="@string/overrides_title"
             android:excludeFromRecents="true"
             android:exported="false" />
+        <!-- The radio page of the device identity (ADR-209): one app, or the default for new apps; started by the pages of
+             Compartments only. -->
+        <activity
+            android:name=".ExitIdentityActivity"
+            android:label="@string/identity_title"
+            android:excludeFromRecents="true"
+            android:exported="false" />
         <!-- What stays visible (ADR-206, ADR-208): read-only, started by a row of the main page only. -->
         <activity
             android:name=".ExitVisibleActivity"

@@ -203,8 +203,10 @@ final class ProfileClient {
                 return false;
             }
             mService.clearApp(packageName);
+            mRefusal = null;
             return true;
         } catch (RemoteException | RuntimeException e) {
+            note(e);
             return false;
         }
     }

@@ -82,6 +82,14 @@
     <string name="identity_defaults_sensors">Motion sensors for those apps</string>
     <string name="identity_error">Could not change this setting</string>
     <string name="identity_footer">Compartments keeps apps apart. It does not make your phone invisible.</string>
+    <string name="identity_follow_default">Follow default</string>
+    <string name="identity_follow_default_summary">Uses the default for new apps, now %1$s.</string>
+    <string name="identity_identified_summary">The app can recognise this phone and read every setting. For a bank or an app that must know the phone.</string>
+    <string name="identity_unlinked_summary">The app gets real data but cannot recognise this phone or link itself to other apps.</string>
+    <string name="identity_substituted_summary">The app gets substitute location and sensor data, and a place of its own.</string>
+    <string name="identity_default_description">Choose the device identity new apps get. An app that is already running gets it when it next starts.</string>
+    <string name="identity_footer_app">Warning: an app may stop working if it detects substitute data. Changing this stops the app and starts it again with the new setting.</string>
+    <string name="identity_footer_default">Warning: an app may stop working if it detects substitute data. Changing the default stops no app.</string>
     <string name="profile_title">Profile</string>
     <string name="profile_trusted">Identified</string>
     <string name="profile_protected">Unlinked</string>

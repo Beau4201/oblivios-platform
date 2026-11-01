@@ -132,7 +132,7 @@ for add, want in (
     # the strings of the page are dropped first, so that only the added string can be the cause
     text = "\n".join(l for l in text.split("\n") if not any(k in l for k in (
         "class_location", "value_location", "place_", "persona_", "identity_time_zone", "identity_defaults_location",
-        "profile_isolated_footer")))
+        "profile_isolated_footer", "identity_substituted_summary")))
     open(p, "w").write(text.replace("</resources>", "    " + add + "\n</resources>"))
     assert cs.check(os.path.join(d, "a"), full) == [], (add, cs.check(os.path.join(d, "a"), full))
     pkg = package((("frameworks-base", "0005"),))
@@ -147,7 +147,7 @@ p = os.path.join(d, "a", "res", "values", "strings.xml")
 text = open(p).read()
 text = "\n".join(l for l in text.split("\n") if not any(k in l for k in (
     "class_location", "value_location", "place_", "persona_", "identity_time_zone", "identity_defaults_location",
-    "profile_isolated_footer")))
+    "profile_isolated_footer", "identity_substituted_summary")))
 open(p, "w").write(text.replace("</resources>", '    <string name="identity_visible_x_summary">Your location and time zone.</string>\n</resources>'))
 pkg = package((("frameworks-base", "0005"), ("frameworks-base", "0006")))
 assert cs.check(os.path.join(d, "a"), pkg) == [], cs.check(os.path.join(d, "a"), pkg)
