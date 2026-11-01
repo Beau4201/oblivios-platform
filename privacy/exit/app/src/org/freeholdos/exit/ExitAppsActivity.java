@@ -16,6 +16,7 @@ import androidx.preference.PreferenceScreen;
 import com.android.internal.compartments.CompartmentsAppPolicy;
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 import com.android.settingslib.preference.PreferenceFragment;
+import com.android.settingslib.widget.FooterPreference;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -152,26 +153,45 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
                     rows.put(r.pkg, p);
                     screen.addPreference(p);
                 }
+                FooterPreference footer = new FooterPreference(ctx);
+                footer.setSummary(R.string.apps_footer);
+                screen.addPreference(footer);
                 built = shape.toString();
             }
-            // The profile of an app (ADR-208): the one the user set, else the default; two calls however long the list is.
+            // The identity of an app (ADR-209): its own when the user set it (Custom when a detail differs), else the default for
+            // new apps; one call per configured app and one for the defaults, however long the list is.
             Set<String> configured = null;
-            int defaultProfile = -1;
+            CompartmentsAppPolicy defaults = null;
             if (profiles.available()) {
                 String[] set = profiles.getConfigured();
-                CompartmentsAppPolicy defaults = profiles.getDefaults();
+                defaults = profiles.getDefaults();
                 if (set != null && defaults != null) {
                     configured = new HashSet<>(Arrays.asList(set));
-                    defaultProfile = defaults.profile;
                 }
             }
             for (Presenter.AppRow r : list) {
                 Preference p = rows.get(r.pkg);
                 if (p != null) {
-                    String stand = getString(hintOf(r.choice));
-                    int profile = configured == null ? -1 : configured.contains(r.pkg) ? profiles.getProfile(r.pkg) : defaultProfile;
-                    p.setSummary(profile < 0 ? stand : stand + " · " + getString(ProfileText.profileName(profile)));
+                    String address = getString(hintOf(r.choice));
+                    String identity = configured == null ? null
+                            : configured.contains(r.pkg) ? ownIdentity(r.pkg) : getString(ProfileText.profileName(defaults.profile));
+                    p.setSummary(identity == null ? address
+                            : r.choice == Choices.Choice.DIRECT ? identity : identity + " · " + address);
                 }
+            }
+        }
+
+        /** The identity the user set for an app, or null when the service cannot say. */
+        private String ownIdentity(String pkg) {
+            CompartmentsAppPolicy a = profiles.getApp(pkg);
+            if (a == null) {
+                return null;
+            }
+            try {
+                int identity = ProfileRows.identityOf(a.profile, a.sensors, a.loopback, a.settings, a.location);
+                return getString(identity == ProfileRows.IDENTITY_CUSTOM ? R.string.identity_custom : ProfileText.profileName(identity));
+            } catch (IllegalArgumentException e) {
+                return null;
             }
         }
 
