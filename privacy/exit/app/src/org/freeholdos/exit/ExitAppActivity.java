@@ -22,9 +22,9 @@ import com.android.internal.compartments.CompartmentsPlace;
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 import com.android.settingslib.preference.PreferenceFragment;
 import com.android.settingslib.widget.FooterPreference;
-import com.android.settingslib.widget.SelectorWithWidgetPreference;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -69,7 +69,8 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         private String pkg;
         private ApplicationInfo info;
         private String built = "";
-        private final List<SelectorWithWidgetPreference> radios = new ArrayList<>();
+        /** The row of the network address; null while the page shows no such row. */
+        private ListPreference addressPref;
         private ProfileClient profiles;
         /** The place id of the app as the service reported it when the page was last built; -1 when it has no place. */
         private int placeId = -1;
@@ -122,7 +123,7 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
             if (!rt.runsHere() || s == null) {
                 if (!"owner".equals(built)) {
                     screen.removeAll();
-                    radios.clear();
+                    addressPref = null;
                     screen.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.owner_only)));
                     built = "owner";
                 }
@@ -162,16 +163,15 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 built = shape.toString();
             }
             Choices.Choice now = s.choices.choiceOf(pkg);
-            Choices.Choice[] options = Presenter.options();
-            for (int i = 0; i < radios.size(); i++) {
-                radios.get(i).setChecked(options[i] == now);
+            if (addressPref != null) {
+                addressPref.setValue(Integer.toString(Arrays.asList(Presenter.options()).indexOf(now)));
             }
         }
 
         private void build(Context ctx, PreferenceScreen screen, boolean fixed, List<Presenter.OverrideRow> shown,
                 List<Status.Promoted> promoted, CompartmentsAppPolicy policy) {
             screen.removeAll();
-            radios.clear();
+            addressPref = null;
             PackageManager pm = ctx.getPackageManager();
             CharSequence label = pm.getApplicationLabel(info);
             Preference header = ExitSettingsActivity.note(ctx, label, null);
@@ -182,23 +182,22 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 return;
             }
 
-            PreferenceCategory network = new PreferenceCategory(ctx);
-            network.setPersistent(false);
-            network.setTitle(getString(R.string.app_mode_title, label));
-            screen.addPreference(network);
-            for (Choices.Choice c : Presenter.options()) {
-                SelectorWithWidgetPreference radio = new SelectorWithWidgetPreference(ctx);
-                radio.setPersistent(false);
-                radio.setTitle(modeText(c));
-                radio.setSummary(modeSummary(c));
-                radio.setOnClickListener(p -> choose(c));
-                radios.add(radio);
-                network.addPreference(radio);
-            }
+            CharSequence footerText = policy == null ? null : addIdentity(ctx, screen, policy, label);
 
-            if (policy != null) {
-                addIdentity(ctx, screen, policy);
+            PreferenceCategory network = category(ctx, R.string.address_title);
+            screen.addPreference(network);
+            Choices.Choice[] options = Presenter.options();
+            int[] indexes = new int[options.length];
+            for (int i = 0; i < indexes.length; i++) {
+                indexes[i] = i;
             }
+            addressPref = ProfileText.choice(ctx, "app_address", R.string.address_title, indexes,
+                    i -> modeText(options[i]), 0);
+            addressPref.setOnPreferenceChangeListener((p, v) -> {
+                choose(options[Integer.parseInt((String) v)]);
+                return false;
+            });
+            network.addPreference(addressPref);
 
             if (!promoted.isEmpty()) {
                 PreferenceCategory now = new PreferenceCategory(ctx);
@@ -237,66 +236,84 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 });
                 hosts.addPreference(p);
             }
+
+            if (footerText != null) {
+                FooterPreference footer = new FooterPreference(ctx);
+                footer.setSummary(footerText);
+                screen.addPreference(footer);
+            }
+        }
+
+        private PreferenceCategory category(Context ctx, int title) {
+            PreferenceCategory c = new PreferenceCategory(ctx);
+            c.setPersistent(false);
+            c.setTitle(title);
+            return c;
         }
 
         /**
-         * The profile of the app, one row for each class it can be set for, and what the profile means (ADR-208). Every row
-         * stores nothing itself: a change goes to the service and the page is built again from what the service reports.
+         * The device identity of the app (ADR-209): one row with the identity, or Custom when a detail differs from it, that opens
+         * the radio page; then the four details, and the place of a Substituted app. Every row stores nothing itself: a change
+         * goes to the service and the page is built again from what the service reports. Returns the text of the footer, which
+         * the caller adds last, or null when the app has no identity rows.
          */
-        private void addIdentity(Context ctx, PreferenceScreen screen, CompartmentsAppPolicy policy) {
+        private CharSequence addIdentity(Context ctx, PreferenceScreen screen, CompartmentsAppPolicy policy, CharSequence label) {
             List<ProfileRows.Row> rows;
+            int identity;
             try {
                 rows = ProfileRows.rowsFor(policy.profile, policy.sensors, policy.loopback, policy.settings, policy.location);
+                identity = ProfileRows.identityOf(policy.profile, policy.sensors, policy.loopback, policy.settings, policy.location);
             } catch (IllegalArgumentException e) {
-                return;
+                return null;
             }
-            PreferenceCategory category = new PreferenceCategory(ctx);
-            category.setPersistent(false);
-            category.setTitle(R.string.identity_title);
-            screen.addPreference(category);
-
-            ListPreference profile = ProfileText.choice(ctx, "app_profile", R.string.profile_title,
-                    ProfileRows.profileChoices(false), ProfileText::profileName, policy.profile);
-            profile.setOnPreferenceChangeListener((p, v) -> {
-                changed(profiles.setProfile(pkg, Integer.parseInt((String) v)));
-                return false;
+            PreferenceCategory group = category(ctx, R.string.identity_title);
+            screen.addPreference(group);
+            Preference row = new Preference(ctx);
+            row.setPersistent(false);
+            row.setTitle(R.string.identity_title);
+            row.setSummary(identity == ProfileRows.IDENTITY_CUSTOM ? R.string.identity_custom : ProfileText.profileName(identity));
+            row.setOnPreferenceClickListener(x -> {
+                startActivity(ExitIdentityActivity.intentForApp(ctx, pkg));
+                return true;
             });
-            category.addPreference(profile);
+            group.addPreference(row);
 
-            for (ProfileRows.Row row : rows) {
-                final int cls = row.cls;
-                ListPreference pref = ProfileText.choice(ctx, "app_class_" + cls, ProfileText.classTitle(cls), row.values,
-                        v -> ProfileText.valueName(cls, v), row.current);
+            PreferenceCategory details = category(ctx, R.string.details_title);
+            screen.addPreference(details);
+            for (ProfileRows.Row r : rows) {
+                final int cls = r.cls;
+                ListPreference pref = ProfileText.choice(ctx, "app_class_" + cls, ProfileText.classTitle(cls), r.values,
+                        v -> ProfileText.valueName(cls, v), r.current);
                 pref.setOnPreferenceChangeListener((p, v) -> {
                     changed(profiles.setClassValue(pkg, cls, Integer.parseInt((String) v)));
                     return false;
                 });
-                category.addPreference(pref);
-                if (cls == ProfileRows.CLASS_LOCATION && ProfileRows.placeRow(policy.location, personaPlaceId) != ProfileRows.PlaceRow.HIDDEN) {
-                    category.addPreference(placeRow(ctx)); // reworked with the page in ADR-209 Task 4
+                details.addPreference(pref);
+            }
+
+            ProfileRows.PlaceRow place = ProfileRows.placeRow(policy.location, personaPlaceId);
+            if (place != ProfileRows.PlaceRow.HIDDEN) {
+                PreferenceCategory placeGroup = category(ctx, R.string.place_title);
+                screen.addPreference(placeGroup);
+                placeGroup.addPreference(place == ProfileRows.PlaceRow.SHOWN ? placeRow(ctx)
+                        : ExitSettingsActivity.note(ctx, getString(R.string.place_title), getString(R.string.place_not_available)));
+                if (personaExit(ctx) == Presenter.Exit.MISMATCH) {
+                    placeGroup.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.persona_disagree)));
+                    Preference tor = new Preference(ctx);
+                    tor.setPersistent(false);
+                    tor.setTitle(R.string.persona_use_tor);
+                    tor.setOnPreferenceClickListener(x -> {
+                        choose(Choices.Choice.TOR);
+                        return true;
+                    });
+                    placeGroup.addPreference(tor);
                 }
             }
 
+            String footer = getString(R.string.app_footer_details);
             // P11: no place can be made, so the service took the location permissions of this app; say so
-            if (policy.location == ProfileRows.VALUE_SUBSTITUTE && personaPlaceId == 0) {
-                category.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.persona_none)));
-            }
-
-            if (policy.location == ProfileRows.VALUE_SUBSTITUTE && personaExit(ctx) == Presenter.Exit.MISMATCH) {
-                category.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.persona_disagree)));
-                Preference tor = new Preference(ctx);
-                tor.setPersistent(false);
-                tor.setTitle(R.string.persona_use_tor);
-                tor.setOnPreferenceClickListener(x -> {
-                    choose(Choices.Choice.TOR);
-                    return true;
-                });
-                category.addPreference(tor);
-            }
-
-            FooterPreference footer = new FooterPreference(ctx);
-            footer.setSummary(ProfileText.profileFooter(policy.profile));
-            screen.addPreference(footer);
+            return personaPlaceId == 0 && place == ProfileRows.PlaceRow.NOT_AVAILABLE
+                    ? getString(R.string.app_footer_no_place, label) + " " + footer : footer;
         }
 
         /** The row that opens the place page: Automatic with the country it resolves to, the name of the place, or none. */
@@ -359,17 +376,6 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 return;
             }
             rt.setChoice(pkg, c);
-        }
-
-        private static int modeSummary(Choices.Choice c) {
-            switch (c) {
-                case TOR:
-                    return R.string.app_mode_tor_summary;
-                case OPEN:
-                    return R.string.app_mode_open_summary;
-                default:
-                    return R.string.app_mode_direct_summary;
-            }
         }
 
         private static int modeText(Choices.Choice c) {

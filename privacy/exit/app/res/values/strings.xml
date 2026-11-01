@@ -58,13 +58,9 @@
     <string name="app_tor_hint">All traffic via Tor</string>
     <string name="app_direct_hint">Trackers only</string>
     <string name="app_open_hint">Direct</string>
-    <string name="app_mode_title">Protection for %1$s</string>
     <string name="app_mode_direct">Trackers only</string>
-    <string name="app_mode_direct_summary">Hides trackers in this app.</string>
     <string name="app_mode_tor">All traffic via Tor</string>
-    <string name="app_mode_tor_summary">Everything this app does goes through Tor. Slower, and some apps do not work.</string>
     <string name="app_mode_open">Direct</string>
-    <string name="app_mode_open_summary">Trackers see your address in this app.</string>
     <string name="app_exempt">This app always connects normally and is never hidden.</string>
     <string name="apps_limit">All traffic via Tor is limited to %1$d apps.</string>
     <string name="apps_open_limit">Direct is limited to %1$d apps.</string>
@@ -82,6 +78,12 @@
     <string name="identity_defaults_sensors">Motion sensors for those apps</string>
     <string name="identity_error">Could not change this setting</string>
     <string name="identity_footer">Compartments keeps apps apart. It does not make your phone invisible.</string>
+    <string name="identity_custom">Custom</string>
+    <string name="details_title">Details</string>
+    <string name="address_title">Network address</string>
+    <string name="place_not_available">Not available</string>
+    <string name="app_footer_details">The four details follow the identity until you change one; when one differs, the identity reads Custom. Changing a setting stops the app and starts it again.</string>
+    <string name="app_footer_no_place">This image has no place data, so %1$s receives no location. Its air pressure stays real.</string>
     <string name="identity_follow_default">Follow default</string>
     <string name="identity_follow_default_summary">Uses the default for new apps, now %1$s.</string>
     <string name="identity_identified_summary">The app can recognise this phone and read every setting. For a bank or an app that must know the phone.</string>
@@ -90,13 +92,9 @@
     <string name="identity_default_description">Choose the device identity new apps get. An app that is already running gets it when it next starts.</string>
     <string name="identity_footer_app">Warning: an app may stop working if it detects substitute data. Changing this stops the app and starts it again with the new setting.</string>
     <string name="identity_footer_default">Warning: an app may stop working if it detects substitute data. Changing the default stops no app.</string>
-    <string name="profile_title">Profile</string>
     <string name="profile_trusted">Identified</string>
     <string name="profile_protected">Unlinked</string>
     <string name="profile_isolated">Substituted</string>
-    <string name="profile_trusted_footer">This app can recognise this phone and link itself to your other apps. Use it for an app that must know you, such as a bank.</string>
-    <string name="profile_protected_footer">This app works as normal and cannot link itself to other apps or to this phone.</string>
-    <string name="profile_isolated_footer">This app gets invented motion data and a place of its own, and keeps working; what it reads is not yours. An app may refuse to run if it notices. The place is not perfect: the magnetic field and the air pressure do not match it, the country of your SIM stays real, the cell details come from a small offline list, moves ignore roads, Wi-Fi scans are empty, and how you use the app is still visible.</string>
     <string name="class_sensors">Motion sensors</string>
     <string name="class_loopback">Other apps on this phone</string>
     <string name="class_settings">Phone settings</string>
@@ -124,7 +122,6 @@
     <string name="place_error">Could not set the place</string>
     <string name="identity_time_zone_note">The app is stopped when you change its place, and starts again with the new one.</string>
     <string name="identity_restart_note">An app that has its own settings here is stopped when you change them, and starts again with them.</string>
-    <string name="persona_none">No place can be made for this app yet, so it has no location. It gets one when the phone has place data and knows its country, or when you choose a place.</string>
     <string name="persona_disagree">This app is not on Tor, so its address still shows your country while its place is in another.</string>
     <string name="persona_use_tor">Send this app through Tor</string>
 

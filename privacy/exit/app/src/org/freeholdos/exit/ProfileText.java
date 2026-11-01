@@ -35,18 +35,6 @@ final class ProfileText {
         }
     }
 
-    /** The footer of the page of one app: what the app gets under its current profile. */
-    static int profileFooter(int profile) {
-        switch (profile) {
-            case ProfileRows.PROFILE_TRUSTED:
-                return R.string.profile_trusted_footer;
-            case ProfileRows.PROFILE_ISOLATED:
-                return R.string.profile_isolated_footer;
-            default:
-                return R.string.profile_protected_footer;
-        }
-    }
-
     static int classTitle(int cls) {
         switch (cls) {
             case ProfileRows.CLASS_LOOPBACK:
