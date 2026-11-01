@@ -81,7 +81,7 @@
     <string name="address_title">Network address</string>
     <string name="place_not_available">Not available</string>
     <string name="app_footer_details">The four details follow the identity until you change one; when one differs, the identity reads Custom. Changing a setting stops the app and starts it again.</string>
-    <string name="app_footer_no_place">This image has no place data, so %1$s receives no location. Its air pressure stays real.</string>
+    <string name="app_footer_no_place">This image has no place data, so %1$s receives no location.</string>
     <string name="identity_follow_default">Follow default</string>
     <string name="identity_follow_default_summary">Uses the default for new apps, now %1$s.</string>
     <string name="identity_identified_summary">The app can recognise this phone and read every setting. For a bank or an app that must know the phone.</string>
