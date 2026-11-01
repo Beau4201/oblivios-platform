@@ -1,0 +1,32 @@
+From e8d0eaa4a5f0b6c3cabda86b45f04f1b27ebfb2d Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sun, 1 Nov 2026 14:02:09 +0100
+Subject: [PATCH] Settings: name the Compartments identity on the info row
+
+The summary of the Compartments row of the app info page reads Identified, Unlinked or Substituted, the names that the Compartments pages use. The string keys stay, so no code changes.
+---
+ res/values/strings_ext.xml | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index c69d476..1d9f0f8 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -378,10 +378,10 @@ For compatibility, this app can still see clipboard metadata, such as whether an
+ 
+     <!-- The page of one app in Compartments (the per-app network exit): the row of the app's info page, under data usage. -->
+     <string name="app_compartments_label">Compartments</string>
+-    <!-- Summary of that row: the profile that the app has in Compartments (ADR-208). -->
+-    <string name="app_compartments_profile_trusted">Trusted</string>
+-    <string name="app_compartments_profile_protected">Protected</string>
+-    <string name="app_compartments_profile_isolated">Isolated</string>
++    <!-- Summary of that row: the device identity that the app has in Compartments (ADR-208, names ADR-209). -->
++    <string name="app_compartments_profile_trusted">Identified</string>
++    <string name="app_compartments_profile_protected">Unlinked</string>
++    <string name="app_compartments_profile_isolated">Substituted</string>
+     <!-- The row of Compartments on the Network & internet page, which the Settings search finds (keywords: the plain words a person
+          would type). -->
+     <string name="compartments_title">Compartments</string>
+-- 
+2.56.0
+
