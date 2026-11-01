@@ -51,6 +51,12 @@ inline bool isMotionType(int32_t type) {
            type == SENSOR_TYPE_GYROSCOPE_UNCALIBRATED || type == SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED;
 }
 
+// The one environment sensor that SUBSTITUTE replaces: the air pressure gives away the height and the weather of the real place,
+// which the persona has left. BLOCKED delivers it as it is (BLOCKED withholds the motion, not the environment).
+inline bool isPressureType(int32_t type) {
+    return type == SENSOR_TYPE_PRESSURE;
+}
+
 // The types that the HAL derives from the same real motion (gravity, linear acceleration, the rotation vectors, the old
 // orientation, the steps and the detectors): the stream that SUBSTITUTE invents has no counterpart for them, and the real values
 // would contradict it, so SUBSTITUTE and BLOCKED both deliver none of them.
@@ -63,11 +69,12 @@ inline bool isDerivedMotionType(int32_t type) {
 }
 
 // A direct channel hands the HAL's own events to the app, so it must not exist where the app is not meant to see them:
-// for a folded app the uncalibrated types (ADR-167), for a substituted or blocked app every motion type.
+// for a folded app the uncalibrated types (ADR-167), for a blocked app every motion type, for a substituted app those and the
+// air pressure.
 inline bool directChannelRefused(SensorMode m, int32_t type) {
     switch (m) {
         case SensorMode::FOLDED: return eventCarriesBias(type);
-        case SensorMode::SUBSTITUTE:
+        case SensorMode::SUBSTITUTE: return isMotionType(type) || isDerivedMotionType(type) || isPressureType(type);
         case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);
         default: return false;
     }

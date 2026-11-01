@@ -1,0 +1,160 @@
+From 1a8ac1e17877fa6ec9e0942e94783cc3d4390e36 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sun, 1 Nov 2026 20:57:19 +0100
+Subject: [PATCH] compartments: list the apps that may use the loopback
+ interface in a global setting
+
+A runtime grant of USE_LOOPBACK_INTERFACE needs the app to declare it, so the profile Trusted did
+nothing for an app that does not (CMP-005). The service writes the app ids of the Trusted apps
+that are installed in the owner user into the global setting freeholdos_loopback_app_ids at every
+mirror (MirrorPlan.loopbackAppIds, LoopbackAppIds), for the connectivity module to read.
+---
+ .../CompartmentsPolicyService.java            | 12 +++
+ .../server/compartments/LoopbackAppIds.java   | 77 +++++++++++++++++++
+ .../server/compartments/MirrorPlan.java       | 16 ++++
+ 3 files changed, 105 insertions(+)
+ create mode 100644 services/core/java/com/android/server/compartments/LoopbackAppIds.java
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index 5861c2b..d0dde38 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -76,6 +76,8 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     static final String READ_PROFILE = "org.freeholdos.permission.READ_COMPARTMENT_PROFILE";
+     static final String EXIT_PACKAGE = "org.freeholdos.exit";
+     static final String SETTINGS_REAL_PACKAGES = "freeholdos_settings_real_packages";
++    /** The app ids of the Trusted apps, for the connectivity module, which adds the loopback bit to their uids (LoopbackAppIds). */
++    static final String SETTINGS_LOOPBACK_APP_IDS = "freeholdos_loopback_app_ids";
+     private static final String LOOPBACK_PERMISSION = "android.permission.USE_LOOPBACK_INTERFACE";
+     static final String PLACES_FILE = "/product/etc/compartments/places.tsv";
+     static final String CELLS_FILE = "/product/etc/compartments/cells.tsv";
+@@ -398,6 +400,16 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+             Slog.w(TAG, "loopback mirror failed: " + e.getClass().getSimpleName());
+             ok = false;
+         }
++        try {
++            String wanted = MirrorPlan.loopbackAppIds(next, mResolver);
++            String have = Settings.Global.getString(mContext.getContentResolver(), SETTINGS_LOOPBACK_APP_IDS);
++            if (!wanted.equals(have == null ? "" : have)) {
++                Settings.Global.putString(mContext.getContentResolver(), SETTINGS_LOOPBACK_APP_IDS, wanted);
++            }
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "loopback app ids mirror failed: " + e.getClass().getSimpleName());
++            ok = false;
++        }
+         try {
+             writeSensorFile(next);
+         } catch (RuntimeException e) {
+diff --git a/services/core/java/com/android/server/compartments/LoopbackAppIds.java b/services/core/java/com/android/server/compartments/LoopbackAppIds.java
+new file mode 100644
+index 0000000..f5384c6
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/LoopbackAppIds.java
+@@ -0,0 +1,77 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++import java.util.Collections;
++import java.util.Set;
++import java.util.TreeSet;
++
++/**
++ * The app ids that may use the loopback interface although they do not hold USE_LOOPBACK_INTERFACE (ADR-208). That permission is
++ * a runtime permission, and a runtime grant needs the app to declare it, which almost no app does: a Trusted app that does not
++ * declare it stayed refused (CMP-005). The policy service writes the app ids of the Trusted apps into a global setting with
++ * {@link #format}, and the connectivity module reads them with {@link #parse} and adds the bit to the uid of those apps in every
++ * user. One copy of this file lives in each of the two trees (see tools/check-copies.py). Pure Java.
++ *
++ * <p>Format: decimal app ids from 10000 to 19999 in strictly ascending order, separated by a comma, no space, no leading zero.
++ */
++final class LoopbackAppIds {
++    static final int FIRST_APP_ID = 10000;
++    static final int LAST_APP_ID = 19999;
++    static final int MAX_IDS = 4096;
++
++    private LoopbackAppIds() {
++    }
++
++    /** The text for {@code appIds}: ids outside the range of ordinary apps are left out, and at most {@link #MAX_IDS} are written. */
++    static String format(Set<Integer> appIds) {
++        TreeSet<Integer> sorted = new TreeSet<>();
++        for (Integer id : appIds) {
++            if (id != null && id >= FIRST_APP_ID && id <= LAST_APP_ID) {
++                sorted.add(id);
++            }
++        }
++        StringBuilder out = new StringBuilder();
++        int written = 0;
++        for (int id : sorted) {
++            if (written++ >= MAX_IDS) {
++                break;
++            }
++            out.append(written == 1 ? "" : ",").append(id);
++        }
++        return out.toString();
++    }
++
++    /** The app ids in {@code text}; none for null, for the empty text and for any text that {@link #format} could not have written. */
++    static Set<Integer> parse(String text) {
++        if (text == null || text.isEmpty()) {
++            return Collections.emptySet();
++        }
++        TreeSet<Integer> out = new TreeSet<>();
++        int p = 0;
++        int last = -1;
++        while (true) {
++            int start = p;
++            int id = 0;
++            char c;
++            while (p < text.length() && (c = text.charAt(p)) >= '0' && c <= '9') {
++                if (p - start >= 5) {
++                    return Collections.emptySet();
++                }
++                id = id * 10 + (c - '0');
++                p++;
++            }
++            if (p == start || id < FIRST_APP_ID || id > LAST_APP_ID || id <= last || out.size() >= MAX_IDS) {
++                return Collections.emptySet();
++            }
++            out.add(id);
++            last = id;
++            if (p == text.length()) {
++                return out;
++            }
++            if (text.charAt(p) != ',') {
++                return Collections.emptySet();
++            }
++            p++;
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/compartments/MirrorPlan.java b/services/core/java/com/android/server/compartments/MirrorPlan.java
+index 59ec2c8..a8430f6 100644
+--- a/services/core/java/com/android/server/compartments/MirrorPlan.java
++++ b/services/core/java/com/android/server/compartments/MirrorPlan.java
+@@ -52,6 +52,22 @@ final class MirrorPlan {
+         return out;
+     }
+ 
++    /**
++     * The value of the global setting that lists the app ids allowed on the loopback interface, for the connectivity module: the
++     * apps of {@link #loopbackAllowed} that are installed in the owner user and are ordinary apps. The permission itself cannot be
++     * granted to an app that does not declare it, so this list is what makes the profile work for every app.
++     */
++    static String loopbackAppIds(PolicyStore s, UidResolver r) {
++        Set<Integer> ids = new TreeSet<>();
++        for (String pkg : loopbackAllowed(s)) {
++            int appId = ordinaryAppId(r.uidOf(pkg));
++            if (appId >= 0) {
++                ids.add(appId);
++            }
++        }
++        return LoopbackAppIds.format(ids);
++    }
++
+     /** The more protective of two modes: RAW, FOLDED, SUBSTITUTE, BLOCKED in that order. */
+     static SensorMode stricter(SensorMode a, SensorMode b) {
+         return rank(a) >= rank(b) ? a : b;
+-- 
+2.56.0
+

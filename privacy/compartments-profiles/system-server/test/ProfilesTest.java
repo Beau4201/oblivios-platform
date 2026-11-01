@@ -277,6 +277,12 @@ public final class ProfilesTest {
         // default is Isolated -> SUBSTITUTE; com.a.app and com.bank.app are Trusted -> RAW; com.z.app is Protected -> FOLDED;
         // com.gone.app is not installed and has no line
         check(file.equals("s abcdef0123456789\nd SUBSTITUTE\na 10100 RAW\na 10200 RAW\na 10300 FOLDED\n"), "sensor file: " + file);
+        // the loopback list: the Trusted apps that are installed (com.gone.app is not), ascending; a Protected app is not in it
+        check(MirrorPlan.loopbackAppIds(s, pkg -> uids.getOrDefault(pkg, -1)).equals("10100,10200"), "loopback app ids");
+        check(MirrorPlan.loopbackAppIds(PolicyStore.EMPTY, pkg -> 10100).isEmpty(), "no Trusted app, no loopback ids");
+        check(MirrorPlan.loopbackAppIds(s, pkg -> 1000).isEmpty() && MirrorPlan.loopbackAppIds(s, pkg -> 20000).isEmpty(),
+                "a platform uid or a sandbox uid is no loopback id");
+        check(MirrorPlan.loopbackAppIds(s, pkg -> 1010100).equals("10100"), "an app id is the uid of any user");
 
         String plain = MirrorPlan.sensorModeFile(PolicyStore.EMPTY, pkg -> -1, 1L);
         check(plain.equals("s 0000000000000001\nd FOLDED\n"), "an empty store gives the status quo: " + plain);

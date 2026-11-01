@@ -1,0 +1,38 @@
+From f18707c3dce50ba2750c2d73d6c3a84a483df80e Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sun, 1 Nov 2026 21:25:18 +0100
+Subject: [PATCH] telephony: bring the copy of CellSubset up to its source
+
+CellSubset gained placeIds (frameworks-base/0018, for the automatic place); the copy in the Telephony
+app stays equal to its source, as tools/check-copies.py requires. The app does not call the method.
+---
+ src/com/android/phone/CellSubset.java | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/com/android/phone/CellSubset.java b/src/com/android/phone/CellSubset.java
+index 6cd2209..28b9fc4 100644
+--- a/src/com/android/phone/CellSubset.java
++++ b/src/com/android/phone/CellSubset.java
+@@ -6,6 +6,7 @@ import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ 
+ /**
+  * The cell towers of the persona (ADR-208): a few towers per place of {@link Places}, with the operator codes of the country,
+@@ -110,6 +111,11 @@ final class CellSubset {
+         return first.mcc + (first.mnc < 10 ? "0" : "") + first.mnc;  // not String.format: the digits would follow the locale
+     }
+ 
++    /** The ids of the places that have at least one cell. */
++    Set<Integer> placeIds() {
++        return Collections.unmodifiableSet(byPlace.keySet());
++    }
++
+     /** At most 8 cells of the place in file order; empty for a place without cells. */
+     List<Cell> cellsFor(int placeId) {
+         List<Cell> all = byPlace.get(placeId);
+-- 
+2.56.0
+

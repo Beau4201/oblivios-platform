@@ -1,0 +1,305 @@
+From 9e74ba40324471582108e4b842731acf4c5c1f44 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sun, 1 Nov 2026 20:48:35 +0100
+Subject: [PATCH 16/16] compartments: give back the location permissions that
+ the service took
+
+revokeLocation took the location permissions of an app whose location is Blocked or whose
+persona cannot be made, and nothing gave them back: an app set from Blocked to Real data stayed
+without the permission that the user had granted (CMP-015, lynx 2026103101). A ledger
+(RevokedLedger, /data/system/compartments/revoked, 0600) now notes each permission that the app
+held when it was taken, and restoreLocation grants it again once the package is no longer denied.
+Only a granted permission is noted, so nothing is granted that the user did not hold; the file can
+name only the four location permissions; a missing or damaged file leaves the permissions revoked.
+---
+ .../CompartmentsPolicyService.java            |  78 +++++++++-
+ .../server/compartments/RevokedLedger.java    | 137 ++++++++++++++++++
+ 2 files changed, 209 insertions(+), 6 deletions(-)
+ create mode 100644 services/core/java/com/android/server/compartments/RevokedLedger.java
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index b6c9c05..5861c2b 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -79,12 +79,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     private static final String LOOPBACK_PERMISSION = "android.permission.USE_LOOPBACK_INTERFACE";
+     static final String PLACES_FILE = "/product/etc/compartments/places.tsv";
+     static final String CELLS_FILE = "/product/etc/compartments/cells.tsv";
+-    private static final String[] LOCATION_PERMISSIONS = {
+-        "android.permission.ACCESS_FINE_LOCATION",
+-        "android.permission.ACCESS_COARSE_LOCATION",
+-        "android.permission.ACCESS_BACKGROUND_LOCATION",
+-        "android.permission.ACCESS_MEDIA_LOCATION",  // the real GPS position in the EXIF of the photos of the user
+-    };
++    private static final String[] LOCATION_PERMISSIONS = RevokedLedger.PERMISSIONS;
+     /** A package that the user changed starts again after this long: the readers of the mirror files look again about once a second. */
+     private static final int STOP_DELAY_MS = 2000;
+     /** The fixes of the passive provider may come as often as this: one a second is enough for the activity of the phone. */
+@@ -100,6 +95,9 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     private final AtomicFile mPolicyFile;
+     private final AtomicFile mSensorFile;
+     private final AtomicFile mPersonaFile;
++    private final AtomicFile mRevokedFile;
++    /** The location permissions taken from apps and not yet given back; guarded by mLock. */
++    private RevokedLedger mLedger;
+     private final long mSalt;
+     private final Handler mHandler = BackgroundThread.getHandler();
+     private volatile PolicyStore mStore;
+@@ -160,6 +158,8 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         mPolicyFile = new AtomicFile(new File(mDir, "policy.bin"));
+         mSensorFile = new AtomicFile(new File(mDir, "sensor_modes"));
+         mPersonaFile = new AtomicFile(new File(mDir, "persona"));
++        mRevokedFile = new AtomicFile(new File(mDir, "revoked"));
++        mLedger = loadLedger();
+         mSalt = loadSalt(new File(mDir, "salt"));
+         mStore = loadStore();
+         mPersona = loadPersona();
+@@ -443,12 +443,19 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+             writeAtomic(mPersonaFile, file.getBytes(StandardCharsets.US_ASCII), 0644);
+         } finally {
+             revokeLocation(deny);
++            restoreLocation(deny);
+         }
+     }
+ 
++    /**
++     * Takes the location permissions of the packages. A permission that the app held is noted in the ledger, so that it is given
++     * back when the app is no longer denied (Blocked set back to Real data, a place that can be made now): a revoked runtime
++     * permission would otherwise stay revoked for good. The caller holds mLock.
++     */
+     private void revokeLocation(Set<String> packages) {
+         PackageManager pm = mContext.getPackageManager();
+         List<UserHandle> users = mContext.getSystemService(UserManager.class).getUserHandles(true);
++        boolean noted = false;
+         for (String pkg : packages) {
+             for (UserHandle user : users) {
+                 try {
+@@ -456,9 +463,14 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 } catch (PackageManager.NameNotFoundException e) {
+                     continue;  // not installed for this user: nothing to take
+                 }
++                PackageManager asUser = mContext.createContextAsUser(user, 0).getPackageManager();
+                 for (String permission : LOCATION_PERMISSIONS) {
+                     try {
++                        boolean held = asUser.checkPermission(permission, pkg) == PackageManager.PERMISSION_GRANTED;
+                         pm.revokeRuntimePermission(pkg, permission, user);
++                        if (held && mLedger.record(user.getIdentifier(), pkg, permission)) {
++                            noted = true;
++                        }
+                     } catch (SecurityException | IllegalArgumentException e) {
+                         // the package does not request this permission
+                     } catch (RuntimeException e) {
+@@ -467,6 +479,42 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 }
+             }
+         }
++        if (noted) {
++            saveLedger();
++        }
++    }
++
++    /**
++     * Gives back the location permissions that were taken from packages that are no longer denied. An entry whose package is
++     * gone, or no longer asks for the permission, is dropped; an entry whose grant failed for another reason stays and is tried
++     * again at the next change. The caller holds mLock.
++     */
++    private void restoreLocation(Set<String> denied) {
++        List<RevokedLedger.Entry> owed = mLedger.owedTo(denied);
++        if (owed.isEmpty()) {
++            return;
++        }
++        PackageManager pm = mContext.getPackageManager();
++        for (RevokedLedger.Entry e : owed) {
++            try {
++                pm.getPackageUidAsUser(e.pkg, 0, e.user);
++                pm.grantRuntimePermission(e.pkg, e.permission, UserHandle.of(e.user));
++                mLedger.settle(e);
++            } catch (PackageManager.NameNotFoundException | SecurityException | IllegalArgumentException x) {
++                mLedger.settle(e);
++            } catch (RuntimeException x) {
++                Slog.w(TAG, "location permission not restored: " + x.getClass().getSimpleName());
++            }
++        }
++        saveLedger();
++    }
++
++    private void saveLedger() {
++        try {
++            writeAtomic(mRevokedFile, mLedger.encode().getBytes(StandardCharsets.US_ASCII), -1);
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "revoked ledger not written: " + e.getClass().getSimpleName());
++        }
+     }
+ 
+     private void applyLoopback(PolicyStore previous, PolicyStore next, boolean full) {
+@@ -921,6 +969,24 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         }
+     }
+ 
++    /**
++     * The permissions that are owed back; an empty ledger when the file is missing or unreadable (nothing is then given back,
++     * which leaves a permission revoked, never granted without a record).
++     */
++    private RevokedLedger loadLedger() {
++        try {
++            if (!mRevokedFile.exists()) {
++                return new RevokedLedger();
++            }
++            byte[] data = mRevokedFile.readFully();
++            return data.length > MAX_STORE_BYTES ? new RevokedLedger()
++                    : RevokedLedger.parse(new String(data, StandardCharsets.US_ASCII));
++        } catch (IOException | RuntimeException e) {
++            Slog.w(TAG, "revoked ledger unreadable: " + e.getClass().getSimpleName());
++            return new RevokedLedger();
++        }
++    }
++
+     private static long loadSalt(File f) {
+         AtomicFile af = new AtomicFile(f);
+         try {
+diff --git a/services/core/java/com/android/server/compartments/RevokedLedger.java b/services/core/java/com/android/server/compartments/RevokedLedger.java
+new file mode 100644
+index 0000000..faafaa9
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/RevokedLedger.java
+@@ -0,0 +1,137 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Set;
++import java.util.TreeSet;
++import java.util.regex.Pattern;
++
++/**
++ * The location permissions that the service took from an app and has not given back (ADR-208). A revoked runtime permission
++ * stays revoked, so without this record an app set from Blocked (or from an Isolated app that had no persona) back to Real data
++ * would stay without the permission that the user had given it. Only a permission that was granted at the moment it was taken
++ * is recorded, so giving it back never grants more than the user had; only the four location permissions can be read from a
++ * file, so a damaged or planted file cannot make the service grant anything else. Pure Java.
++ *
++ * <p>Format: one line per entry, {@code user TAB package TAB permission} and a newline after every line, in sorted order.
++ */
++final class RevokedLedger {
++    static final int MAX_ENTRIES = 4096;
++    static final String[] PERMISSIONS = {
++        "android.permission.ACCESS_FINE_LOCATION",
++        "android.permission.ACCESS_COARSE_LOCATION",
++        "android.permission.ACCESS_BACKGROUND_LOCATION",
++        "android.permission.ACCESS_MEDIA_LOCATION",  // the real GPS position in the EXIF of the photos of the user
++    };
++    private static final Pattern USER = Pattern.compile("0|[1-9][0-9]{0,8}");
++
++    static final class Entry implements Comparable<Entry> {
++        final int user;
++        final String pkg;
++        final String permission;
++
++        Entry(int user, String pkg, String permission) {
++            this.user = user;
++            this.pkg = pkg;
++            this.permission = permission;
++        }
++
++        @Override
++        public int compareTo(Entry o) {
++            if (user != o.user) {
++                return Integer.compare(user, o.user);
++            }
++            int c = pkg.compareTo(o.pkg);
++            return c != 0 ? c : permission.compareTo(o.permission);
++        }
++
++        @Override
++        public boolean equals(Object o) {
++            return o instanceof Entry && compareTo((Entry) o) == 0;
++        }
++
++        @Override
++        public int hashCode() {
++            return (user * 31 + pkg.hashCode()) * 31 + permission.hashCode();
++        }
++    }
++
++    private final TreeSet<Entry> entries = new TreeSet<>();
++
++    /** True when the permission is one that the service may take and give back. */
++    static boolean validPermission(String permission) {
++        for (String p : PERMISSIONS) {
++            if (p.equals(permission)) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    /**
++     * Notes that a granted permission was taken. False, noting nothing, for a user below 0, a name that is not a package, a
++     * permission that is not one of the four, or a full ledger; an entry that is there already is a success.
++     */
++    boolean record(int user, String pkg, String permission) {
++        if (user < 0 || !PolicyStore.validPackage(pkg) || !validPermission(permission)) {
++            return false;
++        }
++        Entry e = new Entry(user, pkg, permission);
++        if (entries.contains(e)) {
++            return true;
++        }
++        if (entries.size() >= MAX_ENTRIES) {
++            return false;
++        }
++        return entries.add(e);
++    }
++
++    /** The entries of the packages that are not in {@code denied}: what the service owes back. */
++    List<Entry> owedTo(Set<String> denied) {
++        List<Entry> out = new ArrayList<>();
++        for (Entry e : entries) {
++            if (!denied.contains(e.pkg)) {
++                out.add(e);
++            }
++        }
++        return out;
++    }
++
++    /** Forgets an entry: it was given back, or the package no longer asks for the permission or is gone. */
++    void settle(Entry e) {
++        entries.remove(e);
++    }
++
++    int size() {
++        return entries.size();
++    }
++
++    String encode() {
++        StringBuilder out = new StringBuilder();
++        for (Entry e : entries) {
++            out.append(e.user).append('\t').append(e.pkg).append('\t').append(e.permission).append('\n');
++        }
++        return out.toString();
++    }
++
++    /** @throws IllegalArgumentException for any text that is not exactly a file of the format */
++    static RevokedLedger parse(String text) {
++        RevokedLedger out = new RevokedLedger();
++        if (text.isEmpty()) {
++            return out;
++        }
++        if (text.charAt(text.length() - 1) != '\n') {
++            throw new IllegalArgumentException("not a ledger");
++        }
++        for (String line : text.substring(0, text.length() - 1).split("\n", -1)) {
++            String[] f = line.split("\t", -1);
++            int before = out.size();
++            if (f.length != 3 || !USER.matcher(f[0]).matches() || !out.record(Integer.parseInt(f[0]), f[1], f[2])
++                    || out.size() != before + 1) {
++                throw new IllegalArgumentException("a line is not an entry");
++            }
++        }
++        return out;
++    }
++}
+-- 
+2.56.0
+

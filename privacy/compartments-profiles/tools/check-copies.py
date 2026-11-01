@@ -9,6 +9,7 @@ import pathlib, re, sys
 SOURCES = {
     "PersonaFile.java": "system-server/src/com/android/server/compartments/PersonaFile.java",
     "CellSubset.java": "system-server/src/com/android/server/compartments/CellSubset.java",
+    "LoopbackAppIds.java": "system-server/src/com/android/server/compartments/LoopbackAppIds.java",
     "PersonaReader.java": "persona-client/src/PersonaReader.java",
     "PersonaProcess.java": "persona-client/framework/PersonaProcess.java",
     "PersonaCells.java": "persona-client/telephony/PersonaCells.java",

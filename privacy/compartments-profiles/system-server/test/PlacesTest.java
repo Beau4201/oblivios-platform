@@ -251,6 +251,45 @@ public final class PlacesTest {
         check(p.automaticFor(null, 0, 0, 1) == 0 && p.automaticFor("es", 0, 0, 1) == 0 && p.automaticFor("", 0, 0, 1) == 0, "an invalid country");
         // a fix that is not finite or out of range gives no distance: the choice must still be a place of the country
         check(p.byId(p.automaticFor("ES", Double.NaN, 0, 1)).country.equals("ES"), "a NaN position still gives a place");
+
+        // a place with cells is preferred: from Madrid the far places are Valencia (3), Sevilla (4) and Barcelona (5)
+        for (long seed = 1; seed <= 50; seed++) {
+            check(spain.preferring(new HashSet<>(java.util.Arrays.asList(5))).automaticFor("ES", 40.4168, -3.7038, seed) == 5,
+                    "the only far place with cells");
+        }
+        Set<Integer> pair = new HashSet<>();
+        for (long seed = 1; seed <= 200; seed++) {
+            pair.add(spain.preferring(new HashSet<>(java.util.Arrays.asList(1, 3, 4))).automaticFor("ES", 40.4168, -3.7038, seed));
+        }
+        check(pair.equals(new HashSet<>(java.util.Arrays.asList(3, 4))), "the far places with cells, not Madrid itself: " + pair);
+        // no far place has cells: the farthest place with cells, however near
+        for (long seed = 1; seed <= 20; seed++) {
+            check(spain.preferring(new HashSet<>(java.util.Arrays.asList(1, 2))).automaticFor("ES", 40.4168, -3.7038, seed) == 2,
+                    "the farthest place with cells when none is far enough");
+        }
+        // no place of the country has cells, or the ids are those of no place: as without a preference
+        Set<Integer> same = new HashSet<>();
+        for (long seed = 1; seed <= 200; seed++) {
+            same.add(spain.preferring(new HashSet<>(java.util.Arrays.asList(99, 100))).automaticFor("ES", 40.4168, -3.7038, seed));
+        }
+        check(same.equals(new HashSet<>(java.util.Arrays.asList(3, 4, 5))), "a preference without a place of the country changes nothing: " + same);
+        check(spain.preferring(java.util.Collections.<Integer>emptySet()).automaticFor("ES", 40.4168, -3.7038, 1)
+                == spain.automaticFor("ES", 40.4168, -3.7038, 1), "an empty preference changes nothing");
+        // a position that is not finite counts every place as far; the preference still holds
+        check(spain.preferring(new HashSet<>(java.util.Arrays.asList(4))).automaticFor("ES", Double.NaN, 0, 1) == 4, "NaN position, one place with cells");
+        // another country is not touched by the places with cells of this one
+        Places mixed = Places.parse(ln(1, "Madrid", "ES", "40.4168", "-3.7038", "Europe/Madrid", 214)
+                + ln(2, "Valencia", "ES", "39.4699", "-0.3763", "Europe/Madrid", 214)
+                + ln(3, "Paris", "FR", "48.8566", "2.3522", "Europe/Paris", 208));
+        check(mixed.preferring(new HashSet<>(java.util.Arrays.asList(3))).automaticFor("ES", 52.37, 4.90, 1) != 3, "no place of another country");
+        check(mixed.preferring(new HashSet<>(java.util.Arrays.asList(3))).automaticFor("FR", 52.37, 4.90, 1) == 3, "the place of its own country");
+        check(spain.preferring(new HashSet<>(java.util.Arrays.asList(5))).byId(2).name.equals("Madridejos")
+                && spain.preferring(new HashSet<>(java.util.Arrays.asList(5))).size() == 5, "the places themselves do not change");
+        Set<Integer> source = new HashSet<>(java.util.Arrays.asList(5));
+        Places pref = spain.preferring(source);
+        source.clear();
+        source.add(3);
+        check(pref.automaticFor("ES", 40.4168, -3.7038, 1) == 5, "the preference is a copy");
     }
 
     private static String cellLines(int place, int count) {
@@ -271,6 +310,8 @@ public final class PlacesTest {
         check(c.cellsFor(4).size() == 1 && c.cellsFor(4).get(0).cid == 4294967295L && c.cellsFor(4).get(0).mnc == 4, "the largest cid");
         check(c.cellsFor(7).get(0).tac == 65535 && c.cellsFor(7).get(0).mnc == 260 && c.cellsFor(7).get(0).cid == 0, "the largest tac, cid 0");
         check(c.cellsFor(2).isEmpty() && c.cellsFor(0).isEmpty() && c.cellsFor(-3).isEmpty(), "an unknown place has no cells");
+        check(c.placeIds().equals(new HashSet<>(java.util.Arrays.asList(1, 4, 7))), "the places that have cells");
+        check(CellSubset.parse(ln(9, 214, 1, 1, 1)).placeIds().size() == 1, "one place with cells");
         CellSubset ops = CellSubset.parse(ln(1, 214, 7, 1, 1) + ln(1, 310, 260, 1, 2) + ln(2, 262, 99, 1, 3) + ln(3, 505, 100, 1, 4) + ln(4, 214, 0, 1, 5));
         check(ops.operatorFor(1).equals("21407"), "the operator is mcc and a two-digit mnc of the FIRST cell");
         check(ops.operatorFor(2).equals("26299"), "mnc 99 has two digits");

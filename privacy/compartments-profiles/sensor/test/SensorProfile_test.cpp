@@ -154,7 +154,10 @@ static void table() {
         CHECK(directChannelRefused(SensorMode::SUBSTITUTE, type));
         CHECK(directChannelRefused(SensorMode::BLOCKED, type));
     }
-    CHECK(!directChannelRefused(SensorMode::SUBSTITUTE, SENSOR_TYPE_PRESSURE));
+    CHECK(directChannelRefused(SensorMode::SUBSTITUTE, SENSOR_TYPE_PRESSURE));   // the HAL's own pressure would be the real one
+    CHECK(!directChannelRefused(SensorMode::BLOCKED, SENSOR_TYPE_PRESSURE));
+    CHECK(!directChannelRefused(SensorMode::FOLDED, SENSOR_TYPE_PRESSURE));
+    CHECK(!directChannelRefused(SensorMode::SUBSTITUTE, SENSOR_TYPE_LIGHT));
     for (int32_t type : kDerived) {
         CHECK(directChannelRefused(SensorMode::SUBSTITUTE, type));
         CHECK(directChannelRefused(SensorMode::BLOCKED, type));
@@ -308,10 +311,61 @@ static void stream() {
     CHECK(sway(Activity::STILL) < 0.05);
 
     // other types are not touched
-    sensors_event_t p = make(SENSOR_TYPE_PRESSURE, 5);
+    sensors_event_t p = make(SENSOR_TYPE_LIGHT, 5);
     sensors_event_t before = p;
     CHECK(!substituteEvent(&p, seedA, Activity::STILL));
     CHECK(memcmp(&p, &before, sizeof(p)) == 0);
+}
+
+static void pressureStream() {
+    const int64_t kHour = 3600LL * 1000000000LL;
+    const uint64_t seedA = SensorModeTable::mix(1), seedB = SensorModeTable::mix(2);
+    auto at = [](uint64_t seed, int64_t ts, float real) {
+        sensors_event_t e = make(SENSOR_TYPE_PRESSURE, ts, real);
+        CHECK(substituteEvent(&e, seed, Activity::STILL));
+        return e.data[0];
+    };
+
+    // no function of the real reading, the same for one app and time, different between apps
+    CHECK(at(seedA, 5 * kHour, 800.0f) == at(seedA, 5 * kHour, 1100.0f));
+    CHECK(at(seedA, 5 * kHour, 1.0f) == at(seedA, 5 * kHour, 1.0f));
+    CHECK(at(seedA, 5 * kHour, 1.0f) != at(seedB, 5 * kHour, 1.0f));
+
+    // a day at one sample a minute: plausible, a swing of the weather, no jumps
+    float lo = 2000.0f, hi = 0.0f, maxStep = 0.0f, prev = 0.0f;
+    for (int i = 0; i < 24 * 60; i++) {
+        const float v = at(seedA, i * 60LL * 1000000000LL, 1031.7f);
+        lo = std::fmin(lo, v);
+        hi = std::fmax(hi, v);
+        if (i > 0) maxStep = std::fmax(maxStep, std::fabs(v - prev));
+        prev = v;
+    }
+    CHECK(lo > 930.0f && hi < 1025.0f);
+    CHECK(hi - lo > 10.0f && hi - lo < 14.0f);
+    CHECK(maxStep < 0.5f);
+
+    // the sensor is not noiseless: samples a second apart are rarely equal
+    int equalNeighbours = 0;
+    for (int i = 0; i < 100; i++) {
+        if (at(seedA, i * 1000000000LL, 1.0f) == at(seedA, (i + 1) * 1000000000LL, 1.0f)) equalNeighbours++;
+    }
+    CHECK(equalNeighbours < 5);
+    // and the noise is in the sample, not in a slow trend: a nanosecond apart the weather is the same, the noise is not
+    int differentWithinANanosecond = 0;
+    for (int i = 0; i < 20; i++) {
+        if (at(seedA, i * kHour, 1.0f) != at(seedA, i * kHour + 1, 1.0f)) differentWithinANanosecond++;
+    }
+    CHECK(differentWithinANanosecond >= 15);
+
+    // every app is in a believable place, and the places differ
+    float minSeed = 2000.0f, maxSeed = 0.0f;
+    for (uint64_t i = 0; i < 200; i++) {
+        const float v = at(SensorModeTable::mix(100 + i), 3 * kHour, 1031.7f);
+        CHECK(v > 930.0f && v < 1025.0f);
+        minSeed = std::fmin(minSeed, v);
+        maxSeed = std::fmax(maxSeed, v);
+    }
+    CHECK(maxSeed - minSeed > 30.0f);
 }
 
 static void modes() {
@@ -332,10 +386,14 @@ static void modes() {
     sensors_event_t sub = make(SENSOR_TYPE_ACCELEROMETER, 9);
     CHECK(applyMode(&sub, SensorMode::SUBSTITUTE, seed, Activity::STILL));
     CHECK(magnitude(sub) > 9.6f && magnitude(sub) < 10.0f);
-    sensors_event_t pressure = make(SENSOR_TYPE_PRESSURE, 9);
-    sensors_event_t pressureBefore = pressure;
+    sensors_event_t light = make(SENSOR_TYPE_LIGHT, 9);
+    sensors_event_t lightBefore = light;
+    CHECK(applyMode(&light, SensorMode::SUBSTITUTE, seed, Activity::STILL));
+    CHECK(memcmp(&light, &lightBefore, sizeof(light)) == 0);
+    sensors_event_t pressure = make(SENSOR_TYPE_PRESSURE, 9, 1031.7f);
     CHECK(applyMode(&pressure, SensorMode::SUBSTITUTE, seed, Activity::STILL));
-    CHECK(memcmp(&pressure, &pressureBefore, sizeof(pressure)) == 0);
+    CHECK(pressure.data[0] > 930.0f && pressure.data[0] < 1025.0f && pressure.data[0] != 1031.7f);
+    CHECK(pressure.data[1] == 1032.7f && pressure.data[6] == 42.0f && pressure.timestamp == 9 && pressure.type == SENSOR_TYPE_PRESSURE);
 
     sensors_event_t blockedMotion = make(SENSOR_TYPE_MAGNETIC_FIELD, 9);
     CHECK(!applyMode(&blockedMotion, SensorMode::BLOCKED, seed, Activity::STILL));
@@ -351,6 +409,10 @@ static void modes() {
         CHECK(modeTouches(SensorMode::FOLDED, type) == eventCarriesBias(type));
     }
     CHECK(!modeTouches(SensorMode::BLOCKED, SENSOR_TYPE_PRESSURE));
+    CHECK(modeTouches(SensorMode::SUBSTITUTE, SENSOR_TYPE_PRESSURE));
+    CHECK(!modeTouches(SensorMode::FOLDED, SENSOR_TYPE_PRESSURE));
+    CHECK(!modeTouches(SensorMode::RAW, SENSOR_TYPE_PRESSURE));
+    CHECK(!modeTouches(SensorMode::SUBSTITUTE, SENSOR_TYPE_LIGHT));
     CHECK(!modeTouches(SensorMode::SUBSTITUTE, SENSOR_TYPE_META_DATA));
 
     // the types that the HAL derives from the real motion are delivered in neither SUBSTITUTE nor BLOCKED; FOLDED and RAW pass them
@@ -369,20 +431,20 @@ static void modes() {
         CHECK(!modeTouches(SensorMode::FOLDED, type));
         CHECK(!modeTouches(SensorMode::RAW, type));
     }
-    sensors_event_t stepIn[2] = {make(SENSOR_TYPE_STEP_COUNTER, 1), make(SENSOR_TYPE_PRESSURE, 2)};
+    sensors_event_t stepIn[2] = {make(SENSOR_TYPE_STEP_COUNTER, 1), make(SENSOR_TYPE_LIGHT, 2)};
     sensors_event_t stepOut[2];
     CHECK(copyEventsApplyingMode(stepIn, 2, stepOut, SensorMode::SUBSTITUTE, seed, Activity::STILL) == 1 &&
-          stepOut[0].type == SENSOR_TYPE_PRESSURE);
+          stepOut[0].type == SENSOR_TYPE_LIGHT);
 
     // the copy leaves the shared input alone, drops what is blocked and keeps the order
-    sensors_event_t in[4] = {make(SENSOR_TYPE_ACCELEROMETER, 1), make(SENSOR_TYPE_PRESSURE, 2),
+    sensors_event_t in[4] = {make(SENSOR_TYPE_ACCELEROMETER, 1), make(SENSOR_TYPE_LIGHT, 2),
                              make(SENSOR_TYPE_META_DATA, 3), make(SENSOR_TYPE_GYROSCOPE_UNCALIBRATED, 4)};
     sensors_event_t inCopy[4];
     memcpy(inCopy, in, sizeof(in));
     sensors_event_t out[4];
     const size_t n = copyEventsApplyingMode(in, 4, out, SensorMode::BLOCKED, seed, Activity::STILL);
     CHECK(n == 2);
-    CHECK(out[0].type == SENSOR_TYPE_PRESSURE && out[1].type == SENSOR_TYPE_META_DATA);
+    CHECK(out[0].type == SENSOR_TYPE_LIGHT && out[1].type == SENSOR_TYPE_META_DATA);
     CHECK(memcmp(in, inCopy, sizeof(in)) == 0);
     const size_t m = copyEventsApplyingMode(in, 4, out, SensorMode::SUBSTITUTE, seed, Activity::STILL);
     CHECK(m == 4);
@@ -466,6 +528,7 @@ int main() {
     table();
     activityLine();
     stream();
+    pressureStream();
     modes();
     source();
     if (failures) {

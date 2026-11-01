@@ -1,0 +1,269 @@
+From 9c294273d8bba86ecd825f2683b9499ec2a53eee Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sun, 1 Nov 2026 20:56:56 +0100
+Subject: [PATCH] connectivity: let the apps that the user trusts onto the
+ loopback interface without the permission
+
+Setting Other apps on this phone to Can reach (the profile Trusted) granted USE_LOOPBACK_INTERFACE
+by a runtime grant, which needs the app to declare the permission: an app that does not declare
+it (almost all) stayed refused (CMP-005). The policy service of Compartments now lists the app
+ids of the Trusted apps in the global setting freeholdos_loopback_app_ids, and PermissionMonitor
+adds the loopback bit to the uid of those apps in every user, when the permission service sends
+the bits and when the setting changes. A missing, unreadable or damaged setting is an empty list.
+---
+ .../server/connectivity/LoopbackAppIds.java   |  77 ++++++++++++
+ .../connectivity/PermissionMonitor.java       | 110 ++++++++++++++++--
+ 2 files changed, 178 insertions(+), 9 deletions(-)
+ create mode 100644 service/src/com/android/server/connectivity/LoopbackAppIds.java
+
+diff --git a/service/src/com/android/server/connectivity/LoopbackAppIds.java b/service/src/com/android/server/connectivity/LoopbackAppIds.java
+new file mode 100644
+index 0000000..7375c03
+--- /dev/null
++++ b/service/src/com/android/server/connectivity/LoopbackAppIds.java
+@@ -0,0 +1,77 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.connectivity;
++
++import java.util.Collections;
++import java.util.Set;
++import java.util.TreeSet;
++
++/**
++ * The app ids that may use the loopback interface although they do not hold USE_LOOPBACK_INTERFACE (ADR-208). That permission is
++ * a runtime permission, and a runtime grant needs the app to declare it, which almost no app does: a Trusted app that does not
++ * declare it stayed refused (CMP-005). The policy service writes the app ids of the Trusted apps into a global setting with
++ * {@link #format}, and the connectivity module reads them with {@link #parse} and adds the bit to the uid of those apps in every
++ * user. One copy of this file lives in each of the two trees (see tools/check-copies.py). Pure Java.
++ *
++ * <p>Format: decimal app ids from 10000 to 19999 in strictly ascending order, separated by a comma, no space, no leading zero.
++ */
++final class LoopbackAppIds {
++    static final int FIRST_APP_ID = 10000;
++    static final int LAST_APP_ID = 19999;
++    static final int MAX_IDS = 4096;
++
++    private LoopbackAppIds() {
++    }
++
++    /** The text for {@code appIds}: ids outside the range of ordinary apps are left out, and at most {@link #MAX_IDS} are written. */
++    static String format(Set<Integer> appIds) {
++        TreeSet<Integer> sorted = new TreeSet<>();
++        for (Integer id : appIds) {
++            if (id != null && id >= FIRST_APP_ID && id <= LAST_APP_ID) {
++                sorted.add(id);
++            }
++        }
++        StringBuilder out = new StringBuilder();
++        int written = 0;
++        for (int id : sorted) {
++            if (written++ >= MAX_IDS) {
++                break;
++            }
++            out.append(written == 1 ? "" : ",").append(id);
++        }
++        return out.toString();
++    }
++
++    /** The app ids in {@code text}; none for null, for the empty text and for any text that {@link #format} could not have written. */
++    static Set<Integer> parse(String text) {
++        if (text == null || text.isEmpty()) {
++            return Collections.emptySet();
++        }
++        TreeSet<Integer> out = new TreeSet<>();
++        int p = 0;
++        int last = -1;
++        while (true) {
++            int start = p;
++            int id = 0;
++            char c;
++            while (p < text.length() && (c = text.charAt(p)) >= '0' && c <= '9') {
++                if (p - start >= 5) {
++                    return Collections.emptySet();
++                }
++                id = id * 10 + (c - '0');
++                p++;
++            }
++            if (p == start || id < FIRST_APP_ID || id > LAST_APP_ID || id <= last || out.size() >= MAX_IDS) {
++                return Collections.emptySet();
++            }
++            out.add(id);
++            last = id;
++            if (p == text.length()) {
++                return out;
++            }
++            if (text.charAt(p) != ',') {
++                return Collections.emptySet();
++            }
++            p++;
++        }
++    }
++}
+diff --git a/service/src/com/android/server/connectivity/PermissionMonitor.java b/service/src/com/android/server/connectivity/PermissionMonitor.java
+index bf68eba..3bc8b65 100755
+--- a/service/src/com/android/server/connectivity/PermissionMonitor.java
++++ b/service/src/com/android/server/connectivity/PermissionMonitor.java
+@@ -108,6 +108,7 @@ import com.android.server.permission.PermissionBpfMap;
+ import com.android.server.permission.PermissionManagerLocal;
+ 
+ import java.util.ArrayList;
++import java.util.Collections;
+ import java.util.HashSet;
+ import java.util.List;
+ import java.util.Map;
+@@ -201,6 +202,18 @@ public class PermissionMonitor {
+     private final boolean mUseBroadcastReceiveHelper;
+     private final boolean mIsLoopbackPermissionEnabled;
+ 
++    // FreeholdOS (ADR-208): an app that the user sets to "Other apps on this phone: Can reach" (the profile Trusted) may use the
++    // loopback interface although it does not declare USE_LOOPBACK_INTERFACE, which a runtime grant needs. The policy service of
++    // Compartments lists the app ids of those apps in this global setting (LoopbackAppIds), and the bit is added to the uid of
++    // each of them in every user.
++    private static final String LOOPBACK_APP_IDS_SETTING = "freeholdos_loopback_app_ids";
++    private final Object mLoopbackLock = new Object();
++    // Both guarded by mLoopbackLock, which is also held while the map is written, so that two writers cannot leave the older
++    // value in it: the app ids of the setting, and the permission bits as the permission service sent them last for each uid,
++    // which a change of the setting needs without asking the permission service again.
++    private Set<Integer> mLoopbackAppIds = Collections.emptySet();
++    private final SparseIntArray mRawPermissionBits = new SparseIntArray();
++
+     private final BroadcastReceiver mIntentReceiver = new BroadcastReceiver() {
+         @Override
+         public void onReceive(Context context, Intent intent) {
+@@ -278,6 +291,66 @@ public class PermissionMonitor {
+     // It does not have a corresponding functional bit in the BPF map.
+     public static final int PERMISSION_BPF_MAP_BIT_ACCESS_NETWORK_STATE = 1 << 9;
+ 
++    /**
++     * FreeholdOS (ADR-208): the permission bits of the BPF map for {@code uid}, plus the loopback bit when the user lets the app
++     * onto the loopback interface. The caller holds mLoopbackLock.
++     */
++    private int withLoopbackGrant(int uid, int chunkPermissions) {
++        if (!mIsLoopbackPermissionEnabled || !mLoopbackAppIds.contains(UserHandle.getAppId(uid))) {
++            return chunkPermissions;
++        }
++        return chunkPermissions | PERMISSION_BIT_USE_LOOPBACK_INTERFACE;
++    }
++
++    /** Drops what is remembered of the uids of an app id (appId >= 0) or of a user (userId >= 0). */
++    private void forgetRawPermissionBits(int appId, int userId) {
++        synchronized (mLoopbackLock) {
++            for (int i = mRawPermissionBits.size() - 1; i >= 0; i--) {
++                final int uid = mRawPermissionBits.keyAt(i);
++                if ((appId >= 0 && UserHandle.getAppId(uid) == appId)
++                        || (userId >= 0 && UserHandle.getUserId(uid) == userId)) {
++                    mRawPermissionBits.removeAt(i);
++                }
++            }
++        }
++    }
++
++    /**
++     * FreeholdOS (ADR-208): reads the list of app ids again and writes the bits of the uids whose app id entered or left it. An
++     * unreadable or damaged setting is an empty list: no app gets the bit that way.
++     */
++    private void onLoopbackAppIdsChanged() {
++        Set<Integer> next;
++        try {
++            next = LoopbackAppIds.parse(
++                    Settings.Global.getString(mContext.getContentResolver(), LOOPBACK_APP_IDS_SETTING));
++        } catch (RuntimeException e) {
++            next = Collections.emptySet();
++        }
++        synchronized (mLoopbackLock) {
++            final Set<Integer> before = mLoopbackAppIds;
++            mLoopbackAppIds = next;
++            final SparseIntArray changed = new SparseIntArray();
++            for (int i = 0; i < mRawPermissionBits.size(); i++) {
++                final int uid = mRawPermissionBits.keyAt(i);
++                final int appId = UserHandle.getAppId(uid);
++                if (before.contains(appId) == next.contains(appId)) continue;
++                final int chunkPermissions = withLoopbackGrant(uid,
++                        convertToChunkPermissionBits(mRawPermissionBits.valueAt(i)));
++                changed.put(uid, chunkPermissions);
++                if (hasSdkSandbox(uid)) {
++                    changed.put(Process.toSdkSandboxUid(uid), chunkPermissions);
++                }
++            }
++            if (changed.size() == 0) return;
++            try {
++                mBpfNetMaps.setChunkPermListForUids(changed);
++            } catch (ServiceSpecificException e) {
++                Log.e(TAG, "Send loopback uid permission failed." + e);
++            }
++        }
++    }
++
+     private int convertToChunkPermissionBits(int permissionBits) {
+         int chunkPermissions = PERMISSION_BIT_NONE;
+         if ((permissionBits & PERMISSION_BPF_MAP_BIT_ACCESS_LOCAL_NETWORK) != 0
+@@ -490,17 +563,21 @@ public class PermissionMonitor {
+                         long startTimeNanos = SystemClock.elapsedRealtimeNanos();
+                         try {
+                             SparseIntArray allUidsPermissionBits = new SparseIntArray();
+-                            for (int i = 0; i < uidsPermissionBits.size(); i++){
+-                                int uid = uidsPermissionBits.keyAt(i);
+-                                int chunkPermissions = convertToChunkPermissionBits(
+-                                        uidsPermissionBits.valueAt(i));
+-                                allUidsPermissionBits.put(uid, chunkPermissions);
+-                                if (hasSdkSandbox(uid)) {
+-                                    allUidsPermissionBits.put(Process.toSdkSandboxUid(uid),
+-                                            chunkPermissions);
++                            synchronized (mLoopbackLock) {
++                                for (int i = 0; i < uidsPermissionBits.size(); i++){
++                                    int uid = uidsPermissionBits.keyAt(i);
++                                    mRawPermissionBits.put(uid, uidsPermissionBits.valueAt(i));
++                                    int chunkPermissions = withLoopbackGrant(uid,
++                                            convertToChunkPermissionBits(
++                                                    uidsPermissionBits.valueAt(i)));
++                                    allUidsPermissionBits.put(uid, chunkPermissions);
++                                    if (hasSdkSandbox(uid)) {
++                                        allUidsPermissionBits.put(Process.toSdkSandboxUid(uid),
++                                                chunkPermissions);
++                                    }
+                                 }
++                                mBpfNetMaps.setChunkPermListForUids(allUidsPermissionBits);
+                             }
+-                            mBpfNetMaps.setChunkPermListForUids(allUidsPermissionBits);
+                         } catch (ServiceSpecificException e) {
+                             Log.e(TAG, "Send uid traffic permission failed." + e);
+                         } finally {
+@@ -516,6 +593,7 @@ public class PermissionMonitor {
+                         }
+                     },
+                     (Integer appId) -> { /* removeAppId */
++                        forgetRawPermissionBits(appId, -1);
+                         mBpfNetMaps.removePermissionsForAppId(appId);
+                         if (hasSdkSandbox(appId)) {
+                             int sdkSandboxAppId = Process.toSdkSandboxUid(appId);
+@@ -523,6 +601,7 @@ public class PermissionMonitor {
+                         }
+                     },
+                     (Integer userId) -> { /* removeUser */
++                        forgetRawPermissionBits(-1, userId);
+                         mBpfNetMaps.removePermissionsForUserId(userId);
+                     },
+                     PERMISSIONS
+@@ -720,6 +799,19 @@ public class PermissionMonitor {
+         final Handler handler = new Handler(mThread.getLooper());
+         final Context userAllContext = mContext.createContextAsUser(UserHandle.ALL, 0 /* flags */);
+ 
++        // FreeholdOS (ADR-208): the apps that the user lets onto the loopback interface; read now and on every change.
++        mDeps.registerContentObserver(
++                userAllContext,
++                Settings.Global.getUriFor(LOOPBACK_APP_IDS_SETTING),
++                false /* notifyForDescendants */,
++                new ContentObserver(handler) {
++                    @Override
++                    public void onChange(boolean selfChange) {
++                        onLoopbackAppIdsChanged();
++                    }
++                });
++        onLoopbackAppIdsChanged();
++
+         if (!mUseBroadcastReceiveHelper) {
+             final IntentFilter intentFilter = new IntentFilter();
+             intentFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
+-- 
+2.56.0
+

@@ -1,0 +1,44 @@
+From 231ac05f9ef3fb51d44976bfd4263d99a8b5d0d3 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sun, 1 Nov 2026 20:48:14 +0100
+Subject: [PATCH 15/16] compartments: give the passive location listener the
+ minimum interval it needs
+
+LocationRequest.Builder.build() throws IllegalStateException for a passive request without an
+explicit minimum update interval, so the listener of the policy service that feeds the activity
+estimator never registered: the log held "passive location listener failed: IllegalStateException"
+every 30 s on lynx 2026110101, and the sensor service never learned that the phone was walking or
+driving. One fix a second is enough for the estimator.
+---
+ .../server/compartments/CompartmentsPolicyService.java     | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index 4aa0888..b6c9c05 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -87,6 +87,8 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     };
+     /** A package that the user changed starts again after this long: the readers of the mirror files look again about once a second. */
+     private static final int STOP_DELAY_MS = 2000;
++    /** The fixes of the passive provider may come as often as this: one a second is enough for the activity of the phone. */
++    private static final long FIX_MIN_INTERVAL_MS = 1000;
+     private static final int MAX_STORE_BYTES = 1024 * 1024;
+     private static final int MAX_PLACES_BYTES = 16 * 1024 * 1024;
+     private static final int MAX_SEARCH_RESULTS = 50;
+@@ -561,9 +563,10 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     private void registerFixListener() {
+         try {
+             LocationManager lm = mContext.getSystemService(LocationManager.class);
++            // a passive request must name its minimum interval, or build() throws IllegalStateException
+             lm.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER,
+-                    new LocationRequest.Builder(LocationRequest.PASSIVE_INTERVAL).build(), new HandlerExecutor(mHandler),
+-                    mFixListener);
++                    new LocationRequest.Builder(LocationRequest.PASSIVE_INTERVAL).setMinUpdateIntervalMillis(FIX_MIN_INTERVAL_MS)
++                            .build(), new HandlerExecutor(mHandler), mFixListener);
+         } catch (RuntimeException e) {
+             // the location service may not be ready at boot (P20): try again
+             Slog.w(TAG, "passive location listener failed: " + e.getClass().getSimpleName());
+-- 
+2.56.0
+

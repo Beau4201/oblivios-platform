@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The cell towers of the persona (ADR-208): a few towers per place of {@link Places}, with the operator codes of the country,
@@ -108,6 +109,11 @@ final class CellSubset {
         }
         Cell first = all.get(0);
         return first.mcc + (first.mnc < 10 ? "0" : "") + first.mnc;  // not String.format: the digits would follow the locale
+    }
+
+    /** The ids of the places that have at least one cell. */
+    Set<Integer> placeIds() {
+        return Collections.unmodifiableSet(byPlace.keySet());
     }
 
     /** At most 8 cells of the place in file order; empty for a place without cells. */

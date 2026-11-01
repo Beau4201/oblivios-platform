@@ -52,6 +52,22 @@ final class MirrorPlan {
         return out;
     }
 
+    /**
+     * The value of the global setting that lists the app ids allowed on the loopback interface, for the connectivity module: the
+     * apps of {@link #loopbackAllowed} that are installed in the owner user and are ordinary apps. The permission itself cannot be
+     * granted to an app that does not declare it, so this list is what makes the profile work for every app.
+     */
+    static String loopbackAppIds(PolicyStore s, UidResolver r) {
+        Set<Integer> ids = new TreeSet<>();
+        for (String pkg : loopbackAllowed(s)) {
+            int appId = ordinaryAppId(r.uidOf(pkg));
+            if (appId >= 0) {
+                ids.add(appId);
+            }
+        }
+        return LoopbackAppIds.format(ids);
+    }
+
     /** The more protective of two modes: RAW, FOLDED, SUBSTITUTE, BLOCKED in that order. */
     static SensorMode stricter(SensorMode a, SensorMode b) {
         return rank(a) >= rank(b) ? a : b;

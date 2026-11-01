@@ -73,7 +73,24 @@ MUTANTS += [
     (M, "a substituted or blocked app keeps a derived direct channel", "case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);", "case SensorMode::BLOCKED: return isMotionType(type);"),
     (S, "a substituted app gets derived events", "if (isDerivedMotionType(e->type)) return false;\n            substituteEvent(e, seed, a);", "substituteEvent(e, seed, a);"),
     (S, "a blocked app gets derived events", "return !isMotionType(e->type) && !isDerivedMotionType(e->type);", "return !isMotionType(e->type);"),
-    (S, "a derived event is delivered from the shared buffer", "default: return isMotionType(type) || isDerivedMotionType(type);", "default: return isMotionType(type);"),
+    (S, "a derived event is delivered from the shared buffer", "case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);\n    }\n    return false;", "case SensorMode::BLOCKED: return isMotionType(type);\n    }\n    return false;"),
+    (S, "a derived event of a substituted app is delivered from the shared buffer", "case SensorMode::SUBSTITUTE: return isMotionType(type) || isDerivedMotionType(type) || isPressureType(type);", "case SensorMode::SUBSTITUTE: return isMotionType(type) || isPressureType(type);"),
+]
+# the air pressure of a substituted app (not of a blocked one)
+MUTANTS += [
+    (M, "pressure is the light sensor", "return type == SENSOR_TYPE_PRESSURE;", "return type == SENSOR_TYPE_LIGHT;"),
+    (M, "a substituted app keeps its pressure direct channel", "case SensorMode::SUBSTITUTE: return isMotionType(type) || isDerivedMotionType(type) || isPressureType(type);", "case SensorMode::SUBSTITUTE: return isMotionType(type) || isDerivedMotionType(type);"),
+    (M, "a blocked app loses its pressure direct channel", "case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);", "case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type) || isPressureType(type);"),
+    (S, "a pressure event of a substituted app is delivered from the shared buffer", "case SensorMode::SUBSTITUTE: return isMotionType(type) || isDerivedMotionType(type) || isPressureType(type);", "case SensorMode::SUBSTITUTE: return isMotionType(type) || isDerivedMotionType(type);"),
+    (S, "a pressure event of a blocked app is copied and changed", "case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);\n    }\n    return false;", "case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type) || isPressureType(type);\n    }\n    return false;"),
+    (S, "substituteEvent ignores pressure", "return isMotionType(type) || isPressureType(type);", "return isMotionType(type);"),
+    (S, "the pressure follows the real reading", "e->data[0] = pressure(seed, e->timestamp);", "e->data[0] = e->data[0] + pressure(seed, e->timestamp) - 1013.25f;"),
+    (S, "the pressure goes to the wrong value", "e->data[0] = pressure(seed, e->timestamp);", "e->data[1] = pressure(seed, e->timestamp);"),
+    (S, "every app has the same height", "const float height = perSeed(seed, 6, 0.0f, 600.0f);", "const float height = 0.0f;"),
+    (S, "the weather does not swing", "const float weather = 6.0f * std::sin(", "const float weather = 0.0f * std::sin("),
+    (S, "the pressure noise is large", "0.03f * noise(seed, ts, 10)", "3.0f * noise(seed, ts, 10)"),
+    (S, "the pressure noise is the same every time", "0.03f * noise(seed, ts, 10)", "0.03f * noise(seed, 0, 10)"),
+    (S, "the weather swings in minutes", "phase(ts, 1.0 / 21600.0)", "phase(ts, 1.0 / 21.6)"),
 ]
 # one mutant per derived type: the type is no longer in the list
 MUTANTS += [(M, f"{name.lower()} is not a derived motion type", f"type == SENSOR_TYPE_{name}", "false") for name in (

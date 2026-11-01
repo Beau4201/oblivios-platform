@@ -4,8 +4,10 @@ package com.android.server.compartments;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * The places of the persona (ADR-208): the offline list of cities that an Isolated app can be placed in. Read once from a
@@ -44,9 +46,21 @@ final class Places {
     }
 
     private final List<Place> places;
+    /** The ids of the places that have cell towers; null: no preference (see {@link #preferring}). */
+    private final Set<Integer> withCells;
 
-    private Places(List<Place> places) {
+    private Places(List<Place> places, Set<Integer> withCells) {
         this.places = Collections.unmodifiableList(places);
+        this.withCells = withCells;
+    }
+
+    /**
+     * The same places, whose automatic choice takes a place of {@code ids} when the country has one: a place without cell
+     * towers would give the persona a phone with no cell identity at all, which no phone in a city has (about a third of the
+     * places have none). The places themselves, the search and the places a user chooses are not changed.
+     */
+    Places preferring(Set<Integer> ids) {
+        return new Places(places, new HashSet<>(ids));
     }
 
     /** @throws IllegalArgumentException for any text that is not exactly a file of the format */
@@ -114,7 +128,7 @@ final class Places {
                 out.add(new Place(id, tsv.substring(cut[1] + 1, cut[2]), tsv.substring(cut[2] + 1, cut[3]), lat, lon, zone, mcc));
             }
         }
-        return new Places(out);
+        return new Places(out, null);
     }
 
     /** The grammar 0|[1-9][0-9]{0,8} of s[from, to): ASCII digits, no sign, no leading zero. */
@@ -280,18 +294,34 @@ final class Places {
         List<Place> far = new ArrayList<>();
         Place farthest = null;
         double farthestM = -1.0;
+        List<Place> farWith = new ArrayList<>();
+        Place farthestWith = null;
+        double farthestWithM = -1.0;
         for (Place p : places) {
             if (!p.country.equals(countryIso)) {
                 continue;
             }
             double d = known ? Geo.distanceM(realLat, realLon, p.lat, p.lon) : Double.MAX_VALUE;
+            boolean has = withCells != null && withCells.contains(p.id);
             if (d >= MIN_AUTOMATIC_DISTANCE_M) {
                 far.add(p);
+                if (has) {
+                    farWith.add(p);
+                }
             }
             if (d > farthestM) {
                 farthestM = d;
                 farthest = p;
             }
+            if (has && d > farthestWithM) {
+                farthestWithM = d;
+                farthestWith = p;
+            }
+        }
+        if (farthestWith != null) {
+            // the country has places with cells: choose among those only
+            far = farWith;
+            farthest = farthestWith;
         }
         if (far.isEmpty()) {
             return farthest == null ? 0 : farthest.id;

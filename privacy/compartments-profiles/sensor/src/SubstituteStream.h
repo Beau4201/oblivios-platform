@@ -45,18 +45,32 @@ inline float perSeed(uint64_t seed, uint32_t slot, float lo, float hi) {
     return lo + (hi - lo) * u;
 }
 
+// The air pressure in hPa of an invented place: the standard atmosphere at a height fixed for the seed (0 to 600 m), a slow swing
+// of a few hPa for the weather, and the noise of a real sensor. It is no function of the real reading, so it says nothing of the
+// real place. ponytail: no link to the height of the persona's city (the sensor file holds no place), add when places.tsv gets one.
+inline float pressure(uint64_t seed, int64_t ts) {
+    const float height = perSeed(seed, 6, 0.0f, 600.0f);
+    const float standard = 1013.25f * std::pow(1.0f - height / 44330.0f, 5.255f);
+    const float weather = 6.0f * std::sin(phase(ts, 1.0 / 21600.0) + perSeed(seed, 7, 0.0f, 6.28f));
+    return standard + weather + 0.03f * noise(seed, ts, 10);
+}
+
 }  // namespace substitute_detail
 
 // The type of events that substituteEvent writes.
 inline bool substitutes(int32_t type) {
-    return isMotionType(type);
+    return isMotionType(type) || isPressureType(type);
 }
 
-// Writes the first three values of an event of a motion type (and zero as the bias of an uncalibrated one); the rest of the
-// event is left as it is. Returns false, touching nothing, for any other type.
+// Writes the first three values of an event of a motion type (and zero as the bias of an uncalibrated one), or the one value of
+// an air pressure event; the rest of the event is left as it is. Returns false, touching nothing, for any other type.
 inline bool substituteEvent(sensors_event_t* e, uint64_t seed, Activity a) {
     using namespace substitute_detail;
     if (!substitutes(e->type)) return false;
+    if (isPressureType(e->type)) {
+        e->data[0] = pressure(seed, e->timestamp);
+        return true;
+    }
     const float walk = (a == Activity::WALKING) ? 1.0f : 0.0f;
     const float drive = (a == Activity::DRIVING) ? 1.0f : 0.0f;
     float v[3];
@@ -125,8 +139,10 @@ inline bool modeTouches(SensorMode m, int32_t type) {
     switch (m) {
         case SensorMode::RAW: return false;
         case SensorMode::FOLDED: return eventCarriesBias(type);
-        default: return isMotionType(type) || isDerivedMotionType(type);
+        case SensorMode::SUBSTITUTE: return isMotionType(type) || isDerivedMotionType(type) || isPressureType(type);
+        case SensorMode::BLOCKED: return isMotionType(type) || isDerivedMotionType(type);
     }
+    return false;
 }
 
 // Copies n events from in to out, applies the mode to each copy and leaves out the events that are not to be delivered.

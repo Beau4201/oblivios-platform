@@ -268,6 +268,65 @@ MUTANTS = [
     ("MirrorPlan.java", "a resolved app is reported", "&& placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon, keptPlace(before, table, pkg, appId, places)) == 0) {", "&& placeOf(s.policyOf(pkg), appId, salt, places, country, lat, lon, keptPlace(before, table, pkg, appId, places)) >= 0) {"),
     ("MirrorPlan.java", "an unresolved app with a real location is reported", "if (appId >= 0 && s.value(pkg, Cls.LOCATION) == Value.SUBSTITUTE\n", "if (appId >= 0\n"),
     ("MirrorPlan.java", "an unresolved app that is not installed is reported", "if (appId >= 0 && s.value(pkg, Cls.LOCATION) == Value.SUBSTITUTE\n", "if (s.value(pkg, Cls.LOCATION) == Value.SUBSTITUTE\n"),
+    # RevokedLedger (the location permissions taken and owed back)
+    ("RevokedLedger.java", "a negative user is recorded", "if (user < 0 || !PolicyStore.validPackage(pkg)", "if (!PolicyStore.validPackage(pkg)"),
+    ("RevokedLedger.java", "a name that is not a package is recorded", "!PolicyStore.validPackage(pkg) ||", ""),
+    ("RevokedLedger.java", "any permission is recorded", " || !validPermission(permission)", ""),
+    ("RevokedLedger.java", "the limit is one too many", "entries.size() >= MAX_ENTRIES", "entries.size() > MAX_ENTRIES"),
+    ("RevokedLedger.java", "the ledger has no limit", "if (entries.size() >= MAX_ENTRIES) {", "if (false) {"),
+    ("RevokedLedger.java", "an entry that is there is refused", "if (entries.contains(e)) {\n            return true;", "if (entries.contains(e)) {\n            return false;"),
+    ("RevokedLedger.java", "a permission is matched by prefix", "if (p.equals(permission)) {", "if (permission != null && permission.startsWith(p)) {"),
+    ("RevokedLedger.java", "a denied package is owed its permissions", "if (!denied.contains(e.pkg)) {", "if (true) {"),
+    ("RevokedLedger.java", "only a denied package is owed", "if (!denied.contains(e.pkg)) {", "if (denied.contains(e.pkg)) {"),
+    ("RevokedLedger.java", "a settled entry stays", "entries.remove(e);", ""),
+    ("RevokedLedger.java", "the file separates by a space", "append('\\t').append(e.pkg)", "append(' ').append(e.pkg)"),
+    ("RevokedLedger.java", "the file needs no final newline", "if (text.charAt(text.length() - 1) != '\\n') {", "if (false) {"),
+    ("RevokedLedger.java", "a trailing empty line is dropped", 'split("\\n", -1)', 'split("\\n")'),
+    ("RevokedLedger.java", "a trailing empty field is dropped", 'split("\\t", -1)', 'split("\\t")'),
+    ("RevokedLedger.java", "the number of fields is not checked", "f.length != 3 || ", ""),
+    ("RevokedLedger.java", "the user is not checked", "!USER.matcher(f[0]).matches() || ", ""),
+    ("RevokedLedger.java", "a repeated line is read", "\n                    || out.size() != before + 1", ""),
+    ("RevokedLedger.java", "a user may have ten digits", "[1-9][0-9]{0,8}", "[1-9][0-9]{0,9}"),
+    ("RevokedLedger.java", "a user may start with a zero", '"0|[1-9][0-9]{0,8}"', '"[0-9]{1,9}"'),
+    ("RevokedLedger.java", "users sort as text", "return Integer.compare(user, o.user);", "return String.valueOf(user).compareTo(String.valueOf(o.user));"),
+    ("RevokedLedger.java", "the permission is no part of the key", "return c != 0 ? c : permission.compareTo(o.permission);", "return c;"),
+    ("RevokedLedger.java", "an empty file is not a ledger", "if (text.isEmpty()) {\n            return out;\n        }\n", ""),
+    # LoopbackAppIds (the Trusted apps that the connectivity module lets onto the loopback interface)
+    ("LoopbackAppIds.java", "an id below the app range is written", "id >= FIRST_APP_ID && id <= LAST_APP_ID) {\n                sorted.add(id);", "id <= LAST_APP_ID) {\n                sorted.add(id);"),
+    ("LoopbackAppIds.java", "an id above the app range is written", "id >= FIRST_APP_ID && id <= LAST_APP_ID) {\n                sorted.add(id);", "id >= FIRST_APP_ID) {\n                sorted.add(id);"),
+    ("LoopbackAppIds.java", "the first id of the range is left out", "id >= FIRST_APP_ID && id <= LAST_APP_ID) {\n                sorted.add(id);", "id > FIRST_APP_ID && id <= LAST_APP_ID) {\n                sorted.add(id);"),
+    ("LoopbackAppIds.java", "the last id of the range is left out", "id >= FIRST_APP_ID && id <= LAST_APP_ID) {\n                sorted.add(id);", "id >= FIRST_APP_ID && id < LAST_APP_ID) {\n                sorted.add(id);"),
+    ("LoopbackAppIds.java", "format writes a null as an id", "if (id != null && id >= FIRST_APP_ID", "if (id >= FIRST_APP_ID"),
+    ("LoopbackAppIds.java", "format has no limit", "if (written++ >= MAX_IDS) {", "if (written++ >= MAX_IDS * 10) {"),
+    ("LoopbackAppIds.java", "format keeps the highest ids at the limit", "for (int id : sorted) {", "for (int id : sorted.descendingSet()) {"),
+    ("LoopbackAppIds.java", "format separates by a space", 'out.append(written == 1 ? "" : ",").append(id);', 'out.append(written == 1 ? "" : ", ").append(id);'),
+    ("LoopbackAppIds.java", "format starts with a comma", 'out.append(written == 1 ? "" : ",").append(id);', 'out.append(",").append(id);'),
+    ("LoopbackAppIds.java", "null is a list", "if (text == null || text.isEmpty()) {", "if (text.isEmpty()) {"),
+    ("LoopbackAppIds.java", "a number of six digits is read", "if (p - start >= 5) {", "if (p - start >= 6) {"),
+    ("LoopbackAppIds.java", "a number of four digits is read", "if (p - start >= 5) {", "if (p - start >= 4) {"),
+    # Equivalent, not listed: dropping `p == start` (an empty token reads as id 0, which the range refuses) and taking a platform
+    # uid in MirrorPlan.loopbackAppIds without ordinaryAppId (format leaves out every id outside the range).
+    ("LoopbackAppIds.java", "an id below the range is read", "id < FIRST_APP_ID || id > LAST_APP_ID ||", "id > LAST_APP_ID ||"),
+    ("LoopbackAppIds.java", "an id above the range is read", "id < FIRST_APP_ID || id > LAST_APP_ID ||", "id < FIRST_APP_ID ||"),
+    ("LoopbackAppIds.java", "the first id of the range is refused", "id < FIRST_APP_ID ||", "id <= FIRST_APP_ID ||"),
+    ("LoopbackAppIds.java", "the last id of the range is refused", "id > LAST_APP_ID ||", "id >= LAST_APP_ID ||"),
+    ("LoopbackAppIds.java", "ids may descend", "|| id <= last ||", "|| false ||"),
+    ("LoopbackAppIds.java", "an id may repeat", "|| id <= last ||", "|| id < last ||"),
+    ("LoopbackAppIds.java", "the list has no limit", "|| out.size() >= MAX_IDS) {", ") {"),
+    ("LoopbackAppIds.java", "the limit is one too many", "|| out.size() >= MAX_IDS) {", "|| out.size() > MAX_IDS) {"),
+    ("LoopbackAppIds.java", "a separator other than a comma is read", "if (text.charAt(p) != ',') {", "if (text.charAt(p) != ',' && text.charAt(p) != ';') {"),
+    ("LoopbackAppIds.java", "the text may end after a comma", "            p++;\n        }\n    }\n}", "            p++;\n            if (p == text.length()) {\n                return out;\n            }\n        }\n    }\n}"),
+    ("MirrorPlan.java", "the loopback list takes every configured app", "for (String pkg : loopbackAllowed(s)) {\n            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId >= 0) {\n                ids.add(appId);", "for (String pkg : s.configured()) {\n            int appId = ordinaryAppId(r.uidOf(pkg));\n            if (appId >= 0) {\n                ids.add(appId);"),
+    ("MirrorPlan.java", "the loopback list keeps the uid", "ids.add(appId);\n            }\n        }\n        return LoopbackAppIds.format(ids);", "ids.add(r.uidOf(pkg));\n            }\n        }\n        return LoopbackAppIds.format(ids);"),
+    # Places.preferring and CellSubset.placeIds (the automatic place takes a place that has cells when the country has one)
+    ("Places.java", "the preference is ignored", "        if (farthestWith != null) {\n", "        if (false) {\n"),
+    ("Places.java", "the farthest place with cells is the nearest", "if (has && d > farthestWithM) {", "if (has && d < farthestWithM) {"),
+    ("Places.java", "every place counts as having cells", "boolean has = withCells != null && withCells.contains(p.id);", "boolean has = withCells != null;"),
+    ("Places.java", "a far place without cells is taken", "                far.add(p);\n                if (has) {", "                far.add(p);\n                if (true) {"),
+    ("Places.java", "a near place with cells counts as far", "                if (has) {\n                    farWith.add(p);\n                }\n            }\n", "            }\n            if (has) {\n                farWith.add(p);\n            }\n"),
+    ("Places.java", "the preference is not copied", "return new Places(places, new HashSet<>(ids));", "return new Places(places, ids);"),
+    ("Places.java", "the preferred places lose the others", "return new Places(places, new HashSet<>(ids));", "return new Places(new ArrayList<>(), new HashSet<>(ids));"),
+    ("CellSubset.java", "no place has cells", "return Collections.unmodifiableSet(byPlace.keySet());", "return Collections.emptySet();"),
 ]
 def run_tests(src_dir, test_dir):
     """Compiles the sources with the tests and runs every test class; the worst exit status, or the compiler's."""
@@ -276,7 +335,7 @@ def run_tests(src_dir, test_dir):
     if c.returncode != 0:
         return c
     runs = [subprocess.run(["java", "-ea", "-cp", str(out), "com.android.server.compartments." + test], capture_output=True, text=True)
-            for test in ("ProfilesTest", "PersonaTest", "PlacesTest")]
+            for test in ("ProfilesTest", "PersonaTest", "PlacesTest", "RevokedLedgerTest", "LoopbackAppIdsTest")]
     return max(runs, key=lambda x: x.returncode)
 
 
@@ -305,7 +364,7 @@ for name, what, old, new in MUTANTS:
             survived += 1
             continue
         runs = [subprocess.run(["java", "-ea", "-cp", str(d / "out"), "com.android.server.compartments." + test], capture_output=True, text=True)
-                for test in ("ProfilesTest", "PersonaTest", "PlacesTest")]
+                for test in ("ProfilesTest", "PersonaTest", "PlacesTest", "RevokedLedgerTest", "LoopbackAppIdsTest")]
         r = max(runs, key=lambda x: x.returncode)
         if r.returncode == 0:
             print("SURVIVED:", name, what)
