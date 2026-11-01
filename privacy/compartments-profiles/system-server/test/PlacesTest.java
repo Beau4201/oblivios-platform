@@ -144,6 +144,60 @@ public final class PlacesTest {
         check(throwsIllegal(() -> Places.parse(ln(1, "x".repeat(101), "ES", "40.4168", "-3.7038", "Europe/Madrid", 214))), "name of 101 characters");
         check(!throwsIllegal(() -> Places.parse(ln(1, "x".repeat(100), "ES", "40.4168", "-3.7038", "Europe/Madrid", 214))), "name of 100 characters");
         check(!throwsIllegal(() -> Places.parse(ln(1, "São Paulo", "BR", "-23.55", "-46.63", "America/Sao_Paulo", 724))), "a name with a letter beyond ASCII");
+        // the coordinate is computed by one division and must equal Double.parseDouble for every accepted text
+        java.util.Random rnd = new java.util.Random(1);
+        boolean same = true;
+        for (int n = 0; n < 5000 && same; n++) {
+            int decimals = rnd.nextInt(8);
+            StringBuilder lat = new StringBuilder(rnd.nextBoolean() ? "-" : "").append(rnd.nextInt(80));
+            StringBuilder lon = new StringBuilder(rnd.nextBoolean() ? "-" : "").append(rnd.nextInt(180));
+            for (int d = 0; d < decimals; d++) {
+                lat.append(rnd.nextInt(10));
+                lon.append(rnd.nextInt(10));
+            }
+            if (decimals > 0) {
+                lat.insert(lat.length() - decimals, '.');
+                lon.insert(lon.length() - decimals, '.');
+            }
+            Place q = Places.parse(ln(1, "A", "AA", lat, lon, "UTC", 214)).byId(1);
+            same = q.lat == Double.parseDouble(lat.toString()) && q.lon == Double.parseDouble(lon.toString())
+                    && Double.doubleToRawLongBits(q.lat) == Double.doubleToRawLongBits(Double.parseDouble(lat.toString()));
+        }
+        check(same, "the coordinates equal Double.parseDouble");
+        // the grammar edges of every field, held by a character loop and not by a regex (the parse must stay fast on the phone)
+        check(!throwsIllegal(() -> Places.parse(ln("999999999", "A", "AA", "1", "1", "UTC", 214))), "id of 9 digits");
+        check(throwsIllegal(() -> Places.parse(ln("1000000000", "A", "AA", "1", "1", "UTC", 214))), "id of 10 digits");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "1", "UTC", 214, "x", "y", "z"))), "10 fields");
+        check(throwsIllegal(() -> Places.parse(ln("", "A", "AA", "1", "1", "UTC", 214))), "empty id");
+        check(throwsIllegal(() -> Places.parse(ln("1 ", "A", "AA", "1", "1", "UTC", 214))), "id with a space");
+        check(!throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "40.1234567", "-3.1234567", "UTC", 214))), "7 decimals");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "40.12345678", "1", "UTC", 214))), "8 decimals in the latitude");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "3.12345678", "UTC", 214))), "8 decimals in the longitude");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "40.", "1", "UTC", 214))), "latitude with a dot and no decimals");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", ".5", "1", "UTC", 214))), "latitude without an integer part");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "-", "1", "UTC", 214))), "latitude of only a sign");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "+5", "1", "UTC", 214))), "latitude with a plus sign");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "100", "1", "UTC", 214))), "latitude of 3 integer digits");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "1000", "UTC", 214))), "longitude of 4 integer digits");
+        // within range, so only the grammar can refuse them
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "012", "1", "UTC", 214))), "latitude 012");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "0100", "UTC", 214))), "longitude 0100");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1x", "1", "UTC", 214))), "latitude 1x");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "5e", "UTC", 214))), "longitude 5e");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "1.2.3", "UTC", 214))), "longitude with two dots");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "٤٠", "1", "UTC", 214))), "latitude in another script");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "--1", "UTC", 214))), "longitude with two signs");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "180.0000001", "UTC", 214))), "longitude just beyond 180");
+        check(!throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "-0", "-0.0", "UTC", 214))), "negative zero");
+        check(!throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "1", "Z".repeat(64), 214))), "zone of 64 characters");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "1", "Z".repeat(65), 214))), "zone of 65 characters");
+        check(!throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "1", "Etc/GMT-1_a+b", 214))), "zone with _ + - and /");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "1", "Europe/Zürich", 214))), "zone with a letter beyond ASCII");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "1", "Europe\\Paris", 214))), "zone with a backslash");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "ÉS", "1", "1", "UTC", 214))), "country with a letter beyond ASCII");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "ＡA", "1", "1", "UTC", 214))), "country with a full-width letter");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "A", "1", "1", "UTC", 214))), "country of one letter");
+        check(throwsIllegal(() -> Places.parse(ln(1, "A", "AA", "1", "1", "UTC", ""))), "empty mcc");
         check(throwsIllegal(() -> Places.parse(ok.substring(0, ok.length() - 1))), "no final newline");
         check(throwsIllegal(() -> Places.parse("")), "an empty file");
         check(throwsIllegal(() -> Places.parse(ok.replace("\n", "\r\n"))), "CRLF");
@@ -252,6 +306,23 @@ public final class PlacesTest {
         check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, "+5"))), "cid with a plus sign");
         check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, "0x5"))), "cid in hex");
         check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, "٥"))), "cid in another script");
+        // the grammar edges of every field, held by a character loop and not by a regex (the parse must stay fast on the phone)
+        check(!throwsIllegal(() -> CellSubset.parse(ln(1, 200, 0, 0, 0))), "the lowest valid values");
+        check(!throwsIllegal(() -> CellSubset.parse(ln(2147483647, 799, 999, 65535, 4294967295L))), "the highest valid values");
+        check(throwsIllegal(() -> CellSubset.parse(ln(2147483648L, 214, 1, 100, 5))), "place beyond int");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, "10000000000"))), "cid of 11 digits");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, "99999999999999999999"))), "cid beyond a long");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, "0000000005"))), "cid of 10 digits with leading zeros");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, "00"))), "cid 00");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, 5, 1, 214, 1, 100, 5))), "two lines joined by a tab");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, "18446744073709551616"))), "cid of 2^64 would wrap to 0");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, 100, ""))), "empty cid");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, "", 1, 100, 5))), "empty mcc");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, " 1", 100, 5))), "mnc with a space");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, "1_0", 5))), "tac with an underscore");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, 1, "1.0", 5))), "tac with a dot");
+        check(throwsIllegal(() -> CellSubset.parse(ln(1, 214, "١", 100, 5))), "mnc in another script");
+        check(throwsIllegal(() -> CellSubset.parse(ok + "\n")), "an empty line");
         check(throwsIllegal(() -> CellSubset.parse(ok.substring(0, ok.length() - 1))), "no final newline");
         check(throwsIllegal(() -> CellSubset.parse(ok.replace("\n", "\r\n"))), "CRLF");
         check(throwsIllegal(() -> CellSubset.parse("")), "an empty file");

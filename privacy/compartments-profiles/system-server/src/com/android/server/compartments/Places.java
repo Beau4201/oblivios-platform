@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Pattern;
 
 /**
  * The places of the persona (ADR-208): the offline list of cities that an Isolated app can be placed in. Read once from a
@@ -22,11 +21,7 @@ final class Places {
     static final int MAX_LINES = 100000;
     static final double MIN_AUTOMATIC_DISTANCE_M = 150000.0;
     private static final int MAX_NAME = 100;
-    private static final Pattern NUMBER = Pattern.compile("0|[1-9][0-9]{0,8}");
-    private static final Pattern LAT = Pattern.compile("-?[0-9]{1,2}(\\.[0-9]{1,7})?");
-    private static final Pattern LON = Pattern.compile("-?[0-9]{1,3}(\\.[0-9]{1,7})?");
-    private static final Pattern COUNTRY = Pattern.compile("[A-Z]{2}");
-    private static final Pattern ZONE = Pattern.compile("[A-Za-z0-9_/+-]{1,64}");
+    private static final int MAX_ZONE = 64;
 
     static final class Place {
         final int id;
@@ -67,63 +62,158 @@ final class Places {
         if (tsv == null || tsv.isEmpty() || tsv.charAt(tsv.length() - 1) != '\n') {
             throw new IllegalArgumentException("not a places file");
         }
+        // One pass over the characters, no regular expression and no split: a field is a range of tsv, and a string is made
+        // only for a line that is valid (the first read ran under a system lock, so the parse has to be quick).
         List<Place> out = new ArrayList<>();
+        int[] cut = new int[8];  // cut[k]: the character before field k (the previous tab); cut[7]: the newline
         int start = 0;
         int lastId = 0;
         while (start < tsv.length()) {
-            int end = tsv.indexOf('\n', start);
             if (out.size() >= MAX_LINES) {
                 throw new IllegalArgumentException("too many lines");
             }
-            String[] f = tsv.substring(start, end).split("\t", -1);
-            start = end + 1;
-            if (f.length != 7) {
-                throw new IllegalArgumentException("a line has " + f.length + " fields");
+            cut[0] = start - 1;
+            int tabs = 0;
+            int end = start;
+            for (char c; (c = tsv.charAt(end)) != '\n'; end++) {  // the file ends in a newline, so this stops
+                if (c == '\t') {
+                    if (tabs == 6) {
+                        throw new IllegalArgumentException("a line has more than 7 fields");
+                    }
+                    cut[++tabs] = end;
+                }
             }
-            int id = number(f[0]);
+            if (tabs != 6) {
+                throw new IllegalArgumentException("a line has " + (tabs + 1) + " fields");
+            }
+            cut[7] = end;
+            start = end + 1;
+            int id = number(tsv, cut[0] + 1, cut[1]);
             if (id <= lastId) {
                 throw new IllegalArgumentException("ids must ascend from 1");
             }
             lastId = id;
-            if (!validName(f[1]) || !COUNTRY.matcher(f[2]).matches() || !ZONE.matcher(f[5]).matches()) {
+            if (!validName(tsv, cut[1] + 1, cut[2]) || !validCountry(tsv, cut[2] + 1, cut[3])
+                    || !validZone(tsv, cut[5] + 1, cut[6])) {
                 throw new IllegalArgumentException("a name, country or time zone is not valid");
             }
-            if (!LAT.matcher(f[3]).matches() || !LON.matcher(f[4]).matches()) {
+            if (!validCoordinate(tsv, cut[3] + 1, cut[4], 2) || !validCoordinate(tsv, cut[4] + 1, cut[5], 3)) {
                 throw new IllegalArgumentException("a coordinate is not valid");
             }
-            double lat = Double.parseDouble(f[3]);
-            double lon = Double.parseDouble(f[4]);
+            double lat = coordinate(tsv, cut[3] + 1, cut[4]);
+            double lon = coordinate(tsv, cut[4] + 1, cut[5]);
             if (Math.abs(lat) > 80.0 || Math.abs(lon) > 180.0) {
                 throw new IllegalArgumentException("a coordinate is out of range");
             }
-            int mcc = number(f[6]);
+            int mcc = number(tsv, cut[6] + 1, cut[7]);
             if (mcc < 200 || mcc > 799) {
                 throw new IllegalArgumentException("mcc");
             }
-            if (zones == null || zones.contains(f[5])) {
-                out.add(new Place(id, f[1], f[2], lat, lon, f[5], mcc));
+            String zone = tsv.substring(cut[5] + 1, cut[6]);
+            if (zones == null || zones.contains(zone)) {
+                out.add(new Place(id, tsv.substring(cut[1] + 1, cut[2]), tsv.substring(cut[2] + 1, cut[3]), lat, lon, zone, mcc));
             }
         }
         return new Places(out);
     }
 
-    private static int number(String s) {
-        if (!NUMBER.matcher(s).matches()) {
+    /** The grammar 0|[1-9][0-9]{0,8} of s[from, to): ASCII digits, no sign, no leading zero. */
+    private static int number(String s, int from, int to) {
+        int len = to - from;
+        if (len < 1 || len > 9 || (len > 1 && s.charAt(from) == '0')) {
             throw new IllegalArgumentException("not a number");
         }
-        return Integer.parseInt(s);
+        int v = 0;
+        for (int i = from; i < to; i++) {
+            char c = s.charAt(i);
+            if (c < '0' || c > '9') {
+                throw new IllegalArgumentException("not a number");
+            }
+            v = v * 10 + (c - '0');
+        }
+        return v;
     }
 
-    private static boolean validName(String s) {
-        if (s.isEmpty() || s.length() > MAX_NAME) {
+    private static boolean validName(String s, int from, int to) {
+        if (to - from < 1 || to - from > MAX_NAME) {
             return false;
         }
-        for (int i = 0; i < s.length(); i++) {
+        for (int i = from; i < to; i++) {
             if (Character.isISOControl(s.charAt(i))) {
                 return false;
             }
         }
         return true;
+    }
+
+    /** The grammar [A-Z]{2} of s[from, to). */
+    private static boolean validCountry(String s, int from, int to) {
+        return to - from == 2 && s.charAt(from) >= 'A' && s.charAt(from) <= 'Z' && s.charAt(from + 1) >= 'A' && s.charAt(from + 1) <= 'Z';
+    }
+
+    /** The grammar [A-Za-z0-9_/+-]{1,64} of s[from, to). */
+    private static boolean validZone(String s, int from, int to) {
+        if (to - from < 1 || to - from > MAX_ZONE) {
+            return false;
+        }
+        for (int i = from; i < to; i++) {
+            char c = s.charAt(i);
+            if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '/' || c == '+' || c == '-')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static final double[] POW10 = {1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7};
+
+    /**
+     * The value of a coordinate that {@link #validCoordinate} accepted, equal to Double.parseDouble of it: the digits are at
+     * most 10 (below 2^53) and the divisor is a power of ten up to 1e7 (exact), so one division is correctly rounded.
+     */
+    private static double coordinate(String s, int from, int to) {
+        boolean negative = s.charAt(from) == '-';
+        long digits = 0;
+        int decimals = -1;
+        for (int i = negative ? from + 1 : from; i < to; i++) {
+            char c = s.charAt(i);
+            if (c == '.') {
+                decimals = 0;
+            } else {
+                digits = digits * 10 + (c - '0');
+                if (decimals >= 0) {
+                    decimals++;
+                }
+            }
+        }
+        double v = decimals <= 0 ? (double) digits : digits / POW10[decimals];
+        return negative ? -v : v;
+    }
+
+    /** The grammar -?[0-9]{1,maxInt}(\.[0-9]{1,7})? of s[from, to). */
+    private static boolean validCoordinate(String s, int from, int to, int maxInt) {
+        int i = from;
+        if (i < to && s.charAt(i) == '-') {
+            i++;
+        }
+        int d = i;
+        while (i < to && s.charAt(i) >= '0' && s.charAt(i) <= '9') {
+            i++;
+        }
+        if (i - d < 1 || i - d > maxInt) {
+            return false;
+        }
+        if (i == to) {
+            return true;
+        }
+        if (s.charAt(i) != '.') {
+            return false;
+        }
+        d = ++i;
+        while (i < to && s.charAt(i) >= '0' && s.charAt(i) <= '9') {
+            i++;
+        }
+        return i == to && i - d >= 1 && i - d <= 7;
     }
 
     int size() {
@@ -183,7 +273,7 @@ final class Places {
      * enough.
      */
     int automaticFor(String countryIso, double realLat, double realLon, long seed) {
-        if (countryIso == null || !COUNTRY.matcher(countryIso).matches()) {
+        if (countryIso == null || !validCountry(countryIso, 0, countryIso.length())) {
             return 0;
         }
         boolean known = !Double.isNaN(realLat) && !Double.isInfinite(realLat) && !Double.isNaN(realLon) && !Double.isInfinite(realLon);

@@ -1,0 +1,114 @@
+From 4c9d842106725ad2c3b84d65480374a0c39b29bc Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sun, 1 Nov 2026 15:34:14 +0100
+Subject: [PATCH] telephony: parse the cell data without a regex
+
+From: beau4201 <beau.ten.berge@gmail.com>
+
+The copy of CellSubset, see frameworks-base/0014: the first cell request of an app with a
+persona parsed the 400,000 lines of cells.tsv with one regex per field, in a Binder thread of
+the phone process. One pass over the characters, the same strict grammar.
+---
+ src/com/android/phone/CellSubset.java | 55 +++++++++++++++++----------
+ 1 file changed, 34 insertions(+), 21 deletions(-)
+
+diff --git a/src/com/android/phone/CellSubset.java b/src/com/android/phone/CellSubset.java
+index 958103e..6cd2209 100644
+--- a/src/com/android/phone/CellSubset.java
++++ b/src/com/android/phone/CellSubset.java
+@@ -6,7 +6,6 @@ import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
+-import java.util.regex.Pattern;
+ 
+ /**
+  * The cell towers of the persona (ADR-208): a few towers per place of {@link Places}, with the operator codes of the country,
+@@ -15,12 +14,16 @@ import java.util.regex.Pattern;
+  * <p>Format: one line per cell, five tab-separated decimal fields and a newline after every line: {@code placeId mcc mnc tac
+  * cid}. The mcc is 200 to 799, the mnc 0 to 999, the tac 0 to 65535 and the cid 0 to 2^32-1. At most 64 lines belong to one
+  * place, and {@link #cellsFor} returns the first 8 of them.
++ *
++ * <p>The parse is one pass over the characters, without a regular expression and without a split: the file has 400,000 lines,
++ * and the first read of it ran under a system lock (the regex version took 10 s on a host in the interpreter, 15 s or more on
++ * the phone).
+  */
+ final class CellSubset {
+     static final int MAX_LINES = 1000000;
+     static final int MAX_PER_PLACE = 64;
+     static final int RETURNED = 8;
+-    private static final Pattern NUMBER = Pattern.compile("0|[1-9][0-9]{0,9}");
++    private static final int MAX_DIGITS = 10;
+ 
+     static final class Cell {
+         final int mcc;
+@@ -48,23 +51,40 @@ final class CellSubset {
+             throw new IllegalArgumentException("not a cell file");
+         }
+         Map<Integer, List<Cell>> out = new HashMap<>();
+-        int start = 0;
++        long[] v = new long[5];
++        int p = 0;
+         int lines = 0;
+-        while (start < tsv.length()) {
+-            int end = tsv.indexOf('\n', start);
++        while (p < tsv.length()) {
+             if (++lines > MAX_LINES) {
+                 throw new IllegalArgumentException("too many lines");
+             }
+-            String[] f = tsv.substring(start, end).split("\t", -1);
+-            start = end + 1;
+-            if (f.length != 5) {
+-                throw new IllegalArgumentException("a line has " + f.length + " fields");
++            // five fields, each of the grammar 0|[1-9][0-9]{0,9} (ASCII digits, no sign, no leading zero), the first four
++            // ended by a tab and the fifth by the newline; the file ends in a newline, so the inner loop always stops
++            for (int k = 0; k < 5; k++) {
++                int s = p;
++                long n = 0;
++                char c;
++                while ((c = tsv.charAt(p)) != '\t' && c != '\n') {
++                    if (c < '0' || c > '9' || p - s >= MAX_DIGITS) {
++                        throw new IllegalArgumentException("not a number");
++                    }
++                    n = n * 10 + (c - '0');
++                    p++;
++                }
++                if (p == s || (p - s > 1 && tsv.charAt(s) == '0')) {
++                    throw new IllegalArgumentException("not a number");
++                }
++                if (c != (k < 4 ? '\t' : '\n')) {
++                    throw new IllegalArgumentException("a line does not have 5 fields");
++                }
++                v[k] = n;
++                p++;
+             }
+-            long place = number(f[0]);
+-            long mcc = number(f[1]);
+-            long mnc = number(f[2]);
+-            long tac = number(f[3]);
+-            long cid = number(f[4]);
++            long place = v[0];
++            long mcc = v[1];
++            long mnc = v[2];
++            long tac = v[3];
++            long cid = v[4];
+             if (place < 1 || place > Integer.MAX_VALUE || mcc < 200 || mcc > 799 || mnc > 999 || tac > 65535 || cid > 4294967295L) {
+                 throw new IllegalArgumentException("a value is out of range");
+             }
+@@ -77,13 +97,6 @@ final class CellSubset {
+         return new CellSubset(out);
+     }
+ 
+-    private static long number(String s) {
+-        if (!NUMBER.matcher(s).matches()) {
+-            throw new IllegalArgumentException("not a number");
+-        }
+-        return Long.parseLong(s);
+-    }
+-
+     /**
+      * The numeric operator of the first cell of the place, as a real operator property holds it: the mcc and the mnc, the mnc
+      * with two digits below 100 and three otherwise; "" for a place without cells.
+-- 
+2.56.0
+

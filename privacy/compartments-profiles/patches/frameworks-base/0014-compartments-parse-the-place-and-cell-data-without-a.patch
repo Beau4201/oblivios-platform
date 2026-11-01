@@ -1,0 +1,359 @@
+From 004940b58f73ccf128275694fbfc48b94f90a46d Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Sun, 1 Nov 2026 15:32:53 +0100
+Subject: [PATCH] compartments: parse the place and cell data without a regex
+ and read the cells under their own lock
+
+From: beau4201 <beau.ten.berge@gmail.com>
+
+The first read of cells.tsv (400,000 lines) ran under the ActivityManager lock on lynx
+2026110101 and blocked it for 15 s or more: personaFor waited in operatorOf for
+mPlacesLock, held by the background thread that parsed the file with one regex per field.
+
+CellSubset and Places are parsed in one pass over the characters with the same strict
+grammar, no regex and no split; the coordinates are computed by one correctly rounded
+division. The cells have their own lock, so a caller that needs only the places never waits
+for the cell parse.
+---
+ .../server/compartments/CellSubset.java       |  55 ++++---
+ .../CompartmentsPolicyService.java            |   5 +-
+ .../android/server/compartments/Places.java   | 142 ++++++++++++++----
+ 3 files changed, 154 insertions(+), 48 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CellSubset.java b/services/core/java/com/android/server/compartments/CellSubset.java
+index 03e139c..9e5ab65 100644
+--- a/services/core/java/com/android/server/compartments/CellSubset.java
++++ b/services/core/java/com/android/server/compartments/CellSubset.java
+@@ -6,7 +6,6 @@ import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
+-import java.util.regex.Pattern;
+ 
+ /**
+  * The cell towers of the persona (ADR-208): a few towers per place of {@link Places}, with the operator codes of the country,
+@@ -15,12 +14,16 @@ import java.util.regex.Pattern;
+  * <p>Format: one line per cell, five tab-separated decimal fields and a newline after every line: {@code placeId mcc mnc tac
+  * cid}. The mcc is 200 to 799, the mnc 0 to 999, the tac 0 to 65535 and the cid 0 to 2^32-1. At most 64 lines belong to one
+  * place, and {@link #cellsFor} returns the first 8 of them.
++ *
++ * <p>The parse is one pass over the characters, without a regular expression and without a split: the file has 400,000 lines,
++ * and the first read of it ran under a system lock (the regex version took 10 s on a host in the interpreter, 15 s or more on
++ * the phone).
+  */
+ final class CellSubset {
+     static final int MAX_LINES = 1000000;
+     static final int MAX_PER_PLACE = 64;
+     static final int RETURNED = 8;
+-    private static final Pattern NUMBER = Pattern.compile("0|[1-9][0-9]{0,9}");
++    private static final int MAX_DIGITS = 10;
+ 
+     static final class Cell {
+         final int mcc;
+@@ -48,23 +51,40 @@ final class CellSubset {
+             throw new IllegalArgumentException("not a cell file");
+         }
+         Map<Integer, List<Cell>> out = new HashMap<>();
+-        int start = 0;
++        long[] v = new long[5];
++        int p = 0;
+         int lines = 0;
+-        while (start < tsv.length()) {
+-            int end = tsv.indexOf('\n', start);
++        while (p < tsv.length()) {
+             if (++lines > MAX_LINES) {
+                 throw new IllegalArgumentException("too many lines");
+             }
+-            String[] f = tsv.substring(start, end).split("\t", -1);
+-            start = end + 1;
+-            if (f.length != 5) {
+-                throw new IllegalArgumentException("a line has " + f.length + " fields");
++            // five fields, each of the grammar 0|[1-9][0-9]{0,9} (ASCII digits, no sign, no leading zero), the first four
++            // ended by a tab and the fifth by the newline; the file ends in a newline, so the inner loop always stops
++            for (int k = 0; k < 5; k++) {
++                int s = p;
++                long n = 0;
++                char c;
++                while ((c = tsv.charAt(p)) != '\t' && c != '\n') {
++                    if (c < '0' || c > '9' || p - s >= MAX_DIGITS) {
++                        throw new IllegalArgumentException("not a number");
++                    }
++                    n = n * 10 + (c - '0');
++                    p++;
++                }
++                if (p == s || (p - s > 1 && tsv.charAt(s) == '0')) {
++                    throw new IllegalArgumentException("not a number");
++                }
++                if (c != (k < 4 ? '\t' : '\n')) {
++                    throw new IllegalArgumentException("a line does not have 5 fields");
++                }
++                v[k] = n;
++                p++;
+             }
+-            long place = number(f[0]);
+-            long mcc = number(f[1]);
+-            long mnc = number(f[2]);
+-            long tac = number(f[3]);
+-            long cid = number(f[4]);
++            long place = v[0];
++            long mcc = v[1];
++            long mnc = v[2];
++            long tac = v[3];
++            long cid = v[4];
+             if (place < 1 || place > Integer.MAX_VALUE || mcc < 200 || mcc > 799 || mnc > 999 || tac > 65535 || cid > 4294967295L) {
+                 throw new IllegalArgumentException("a value is out of range");
+             }
+@@ -77,13 +97,6 @@ final class CellSubset {
+         return new CellSubset(out);
+     }
+ 
+-    private static long number(String s) {
+-        if (!NUMBER.matcher(s).matches()) {
+-            throw new IllegalArgumentException("not a number");
+-        }
+-        return Long.parseLong(s);
+-    }
+-
+     /**
+      * The numeric operator of the first cell of the place, as a real operator property holds it: the mcc and the mnc, the mnc
+      * with two digits below 100 and three otherwise; "" for a place without cells.
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index 176b7d2..4aa0888 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -109,6 +109,9 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     private final Object mPlacesLock = new Object();
+     private volatile boolean mPlacesRead;
+     private volatile Places mPlaces;
++    // Its own lock: the cells are the larger file, and a caller that needs only the places (or the other way round) must not wait
++    // for the parse of the other (the first read of the cells once held mPlacesLock under the ActivityManager lock for 15 s).
++    private final Object mCellsLock = new Object();
+     private volatile boolean mCellsRead;
+     private volatile CellSubset mCells;
+ 
+@@ -780,7 +783,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     /** The numeric operator of a place from the cell data, "" when the image has none or the place has no cell. */
+     private String operatorOf(int placeId) {
+         if (!mCellsRead) {
+-            synchronized (mPlacesLock) {
++            synchronized (mCellsLock) {
+                 if (!mCellsRead) {
+                     mCells = readCells();
+                     mCellsRead = true;
+diff --git a/services/core/java/com/android/server/compartments/Places.java b/services/core/java/com/android/server/compartments/Places.java
+index 2034efd..2e9b384 100644
+--- a/services/core/java/com/android/server/compartments/Places.java
++++ b/services/core/java/com/android/server/compartments/Places.java
+@@ -6,7 +6,6 @@ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.List;
+ import java.util.Locale;
+-import java.util.regex.Pattern;
+ 
+ /**
+  * The places of the persona (ADR-208): the offline list of cities that an Isolated app can be placed in. Read once from a
+@@ -22,11 +21,7 @@ final class Places {
+     static final int MAX_LINES = 100000;
+     static final double MIN_AUTOMATIC_DISTANCE_M = 150000.0;
+     private static final int MAX_NAME = 100;
+-    private static final Pattern NUMBER = Pattern.compile("0|[1-9][0-9]{0,8}");
+-    private static final Pattern LAT = Pattern.compile("-?[0-9]{1,2}(\\.[0-9]{1,7})?");
+-    private static final Pattern LON = Pattern.compile("-?[0-9]{1,3}(\\.[0-9]{1,7})?");
+-    private static final Pattern COUNTRY = Pattern.compile("[A-Z]{2}");
+-    private static final Pattern ZONE = Pattern.compile("[A-Za-z0-9_/+-]{1,64}");
++    private static final int MAX_ZONE = 64;
+ 
+     static final class Place {
+         final int id;
+@@ -67,58 +62,83 @@ final class Places {
+         if (tsv == null || tsv.isEmpty() || tsv.charAt(tsv.length() - 1) != '\n') {
+             throw new IllegalArgumentException("not a places file");
+         }
++        // One pass over the characters, no regular expression and no split: a field is a range of tsv, and a string is made
++        // only for a line that is valid (the first read ran under a system lock, so the parse has to be quick).
+         List<Place> out = new ArrayList<>();
++        int[] cut = new int[8];  // cut[k]: the character before field k (the previous tab); cut[7]: the newline
+         int start = 0;
+         int lastId = 0;
+         while (start < tsv.length()) {
+-            int end = tsv.indexOf('\n', start);
+             if (out.size() >= MAX_LINES) {
+                 throw new IllegalArgumentException("too many lines");
+             }
+-            String[] f = tsv.substring(start, end).split("\t", -1);
+-            start = end + 1;
+-            if (f.length != 7) {
+-                throw new IllegalArgumentException("a line has " + f.length + " fields");
++            cut[0] = start - 1;
++            int tabs = 0;
++            int end = start;
++            for (char c; (c = tsv.charAt(end)) != '\n'; end++) {  // the file ends in a newline, so this stops
++                if (c == '\t') {
++                    if (tabs == 6) {
++                        throw new IllegalArgumentException("a line has more than 7 fields");
++                    }
++                    cut[++tabs] = end;
++                }
++            }
++            if (tabs != 6) {
++                throw new IllegalArgumentException("a line has " + (tabs + 1) + " fields");
+             }
+-            int id = number(f[0]);
++            cut[7] = end;
++            start = end + 1;
++            int id = number(tsv, cut[0] + 1, cut[1]);
+             if (id <= lastId) {
+                 throw new IllegalArgumentException("ids must ascend from 1");
+             }
+             lastId = id;
+-            if (!validName(f[1]) || !COUNTRY.matcher(f[2]).matches() || !ZONE.matcher(f[5]).matches()) {
++            if (!validName(tsv, cut[1] + 1, cut[2]) || !validCountry(tsv, cut[2] + 1, cut[3])
++                    || !validZone(tsv, cut[5] + 1, cut[6])) {
+                 throw new IllegalArgumentException("a name, country or time zone is not valid");
+             }
+-            if (!LAT.matcher(f[3]).matches() || !LON.matcher(f[4]).matches()) {
++            if (!validCoordinate(tsv, cut[3] + 1, cut[4], 2) || !validCoordinate(tsv, cut[4] + 1, cut[5], 3)) {
+                 throw new IllegalArgumentException("a coordinate is not valid");
+             }
+-            double lat = Double.parseDouble(f[3]);
+-            double lon = Double.parseDouble(f[4]);
++            double lat = coordinate(tsv, cut[3] + 1, cut[4]);
++            double lon = coordinate(tsv, cut[4] + 1, cut[5]);
+             if (Math.abs(lat) > 80.0 || Math.abs(lon) > 180.0) {
+                 throw new IllegalArgumentException("a coordinate is out of range");
+             }
+-            int mcc = number(f[6]);
++            int mcc = number(tsv, cut[6] + 1, cut[7]);
+             if (mcc < 200 || mcc > 799) {
+                 throw new IllegalArgumentException("mcc");
+             }
+-            if (zones == null || zones.contains(f[5])) {
+-                out.add(new Place(id, f[1], f[2], lat, lon, f[5], mcc));
++            String zone = tsv.substring(cut[5] + 1, cut[6]);
++            if (zones == null || zones.contains(zone)) {
++                out.add(new Place(id, tsv.substring(cut[1] + 1, cut[2]), tsv.substring(cut[2] + 1, cut[3]), lat, lon, zone, mcc));
+             }
+         }
+         return new Places(out);
+     }
+ 
+-    private static int number(String s) {
+-        if (!NUMBER.matcher(s).matches()) {
++    /** The grammar 0|[1-9][0-9]{0,8} of s[from, to): ASCII digits, no sign, no leading zero. */
++    private static int number(String s, int from, int to) {
++        int len = to - from;
++        if (len < 1 || len > 9 || (len > 1 && s.charAt(from) == '0')) {
+             throw new IllegalArgumentException("not a number");
+         }
+-        return Integer.parseInt(s);
++        int v = 0;
++        for (int i = from; i < to; i++) {
++            char c = s.charAt(i);
++            if (c < '0' || c > '9') {
++                throw new IllegalArgumentException("not a number");
++            }
++            v = v * 10 + (c - '0');
++        }
++        return v;
+     }
+ 
+-    private static boolean validName(String s) {
+-        if (s.isEmpty() || s.length() > MAX_NAME) {
++    private static boolean validName(String s, int from, int to) {
++        if (to - from < 1 || to - from > MAX_NAME) {
+             return false;
+         }
+-        for (int i = 0; i < s.length(); i++) {
++        for (int i = from; i < to; i++) {
+             if (Character.isISOControl(s.charAt(i))) {
+                 return false;
+             }
+@@ -126,6 +146,76 @@ final class Places {
+         return true;
+     }
+ 
++    /** The grammar [A-Z]{2} of s[from, to). */
++    private static boolean validCountry(String s, int from, int to) {
++        return to - from == 2 && s.charAt(from) >= 'A' && s.charAt(from) <= 'Z' && s.charAt(from + 1) >= 'A' && s.charAt(from + 1) <= 'Z';
++    }
++
++    /** The grammar [A-Za-z0-9_/+-]{1,64} of s[from, to). */
++    private static boolean validZone(String s, int from, int to) {
++        if (to - from < 1 || to - from > MAX_ZONE) {
++            return false;
++        }
++        for (int i = from; i < to; i++) {
++            char c = s.charAt(i);
++            if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '/' || c == '+' || c == '-')) {
++                return false;
++            }
++        }
++        return true;
++    }
++
++    private static final double[] POW10 = {1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7};
++
++    /**
++     * The value of a coordinate that {@link #validCoordinate} accepted, equal to Double.parseDouble of it: the digits are at
++     * most 10 (below 2^53) and the divisor is a power of ten up to 1e7 (exact), so one division is correctly rounded.
++     */
++    private static double coordinate(String s, int from, int to) {
++        boolean negative = s.charAt(from) == '-';
++        long digits = 0;
++        int decimals = -1;
++        for (int i = negative ? from + 1 : from; i < to; i++) {
++            char c = s.charAt(i);
++            if (c == '.') {
++                decimals = 0;
++            } else {
++                digits = digits * 10 + (c - '0');
++                if (decimals >= 0) {
++                    decimals++;
++                }
++            }
++        }
++        double v = decimals <= 0 ? (double) digits : digits / POW10[decimals];
++        return negative ? -v : v;
++    }
++
++    /** The grammar -?[0-9]{1,maxInt}(\.[0-9]{1,7})? of s[from, to). */
++    private static boolean validCoordinate(String s, int from, int to, int maxInt) {
++        int i = from;
++        if (i < to && s.charAt(i) == '-') {
++            i++;
++        }
++        int d = i;
++        while (i < to && s.charAt(i) >= '0' && s.charAt(i) <= '9') {
++            i++;
++        }
++        if (i - d < 1 || i - d > maxInt) {
++            return false;
++        }
++        if (i == to) {
++            return true;
++        }
++        if (s.charAt(i) != '.') {
++            return false;
++        }
++        d = ++i;
++        while (i < to && s.charAt(i) >= '0' && s.charAt(i) <= '9') {
++            i++;
++        }
++        return i == to && i - d >= 1 && i - d <= 7;
++    }
++
+     int size() {
+         return places.size();
+     }
+@@ -183,7 +273,7 @@ final class Places {
+      * enough.
+      */
+     int automaticFor(String countryIso, double realLat, double realLon, long seed) {
+-        if (countryIso == null || !COUNTRY.matcher(countryIso).matches()) {
++        if (countryIso == null || !validCountry(countryIso, 0, countryIso.length())) {
+             return 0;
+         }
+         boolean known = !Double.isNaN(realLat) && !Double.isInfinite(realLat) && !Double.isNaN(realLon) && !Double.isInfinite(realLon);
+-- 
+2.56.0
+
