@@ -50,7 +50,14 @@ final class ProfileText {
 
     static int valueName(int cls, int value) {
         if (value == ProfileRows.VALUE_BLOCKED) {
-            return cls == ProfileRows.CLASS_SETTINGS ? R.string.value_settings_blocked : R.string.value_blocked;
+            switch (cls) {
+                case ProfileRows.CLASS_SETTINGS:
+                    return R.string.value_settings_blocked;
+                case ProfileRows.CLASS_LOOPBACK:
+                    return R.string.value_loopback_blocked;
+                default:
+                    return R.string.value_blocked;
+            }
         }
         switch (cls) {
             case ProfileRows.CLASS_LOOPBACK:

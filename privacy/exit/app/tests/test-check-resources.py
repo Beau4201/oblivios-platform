@@ -20,7 +20,10 @@ CASES = [
     (STRINGS, '<string name="owner_only">', '<string name="unused_one">x</string>\n    <string name="owner_only">', "unused_one is defined and not used"),
     (ACT, "R.string.owner_only", "R.string.not_there", "not_there is used and not defined"),
     (STRINGS, '<string name="notif_consent_text">Choose', '<string name="notif_consent_text">' + "x" * 150 + ' Choose', "notif_consent_text has"),
-    (STRINGS, "%1$s is set to Extra private", "%s is set to Extra private", "placeholder without a number"),
+    (STRINGS, "%1$s sends all traffic via Tor", "%s sends all traffic via Tor", "placeholder without a number"),
+    # ADR-209: one vocabulary; a string that still uses a name the pages dropped is a problem naming the string and the word.
+    (STRINGS, '<string name="owner_only">', '<string name="x">Protected</string>\n    <string name="owner_only">', "string x uses the old word Protected"),
+    (STRINGS, '<string name="owner_only">', '<string name="x">Set it to Extra private now</string>\n    <string name="owner_only">', "string x uses the old word Extra private"),
     (ACT, "setContentView(R.layout.settings_activity);", 'setContentView(R.layout.settings_activity); getWindow().getDecorView().setBackgroundColor(android.graphics.Color.parseColor("#ffffff"));', "a colour is written into the code"),
     ("res/drawable/ic_compartments.xml", "@android:color/white", "#ffffff", "a colour is written into the resource"),
     (ACT, "R.string.status_idle_summary", "R.string.status_running_summary", "status_idle_summary is defined and not used"),
@@ -43,4 +46,13 @@ for fname, old, new, want in CASES:
     problems = cr.check(os.path.join(d, "a"))
     assert any(want in x for x in problems), (want, problems)
     shutil.rmtree(d)
+# A new name is not an old word: only the unused-string problem is reported for it.
+d = tempfile.mkdtemp()
+shutil.copytree(APP, os.path.join(d, "a"), ignore=shutil.ignore_patterns("tests", ".typecheck-*"))
+p = os.path.join(d, "a", STRINGS)
+text = open(p).read()
+open(p, "w").write(text.replace('<string name="owner_only">', '<string name="x">Unlinked</string>\n    <string name="owner_only">', 1))
+problems = cr.check(os.path.join(d, "a"))
+assert not any("old word" in x for x in problems), problems
+shutil.rmtree(d)
 print("check-resources tests passed")

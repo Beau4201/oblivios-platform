@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Plain words for people who do not know the technology (owner, 2026-10-29): "trackers" for advertising, analytics, attribution and
-     crash-reporting hosts, "Standard", "Extra private" and "Off" for the three stands of an app, and no class name of an exception. -->
+     crash-reporting hosts, "Trackers only", "All traffic via Tor" and "Direct" for the three address modes of an app, and no class name of an exception. -->
 <resources>
     <string name="app_name">Compartments</string>
 
     <string name="notif_channel_name">Address protection</string>
-    <string name="notif_tor_title">%1$s is set to Extra private</string>
-    <string name="notif_tor_text">Extra private may be why it does not work. Switch it back to Standard?</string>
-    <string name="notif_tor_action">Use Standard</string>
+    <string name="notif_tor_title">%1$s sends all traffic via Tor</string>
+    <string name="notif_tor_text">That may be why it does not work. Switch it to Trackers only?</string>
+    <string name="notif_tor_action">Use Trackers only</string>
     <string name="notif_mask_title">%1$s cannot reach %2$s</string>
     <string name="notif_mask_text">It cannot reach %1$s while your address is hidden. Show your address to %1$s in this app, or keep it hidden?</string>
     <string name="notif_action_show">Show my address</string>
@@ -28,17 +28,17 @@
     <string name="status_running">On</string>
     <string name="status_running_summary">Trackers do not see your address.</string>
     <string name="status_paused">Paused</string>
-    <string name="status_paused_summary">Apps set to Extra private have no internet until it is back.</string>
+    <string name="status_paused_summary">Apps that send all traffic via Tor have no internet until it is back.</string>
     <string name="status_error_title">Not working yet</string>
     <string name="status_error">Compartments could not start and tries again by itself. If this stays, restart the phone.</string>
     <string name="status_error_detail">Technical detail: %1$s</string>
 
     <string name="warn_vpn">A VPN is on and takes the place of Compartments, so your address is not hidden.</string>
     <string name="warn_dns">Private DNS is on. Some trackers may still see your address.</string>
-    <string name="warn_too_many">Too many apps are set to Extra private. Some of them have no internet. Set some back to Standard.</string>
-    <string name="warn_masks_off">Too many apps are using Compartments. Trackers see your address until you set some apps back to Standard.</string>
-    <string name="warn_too_many_open">Too many apps are set to Off. The extra ones are protected like Standard.</string>
-    <string name="warn_damaged">Your choices could not be read completely. Check which apps are set to Extra private.</string>
+    <string name="warn_too_many">Too many apps send all traffic via Tor. Some of them have no internet. Set some back to Trackers only.</string>
+    <string name="warn_masks_off">Too many apps are using Compartments. Trackers see your address until you set some apps back to Trackers only.</string>
+    <string name="warn_too_many_open">Too many apps are set to Direct. The extra ones are treated like Trackers only.</string>
+    <string name="warn_damaged">Your choices could not be read completely. Check which apps send all traffic via Tor.</string>
 
     <string name="consent_title">Hide your address from trackers</string>
     <string name="consent_text">Advertising, analytics and crash-reporting companies see your internet address whenever an app contacts them, and they can use it to tell that two apps belong to the same person. Compartments sends only those connections through the Tor network, so they no longer see your address. Everything else stays as it is.\n\nGood to know: Tor is slower. If one of these companies sends an app a lot of data, it sees your address for 30 minutes and you are told. An app may load slowly or not at all when it cannot reach such a company; you are then asked what to do. Your internet provider can see that this phone uses Tor. It does not cover an app that brings its own encrypted DNS or connects to a fixed address, nor the moments while Compartments is starting or restarting. Nothing is hidden until you continue.</string>
@@ -52,22 +52,22 @@
     <string name="promoted_unknown_app">An app</string>
 
     <string name="apps_title">Apps</string>
-    <string name="apps_summary">%1$d extra private, %2$d off</string>
-    <string name="apps_summary_none">Standard protection for every app</string>
+    <string name="apps_summary">%1$d via Tor, %2$d direct</string>
+    <string name="apps_summary_none">Trackers only for every app</string>
     <string name="apps_search_hint">Search apps</string>
-    <string name="app_tor_hint">Extra private</string>
-    <string name="app_direct_hint">Standard</string>
-    <string name="app_open_hint">Off</string>
+    <string name="app_tor_hint">All traffic via Tor</string>
+    <string name="app_direct_hint">Trackers only</string>
+    <string name="app_open_hint">Direct</string>
     <string name="app_mode_title">Protection for %1$s</string>
-    <string name="app_mode_direct">Standard</string>
+    <string name="app_mode_direct">Trackers only</string>
     <string name="app_mode_direct_summary">Hides trackers in this app.</string>
-    <string name="app_mode_tor">Extra private</string>
+    <string name="app_mode_tor">All traffic via Tor</string>
     <string name="app_mode_tor_summary">Everything this app does goes through Tor. Slower, and some apps do not work.</string>
-    <string name="app_mode_open">Off</string>
+    <string name="app_mode_open">Direct</string>
     <string name="app_mode_open_summary">Trackers see your address in this app.</string>
     <string name="app_exempt">This app always connects normally and is never hidden.</string>
-    <string name="apps_limit">Extra private is limited to %1$d apps.</string>
-    <string name="apps_open_limit">Off is limited to %1$d apps.</string>
+    <string name="apps_limit">All traffic via Tor is limited to %1$d apps.</string>
+    <string name="apps_open_limit">Direct is limited to %1$d apps.</string>
 
     <string name="overrides_title">Trackers you allowed</string>
     <string name="overrides_summary">%1$d allowed</string>
@@ -77,15 +77,15 @@
     <string name="override_remove">Hide again</string>
 
     <!-- Profiles (ADR-208): what each app learns about this phone. -->
-    <string name="identity_title">Your identity</string>
-    <string name="identity_defaults_profile">Apps you have not set</string>
+    <string name="identity_title">Device identity</string>
+    <string name="identity_defaults_profile">Default for new apps</string>
     <string name="identity_defaults_sensors">Motion sensors for those apps</string>
     <string name="identity_error">Could not change this setting</string>
     <string name="identity_footer">Compartments keeps apps apart. It does not make your phone invisible.</string>
     <string name="profile_title">Profile</string>
-    <string name="profile_trusted">Trusted</string>
-    <string name="profile_protected">Protected</string>
-    <string name="profile_isolated">Isolated</string>
+    <string name="profile_trusted">Identified</string>
+    <string name="profile_protected">Unlinked</string>
+    <string name="profile_isolated">Substituted</string>
     <string name="profile_trusted_footer">This app can recognise this phone and link itself to your other apps. Use it for an app that must know you, such as a bank.</string>
     <string name="profile_protected_footer">This app works as normal and cannot link itself to other apps or to this phone.</string>
     <string name="profile_isolated_footer">This app gets invented motion data and a place of its own, and keeps working; what it reads is not yours. An app may refuse to run if it notices. The place is not perfect: the magnetic field and the air pressure do not match it, the country of your SIM stays real, the cell details come from a small offline list, moves ignore roads, Wi-Fi scans are empty, and how you use the app is still visible.</string>
@@ -98,12 +98,13 @@
     <string name="value_location_real">Real data</string>
     <string name="value_location_substitute">Substitute data</string>
     <string name="value_blocked">Blocked</string>
-    <string name="value_loopback_real">Allowed</string>
+    <string name="value_loopback_real">Can reach</string>
+    <string name="value_loopback_blocked">Cannot reach</string>
     <string name="value_settings_real">All settings</string>
     <string name="value_settings_blocked">Only what apps need</string>
 
     <string name="identity_defaults_location_note">New apps keep the real location. Give an app substitute location data on its own page.</string>
-    <string name="identity_defaults_location_isolated_note">Apps you have not set get a place of their own, as an app you set to Isolated does. An app that is running gets it when it starts again. If no place can be made for an app, it gets no location.</string>
+    <string name="identity_defaults_location_isolated_note">New apps get a place of their own, as an app you set to Substituted does. An app that is running gets it when it starts again. If no place can be made for an app, it gets no location.</string>
 
     <!-- The place of the persona of one app (ADR-208). -->
     <string name="place_title">Place</string>
@@ -122,7 +123,7 @@
     <string name="identity_visible_title">What stays visible</string>
     <string name="identity_visible_summary">What Compartments does not hide</string>
     <string name="identity_visible_address_title">Your internet address</string>
-    <string name="identity_visible_address_summary">The servers of an app see it, unless the app is set to Extra private.</string>
+    <string name="identity_visible_address_summary">The servers of an app see it, unless the app sends all traffic via Tor.</string>
     <string name="identity_visible_model_title">Phone model and screen</string>
     <string name="identity_visible_model_summary">The model, the Android version, the screen and the graphics chip.</string>
     <string name="identity_visible_installed_title">Which apps are installed</string>

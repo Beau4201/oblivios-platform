@@ -6,7 +6,8 @@
 
 Rules: every R.string / R.drawable used in the Java or the manifest exists, and every string and drawable that is defined is
 used; no colour is written into a layout, a drawable or the Java (colours come from the theme); a string that is a
-notification text is at most 140 characters; a string with arguments uses numbered placeholders only.
+notification text is at most 140 characters; a string with arguments uses numbered placeholders only; no string uses a name
+the pages dropped (FORBIDDEN_WORDS).
 """
 import os
 import re
@@ -14,6 +15,9 @@ import sys
 import xml.etree.ElementTree as ET
 
 NOTIFICATION_LIMIT = 140
+# Names the pages dropped in ADR-209 (profiles Identified, Unlinked, Substituted; addresses Trackers only, All traffic via Tor,
+# Direct; group Device identity): one vocabulary on every page, notification and warning.
+FORBIDDEN_WORDS = ("Trusted", "Protected", "Isolated", "Extra private", "Standard", "Apps you have not set", "Your identity")
 HEX_COLOR = re.compile(r'"#[0-9a-fA-F]{3,8}"')
 JAVA_COLOR = re.compile(r"Color\.(parseColor|rgb|argb|valueOf)\(|0x[fF][fF][0-9a-fA-F]{6}\b")
 
@@ -117,6 +121,9 @@ def check(app):
             problems.append(f"string {n} has {len(v)} characters; a notification text is at most {NOTIFICATION_LIMIT}")
         if re.search(r"%(?!\d+\$|%)", v):
             problems.append(f"string {n} has a placeholder without a number")
+        for w in FORBIDDEN_WORDS:
+            if re.search(r"\b" + re.escape(w) + r"\b", v):
+                problems.append(f"string {n} uses the old word {w}")
     return problems
 
 
