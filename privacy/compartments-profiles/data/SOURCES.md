@@ -25,6 +25,8 @@ The two offline files of the Isolated persona, `places.tsv` and `cells.tsv`, are
 | Cities of at least 15000 inhabitants (`cities15000.txt`, 19 tab-separated columns) | GeoNames, `download.geonames.org/export/dump/` | Creative Commons Attribution 4.0 (the readme of the dumps) | Credit GeoNames with a link; commercial use is allowed; the data is provided as is. Not stated: redistribution or inclusion in a product. |
 | Cell towers (CSV `radio,mcc,net,area,cell,unit,lon,lat,range,samples,...`) | OpenCelliD, `opencellid.org` | Creative Commons Attribution-ShareAlike 4.0 (`wiki.opencellid.org/wiki/Licensing`; the download page names no licence) | Credit: "Cell tower data from OpenCellID, licensed under CC BY-SA 4.0", with a link to the source and the licence, and a statement of the changes made. On an app screen that shows the data, the credit is shown there. Adapted material is shared under the same licence. A download needs an access token of an account that the owner creates; the CSV export holds only cells observed in the last 18 months. |
 
+Not usable on 2026-11-01: BeaconDB (public domain) publishes no data dump yet; its privacy page says the data "will" be published.
+
 ## Open for the owner before anything ships
 
 - ShareAlike: `cells.tsv` is adapted material (a subset of at most 20 cells per place) and goes into the image under CC BY-SA 4.0, with its attribution in the image notices. Whether that reaches the rest of the image is a legal reading that the publishers' pages do not settle; the data files are separate files read only by the policy service, which is the argument that it does not. The plan stops here if the owner does not accept this reading (plan, Task 13 step 1).
