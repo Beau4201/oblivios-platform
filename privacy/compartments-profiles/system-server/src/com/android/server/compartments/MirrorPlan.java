@@ -119,10 +119,12 @@ final class MirrorPlan {
                 perApp.merge(appId, mode(s.policyOf(pkg).profile, s.value(pkg, Cls.SENSORS)), MirrorPlan::stricter);
             }
         }
-        for (String pkg : r.platformPackages()) {  // part of the system: real sensors, unless an entry (put above) says otherwise
+        // part of the system: the sensors of the Protected baseline (real motion, the bias folded), unless an entry (put above) says otherwise
+        SensorMode baseline = mode(Profiles.Profile.PROTECTED, Value.REAL);
+        for (String pkg : r.platformPackages()) {
             int appId = ordinaryAppId(r.uidOf(pkg));
             if (appId >= 0) {
-                perApp.putIfAbsent(appId, SensorMode.RAW);
+                perApp.putIfAbsent(appId, baseline);
             }
         }
         StringBuilder out = new StringBuilder(String.format("s %016x\n", salt)).append("d ").append(dflt).append('\n');

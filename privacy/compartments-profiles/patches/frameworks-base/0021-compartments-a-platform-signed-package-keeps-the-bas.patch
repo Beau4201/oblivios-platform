@@ -1,0 +1,36 @@
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Mon, 2 Nov 2026 19:04:10 +0100
+Subject: [PATCH] compartments: a platform-signed package keeps the baseline
+ sensors, not raw ones
+
+frameworks-base/0020 gave a platform-signed package RAW sensors. The
+baseline of the identity closure is FOLDED (real motion, the per-unit
+bias folded away) for every app that is not Trusted, and RAW would
+undo that closure for the system apps. They now get the sensors of the
+Protected baseline; under Protected defaults they need no line.
+---
+ .../java/com/android/server/compartments/MirrorPlan.java    | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/MirrorPlan.java b/services/core/java/com/android/server/compartments/MirrorPlan.java
+index bb0fae72dfa0..c75e1132a2c2 100644
+--- a/services/core/java/com/android/server/compartments/MirrorPlan.java
++++ b/services/core/java/com/android/server/compartments/MirrorPlan.java
+@@ -119,10 +119,12 @@ final class MirrorPlan {
+                 perApp.merge(appId, mode(s.policyOf(pkg).profile, s.value(pkg, Cls.SENSORS)), MirrorPlan::stricter);
+             }
+         }
+-        for (String pkg : r.platformPackages()) {  // part of the system: real sensors, unless an entry (put above) says otherwise
++        // part of the system: the sensors of the Protected baseline (real motion, the bias folded), unless an entry (put above) says otherwise
++        SensorMode baseline = mode(Profiles.Profile.PROTECTED, Value.REAL);
++        for (String pkg : r.platformPackages()) {
+             int appId = ordinaryAppId(r.uidOf(pkg));
+             if (appId >= 0) {
+-                perApp.putIfAbsent(appId, SensorMode.RAW);
++                perApp.putIfAbsent(appId, baseline);
+             }
+         }
+         StringBuilder out = new StringBuilder(String.format("s %016x\n", salt)).append("d ").append(dflt).append('\n');
+-- 
+2.39.5
+

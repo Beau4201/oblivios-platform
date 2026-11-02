@@ -705,15 +705,16 @@ public final class ProfilesTest {
         check(MirrorPlan.locationWithheldAppIds(iso, r, salt, null, "NL", 52.37, 4.89, null, null).toString().equals("[10200, 10400]"),
                 "and is not withheld the position");
 
-        check(MirrorPlan.sensorModeFile(iso, r, salt).equals("s abcdef0123456789\nd SUBSTITUTE\na 10300 RAW\n"),
-                "a platform package without an entry has real sensors under Isolated defaults");
-        check(MirrorPlan.sensorModeFile(PolicyStore.EMPTY, r, salt).equals("s abcdef0123456789\nd FOLDED\na 10300 RAW\na 10400 RAW\n"),
-                "and under Protected defaults");
+        // the sensors of a platform package are those of the Protected baseline (real motion, bias folded), never RAW
+        check(MirrorPlan.sensorModeFile(iso, r, salt).equals("s abcdef0123456789\nd SUBSTITUTE\na 10300 FOLDED\n"),
+                "a platform package without an entry has the baseline sensors under Isolated defaults");
+        check(MirrorPlan.sensorModeFile(PolicyStore.EMPTY, r, salt).equals("s abcdef0123456789\nd FOLDED\n"),
+                "and under Protected defaults it needs no line");
         PolicyStore blocked = PolicyStore.EMPTY.withDefaults(ISO).withApp("com.plat.set", ISO.withValue(Cls.SENSORS, Value.BLOCKED));
-        check(MirrorPlan.sensorModeFile(blocked, r, salt).equals("s abcdef0123456789\nd SUBSTITUTE\na 10300 RAW\na 10400 BLOCKED\n"),
+        check(MirrorPlan.sensorModeFile(blocked, r, salt).equals("s abcdef0123456789\nd SUBSTITUTE\na 10300 FOLDED\na 10400 BLOCKED\n"),
                 "an entry of a platform package is honoured");
         PolicyStore shared = PolicyStore.EMPTY.withDefaults(ISO).withApp("com.shared.entry", ISO.withValue(Cls.SENSORS, Value.BLOCKED));
-        check(MirrorPlan.sensorModeFile(shared, r, salt).equals("s abcdef0123456789\nd SUBSTITUTE\na 10300 BLOCKED\na 10400 RAW\n"),
+        check(MirrorPlan.sensorModeFile(shared, r, salt).equals("s abcdef0123456789\nd SUBSTITUTE\na 10300 BLOCKED\na 10400 FOLDED\n"),
                 "an entry for a package that shares the app id wins over the exemption");
     }
 
