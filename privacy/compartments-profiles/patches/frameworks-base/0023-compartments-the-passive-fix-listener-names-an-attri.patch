@@ -1,0 +1,31 @@
+From dac38e875e4502a688d850e06db37a96de2ff680 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Mon, 2 Nov 2026 21:51:36 +0100
+Subject: [PATCH] compartments: the passive fix listener names an attribution
+ tag
+
+The location service logs "system location request with no attribution
+tag" with a stack trace for a request of the system server that has no
+tag, and the passive listener of the policy service retried into it (CMP-037).
+The request is made from an attribution context named after the service.
+---
+ .../android/server/compartments/CompartmentsPolicyService.java | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index 61ba3d00d755..fe75c633c5e1 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -637,7 +637,8 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+      */
+     private void registerFixListener() {
+         try {
+-            LocationManager lm = mContext.getSystemService(LocationManager.class);
++            // a request of the system process needs an attribution tag (LocationManagerService warns without)
++            LocationManager lm = mContext.createAttributionContext(TAG).getSystemService(LocationManager.class);
+             // a passive request must name its minimum interval, or build() throws IllegalStateException
+             lm.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER,
+                     new LocationRequest.Builder(LocationRequest.PASSIVE_INTERVAL).setMinUpdateIntervalMillis(FIX_MIN_INTERVAL_MS)
+-- 
+2.39.5
+
