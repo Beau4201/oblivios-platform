@@ -1,0 +1,311 @@
+From 96c770b9e163b7a06833481a034c889552616941 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Mon, 2 Nov 2026 13:40:04 +0100
+Subject: [PATCH] wifi: treat an app with a persona but no place as an app with
+ a persona
+
+An Isolated app for which no place can be chosen (no place data on the image, or no country to choose a place in) had
+no entry in the persona file, so the Wi-Fi, Bluetooth, connectivity and telephony code gave it the real surroundings
+while its page said it had a persona. The file now lists such an app on a line "n APPID", and the readers ask
+hasPersona(), which is true for both a place line and an n line. Review item P8 (rest).
+
+The seven checks of WifiPermissionsUtil and the three of WifiServiceImpl ask hasPersona().
+---
+ .../com/android/server/wifi/PersonaFile.java  | 68 ++++++++++++++++---
+ .../android/server/wifi/PersonaReader.java    | 18 ++++-
+ .../android/server/wifi/WifiServiceImpl.java  |  6 +-
+ .../server/wifi/util/WifiPermissionsUtil.java | 14 ++--
+ 4 files changed, 85 insertions(+), 21 deletions(-)
+
+diff --git a/service/java/com/android/server/wifi/PersonaFile.java b/service/java/com/android/server/wifi/PersonaFile.java
+index 5dc191a..285110f 100644
+--- a/service/java/com/android/server/wifi/PersonaFile.java
++++ b/service/java/com/android/server/wifi/PersonaFile.java
+@@ -3,8 +3,11 @@ package com.android.server.wifi;
+ 
+ import java.util.Collections;
+ import java.util.HashMap;
++import java.util.HashSet;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.TreeMap;
++import java.util.TreeSet;
+ import java.util.regex.Pattern;
+ 
+ /**
+@@ -13,8 +16,11 @@ import java.util.regex.Pattern;
+  * (a check of the package keeps the copies equal). Pure Java, no import beyond {@code java.util}.
+  *
+  * <p>Format: {@code s} and the 16 lower-case hex digits of the salt, then one line {@code p APPID PLACE} for each app that has a
+- * persona, in app id order, every line ended by a newline, at most 8192 lines. An app id is of an ordinary app (10000 to 19999)
+- * and a place is a positive number of {@link Places}. A reader that gets anything else refuses the whole file.
++ * persona, in app id order, then one line {@code n APPID} for each Isolated app that has a persona but no place (no place data,
++ * or no country to choose a place in), in app id order, every line ended by a newline, at most 8192 lines. An app id is of an
++ * ordinary app (10000 to 19999) and a place is a positive number of {@link Places}. An app id is on one line only. A reader
++ * that gets anything else refuses the whole file. An {@code n} app is given nothing of the real radio, scans or network
++ * names, as an app with a place is, but no place to take the invented data from.
+  */
+ final class PersonaFile {
+     static final int MAX_LINES = 8192;
+@@ -24,20 +30,35 @@ final class PersonaFile {
+     private static final int SANDBOX_OFFSET = 10000;
+     private static final Pattern SALT = Pattern.compile("s [0-9a-f]{16}");
+     private static final Pattern LINE = Pattern.compile("p (0|[1-9][0-9]{0,9}) (0|[1-9][0-9]{0,9})");
++    private static final Pattern NONE_LINE = Pattern.compile("n (0|[1-9][0-9]{0,9})");
+ 
+     private final long salt;
+     private final Map<Integer, Integer> places;
++    private final Set<Integer> noPlace;
+ 
+-    private PersonaFile(long salt, Map<Integer, Integer> places) {
++    private PersonaFile(long salt, Map<Integer, Integer> places, Set<Integer> noPlace) {
+         this.salt = salt;
+         this.places = places;
++        this.noPlace = noPlace;
+     }
+ 
+     /** The text of the file for the apps (by app id) that have a place. */
+     static String format(long salt, Map<Integer, Integer> appIdToPlace) {
+-        if (appIdToPlace == null || appIdToPlace.size() > MAX_LINES - 1) {
++        return format(salt, appIdToPlace, new TreeSet<>());
++    }
++
++    /** The text of the file for the apps (by app id) that have a place and the apps that have a persona without one. */
++    static String format(long salt, Map<Integer, Integer> appIdToPlace, Set<Integer> appIdsWithoutPlace) {
++        if (appIdToPlace == null || appIdsWithoutPlace == null || appIdToPlace.size() + appIdsWithoutPlace.size() > MAX_LINES - 1) {
+             throw new IllegalArgumentException("too many apps");
+         }
++        Set<Integer> none = new TreeSet<>();
++        for (Integer appId : appIdsWithoutPlace) {
++            if (appId == null || appId < FIRST_APP_ID || appId > LAST_APP_ID || appIdToPlace.containsKey(appId)) {
++                throw new IllegalArgumentException("an app id is out of range or has a place as well");
++            }
++            none.add(appId);
++        }
+         Map<Integer, Integer> sorted = new TreeMap<>();
+         for (Map.Entry<Integer, Integer> e : appIdToPlace.entrySet()) {
+             Integer appId = e.getKey();
+@@ -57,6 +78,9 @@ final class PersonaFile {
+         for (Map.Entry<Integer, Integer> e : sorted.entrySet()) {
+             b.append("p ").append(e.getKey()).append(' ').append(e.getValue()).append('\n');
+         }
++        for (Integer appId : none) {
++            b.append("n ").append(appId).append('\n');
++        }
+         return b.toString();
+     }
+ 
+@@ -66,6 +90,7 @@ final class PersonaFile {
+             throw new IllegalArgumentException("not a persona file");
+         }
+         Map<Integer, Integer> out = new HashMap<>();
++        Set<Integer> none = new HashSet<>();
+         long salt = 0;
+         int start = 0;
+         int lines = 0;
+@@ -83,6 +108,16 @@ final class PersonaFile {
+                 salt = Long.parseUnsignedLong(line.substring(2), 16);
+                 continue;
+             }
++            if (NONE_LINE.matcher(line).matches()) {
++                long appId = Long.parseLong(line.substring(2));
++                if (appId < FIRST_APP_ID || appId > LAST_APP_ID) {
++                    throw new IllegalArgumentException("an app id is out of range");
++                }
++                if (out.containsKey((int) appId) || !none.add((int) appId)) {
++                    throw new IllegalArgumentException("an app id is repeated");
++                }
++                continue;
++            }
+             if (!LINE.matcher(line).matches()) {
+                 throw new IllegalArgumentException("not a place line");
+             }
+@@ -92,11 +127,11 @@ final class PersonaFile {
+             if (appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1 || place > Integer.MAX_VALUE) {
+                 throw new IllegalArgumentException("an app id or a place is out of range");
+             }
+-            if (out.put((int) appId, (int) place) != null) {
++            if (none.contains((int) appId) || out.put((int) appId, (int) place) != null) {
+                 throw new IllegalArgumentException("an app id is repeated");
+             }
+         }
+-        return new PersonaFile(salt, Collections.unmodifiableMap(out));
++        return new PersonaFile(salt, Collections.unmodifiableMap(out), Collections.unmodifiableSet(none));
+     }
+ 
+     long salt() {
+@@ -108,14 +143,29 @@ final class PersonaFile {
+      * for the app 10000 below it), or 0 when the app has no persona.
+      */
+     int placeOf(int uid) {
++        Integer place = places.get(appIdOf(uid));
++        return place == null ? 0 : place;
++    }
++
++    /**
++     * Whether the app that this uid belongs to has a persona: a place, or a line {@code n} (a persona without a place). The
++     * checks of the Wi-Fi, Bluetooth, connectivity and telephony code ask this, not {@link #placeOf}, which is 0 for both an app
++     * without a persona and an app with one that has no place.
++     */
++    boolean hasPersona(int uid) {
++        int appId = appIdOf(uid);
++        return places.containsKey(appId) || noPlace.contains(appId);
++    }
++
++    /** The app id of a uid, the SDK sandbox answering for the app 10000 below it; -1 for a negative uid. */
++    private static int appIdOf(int uid) {
+         if (uid < 0) {
+-            return 0;
++            return -1;
+         }
+         int appId = uid % USER_OFFSET;
+         if (appId >= FIRST_APP_ID + SANDBOX_OFFSET && appId <= LAST_APP_ID + SANDBOX_OFFSET) {
+             appId -= SANDBOX_OFFSET;
+         }
+-        Integer place = places.get(appId);
+-        return place == null ? 0 : place;
++        return appId;
+     }
+ }
+diff --git a/service/java/com/android/server/wifi/PersonaReader.java b/service/java/com/android/server/wifi/PersonaReader.java
+index d5dd243..036d396 100644
+--- a/service/java/com/android/server/wifi/PersonaReader.java
++++ b/service/java/com/android/server/wifi/PersonaReader.java
+@@ -40,12 +40,27 @@ public final class PersonaReader {
+         mOwnerUid = ownerUid;
+     }
+ 
+-    /** The place of the app of this uid, or 0 when it has none or the file cannot be used. */
++    /** The place of the app of this uid, or 0 when it has none (also a persona without a place) or the file cannot be used. */
+     public int placeOf(int uid) {
+         return placeOf(uid, System.nanoTime() / 1_000_000L);
+     }
+ 
++    /** Whether the app of this uid has a persona, with or without a place; false when the file cannot be used. */
++    public boolean hasPersona(int uid) {
++        return hasPersona(uid, System.nanoTime() / 1_000_000L);
++    }
++
+     synchronized int placeOf(int uid, long nowMs) {
++        refresh(nowMs);
++        return mFile == null ? 0 : mFile.placeOf(uid);
++    }
++
++    synchronized boolean hasPersona(int uid, long nowMs) {
++        refresh(nowMs);
++        return mFile != null && mFile.hasPersona(uid);
++    }
++
++    private void refresh(long nowMs) {
+         if (!mLoaded || nowMs - mLoadedAtMs >= INTERVAL_MS) {
+             PersonaFile fresh = load();
+             if (fresh != null) {
+@@ -54,7 +69,6 @@ public final class PersonaReader {
+             mLoadedAtMs = nowMs;
+             mLoaded = true;
+         }
+-        return mFile == null ? 0 : mFile.placeOf(uid);
+     }
+ 
+     private PersonaFile load() {
+diff --git a/service/java/com/android/server/wifi/WifiServiceImpl.java b/service/java/com/android/server/wifi/WifiServiceImpl.java
+index 341d9bd..6574551 100644
+--- a/service/java/com/android/server/wifi/WifiServiceImpl.java
++++ b/service/java/com/android/server/wifi/WifiServiceImpl.java
+@@ -5425,7 +5425,7 @@ public class WifiServiceImpl extends IWifiManager.Stub {
+                             + "(uid=" + uid + ")");
+                 }
+                 // FreeholdOS (ADR-208): an app with a persona keeps the redaction, as an app without the permission does
+-                if (mPersona.placeOf(uid) == 0) {
++                if (!mPersona.hasPersona(uid)) {
+                     redactions &= ~NetworkCapabilities.REDACT_FOR_ACCESS_FINE_LOCATION;
+                 }
+             } catch (SecurityException ignored) {
+@@ -5474,7 +5474,7 @@ public class WifiServiceImpl extends IWifiManager.Stub {
+             mWifiPermissionsUtil.enforceCanAccessScanResults(callingPackage, callingFeatureId,
+                     uid, null);
+             // FreeholdOS (ADR-208): an app with a persona sees no access point of the real place
+-            if (mPersona.placeOf(uid) != 0) {
++            if (mPersona.hasPersona(uid)) {
+                 return new ParceledListSlice<>(Collections.emptyList());
+             }
+             List<ScanResult> scanResults = mWifiThreadRunner.call(
+@@ -5562,7 +5562,7 @@ public class WifiServiceImpl extends IWifiManager.Stub {
+             mWifiPermissionsUtil.enforceCanAccessScanResults(callingPackage, callingFeatureId,
+                     uid, null);
+             // FreeholdOS (ADR-208): an app with a persona sees no access point of the real place
+-            if (mPersona.placeOf(uid) != 0) {
++            if (mPersona.hasPersona(uid)) {
+                 return Collections.emptyMap();
+             }
+ 
+diff --git a/service/java/com/android/server/wifi/util/WifiPermissionsUtil.java b/service/java/com/android/server/wifi/util/WifiPermissionsUtil.java
+index b833c83..c83c4d0 100644
+--- a/service/java/com/android/server/wifi/util/WifiPermissionsUtil.java
++++ b/service/java/com/android/server/wifi/util/WifiPermissionsUtil.java
+@@ -169,7 +169,7 @@ public class WifiPermissionsUtil {
+      * @param uid The uid of the package
+      */
+     public void enforceLocationPermission(String pkgName, @Nullable String featureId, int uid) {
+-        if (mPersona.placeOf(uid) != 0) {
++        if (mPersona.hasPersona(uid)) {
+             throw new SecurityException("UID " + uid + " has a persona: no location access");
+         }
+         if (!checkCallersLocationPermission(pkgName, featureId,
+@@ -228,7 +228,7 @@ public class WifiPermissionsUtil {
+         checkPackage(uid, packageName);
+         // Compartments (D6): also an app that renounces location (neverForLocation) is refused; ranging, Aware and Wi-Fi Direct
+         // would still give it distances to access points whose place it knows.
+-        if (mPersona.placeOf(uid) != 0) {
++        if (mPersona.hasPersona(uid)) {
+             throw new SecurityException("UID " + uid + " has a persona: no nearby Wi-Fi devices");
+         }
+         // Apps with NETWORK_SETTINGS, NETWORK_SETUP_WIZARD, NETWORK_MANAGED_PROVISIONING,
+@@ -471,7 +471,7 @@ public class WifiPermissionsUtil {
+      */
+     public void enforceFineLocationPermission(String pkgName, @Nullable String featureId,
+             int uid) {
+-        if (mPersona.placeOf(uid) != 0) {
++        if (mPersona.hasPersona(uid)) {
+             throw new SecurityException("UID " + uid + " has a persona: no location access");
+         }
+         if (!checkCallersFineLocationPermission(pkgName, featureId, uid, false, false)) {
+@@ -522,7 +522,7 @@ public class WifiPermissionsUtil {
+      */
+     public void enforceCoarseLocationPermission(String pkgName, @Nullable String featureId,
+             int uid) {
+-        if (mPersona.placeOf(uid) != 0) {
++        if (mPersona.hasPersona(uid)) {
+             throw new SecurityException("UID " + uid + " has a persona: no location access");
+         }
+         if (!checkCallersCoarseLocationPermission(pkgName, featureId,
+@@ -585,7 +585,7 @@ public class WifiPermissionsUtil {
+             @Nullable String message)
+             throws SecurityException {
+         checkPackage(uid, pkgName);
+-        if (mPersona.placeOf(uid) != 0) {
++        if (mPersona.hasPersona(uid)) {
+             throw new SecurityException("UID " + uid + " has a persona: no location access");
+         }
+ 
+@@ -667,7 +667,7 @@ public class WifiPermissionsUtil {
+             @Nullable String featureId, int uid, boolean ignoreLocationSettings,
+             boolean hideFromAppOps) throws SecurityException {
+         checkPackage(uid, pkgName);
+-        if (mPersona.placeOf(uid) != 0) {
++        if (mPersona.hasPersona(uid)) {
+             throw new SecurityException("UID " + uid + " has a persona: no location access");
+         }
+ 
+@@ -724,7 +724,7 @@ public class WifiPermissionsUtil {
+             Log.e(TAG, "Package check exception - " + se);
+             return false;
+         }
+-        if (mPersona.placeOf(uid) != 0) {
++        if (mPersona.hasPersona(uid)) {
+             return false;
+         }
+ 
+-- 
+2.56.0
+

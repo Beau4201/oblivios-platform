@@ -220,9 +220,11 @@ final class MirrorPlan {
     }
 
     /**
-     * The persona file ({@link PersonaFile}): a line for each app id of a configured app whose location is substituted and that
-     * has a place (see {@link #placeOf}); an app that has none is in {@link #locationUnresolved} instead. Two packages with one
-     * app id give the lower place. Pure: the real country and position are arguments (a NaN position is unknown).
+     * The persona file ({@link PersonaFile}): a place line for each app id of a configured app whose location is substituted and
+     * that has a place (see {@link #placeOf}), and a line without a place for each app id that has none (see
+     * {@link #personaLessAppIds}), so that the Wi-Fi, Bluetooth, connectivity and telephony code gives it a persona's answers
+     * too. Two packages with one app id give the lower place. Pure: the real country and position are arguments (a NaN
+     * position is unknown).
      */
     static String personaFile(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat, double lon) {
         return personaFile(s, r, salt, places, country, lat, lon, null, null);
@@ -242,7 +244,9 @@ final class MirrorPlan {
                 perApp.merge(appId, place, Math::min);
             }
         }
-        return PersonaFile.format(salt, perApp);
+        Set<Integer> noPlace = personaLessAppIds(s, r, salt, places, country, lat, lon, before, table);
+        noPlace.removeAll(perApp.keySet());  // one package of a shared app id has a place: the app has a persona with it
+        return PersonaFile.format(salt, perApp, noPlace);
     }
 
     /**
@@ -277,16 +281,41 @@ final class MirrorPlan {
     static Set<Integer> locationWithheldAppIds(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
             double lon, PolicyStore before, PersonaFile table) {
         Set<String> packages = new TreeSet<>(locationBlocked(s));
-        packages.addAll(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));
+        packages.addAll(personaLessPackages(s, r, salt, places, country, lat, lon, before, table));
+        return appIds(packages, r);
+    }
+
+    /**
+     * The packages whose location is substituted but that have no place: {@link #locationUnresolved}, and, when the defaults are
+     * Isolated and the image has no place data, the installed packages without an entry, which the store still reports as
+     * substituted. The service takes the location permissions of the first kind only; the second keep theirs (they are not taken
+     * from every app at once), and the delivery path withholds the position from both.
+     */
+    static Set<String> personaLessPackages(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
+            double lon, PolicyStore before, PersonaFile table) {
+        Set<String> packages = new TreeSet<>(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));
         if (s.defaults.profile == Profiles.Profile.ISOLATED && places == null) {
-            // no place data: no persona can be made for an app without an entry, which the store still reports as substituted,
-            // so the real fix is not delivered to it; its permissions are left alone (they are not taken from every app at once)
             for (String pkg : r.installedPackages()) {
                 if (!s.hasEntry(pkg)) {
                     packages.add(pkg);
                 }
             }
         }
+        return packages;
+    }
+
+    /**
+     * The app ids of {@link #personaLessPackages}: the apps that have a persona without a place. The persona file lists them
+     * (a line {@code n}), because a persona is more than a place: the Wi-Fi, Bluetooth, connectivity and telephony code hides
+     * its real surroundings from an Isolated app, and an app for which no place can be chosen (no place data, no country) must
+     * not get them back.
+     */
+    static Set<Integer> personaLessAppIds(PolicyStore s, UidResolver r, long salt, Places places, String country, double lat,
+            double lon, PolicyStore before, PersonaFile table) {
+        return appIds(personaLessPackages(s, r, salt, places, country, lat, lon, before, table), r);
+    }
+
+    private static Set<Integer> appIds(Set<String> packages, UidResolver r) {
         Set<Integer> out = new TreeSet<>();
         for (String pkg : packages) {
             int appId = ordinaryAppId(r.uidOf(pkg));

@@ -507,7 +507,11 @@ public final class ProfilesTest {
         check(pf.placeOf(10500) == 0, "a blocked location has no persona");
         check(pf.placeOf(10600) == 0, "a Trusted app has no persona");
         check(pf.placeOf(10700) == 0, "an unknown place is left out");
-        check(file.split("\n").length == 4, "one salt line and three apps: " + file);
+        check(pf.hasPersona(10700), "an app whose place is unknown has a persona without a place");
+        check(pf.hasPersona(10100) && pf.hasPersona(10200) && pf.hasPersona(10400), "the apps with a place have a persona");
+        check(!pf.hasPersona(10300) && !pf.hasPersona(10500) && !pf.hasPersona(10600) && !pf.hasPersona(1000),
+                "a Protected, a blocked, a Trusted and a system app have none");
+        check(file.split("\n").length == 5, "one salt line, three apps with a place and one without: " + file);
         check(pf.placeOf(110100) == pf.placeOf(10100), "the persona is the app's in every user");
         check(MirrorPlan.personaFile(s, pkg -> uids.getOrDefault(pkg, -1), salt, places, "NL", 52.37, 4.89).equals(file),
                 "the choice is stable");
@@ -534,14 +538,18 @@ public final class ProfilesTest {
         PolicyStore auto = PolicyStore.EMPTY.withApp("com.a.app", ISO);
         check(PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, places, "DE", 48.1, 11.5)).placeOf(10100) == 4,
                 "the place is in the real country");
-        check(PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, places, "FR", 48.1, 2.3)).placeOf(10100) == 0,
-                "a country without a place has no persona");
-        check(PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, places, null, 0, 0)).placeOf(10100) == 0,
-                "no country, no Automatic persona");
-        check(PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, null, "NL", 52.37, 4.89)).placeOf(10100) == 0,
-                "no place data, no persona");
-        check(PersonaFile.parse(MirrorPlan.personaFile(PolicyStore.EMPTY.withApp("com.b.app", ISO.withPlace(1)), pkg -> 10200, salt,
-                null, "NL", 52.37, 4.89)).placeOf(10200) == 0, "no place data, no chosen persona either");
+        // an Isolated app that gets no place keeps a persona without one: its scans, networks and cells are still hidden
+        PersonaFile france = PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, places, "FR", 48.1, 2.3));
+        check(france.placeOf(10100) == 0 && france.hasPersona(10100), "a country without a place: a persona without a place");
+        PersonaFile nowhere = PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, places, null, 0, 0));
+        check(nowhere.placeOf(10100) == 0 && nowhere.hasPersona(10100), "no country, no Automatic place, still a persona");
+        PersonaFile withoutData = PersonaFile.parse(MirrorPlan.personaFile(auto, pkg -> 10100, salt, null, "NL", 52.37, 4.89));
+        check(withoutData.placeOf(10100) == 0 && withoutData.hasPersona(10100), "no place data, no place, still a persona");
+        PersonaFile noDataChosen = PersonaFile.parse(MirrorPlan.personaFile(PolicyStore.EMPTY.withApp("com.b.app", ISO.withPlace(1)),
+                pkg -> 10200, salt, null, "NL", 52.37, 4.89));
+        check(noDataChosen.placeOf(10200) == 0 && noDataChosen.hasPersona(10200), "no place data, no chosen place either, still a persona");
+        check(!PersonaFile.parse(MirrorPlan.personaFile(PolicyStore.EMPTY.withApp("com.c.app", AppPolicy.PROTECTED), pkg -> 10300, salt,
+                null, "NL", 52.37, 4.89)).hasPersona(10300), "a Protected app has no persona, with or without place data");
         check(MirrorPlan.personaFile(PolicyStore.EMPTY, pkg -> -1, 1L, places, "NL", 0, 0).equals("s 0000000000000001\n"),
                 "an empty store has a file with the salt only");
 
@@ -552,6 +560,17 @@ public final class ProfilesTest {
                 .withApp("com.z.app", AppPolicy.PROTECTED);
         check(PersonaFile.parse(MirrorPlan.personaFile(shared, pkg -> 10800, salt, places, "NL", 52.37, 4.89)).placeOf(10800) == 2,
                 "a shared app id gets the lower place");
+        // one package of a shared app id has a place and another has none: the app has a persona with the place, on one line
+        PolicyStore sharedOne = PolicyStore.EMPTY
+                .withApp("com.x.app", ISO.withPlace(2))
+                .withApp("com.y.app", ISO.withPlace(99));
+        PersonaFile sharedFile = PersonaFile.parse(MirrorPlan.personaFile(sharedOne, pkg -> 10800, salt, places, "NL", 52.37, 4.89));
+        check(sharedFile.placeOf(10800) == 2 && sharedFile.hasPersona(10800), "a shared app id with a place and an unresolved package");
+        PolicyStore sharedNone = PolicyStore.EMPTY
+                .withApp("com.x.app", ISO.withPlace(98))
+                .withApp("com.y.app", ISO.withPlace(99));
+        PersonaFile sharedNoneFile = PersonaFile.parse(MirrorPlan.personaFile(sharedNone, pkg -> 10800, salt, places, "NL", 52.37, 4.89));
+        check(sharedNoneFile.placeOf(10800) == 0 && sharedNoneFile.hasPersona(10800), "a shared app id with two unresolved packages is one n line");
         PolicyStore sharedReverse = PolicyStore.EMPTY
                 .withApp("com.x.app", ISO.withPlace(2))
                 .withApp("com.y.app", ISO.withPlace(3));
@@ -629,8 +648,12 @@ public final class ProfilesTest {
                 java.util.Set.of("com.set.app", "com.free.app")), "without a country both are unresolved, the platform uid and the missing package are not");
         check(MirrorPlan.locationWithheldAppIds(iso, r, salt, places, "", Double.NaN, Double.NaN, null, null).toString().equals("[10100, 10200]"),
                 "and both are withheld");
-        check(MirrorPlan.personaFile(iso, r, salt, null, "NL", 52.37, 4.89).equals(PersonaFile.format(salt, Map.of())),
-                "without place data nobody has a persona");
+        check(MirrorPlan.personaFile(iso, r, salt, null, "NL", 52.37, 4.89).equals(PersonaFile.format(salt, Map.of(), java.util.Set.of(10100, 10200))),
+                "without place data nobody has a place, and every Isolated app has a persona without one");
+        PersonaFile bare = PersonaFile.parse(MirrorPlan.personaFile(PolicyStore.EMPTY.withDefaults(AppPolicy.PROTECTED).withApp("com.set.app", ISO),
+                r, salt, null, "NL", 52.37, 4.89));
+        check(bare.hasPersona(10100) && !bare.hasPersona(10200) && !bare.hasPersona(1000),
+                "under Protected defaults only the app with an Isolated entry has a persona without a place");
         check(MirrorPlan.locationUnresolved(iso, r, salt, null, "NL", 52.37, 4.89).equals(java.util.Set.of("com.set.app")),
                 "and only the app with an entry is unresolved: the permissions of the apps without one are kept until place data is installed");
         check(MirrorPlan.locationWithheldAppIds(iso, r, salt, null, "NL", 52.37, 4.89, null, null).toString().equals("[10100, 10200]"),

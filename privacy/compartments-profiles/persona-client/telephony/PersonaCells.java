@@ -35,9 +35,14 @@ final class PersonaCells {
     private boolean mRead;
     private CellSubset mCells;
 
-    /** The place of the app of this uid, 0 when it has no persona. */
+    /** The place of the app of this uid, 0 when it has none: no persona, or a persona without a place (see {@link #hasPersona}). */
     int placeOf(int uid) {
         return mReader.placeOf(uid);
+    }
+
+    /** Whether the app of this uid has a persona; one without a place is answered with no cells at all. */
+    boolean hasPersona(int uid) {
+        return mReader.hasPersona(uid);
     }
 
     /** The cells of the place, the first one serving; an empty list for a place without cells. */

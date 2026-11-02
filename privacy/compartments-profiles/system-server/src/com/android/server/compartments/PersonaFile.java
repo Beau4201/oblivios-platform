@@ -3,8 +3,11 @@ package com.android.server.compartments;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 /**
@@ -13,8 +16,11 @@ import java.util.regex.Pattern;
  * (a check of the package keeps the copies equal). Pure Java, no import beyond {@code java.util}.
  *
  * <p>Format: {@code s} and the 16 lower-case hex digits of the salt, then one line {@code p APPID PLACE} for each app that has a
- * persona, in app id order, every line ended by a newline, at most 8192 lines. An app id is of an ordinary app (10000 to 19999)
- * and a place is a positive number of {@link Places}. A reader that gets anything else refuses the whole file.
+ * persona, in app id order, then one line {@code n APPID} for each Isolated app that has a persona but no place (no place data,
+ * or no country to choose a place in), in app id order, every line ended by a newline, at most 8192 lines. An app id is of an
+ * ordinary app (10000 to 19999) and a place is a positive number of {@link Places}. An app id is on one line only. A reader
+ * that gets anything else refuses the whole file. An {@code n} app is given nothing of the real radio, scans or network
+ * names, as an app with a place is, but no place to take the invented data from.
  */
 final class PersonaFile {
     static final int MAX_LINES = 8192;
@@ -24,19 +30,34 @@ final class PersonaFile {
     private static final int SANDBOX_OFFSET = 10000;
     private static final Pattern SALT = Pattern.compile("s [0-9a-f]{16}");
     private static final Pattern LINE = Pattern.compile("p (0|[1-9][0-9]{0,9}) (0|[1-9][0-9]{0,9})");
+    private static final Pattern NONE_LINE = Pattern.compile("n (0|[1-9][0-9]{0,9})");
 
     private final long salt;
     private final Map<Integer, Integer> places;
+    private final Set<Integer> noPlace;
 
-    private PersonaFile(long salt, Map<Integer, Integer> places) {
+    private PersonaFile(long salt, Map<Integer, Integer> places, Set<Integer> noPlace) {
         this.salt = salt;
         this.places = places;
+        this.noPlace = noPlace;
     }
 
     /** The text of the file for the apps (by app id) that have a place. */
     static String format(long salt, Map<Integer, Integer> appIdToPlace) {
-        if (appIdToPlace == null || appIdToPlace.size() > MAX_LINES - 1) {
+        return format(salt, appIdToPlace, new TreeSet<>());
+    }
+
+    /** The text of the file for the apps (by app id) that have a place and the apps that have a persona without one. */
+    static String format(long salt, Map<Integer, Integer> appIdToPlace, Set<Integer> appIdsWithoutPlace) {
+        if (appIdToPlace == null || appIdsWithoutPlace == null || appIdToPlace.size() + appIdsWithoutPlace.size() > MAX_LINES - 1) {
             throw new IllegalArgumentException("too many apps");
+        }
+        Set<Integer> none = new TreeSet<>();
+        for (Integer appId : appIdsWithoutPlace) {
+            if (appId == null || appId < FIRST_APP_ID || appId > LAST_APP_ID || appIdToPlace.containsKey(appId)) {
+                throw new IllegalArgumentException("an app id is out of range or has a place as well");
+            }
+            none.add(appId);
         }
         Map<Integer, Integer> sorted = new TreeMap<>();
         for (Map.Entry<Integer, Integer> e : appIdToPlace.entrySet()) {
@@ -57,6 +78,9 @@ final class PersonaFile {
         for (Map.Entry<Integer, Integer> e : sorted.entrySet()) {
             b.append("p ").append(e.getKey()).append(' ').append(e.getValue()).append('\n');
         }
+        for (Integer appId : none) {
+            b.append("n ").append(appId).append('\n');
+        }
         return b.toString();
     }
 
@@ -66,6 +90,7 @@ final class PersonaFile {
             throw new IllegalArgumentException("not a persona file");
         }
         Map<Integer, Integer> out = new HashMap<>();
+        Set<Integer> none = new HashSet<>();
         long salt = 0;
         int start = 0;
         int lines = 0;
@@ -83,6 +108,16 @@ final class PersonaFile {
                 salt = Long.parseUnsignedLong(line.substring(2), 16);
                 continue;
             }
+            if (NONE_LINE.matcher(line).matches()) {
+                long appId = Long.parseLong(line.substring(2));
+                if (appId < FIRST_APP_ID || appId > LAST_APP_ID) {
+                    throw new IllegalArgumentException("an app id is out of range");
+                }
+                if (out.containsKey((int) appId) || !none.add((int) appId)) {
+                    throw new IllegalArgumentException("an app id is repeated");
+                }
+                continue;
+            }
             if (!LINE.matcher(line).matches()) {
                 throw new IllegalArgumentException("not a place line");
             }
@@ -92,11 +127,11 @@ final class PersonaFile {
             if (appId < FIRST_APP_ID || appId > LAST_APP_ID || place < 1 || place > Integer.MAX_VALUE) {
                 throw new IllegalArgumentException("an app id or a place is out of range");
             }
-            if (out.put((int) appId, (int) place) != null) {
+            if (none.contains((int) appId) || out.put((int) appId, (int) place) != null) {
                 throw new IllegalArgumentException("an app id is repeated");
             }
         }
-        return new PersonaFile(salt, Collections.unmodifiableMap(out));
+        return new PersonaFile(salt, Collections.unmodifiableMap(out), Collections.unmodifiableSet(none));
     }
 
     long salt() {
@@ -108,14 +143,29 @@ final class PersonaFile {
      * for the app 10000 below it), or 0 when the app has no persona.
      */
     int placeOf(int uid) {
+        Integer place = places.get(appIdOf(uid));
+        return place == null ? 0 : place;
+    }
+
+    /**
+     * Whether the app that this uid belongs to has a persona: a place, or a line {@code n} (a persona without a place). The
+     * checks of the Wi-Fi, Bluetooth, connectivity and telephony code ask this, not {@link #placeOf}, which is 0 for both an app
+     * without a persona and an app with one that has no place.
+     */
+    boolean hasPersona(int uid) {
+        int appId = appIdOf(uid);
+        return places.containsKey(appId) || noPlace.contains(appId);
+    }
+
+    /** The app id of a uid, the SDK sandbox answering for the app 10000 below it; -1 for a negative uid. */
+    private static int appIdOf(int uid) {
         if (uid < 0) {
-            return 0;
+            return -1;
         }
         int appId = uid % USER_OFFSET;
         if (appId >= FIRST_APP_ID + SANDBOX_OFFSET && appId <= LAST_APP_ID + SANDBOX_OFFSET) {
             appId -= SANDBOX_OFFSET;
         }
-        Integer place = places.get(appId);
-        return place == null ? 0 : place;
+        return appId;
     }
 }

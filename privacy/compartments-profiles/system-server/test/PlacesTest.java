@@ -404,6 +404,47 @@ public final class PlacesTest {
         check(PersonaFile.parse(PersonaFile.format(1, map(10000, 1))).placeOf(20000) == 1, "the first sandbox answers to the first app");
         check(PersonaFile.parse(PersonaFile.format(1, map(19999, 1))).placeOf(29999) == 1, "the last sandbox answers to the last app");
 
+        // an app with a persona but no place: a line n
+        String withNone = PersonaFile.format(5, map(10100, 7), new java.util.LinkedHashSet<>(java.util.List.of(10300, 10200)));
+        check(withNone.equals("s 0000000000000005\np 10100 7\nn 10200\nn 10300\n"), "the format with n lines: " + withNone.replace("\n", "|"));
+        PersonaFile n = PersonaFile.parse(withNone);
+        check(n.hasPersona(10100) && n.hasPersona(10200) && n.hasPersona(10300), "a place and an n line both give a persona");
+        check(n.placeOf(10200) == 0 && n.placeOf(10300) == 0 && n.placeOf(10100) == 7, "an n line gives no place");
+        check(n.hasPersona(110200) && n.hasPersona(20200) && n.hasPersona(120200), "the same app in another user and its sandbox");
+        check(!n.hasPersona(10400) && !n.hasPersona(1000) && !n.hasPersona(-1) && !n.hasPersona(0) && !n.hasPersona(19999), "no line, no persona");
+        check(!f.hasPersona(10300) && f.hasPersona(10100), "a file without n lines: a place is a persona, nothing else is");
+        check(PersonaFile.format(5, map(10100, 7)).equals(PersonaFile.format(5, map(10100, 7), new java.util.TreeSet<>())), "no n lines by default");
+        check(PersonaFile.parse(PersonaFile.format(0, map(), new java.util.TreeSet<>(java.util.List.of(10000, 19999)))).hasPersona(29999), "the limits of an app id");
+        check(throwsIllegal(() -> PersonaFile.format(1, map(10100, 7), new java.util.TreeSet<>(java.util.List.of(10100)))), "format: an app id with a place and an n line");
+        check(throwsIllegal(() -> PersonaFile.format(1, map(), new java.util.TreeSet<>(java.util.List.of(9999)))), "format: n app id 9999");
+        check(throwsIllegal(() -> PersonaFile.format(1, map(), new java.util.TreeSet<>(java.util.List.of(20000)))), "format: n app id 20000");
+        check(throwsIllegal(() -> PersonaFile.format(1, map(), null)), "format: null set");
+        java.util.Set<Integer> many = new java.util.TreeSet<>();
+        for (int i = 10000; i < 10000 + PersonaFile.MAX_LINES - 1; i++) {
+            many.add(i);
+        }
+        check(!throwsIllegal(() -> PersonaFile.format(1, map(), many)), "format: as many n lines as fit");
+        many.add(19999);
+        check(throwsIllegal(() -> PersonaFile.format(1, map(), many)), "format: one n line too many");
+        check(throwsIllegal(() -> PersonaFile.format(1, map(10000, 1), new java.util.TreeSet<>(java.util.List.of(10001)))) == false
+                && PersonaFile.format(1, map(10000, 1), new java.util.TreeSet<>(java.util.List.of(10001))).split("\n").length == 3, "format: one of each");
+
+        String sn = "s 0000000000000005\n";
+        check(!throwsIllegal(() -> PersonaFile.parse(sn + "n 10100\n")), "an n line alone");
+        check(!throwsIllegal(() -> PersonaFile.parse(sn + "n 10100\np 10200 7\n")), "an n line before a place line is read");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "n 10100\nn 10100\n")), "an n app id repeated");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "p 10100 7\nn 10100\n")), "a place line and then an n line for one app id");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "n 10100\np 10100 7\n")), "an n line and then a place line for one app id");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "n 9999\n")), "n app id 9999");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "n 20000\n")), "n app id 20000");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "n 10100 7\n")), "an n line with a place");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "n x\n")), "an n line without a number");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "n 010100\n")), "an n line with a leading zero");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "n -10100\n")), "a negative n app id");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "n 10100")), "an n line without its newline");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "N 10100\n")), "an upper case n");
+        check(throwsIllegal(() -> PersonaFile.parse(sn + "q 10100\n")), "another line type");
+
         check(throwsIllegal(() -> PersonaFile.format(1, map(9999, 1))), "format: app id 9999");
         check(throwsIllegal(() -> PersonaFile.format(1, map(20000, 1))), "format: app id 20000");
         check(throwsIllegal(() -> PersonaFile.format(1, map(10100, 0))), "format: place 0");

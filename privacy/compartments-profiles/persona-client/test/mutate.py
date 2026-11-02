@@ -25,6 +25,12 @@ MUTANTS = [
     ("the descriptor is not closed", "Os.close(fd);", "if (fd == null) {\n                        Os.close(fd);\n                    }"),
     ("an unusable file removes the persona", "if (fresh != null) {\n                mFile = fresh;", "if (true) {\n                mFile = fresh;"),
     ("the answer is the place of the wrong uid", "mFile.placeOf(uid)", "mFile.placeOf(uid + 1)"),
+    ("the persona is asked of the wrong uid", "mFile.hasPersona(uid)", "mFile.hasPersona(uid + 1)"),
+    ("every app has a persona once a table is read", "return mFile != null && mFile.hasPersona(uid);", "return mFile != null;"),
+    ("no app has a persona", "return mFile != null && mFile.hasPersona(uid);", "return false;"),
+    ("the persona question does not read the file", "        refresh(nowMs);\n        return mFile != null && mFile.hasPersona(uid);", "        return mFile != null && mFile.hasPersona(uid);"),
+    ("the place question does not read the file", "        refresh(nowMs);\n        return mFile == null ? 0", "        return mFile == null ? 0"),
+    ("a missing table means a persona", "return mFile != null && mFile.hasPersona(uid);", "return mFile == null || mFile.hasPersona(uid);"),
 ]
 
 

@@ -40,12 +40,27 @@ public final class PersonaReader {
         mOwnerUid = ownerUid;
     }
 
-    /** The place of the app of this uid, or 0 when it has none or the file cannot be used. */
+    /** The place of the app of this uid, or 0 when it has none (also a persona without a place) or the file cannot be used. */
     public int placeOf(int uid) {
         return placeOf(uid, System.nanoTime() / 1_000_000L);
     }
 
+    /** Whether the app of this uid has a persona, with or without a place; false when the file cannot be used. */
+    public boolean hasPersona(int uid) {
+        return hasPersona(uid, System.nanoTime() / 1_000_000L);
+    }
+
     synchronized int placeOf(int uid, long nowMs) {
+        refresh(nowMs);
+        return mFile == null ? 0 : mFile.placeOf(uid);
+    }
+
+    synchronized boolean hasPersona(int uid, long nowMs) {
+        refresh(nowMs);
+        return mFile != null && mFile.hasPersona(uid);
+    }
+
+    private void refresh(long nowMs) {
         if (!mLoaded || nowMs - mLoadedAtMs >= INTERVAL_MS) {
             PersonaFile fresh = load();
             if (fresh != null) {
@@ -54,7 +69,6 @@ public final class PersonaReader {
             mLoadedAtMs = nowMs;
             mLoaded = true;
         }
-        return mFile == null ? 0 : mFile.placeOf(uid);
     }
 
     private PersonaFile load() {

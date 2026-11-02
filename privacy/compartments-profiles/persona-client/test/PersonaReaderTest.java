@@ -58,6 +58,29 @@ public final class PersonaReaderTest {
         check(r.placeOf(10124, 0) == 0, "an app without one has none");
         check(r.placeOf(1000, 0) == 0, "a system uid has none");
 
+        // a persona without a place: no place, but still a persona
+        Map<Integer, Integer> one = new HashMap<>();
+        one.put(10123, 7);
+        Path withNone = write(dir, "none", PersonaFile.format(1L, one, java.util.Set.of(10150)), "rw-r--r--");
+        PersonaReader rn = new PersonaReader(withNone.toString(), me);
+        check(rn.hasPersona(10123, 0) && rn.placeOf(10123, 0) == 7, "an app with a place has a persona");
+        check(rn.hasPersona(10150, 0) && rn.placeOf(10150, 0) == 0, "an app on an n line has a persona and no place");
+        check(rn.hasPersona(1010150, 0) && rn.hasPersona(20150, 0), "in another user and as a sandbox");
+        check(!rn.hasPersona(10151, 0) && !rn.hasPersona(1000, 0) && !rn.hasPersona(-1, 0), "an app on no line has none");
+        check(!r.hasPersona(10150, 0), "a file without n lines gives no persona to another app");
+        check(!new PersonaReader(dir.resolve("missing").toString(), me).hasPersona(10150, 0), "a missing file: no persona");
+        check(!new PersonaReader(withNone.toString(), me + 1).hasPersona(10150, 0), "a file of another owner: no persona");
+        Path badNone = write(dir, "badnone", PersonaFile.format(1L, one) + "n 10150 7\n", "rw-r--r--");
+        check(!new PersonaReader(badNone.toString(), me).hasPersona(10150, 0), "a bad n line refuses the whole file");
+        PersonaReader keep = new PersonaReader(withNone.toString(), me);
+        check(keep.hasPersona(10150, 0), "the n app before the file turns bad");
+        Files.write(withNone, "junk".getBytes(StandardCharsets.UTF_8));
+        check(keep.hasPersona(10150, 5 * PersonaReader.INTERVAL_MS), "a file that turns bad keeps the n app");
+        Files.delete(withNone);
+        check(keep.hasPersona(10150, 6 * PersonaReader.INTERVAL_MS), "a file that is gone keeps it too");
+        check(keep.hasPersona(10150, 6 * PersonaReader.INTERVAL_MS + 1) && keep.placeOf(10123, 6 * PersonaReader.INTERVAL_MS + 2) == 7,
+                "and placeOf and hasPersona read the same table");
+
         // looked at again at most once a second
         long t0 = 100_000;
         PersonaReader timed = new PersonaReader(good.toString(), me);
