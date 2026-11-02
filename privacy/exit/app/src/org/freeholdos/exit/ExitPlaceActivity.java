@@ -13,7 +13,6 @@ import androidx.preference.PreferenceScreen;
 
 import com.android.internal.compartments.CompartmentsPlace;
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
-import com.android.settingslib.preference.PreferenceFragment;
 import com.android.settingslib.widget.FooterPreference;
 import com.android.settingslib.widget.SelectorWithWidgetPreference;
 
@@ -64,7 +63,7 @@ public final class ExitPlaceActivity extends CollapsingToolbarBaseActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public static final class PlaceFragment extends PreferenceFragment {
+    public static final class PlaceFragment extends CalmPreferenceFragment {
         private ProfileClient profiles;
         private String pkg;
         /** Read on the worker thread, so it is volatile; the reader takes the latest value when it runs again. */

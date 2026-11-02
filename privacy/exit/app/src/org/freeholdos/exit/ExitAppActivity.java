@@ -20,7 +20,6 @@ import androidx.preference.PreferenceScreen;
 import com.android.internal.compartments.CompartmentsAppPolicy;
 import com.android.internal.compartments.CompartmentsPlace;
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
-import com.android.settingslib.preference.PreferenceFragment;
 import com.android.settingslib.widget.FooterPreference;
 
 import java.util.ArrayList;
@@ -62,7 +61,7 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public static final class AppFragment extends PreferenceFragment implements ExitRuntime.Listener {
+    public static final class AppFragment extends CalmPreferenceFragment implements ExitRuntime.Listener {
         private final Handler main = new Handler(Looper.getMainLooper());
         private ExitRuntime rt;
         private CompanyNames names;

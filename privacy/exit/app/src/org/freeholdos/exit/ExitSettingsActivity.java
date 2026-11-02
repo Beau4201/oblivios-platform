@@ -16,7 +16,6 @@ import androidx.preference.SwitchPreferenceCompat;
 
 import com.android.internal.compartments.CompartmentsAppPolicy;
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
-import com.android.settingslib.preference.PreferenceFragment;
 import com.android.settingslib.widget.ButtonPreference;
 import com.android.settingslib.widget.FooterPreference;
 import com.android.settingslib.widget.TopIntroPreference;
@@ -58,7 +57,7 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
         return p;
     }
 
-    public static final class MainFragment extends PreferenceFragment implements ExitRuntime.Listener {
+    public static final class MainFragment extends CalmPreferenceFragment implements ExitRuntime.Listener {
         private final Handler main = new Handler(Looper.getMainLooper());
         private ExitRuntime rt;
         private CompanyNames names;

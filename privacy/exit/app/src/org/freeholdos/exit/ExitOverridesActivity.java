@@ -11,7 +11,6 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceScreen;
 
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
-import com.android.settingslib.preference.PreferenceFragment;
 
 import java.util.List;
 
@@ -32,7 +31,7 @@ public final class ExitOverridesActivity extends CollapsingToolbarBaseActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public static final class OverridesFragment extends PreferenceFragment implements ExitRuntime.Listener {
+    public static final class OverridesFragment extends CalmPreferenceFragment implements ExitRuntime.Listener {
         private final Handler main = new Handler(Looper.getMainLooper());
         private ExitRuntime rt;
         private CompanyNames names;
