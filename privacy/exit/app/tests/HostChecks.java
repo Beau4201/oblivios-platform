@@ -499,7 +499,8 @@ public final class HostChecks {
         check(l.shouldNotify(10100, 7, 1000 + Ladder.WINDOW_MS + 1), "after the window it notifies again");
         check(!l.shouldNotify(10100, 7, 1000 + Ladder.WINDOW_MS + 2), "and the new window holds");
         check(l.size() == 3, "keys of an old window are forgotten: " + l.size());
-        check(Ladder.WINDOW_MS == 600000 && Ladder.MAX_KEYS == 4096, "the numbers of ladder.rs");
+        check(Ladder.WINDOW_MS == 6 * 60 * 60 * 1000L && Ladder.MAX_KEYS == 4096,
+                "the window of the app is 6 hours (the daemon's is 10 minutes), the table size is that of ladder.rs");
         // A flood of keys cannot grow the table, and the oldest key goes first.
         Ladder f = new Ladder();
         for (int i = 0; i < Ladder.MAX_KEYS; i++) {
@@ -875,6 +876,7 @@ public final class HostChecks {
         check(ProfileRows.identityOf(2, 0, 2, 2, 1) == ProfileRows.IDENTITY_CUSTOM, "sensors real under Isolated is Custom");
         check(ProfileRows.identityOf(1, 1, 2, 2, 0) == ProfileRows.IDENTITY_CUSTOM, "sensors substituted under Protected is Custom");
         check(ProfileRows.identityOf(1, 0, 2, 0, 0) == ProfileRows.IDENTITY_CUSTOM, "settings real under Protected is Custom");
+        check(ProfileRows.IDENTITY_UNKNOWN != ProfileRows.IDENTITY_CUSTOM && ProfileRows.IDENTITY_UNKNOWN < 0, "unknown identity is neither Custom nor a profile");
         throwsIae(() -> ProfileRows.identityOf(3, 0, 0, 0, 0), "identity of profile 3");
         throwsIae(() -> ProfileRows.identityOf(1, 0, 1, 0, 0), "identity with substitute loopback");
 

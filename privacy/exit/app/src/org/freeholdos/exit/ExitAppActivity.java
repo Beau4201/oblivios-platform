@@ -246,6 +246,7 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
             addressPref = ProfileText.choice(ctx, "app_address", R.string.address_title, indexes,
                     i -> modeText(options[i]), 0);
             addressPref.setOnPreferenceChangeListener((p, v) -> {
+                addressPref.setValue((String) v);  // shown at once; a refused stand is put back by the render that choose() asks for
                 choose(options[Integer.parseInt((String) v)]);
                 return false;
             });
@@ -343,6 +344,7 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                         v -> ProfileText.valueName(cls, v), r.current);
                 pref.setOnPreferenceChangeListener((p, v) -> {
                     int value = Integer.parseInt((String) v);
+                    ((ListPreference) p).setValue((String) v);  // shown at once; changed() builds the page again from the service, which puts a refused value back
                     ProfileClient.write(() -> profiles.setClassValue(pkg, cls, value), this::changed);
                     return false;
                 });

@@ -7,15 +7,16 @@
 
     <string name="notif_channel_name">Address protection</string>
     <string name="notif_tor_title">%1$s sends all traffic via Tor</string>
-    <string name="notif_tor_text">That may be why it does not work. Switch it to Trackers only?</string>
+    <string name="notif_channel_quiet_name">Address problems</string>
+    <string name="notif_tor_text">That may be why it fails. Use Trackers only?</string>
     <string name="notif_tor_action">Use Trackers only</string>
     <string name="notif_mask_title">%1$s cannot reach %2$s</string>
-    <string name="notif_mask_text">It cannot reach %1$s while your address is hidden. Show your address to %1$s in this app, or keep it hidden?</string>
+    <string name="notif_mask_text">Show your address to %1$s in this app?</string>
     <string name="notif_action_show">Show my address</string>
     <string name="notif_action_keep">Keep hidden</string>
     <string name="notif_unknown_company">a tracker</string>
     <string name="notif_promo_title">%1$s: %2$s sends a lot of data</string>
-    <string name="notif_promo_text">Hiding it would make the app slow, so %2$s sees your address in this app for 30 minutes.</string>
+    <string name="notif_promo_text">%2$s sees your address in this app for 30 minutes; hiding it would be slow.</string>
     <string name="notif_action_rehide">Hide again</string>
     <string name="notif_consent_text">Choose whether advertising and tracking companies can see your address.</string>
 

@@ -8,6 +8,7 @@ import android.view.MenuItem;
 import android.widget.SearchView;
 import android.widget.Toast;
 
+import androidx.preference.Preference;
 import androidx.preference.PreferenceScreen;
 
 import com.android.internal.compartments.CompartmentsPlace;
@@ -161,16 +162,30 @@ public final class ExitPlaceActivity extends CollapsingToolbarBaseActivity {
             radio.setTitle(title);
             radio.setSummary(summary);
             radio.setChecked(checked);
-            radio.setOnClickListener(p -> ProfileClient.write(() -> profiles.setPlace(pkg, id), ok -> {
-                if (getContext() == null) {
-                    return;
-                }
-                if (!ok) {
-                    Toast.makeText(requireContext(), refusalOr(R.string.place_error), Toast.LENGTH_LONG).show();
-                }
-                reader.run();
-            }));
+            radio.setOnClickListener(p -> {
+                checkOnly(p);
+                ProfileClient.write(() -> profiles.setPlace(pkg, id), ok -> {
+                    if (getContext() == null) {
+                        return;
+                    }
+                    if (!ok) {
+                        Toast.makeText(requireContext(), refusalOr(R.string.place_error), Toast.LENGTH_LONG).show();
+                    }
+                    reader.run();
+                });
+            });
             return radio;
+        }
+
+        /** The tapped radio shows at once; the page is built again from the service when the change ends. */
+        private void checkOnly(SelectorWithWidgetPreference chosen) {
+            PreferenceScreen screen = getPreferenceScreen();
+            for (int i = 0; i < screen.getPreferenceCount(); i++) {
+                Preference p = screen.getPreference(i);
+                if (p instanceof SelectorWithWidgetPreference) {
+                    ((SelectorWithWidgetPreference) p).setChecked(p == chosen);
+                }
+            }
         }
     }
 }

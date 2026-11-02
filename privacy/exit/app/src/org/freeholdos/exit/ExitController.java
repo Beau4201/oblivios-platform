@@ -131,7 +131,9 @@ public final class ExitController {
                     daemonState = p.state;
                     sendCountries(store.choices());
                     for (DaemonApi.Failure f : p.failures) {
-                        if (ladder.shouldNotify((int) f.uid, f.company, nowMs)) {
+                        // While Tor is still starting every hidden host fails, whatever the host is: not a reason to ask.
+                        // If Tor does not come up the daemon reports again in its next window.
+                        if (daemonState != ControlCodec.STATE_BOOTSTRAPPING && ladder.shouldNotify((int) f.uid, f.company, nowMs)) {
                             platform.notifyFailure(f.uid, f.company);
                         }
                     }

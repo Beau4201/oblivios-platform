@@ -6,13 +6,14 @@ import java.util.Map;
 
 /**
  * The notification window of the failure ladder (ADR-181 section 4.3). The daemon tells the app once per app, company and
- * window that connections through Tor failed or were slow; the daemon forgets that on a restart, so the app keeps its own
- * window and posts at most one notification per app and company in it. The numbers are those of {@code ladder.rs}
- * ({@code WINDOW}, {@code MAX_KEYS}). Pure Java: every call is given the time.
+ * window (10 minutes in {@code ladder.rs}) that connections through Tor failed or were slow; the daemon forgets that on a
+ * restart, so the app keeps its own window and posts at most one notification per app and company in it. The app's window is
+ * longer than the daemon's, because a user who ignored or answered "keep hidden" does not want to be asked again every ten
+ * minutes (owner, 2026-11-02); {@code MAX_KEYS} is that of {@code ladder.rs}. Pure Java: every call is given the time.
  */
 public final class Ladder {
     /** A key is notified once in this many milliseconds. */
-    public static final long WINDOW_MS = 10 * 60 * 1000L;
+    public static final long WINDOW_MS = 6 * 60 * 60 * 1000L;
     /** The most keys kept; a new key past this evicts the oldest. */
     public static final int MAX_KEYS = 4096;
 

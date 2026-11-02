@@ -53,6 +53,9 @@ public final class ProfileRows {
     /** What {@link #identityOf} returns when one detail of an app differs from what its profile gives. */
     public static final int IDENTITY_CUSTOM = -1;
 
+    /** What a reader of the service keeps for an app whose identity it could not read; never a profile and never Custom. */
+    public static final int IDENTITY_UNKNOWN = -2;
+
     /** What {@link #selectedChoice} returns for an app that has no entry and so follows the defaults. */
     public static final int CHOICE_FOLLOW_DEFAULT = -1;
 

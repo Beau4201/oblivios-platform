@@ -15,7 +15,15 @@ import android.content.pm.PackageManager;
  * mask list of the image; the daemon never reports a host name.
  */
 final class Notifier {
+    /** The first question of the consent: default importance, it needs the user's attention once. */
     static final String CHANNEL = "exit_failures";
+    /**
+     * Failures and promotions: low importance (no sound, no heads-up), because they can come in numbers and the user may ignore
+     * them. A channel keeps the importance of its first creation, so these have a channel of their own.
+     */
+    static final String CHANNEL_QUIET = "exit_notes";
+    /** A notification that nobody answered goes away by itself. */
+    private static final long TIMEOUT_MS = 3 * 60 * 60 * 1000L;
     static final String ACTION_SHOW = "org.freeholdos.exit.SHOW_ADDRESS";
     static final String ACTION_KEEP = "org.freeholdos.exit.KEEP_HIDING";
     static final String ACTION_DIRECT = "org.freeholdos.exit.SWITCH_TOR_OFF";
@@ -35,16 +43,17 @@ final class Notifier {
 
     void post(String pkg, int company) {
         NotificationManager nm = ctx.getSystemService(NotificationManager.class);
-        nm.createNotificationChannel(new NotificationChannel(CHANNEL, ctx.getString(R.string.notif_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT));
+        nm.createNotificationChannel(quietChannel());
         String app = label(pkg);
-        Notification.Builder b = new Notification.Builder(ctx, CHANNEL)
+        Notification.Builder b = new Notification.Builder(ctx, CHANNEL_QUIET)
                 .setSmallIcon(R.drawable.ic_compartments)
                 .setVisibility(Notification.VISIBILITY_SECRET) // names an app and a company: nothing of it on the lock screen
+                .setTimeoutAfter(TIMEOUT_MS)
                 .setAutoCancel(true);
         if (company == 0) {
             b.setContentTitle(ctx.getString(R.string.notif_tor_title, app))
                     .setContentText(ctx.getString(R.string.notif_tor_text))
+                    .setStyle(new Notification.BigTextStyle().bigText(ctx.getString(R.string.notif_tor_text)))
                     .addAction(action(R.string.notif_tor_action, ACTION_DIRECT, pkg, company));
         } else {
             String host = names.nameOf(company);
@@ -53,10 +62,16 @@ final class Notifier {
             }
             b.setContentTitle(ctx.getString(R.string.notif_mask_title, app, host))
                     .setContentText(ctx.getString(R.string.notif_mask_text, host))
+                    .setStyle(new Notification.BigTextStyle().bigText(ctx.getString(R.string.notif_mask_text, host)))
                     .addAction(action(R.string.notif_action_show, ACTION_SHOW, pkg, company))
                     .addAction(action(R.string.notif_action_keep, ACTION_KEEP, pkg, company));
         }
         nm.notify(idOf(pkg, company), b.build());
+    }
+
+    private NotificationChannel quietChannel() {
+        return new NotificationChannel(CHANNEL_QUIET, ctx.getString(R.string.notif_channel_quiet_name),
+                NotificationManager.IMPORTANCE_LOW);
     }
 
     /**
@@ -65,8 +80,7 @@ final class Notifier {
      */
     void postPromotion(String pkg, long uid, int company) {
         NotificationManager nm = ctx.getSystemService(NotificationManager.class);
-        nm.createNotificationChannel(new NotificationChannel(CHANNEL, ctx.getString(R.string.notif_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT));
+        nm.createNotificationChannel(quietChannel());
         String host = names.nameOf(company);
         if (host == null) {
             host = ctx.getString(R.string.notif_unknown_company);
@@ -75,11 +89,13 @@ final class Notifier {
                 .putExtra(EXTRA_PACKAGE, pkg).putExtra(EXTRA_COMPANY, company).putExtra(EXTRA_UID, uid);
         PendingIntent pi = PendingIntent.getBroadcast(ctx, (pkg + ACTION_REHIDE + company + uid).hashCode(), i,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        nm.notify(promotionId(pkg, company), new Notification.Builder(ctx, CHANNEL)
+        nm.notify(promotionId(pkg, company), new Notification.Builder(ctx, CHANNEL_QUIET)
                 .setSmallIcon(R.drawable.ic_compartments)
                 .setVisibility(Notification.VISIBILITY_SECRET)
+                .setTimeoutAfter(TIMEOUT_MS)
                 .setContentTitle(ctx.getString(R.string.notif_promo_title, label(pkg), host))
                 .setContentText(ctx.getString(R.string.notif_promo_text, label(pkg), host))
+                .setStyle(new Notification.BigTextStyle().bigText(ctx.getString(R.string.notif_promo_text, label(pkg), host)))
                 .addAction(new Notification.Action.Builder(null, ctx.getString(R.string.notif_action_rehide), pi).build())
                 .setAutoCancel(true)
                 .build());

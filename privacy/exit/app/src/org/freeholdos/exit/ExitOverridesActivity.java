@@ -104,6 +104,10 @@ public final class ExitOverridesActivity extends CollapsingToolbarBaseActivity {
                 p.setPersistent(false);
                 p.setTitle(getString(R.string.override_row, index.label(r.pkg), company));
                 p.setSummary(R.string.override_remove);
+                android.graphics.drawable.Drawable icon = index.icons.get(r.pkg);
+                if (icon != null) {
+                    p.setIcon(icon);
+                }
                 p.setOnPreferenceClickListener(x -> {
                     rt.setShowsAddress(r.pkg, r.company, false);
                     return true;

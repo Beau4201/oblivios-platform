@@ -92,7 +92,7 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
             /** Null when the service cannot say. */
             Set<String> configured;
             CompartmentsAppPolicy defaults;
-            /** The identity of each configured app (a ProfileRows.IDENTITY_*), -1 when the service cannot say. */
+            /** The identity of each configured app (a profile or ProfileRows.IDENTITY_CUSTOM), IDENTITY_UNKNOWN when the service cannot say. */
             final Map<String, Integer> own = new HashMap<>();
         }
 
@@ -201,16 +201,16 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
             return v;
         }
 
-        /** The identity the user set for an app, or -1 when the service cannot say. */
+        /** The identity the user set for an app (Custom included), or IDENTITY_UNKNOWN when the service cannot say. */
         private int ownIdentity(String pkg) {
             CompartmentsAppPolicy a = profiles.getApp(pkg);
             if (a == null) {
-                return -1;
+                return ProfileRows.IDENTITY_UNKNOWN;
             }
             try {
                 return ProfileRows.identityOf(a.profile, a.sensors, a.loopback, a.settings, a.location);
             } catch (IllegalArgumentException e) {
-                return -1;
+                return ProfileRows.IDENTITY_UNKNOWN;
             }
         }
 
@@ -231,8 +231,9 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
                         if (!v.configured.contains(r.pkg)) {
                             identity = getString(ProfileText.profileName(v.defaults.profile));
                         } else {
-                            int own = v.own.get(r.pkg);
-                            identity = own < 0 ? null
+                            Integer read = v.own.get(r.pkg);
+                            int own = read == null ? ProfileRows.IDENTITY_UNKNOWN : read;
+                            identity = own == ProfileRows.IDENTITY_UNKNOWN ? null
                                     : getString(own == ProfileRows.IDENTITY_CUSTOM ? R.string.identity_custom : ProfileText.profileName(own));
                         }
                     }

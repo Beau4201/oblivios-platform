@@ -201,6 +201,7 @@ final class ExitRuntime {
         }
         handler.post(() -> {
             change.run();
+            publishSnapshot();  // the pages show the new stand at once; the controller below can take seconds (daemon and routes)
             controller.changed(SystemClock.elapsedRealtime());
             publishSnapshot();
         });

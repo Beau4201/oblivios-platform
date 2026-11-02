@@ -46,6 +46,7 @@ public final class ControllerChecks {
         final Map<String, Integer> failures = new TreeMap<>();
         List<DaemonApi.Failure> nextFailures = new ArrayList<>();
         List<DaemonApi.Promotion> nextPromotions = new ArrayList<>();
+        int pollState = ControlCodec.STATE_UP;
         Status last;
 
         void maybeFail(String what) throws IOException {
@@ -86,7 +87,7 @@ public final class ControllerChecks {
                 nextFailures = new ArrayList<>();
                 List<Promotion> q = nextPromotions;
                 nextPromotions = new ArrayList<>();
-                return new Poll(ControlCodec.STATE_UP, f, q);
+                return new Poll(pollState, f, q);
             }
 
             @Override
@@ -680,6 +681,24 @@ public final class ControllerChecks {
         w.nextFailures.add(new DaemonApi.Failure(10100, 7, 3));
         w.controller.tick(5000 + Ladder.WINDOW_MS + 5000);
         check(w.count("notify:10100/7") == 2, "again after the window");
+
+        // While Tor is starting, a failure is not a reason to ask; it does not use up the window either.
+        World s = world();
+        s.choices.set("org.a.one", Choices.Choice.TOR);
+        s.controller.start(0);
+        s.controller.tick(0);
+        s.pollState = ControlCodec.STATE_BOOTSTRAPPING;
+        s.nextFailures.add(new DaemonApi.Failure(10100, 7, 3));
+        s.controller.tick(5000);
+        check(s.count("notify:10100/7") == 0, "no notification while the daemon bootstraps: " + s.log);
+        s.pollState = ControlCodec.STATE_UP;
+        s.nextFailures.add(new DaemonApi.Failure(10100, 7, 3));
+        s.controller.tick(10000);
+        check(s.count("notify:10100/7") == 1, "the same failure once Tor is up notifies");
+        s.pollState = ControlCodec.STATE_FAILED;
+        s.nextFailures.add(new DaemonApi.Failure(10100, 9, 3));
+        s.controller.tick(15000);
+        check(s.count("notify:10100/9") == 1, "a daemon whose Tor failed still reports");
     }
 
     private static void promotions() {

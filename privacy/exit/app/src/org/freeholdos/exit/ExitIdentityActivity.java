@@ -158,8 +158,22 @@ public final class ExitIdentityActivity extends CollapsingToolbarBaseActivity {
             radio.setTitle(title);
             radio.setSummary(summary);
             radio.setChecked(value == selected);
-            radio.setOnClickListener(p -> choose(value));
+            radio.setOnClickListener(p -> {
+                checkOnly(p);
+                choose(value);
+            });
             return radio;
+        }
+
+        /** The tapped radio shows at once; the page is built again from the service when the change ends. */
+        private void checkOnly(SelectorWithWidgetPreference chosen) {
+            PreferenceScreen screen = getPreferenceScreen();
+            for (int i = 0; i < screen.getPreferenceCount(); i++) {
+                Preference p = screen.getPreference(i);
+                if (p instanceof SelectorWithWidgetPreference) {
+                    ((SelectorWithWidgetPreference) p).setChecked(p == chosen);
+                }
+            }
         }
 
         /** A refused or failed change says so and changes nothing; the page is built again from the service either way. */
