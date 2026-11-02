@@ -42,7 +42,12 @@ internal class ConnectionSheetTrigger(private val context: Context) : AirPodsSta
             return
         }
         try {
-            context.startActivity(Intent(context, ConnectionSheetActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            // NO_USER_ACTION: the case opening is not the user leaving the app below. Without it the foreground app gets
+            // onUserLeaveHint and a fullscreen video enters picture-in-picture (ActivityStarter: mUserLeaving).
+            context.startActivity(
+                Intent(context, ConnectionSheetActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION),
+            )
         } catch (e: RuntimeException) {
             Log.w(TAG, "the sheet could not be started: " + e.javaClass.simpleName)
         }
