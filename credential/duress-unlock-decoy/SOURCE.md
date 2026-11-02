@@ -1,5 +1,26 @@
 # Source record
 
+## Feature 2026-11-02: a password as the second credential (`packages-apps-settings/0003`)
+
+The owner asked for a password as the Duress Unlock second credential (ADR-145 had made it PIN-only
+"until a password is built"). The second credential has the type of the screen lock: a PIN under a PIN
+lock, a password under a password lock. Reason `[verified-in-source]`: `SyntheticPasswordManager.java`
+(`Credential type mismatch`, around line 1729) rejects a typed credential whose type differs from the
+stored one, and the keyguard types the lock's own type. `frameworks/base` needs no change: the routing
+(`DecoyProfileHelper.maybeRouteToDecoy`) and the wipe check (`DuressPasswordHelper.isDuressCredential`)
+already handle both types.
+
+- `packages-apps-settings/0003`: the main and set-up screens follow the type of the owner credential
+  (input type, wording through one `%1$s` noun, `createPassword` or `createPin`, "Passwords don't match");
+  the Auto confirm unlock length rule applies to a PIN only. When the lock type changes after the
+  set-up the old decoy never matches, so the main screen says so and Change types the current value as
+  the type the decoy still has (`getCredentialTypeForUser`).
+- Real branch: `packages/apps/Settings` `freeholdos-2026100600`, commit `dcb63695a6f` on top of
+  `363826216c8`. Authored in a disposable local repository seeded from the build server and landed
+  with `git am`.
+- Compiled: no. Settings has no host-side type-check here; the first module build is the check.
+  Run on a device: no (rows `DUR-014` to `DUR-018` of the validation matrix).
+
 ## Correction 2026-10-15: `system-current.txt` sort order after the FreeholdOS rename (`frameworks-base/0006`)
 
 The rename of `USER_TYPE_FULL_SOVEREIGNOS_DECOY` to `USER_TYPE_FULL_FREEHOLDOS_DECOY` (ADR-170) left the line where
