@@ -45,6 +45,7 @@ public final class ProfilesTest {
         personaMirrors();
         keptPlacesAndRestarts();
         isolatedDefaults();
+        platformPackagesFollowNoDefaults();
         withheldAppIds();
         largestStore();
         System.out.println("ok " + checks + " checks");
@@ -669,6 +670,51 @@ public final class ProfilesTest {
         check(far(p.placeOf(10100)) && p.placeOf(10200) == 0, "Protected defaults give the app without an entry no persona");
         check(MirrorPlan.locationPackages(iso, r, places).size() == 4 && MirrorPlan.locationPackages(prot, r, places).equals(java.util.Set.of("com.set.app")),
                 "the packages the plan covers");
+    }
+
+    /** A package signed with the platform key is the system: the defaults give it no persona and real sensors; an entry counts. */
+    private static void platformPackagesFollowNoDefaults() throws Exception {
+        Places places = Places.parse(PLACES);
+        long salt = 0xABCDEF0123456789L;
+        Map<String, Integer> uids = Map.of("com.free.app", 10200, "com.plat.app", 10300, "com.plat.set", 10400, "com.shared.entry", 10300);
+        java.util.List<String> installed = java.util.List.of("com.free.app", "com.plat.app", "com.plat.set");
+        MirrorPlan.UidResolver r = new MirrorPlan.UidResolver() {
+            @Override
+            public int uidOf(String pkg) {
+                return uids.getOrDefault(pkg, -1);
+            }
+
+            @Override
+            public java.util.Collection<String> installedPackages() {
+                return installed;
+            }
+
+            @Override
+            public java.util.Collection<String> platformPackages() {
+                return java.util.Set.of("com.plat.app", "com.plat.set");
+            }
+        };
+        PolicyStore iso = PolicyStore.EMPTY.withDefaults(ISO).withApp("com.plat.set", ISO);
+        PersonaFile t = PersonaFile.parse(MirrorPlan.personaFile(iso, r, salt, places, "NL", 52.37, 4.89));
+        check(far(t.placeOf(10200)), "an app without an entry has a persona under Isolated defaults");
+        check(!t.hasPersona(10300), "a platform package without an entry has none");
+        check(far(t.placeOf(10400)), "a platform package with an entry has one");
+        check(MirrorPlan.locationPackages(iso, r, places).equals(java.util.Set.of("com.free.app", "com.plat.set")), "the packages the plan covers");
+        check(MirrorPlan.personaFile(iso, r, salt, null, "NL", 52.37, 4.89).equals(PersonaFile.format(salt, Map.of(), java.util.Set.of(10200, 10400))),
+                "without place data the platform package has no persona either");
+        check(MirrorPlan.locationWithheldAppIds(iso, r, salt, null, "NL", 52.37, 4.89, null, null).toString().equals("[10200, 10400]"),
+                "and is not withheld the position");
+
+        check(MirrorPlan.sensorModeFile(iso, r, salt).equals("s abcdef0123456789\nd SUBSTITUTE\na 10300 RAW\n"),
+                "a platform package without an entry has real sensors under Isolated defaults");
+        check(MirrorPlan.sensorModeFile(PolicyStore.EMPTY, r, salt).equals("s abcdef0123456789\nd FOLDED\na 10300 RAW\na 10400 RAW\n"),
+                "and under Protected defaults");
+        PolicyStore blocked = PolicyStore.EMPTY.withDefaults(ISO).withApp("com.plat.set", ISO.withValue(Cls.SENSORS, Value.BLOCKED));
+        check(MirrorPlan.sensorModeFile(blocked, r, salt).equals("s abcdef0123456789\nd SUBSTITUTE\na 10300 RAW\na 10400 BLOCKED\n"),
+                "an entry of a platform package is honoured");
+        PolicyStore shared = PolicyStore.EMPTY.withDefaults(ISO).withApp("com.shared.entry", ISO.withValue(Cls.SENSORS, Value.BLOCKED));
+        check(MirrorPlan.sensorModeFile(shared, r, salt).equals("s abcdef0123456789\nd SUBSTITUTE\na 10300 BLOCKED\na 10400 RAW\n"),
+                "an entry for a package that shares the app id wins over the exemption");
     }
 
     /** G6: the largest legal store fits the limit that the service reads, and reads back. */

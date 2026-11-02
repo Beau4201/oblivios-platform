@@ -1,0 +1,114 @@
+From 93542bdb504f87c236343edddcf94fe4edcef15d Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Mon, 2 Nov 2026 19:01:12 +0100
+Subject: [PATCH] compartments: give a platform-signed package no persona and
+ real sensors by default
+
+Isolated defaults gave every installed package of the owner user a
+persona and substituted sensors, SystemUI and Settings included. On
+image 2026110201 the Wi-Fi service refused SystemUI's nearby-device
+calls every 3 s ("UID 10150 has a persona"). A package signed with the
+platform key is part of the system and holds every signature
+permission already, so a persona protects nothing from it and breaks
+what the system does for the user.
+
+UidResolver gets platformPackages(): the installed packages whose
+signature matches that of "android". The persona plan skips them, the
+apps-without-a-persona set skips them, and the sensor file writes
+"a APPID RAW" for them unless an entry of the same app id says
+otherwise. An entry of their own is still honoured.
+---
+ .../CompartmentsPolicyService.java            | 12 +++++++++
+ .../server/compartments/MirrorPlan.java       | 27 +++++++++++++++++--
+ 2 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index df5d7137f527..61ba3d00d755 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -577,6 +577,18 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+             }
+             return out;
+         }
++
++        @Override
++        public Collection<String> platformPackages() {
++            PackageManager pm = mContext.getPackageManager();
++            List<String> out = new ArrayList<>();
++            for (PackageInfo info : pm.getInstalledPackagesAsUser(0, UserHandle.USER_SYSTEM)) {
++                if (pm.checkSignatures(info.packageName, "android") == PackageManager.SIGNATURE_MATCH) {
++                    out.add(info.packageName);
++                }
++            }
++            return out;
++        }
+     };
+ 
+     private int ownerUidOf(String pkg) {
+diff --git a/services/core/java/com/android/server/compartments/MirrorPlan.java b/services/core/java/com/android/server/compartments/MirrorPlan.java
+index f8b0ccd3f540..bb0fae72dfa0 100644
+--- a/services/core/java/com/android/server/compartments/MirrorPlan.java
++++ b/services/core/java/com/android/server/compartments/MirrorPlan.java
+@@ -24,6 +24,15 @@ final class MirrorPlan {
+         default Collection<String> installedPackages() {
+             return Collections.emptySet();
+         }
++
++        /**
++         * The installed packages signed with the platform key (SystemUI, Settings): part of the operating system, which holds
++         * every signature permission already, so a persona or a substituted sensor protects nothing from them and breaks what
++         * the system does for the user. They follow no defaults; an entry of their own is still honoured. None by default.
++         */
++        default Collection<String> platformPackages() {
++            return Collections.emptySet();
++        }
+     }
+ 
+     static final int USER_OFFSET = 100000;
+@@ -110,6 +119,12 @@ final class MirrorPlan {
+                 perApp.merge(appId, mode(s.policyOf(pkg).profile, s.value(pkg, Cls.SENSORS)), MirrorPlan::stricter);
+             }
+         }
++        for (String pkg : r.platformPackages()) {  // part of the system: real sensors, unless an entry (put above) says otherwise
++            int appId = ordinaryAppId(r.uidOf(pkg));
++            if (appId >= 0) {
++                perApp.putIfAbsent(appId, SensorMode.RAW);
++            }
++        }
+         StringBuilder out = new StringBuilder(String.format("s %016x\n", salt)).append("d ").append(dflt).append('\n');
+         if (activity != ActivityEstimator.Activity.STILL) {
+             out.append("t ").append(activity).append('\n');
+@@ -138,11 +153,18 @@ final class MirrorPlan {
+      * place data, every installed package, because an app without an entry follows the defaults (D5). Without place data no
+      * persona can be made for anyone, and the permissions of every app would be taken at once, so these apps keep their
+      * permissions and are only withheld the position at delivery (see {@link #locationWithheldAppIds}) until data is installed.
++     * A package signed with the platform key ({@link UidResolver#platformPackages}) is not one of them unless it has an entry:
++     * it is the system.
+      */
+     static Set<String> locationPackages(PolicyStore s, UidResolver r, Places places) {
+         Set<String> out = new TreeSet<>(s.configured());
+         if (s.defaults.profile == Profiles.Profile.ISOLATED && places != null) {
+-            out.addAll(r.installedPackages());
++            Collection<String> platform = r.platformPackages();
++            for (String pkg : r.installedPackages()) {
++                if (!platform.contains(pkg)) {
++                    out.add(pkg);
++                }
++            }
+         }
+         return out;
+     }
+@@ -295,8 +317,9 @@ final class MirrorPlan {
+             double lon, PolicyStore before, PersonaFile table) {
+         Set<String> packages = new TreeSet<>(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));
+         if (s.defaults.profile == Profiles.Profile.ISOLATED && places == null) {
++            Collection<String> platform = r.platformPackages();
+             for (String pkg : r.installedPackages()) {
+-                if (!s.hasEntry(pkg)) {
++                if (!s.hasEntry(pkg) && !platform.contains(pkg)) {
+                     packages.add(pkg);
+                 }
+             }
+-- 
+2.39.5
+

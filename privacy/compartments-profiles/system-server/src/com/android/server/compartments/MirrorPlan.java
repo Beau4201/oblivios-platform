@@ -24,6 +24,15 @@ final class MirrorPlan {
         default Collection<String> installedPackages() {
             return Collections.emptySet();
         }
+
+        /**
+         * The installed packages signed with the platform key (SystemUI, Settings): part of the operating system, which holds
+         * every signature permission already, so a persona or a substituted sensor protects nothing from them and breaks what
+         * the system does for the user. They follow no defaults; an entry of their own is still honoured. None by default.
+         */
+        default Collection<String> platformPackages() {
+            return Collections.emptySet();
+        }
     }
 
     static final int USER_OFFSET = 100000;
@@ -110,6 +119,12 @@ final class MirrorPlan {
                 perApp.merge(appId, mode(s.policyOf(pkg).profile, s.value(pkg, Cls.SENSORS)), MirrorPlan::stricter);
             }
         }
+        for (String pkg : r.platformPackages()) {  // part of the system: real sensors, unless an entry (put above) says otherwise
+            int appId = ordinaryAppId(r.uidOf(pkg));
+            if (appId >= 0) {
+                perApp.putIfAbsent(appId, SensorMode.RAW);
+            }
+        }
         StringBuilder out = new StringBuilder(String.format("s %016x\n", salt)).append("d ").append(dflt).append('\n');
         if (activity != ActivityEstimator.Activity.STILL) {
             out.append("t ").append(activity).append('\n');
@@ -138,11 +153,18 @@ final class MirrorPlan {
      * place data, every installed package, because an app without an entry follows the defaults (D5). Without place data no
      * persona can be made for anyone, and the permissions of every app would be taken at once, so these apps keep their
      * permissions and are only withheld the position at delivery (see {@link #locationWithheldAppIds}) until data is installed.
+     * A package signed with the platform key ({@link UidResolver#platformPackages}) is not one of them unless it has an entry:
+     * it is the system.
      */
     static Set<String> locationPackages(PolicyStore s, UidResolver r, Places places) {
         Set<String> out = new TreeSet<>(s.configured());
         if (s.defaults.profile == Profiles.Profile.ISOLATED && places != null) {
-            out.addAll(r.installedPackages());
+            Collection<String> platform = r.platformPackages();
+            for (String pkg : r.installedPackages()) {
+                if (!platform.contains(pkg)) {
+                    out.add(pkg);
+                }
+            }
         }
         return out;
     }
@@ -295,8 +317,9 @@ final class MirrorPlan {
             double lon, PolicyStore before, PersonaFile table) {
         Set<String> packages = new TreeSet<>(locationUnresolved(s, r, salt, places, country, lat, lon, before, table));
         if (s.defaults.profile == Profiles.Profile.ISOLATED && places == null) {
+            Collection<String> platform = r.platformPackages();
             for (String pkg : r.installedPackages()) {
-                if (!s.hasEntry(pkg)) {
+                if (!s.hasEntry(pkg) && !platform.contains(pkg)) {
                     packages.add(pkg);
                 }
             }
