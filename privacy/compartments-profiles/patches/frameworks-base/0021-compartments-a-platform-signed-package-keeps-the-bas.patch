@@ -1,3 +1,4 @@
+From eb65956d679634c7d4f8302dc104d43b0eb29b08 Mon Sep 17 00:00:00 2001
 From: FreeholdOS Build <build@freeholdos.local>
 Date: Mon, 2 Nov 2026 19:04:10 +0100
 Subject: [PATCH] compartments: a platform-signed package keeps the baseline
