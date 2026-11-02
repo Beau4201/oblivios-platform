@@ -1,0 +1,352 @@
+From aade2045a2addcd4d3b7491399440014362e42d1 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Mon, 2 Nov 2026 16:10:49 +0100
+Subject: [PATCH] resolver: never cache or serve an answer for a name of the
+ exit mask list
+
+The answer cache of the resolver is kept per network and shared by every uid,
+and a cache hit sends no packet. The exit service of Compartments answers the
+DNS queries of an app of class Masked itself for the names of its mask list,
+but only when the query leaves the phone; a real answer that another uid had
+cached reached the masked app without the exit service seeing the query, and a
+fake answer of the exit service reached an app that is not masked (NET-014).
+
+resolv_cache_lookup now returns RESOLV_CACHE_SKIP and resolv_cache_add refuses
+for a query with a question name on the list. The list is the read-only file
+of the system image that the exit service reads, loaded once on the first query
+by the new ExitMaskList, which matches by the rules of the service: the row of
+the longest domain that the name is, or is below, decides, and a protected row
+(company 0) shields. A file that is missing or is not a list leaves the list
+empty, so the cache stays as it is.
+---
+ Android.bp       |   1 +
+ ExitMaskList.cpp | 170 +++++++++++++++++++++++++++++++++++++++++++++++
+ ExitMaskList.h   |  66 ++++++++++++++++++
+ res_cache.cpp    |  28 ++++++++
+ 4 files changed, 265 insertions(+)
+ create mode 100644 ExitMaskList.cpp
+ create mode 100644 ExitMaskList.h
+
+diff --git a/Android.bp b/Android.bp
+index 6ad4fa4..0a40e58 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -286,6 +286,7 @@ cc_library {
+         "DnsTlsSessionCache.cpp",
+         "DnsTlsSocket.cpp",
+         "Experiments.cpp",
++        "ExitMaskList.cpp",
+         "PrivateDnsConfiguration.cpp",
+         "ResolverController.cpp",
+         "ResolverEventReporter.cpp",
+diff --git a/ExitMaskList.cpp b/ExitMaskList.cpp
+new file mode 100644
+index 0000000..47c22e0
+--- /dev/null
++++ b/ExitMaskList.cpp
+@@ -0,0 +1,170 @@
++// SPDX-License-Identifier: Apache-2.0
++// See ExitMaskList.h. The format and the matching are those of `masklist.rs` of the exit daemon (freeholdos-services,
++// exit-daemon); `resolver/test/differential.py` of freeholdos-platform compares the two on the real list.
++
++#include "ExitMaskList.h"
++
++#include <algorithm>
++#include <cstdio>
++#include <utility>
++
++namespace android::net {
++
++namespace {
++
++constexpr std::string_view kHeader = "exit-mask-list\t1";
++constexpr size_t kMaxDomain = 253;
++constexpr size_t kMaxLabel = 63;
++constexpr size_t kDnsHeader = 12;
++
++bool isLabelChar(char c) {
++    return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
++}
++
++// Lower-case letters, digits and hyphens in labels of 1 to 63 bytes without a hyphen at either end, joined by dots.
++bool isValidDomain(std::string_view d) {
++    if (d.empty() || d.size() > kMaxDomain) return false;
++    size_t start = 0;
++    for (;;) {
++        const size_t dot = d.find('.', start);
++        const std::string_view label = d.substr(start, dot == std::string_view::npos ? dot : dot - start);
++        if (label.empty() || label.size() > kMaxLabel || label.front() == '-' || label.back() == '-') return false;
++        if (!std::all_of(label.begin(), label.end(), isLabelChar)) return false;
++        if (dot == std::string_view::npos) return true;
++        start = dot + 1;
++    }
++}
++
++// A company id: digits only, at most 65535.
++bool parseCompany(std::string_view s, uint16_t* out) {
++    if (s.empty()) return false;
++    uint32_t v = 0;
++    for (char c : s) {
++        if (c < '0' || c > '9') return false;
++        v = v * 10 + static_cast<uint32_t>(c - '0');
++        if (v > 65535) return false;
++    }
++    *out = static_cast<uint16_t>(v);
++    return true;
++}
++
++}  // namespace
++
++bool ExitMaskList::parse(std::string_view text, std::string* error) {
++    mDomains.clear();
++    mRows.clear();
++    auto fail = [&](const char* why) {
++        if (error) *error = why;
++        return false;
++    };
++
++    size_t pos = text.find('\n');
++    if (text.substr(0, pos) != kHeader) return fail("not a mask list (header)");
++    pos = pos == std::string_view::npos ? text.size() : pos + 1;
++
++    std::vector<std::pair<std::string_view, uint16_t>> rows;
++    while (pos < text.size()) {
++        size_t end = text.find('\n', pos);
++        if (end == std::string_view::npos) end = text.size();
++        const std::string_view line = text.substr(pos, end - pos);
++        pos = end + 1;
++        if (line.empty()) continue;
++
++        const size_t tab = line.find('\t');
++        if (tab == std::string_view::npos) return fail("a row without a company id");
++        const std::string_view domain = line.substr(0, tab);
++        std::string_view id = line.substr(tab + 1);
++        id = id.substr(0, id.find('\t'));  // the company name that follows is not read
++        uint16_t company;
++        if (!isValidDomain(domain)) return fail("a row with a domain that is not valid");
++        if (!parseCompany(id, &company)) return fail("a row with a company id that is not valid");
++        if (rows.size() >= kMaxRows) return fail("too many rows");
++        rows.emplace_back(domain, company);
++    }
++
++    std::sort(rows.begin(), rows.end());
++    for (size_t i = 1; i < rows.size(); ++i) {
++        if (rows[i].first == rows[i - 1].first) return fail("a domain twice");
++    }
++    for (const auto& [domain, company] : rows) {
++        mRows.push_back(Row{static_cast<uint32_t>(mDomains.size()), static_cast<uint16_t>(domain.size()), company});
++        mDomains.append(domain);
++    }
++    return true;
++}
++
++bool ExitMaskList::load(const char* path, std::string* error) {
++    mDomains.clear();
++    mRows.clear();
++    FILE* file = fopen(path, "rb");
++    if (file == nullptr) {
++        if (error) *error = "the file cannot be opened";
++        return false;
++    }
++    std::string text;
++    char buf[8192];
++    size_t n;
++    while (text.size() <= kMaxFile && (n = fread(buf, 1, sizeof(buf), file)) > 0) text.append(buf, n);
++    const bool failed = ferror(file) != 0;
++    fclose(file);
++    if (failed || text.size() > kMaxFile) {
++        if (error) *error = failed ? "the file cannot be read" : "the file is too long";
++        return false;
++    }
++    return parse(text, error);
++}
++
++const ExitMaskList::Row* ExitMaskList::find(std::string_view domain) const {
++    auto it = std::lower_bound(mRows.begin(), mRows.end(), domain,
++                               [this](const Row& row, std::string_view d) { return domainOf(row) < d; });
++    return it != mRows.end() && domainOf(*it) == domain ? &*it : nullptr;
++}
++
++bool ExitMaskList::masksName(std::string_view name) const {
++    if (!name.empty() && name.back() == '.') name.remove_suffix(1);
++    if (name.empty() || name.size() > kMaxDomain) return false;
++    char lower[kMaxDomain];
++    for (size_t i = 0; i < name.size(); ++i) {
++        const char c = name[i];
++        lower[i] = (c >= 'A' && c <= 'Z') ? static_cast<char>(c | 0x20) : c;
++    }
++    std::string_view rest(lower, name.size());
++    if (!isValidDomain(rest)) return false;
++    for (;;) {
++        if (const Row* row = find(rest)) return row->company != 0;
++        const size_t dot = rest.find('.');
++        if (dot == std::string_view::npos) return false;
++        rest.remove_prefix(dot + 1);
++    }
++}
++
++bool ExitMaskList::masksQuery(std::span<const uint8_t> query) const {
++    if (mRows.empty() || query.size() < kDnsHeader) return false;
++    size_t questions = (static_cast<size_t>(query[4]) << 8) | query[5];
++    size_t pos = kDnsHeader;
++    for (; questions > 0; --questions) {
++        // The QNAME of a query has no compression pointer: labels of up to 63 bytes, then a zero byte.
++        char name[kMaxDomain];
++        size_t length = 0;
++        bool tooLong = false;
++        for (;;) {
++            if (pos >= query.size()) return false;
++            const size_t label = query[pos++];
++            if (label == 0) break;
++            if (label >= 64 || pos + label > query.size()) return false;
++            if (length + label + (length > 0 ? 1 : 0) > kMaxDomain) {
++                tooLong = true;
++            } else {
++                if (length > 0) name[length++] = '.';
++                for (size_t i = 0; i < label; ++i) name[length++] = static_cast<char>(query[pos + i]);
++            }
++            pos += label;
++        }
++        pos += 4;  // QTYPE and QCLASS
++        if (pos > query.size()) return false;
++        if (!tooLong && masksName(std::string_view(name, length))) return true;
++    }
++    return false;
++}
++
++}  // namespace android::net
+diff --git a/ExitMaskList.h b/ExitMaskList.h
+new file mode 100644
+index 0000000..3f68719
+--- /dev/null
++++ b/ExitMaskList.h
+@@ -0,0 +1,66 @@
++// SPDX-License-Identifier: Apache-2.0
++// The mask list of the Compartments exit service (ADR-181, ADR-186) as the resolver needs it.
++//
++// The exit daemon answers the DNS queries of an app of class Masked itself for the names on its list, with a fake
++// address that leads into Tor. The answer cache of the resolver is shared by every uid of a network and a hit sends no
++// packet, so a real answer that another uid cached would reach the masked app without the daemon seeing the query, and
++// a fake answer would reach an app that is not masked (NET-014). The resolver therefore never serves or stores an answer
++// for a name of this list.
++//
++// The list file is the one that the daemon reads (`--mask-list`, `masklist.rs`); this class reads the same format and
++// matches by the same rules: a name is masked when the row of the longest domain that the name is, or is below, is not
++// protected (company id 0). A file that is missing or not a list leaves the list empty, as it leaves the daemon without
++// masking (the daemon does not start without it), so the cache then stays as it is.
++
++#pragma once
++
++#include <cstddef>
++#include <cstdint>
++#include <span>
++#include <string>
++#include <string_view>
++#include <vector>
++
++namespace android::net {
++
++class ExitMaskList {
++  public:
++    static constexpr const char* kPath = "/system/etc/freeholdos/exit-mask-list.tsv";
++    // The limits of the daemon's reader (`masklist.rs`): rows and bytes of the file.
++    static constexpr size_t kMaxRows = 8192;
++    static constexpr size_t kMaxFile = 4 * 1024 * 1024;
++
++    // Parses the text of a list file. On success the list holds its rows; on failure it is empty and `error` (when not
++    // null) says why. Every file that the daemon accepts is accepted; the name field of a row is not read.
++    bool parse(std::string_view text, std::string* error = nullptr);
++
++    // Reads and parses the file at `path`: at most kMaxFile bytes, never a partial file.
++    bool load(const char* path, std::string* error = nullptr);
++
++    // True when the daemon masks `name` (a dotted name, one trailing dot allowed, any case) for a masked app. The same
++    // answer as `MaskList::classify(name).is_some()` of the daemon.
++    bool masksName(std::string_view name) const;
++
++    // True when one of the questions of a DNS query packet is a masked name. A packet that is not a well-formed query is
++    // not masked: the cache does not take it either.
++    bool masksQuery(std::span<const uint8_t> query) const;
++
++    size_t size() const { return mRows.size(); }
++
++  private:
++    struct Row {
++        uint32_t offset;  // of the domain in mDomains
++        uint16_t length;
++        uint16_t company;  // 0: protected
++    };
++
++    std::string_view domainOf(const Row& row) const {
++        return std::string_view(mDomains).substr(row.offset, row.length);
++    }
++    const Row* find(std::string_view domain) const;
++
++    std::string mDomains;    // every domain, back to back
++    std::vector<Row> mRows;  // sorted by domain
++};
++
++}  // namespace android::net
+diff --git a/res_cache.cpp b/res_cache.cpp
+index 85a01eb..55c7cde 100644
+--- a/res_cache.cpp
++++ b/res_cache.cpp
+@@ -60,6 +60,7 @@
+ #include <server_configurable_flags/get_flags.h>
+ 
+ #include "DnsStats.h"
++#include "ExitMaskList.h"
+ #include "Experiments.h"
+ #include "res_comp.h"
+ #include "res_debug.h"
+@@ -1238,6 +1239,28 @@ static void _cache_remove_expired(Cache* cache) {
+ // Get a NetConfig associated with a network, or nullptr if not found.
+ static NetConfig* find_netconfig_locked(unsigned netid) REQUIRES(cache_mutex);
+ 
++namespace {
++
++// The names that the exit service of Compartments answers itself for an app of class Masked (NET-014). The cache is
++// shared by every uid of a network and a hit sends no packet, so a real answer that another uid cached would reach the
++// masked app without the exit service seeing the query, and a fake answer would reach an app that is not masked. No
++// answer for such a name is served from the cache or stored in it. The list is the file of the exit service, read once
++// on the first query; a file that is missing or is not a list leaves it empty, as the exit service then masks nothing
++// either (it does not start without the list), and the cache stays as it is.
++const android::net::ExitMaskList& exitMaskList() {
++    static const android::net::ExitMaskList list = [] {
++        android::net::ExitMaskList l;
++        std::string error;
++        if (!l.load(android::net::ExitMaskList::kPath, &error)) {
++            LOG(WARNING) << "exit mask list not used, the cache is unchanged: " << error;
++        }
++        return l;
++    }();
++    return list;
++}
++
++}  // namespace
++
+ ResolvCacheStatus resolv_cache_lookup(unsigned netid, span<const uint8_t> query,
+                                       span<uint8_t> answer, int* answerlen, uint32_t flags) {
+     // Skip cache lookup, return RESOLV_CACHE_NOTFOUND directly so that it is
+@@ -1249,6 +1272,8 @@ ResolvCacheStatus resolv_cache_lookup(unsigned netid, span<const uint8_t> query,
+     if (flags & (ANDROID_RESOLV_NO_CACHE_LOOKUP | ANDROID_RESOLV_NO_CACHE_STORE)) {
+         return flags & ANDROID_RESOLV_NO_CACHE_STORE ? RESOLV_CACHE_SKIP : RESOLV_CACHE_NOTFOUND;
+     }
++    // The names of the exit service neither come from the cache nor go into it (see exitMaskList).
++    if (exitMaskList().masksQuery(query)) return RESOLV_CACHE_SKIP;
+     Entry key;
+     Entry** lookup;
+     Entry* e;
+@@ -1351,6 +1376,9 @@ int resolv_cache_add(unsigned netid, span<const uint8_t> query, span<const uint8
+         return -EINVAL;
+     }
+ 
++    // Refused for the names of the exit service, also when a caller did not ask the cache first.
++    if (exitMaskList().masksQuery(query)) return -EPERM;
++
+     std::lock_guard guard(cache_mutex);
+ 
+     cache = find_named_cache_locked(netid);
+-- 
+2.56.0
+
