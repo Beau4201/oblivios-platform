@@ -310,6 +310,11 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
          * the caller adds last, or null when the app has no identity rows.
          */
         private CharSequence addIdentity(Context ctx, PreferenceScreen screen, CompartmentsAppPolicy policy, CharSequence label) {
+            // Signed with the platform key, the app is the system: the service applies no profile to it, so no row is offered.
+            if (ctx.getPackageManager().checkSignatures(pkg, "android") == PackageManager.SIGNATURE_MATCH) {
+                screen.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.system_app_summary)));
+                return null;
+            }
             List<ProfileRows.Row> rows;
             int identity;
             try {

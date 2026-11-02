@@ -225,7 +225,9 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
                 if (p != null) {
                     String address = getString(hintOf(r.choice));
                     String identity = null;
-                    if (v != null && v.configured != null) {
+                    if (index.platform.contains(r.pkg)) {
+                        identity = getString(R.string.identity_system);
+                    } else if (v != null && v.configured != null) {
                         if (!v.configured.contains(r.pkg)) {
                             identity = getString(ProfileText.profileName(v.defaults.profile));
                         } else {

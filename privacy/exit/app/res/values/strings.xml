@@ -77,6 +77,8 @@
     <string name="identity_defaults_profile">Default for new apps</string>
     <string name="identity_error">Could not change this setting</string>
     <string name="identity_custom">Custom</string>
+    <string name="identity_system">System</string>
+    <string name="system_app_summary">This app is part of the system. Compartments does not change what it receives.</string>
     <string name="details_title">Details</string>
     <string name="address_title">Network address</string>
     <string name="place_not_available">Not available</string>

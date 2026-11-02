@@ -11,15 +11,18 @@ import android.os.Handler;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The launchable apps of this user with label and icon, read off the main thread and handed to a page when they are there.
  * The pages of Compartments list apps by these names; nothing here is stored.
  */
 final class AppIndex {
-    static final AppIndex EMPTY = new AppIndex(Collections.<Presenter.Listed>emptyList(), Collections.<String, Drawable>emptyMap());
+    static final AppIndex EMPTY = new AppIndex(Collections.<Presenter.Listed>emptyList(), Collections.<String, Drawable>emptyMap(),
+            Collections.<String>emptySet());
 
     interface Callback {
         void onLoaded(AppIndex index);
@@ -27,10 +30,13 @@ final class AppIndex {
 
     final List<Presenter.Listed> listed;
     final Map<String, Drawable> icons;
+    /** The listed packages signed with the platform key: part of the system, to which Compartments applies no profile. */
+    final Set<String> platform;
 
-    private AppIndex(List<Presenter.Listed> listed, Map<String, Drawable> icons) {
+    private AppIndex(List<Presenter.Listed> listed, Map<String, Drawable> icons, Set<String> platform) {
         this.listed = listed;
         this.icons = icons;
+        this.platform = platform;
     }
 
     /** The label of a package, or the package name when the app is not listed. */
@@ -59,15 +65,19 @@ final class AppIndex {
         new Thread(() -> {
             List<Presenter.Listed> out = new ArrayList<>();
             Map<String, Drawable> ic = new HashMap<>();
+            Set<String> platform = new HashSet<>();
             Intent launcher = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
             for (ResolveInfo ri : pm.queryIntentActivities(launcher, 0)) {
                 String pkg = ri.activityInfo.packageName;
                 if (!ic.containsKey(pkg)) {
                     out.add(new Presenter.Listed(pkg, String.valueOf(ri.loadLabel(pm)), ri.activityInfo.applicationInfo.uid));
                     ic.put(pkg, ri.loadIcon(pm));
+                    if (pm.checkSignatures(pkg, "android") == PackageManager.SIGNATURE_MATCH) {
+                        platform.add(pkg);
+                    }
                 }
             }
-            main.post(() -> cb.onLoaded(new AppIndex(out, ic)));
+            main.post(() -> cb.onLoaded(new AppIndex(out, ic, platform)));
         }, "exit-apps").start();
     }
 }
