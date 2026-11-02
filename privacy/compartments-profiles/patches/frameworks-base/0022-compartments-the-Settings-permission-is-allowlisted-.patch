@@ -1,0 +1,44 @@
+From 80a487f2350acda644b7ec61c827b0b6766ffdca Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Mon, 2 Nov 2026 21:50:15 +0100
+Subject: [PATCH] compartments: the Settings permission is allowlisted in the
+ system_ext file
+
+com.android.settings lives in /system_ext/priv-app, so its privapp
+allowlist is the system_ext one built from data/etc/com.android.settings.xml.
+frameworks-base/0003 put the READ_COMPARTMENT_PROFILE entry in
+privapp-permissions-platform.xml (the /system file), where the package
+is not checked, and every boot showed "Permission allowlist violation"
+(ro.control_privapp_permissions=enforce). The entry moves to the file
+that applies.
+---
+ data/etc/com.android.settings.xml         | 1 +
+ data/etc/privapp-permissions-platform.xml | 1 -
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/data/etc/com.android.settings.xml b/data/etc/com.android.settings.xml
+index 2456d02ac8eb..c5517d403de4 100644
+--- a/data/etc/com.android.settings.xml
++++ b/data/etc/com.android.settings.xml
+@@ -72,5 +72,6 @@
+         <permission name="android.permission.SET_BIOMETRIC_DIALOG_ADVANCED" />
+         <permission name="android.permission.MANAGE_SAFETY_CENTER" />
+         <permission name="android.permission.CONTROL_SIM_AUTO_PIN_MANAGEMENT"/>
++        <permission name="org.freeholdos.permission.READ_COMPARTMENT_PROFILE"/>
+     </privapp-permissions>
+ </permissions>
+diff --git a/data/etc/privapp-permissions-platform.xml b/data/etc/privapp-permissions-platform.xml
+index 635e86a71120..593c84d2dc00 100644
+--- a/data/etc/privapp-permissions-platform.xml
++++ b/data/etc/privapp-permissions-platform.xml
+@@ -777,7 +777,6 @@ applications that come with the platform
+         <permission name="android.permission.SEND_SAFETY_CENTER_UPDATE" />
+         <permission name="android.permission.READ_SYSTEM_GRAMMATICAL_GENDER"/>
+         <permission name="android.permission.CONTROL_SIM_AUTO_PIN_MANAGEMENT"/>
+-        <permission name="org.freeholdos.permission.READ_COMPARTMENT_PROFILE"/>
+     </privapp-permissions>
+ 
+     <privapp-permissions package="com.android.bips">
+-- 
+2.39.5
+
