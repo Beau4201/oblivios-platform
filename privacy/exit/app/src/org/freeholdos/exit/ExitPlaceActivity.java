@@ -127,8 +127,9 @@ public final class ExitPlaceActivity extends CollapsingToolbarBaseActivity {
             screen.removeAll();
             int current = l.current;
             CompartmentsPlace[] found = l.found;
-            // No data and no way to read the choice: the page says so and offers nothing it could not store.
-            if (current < 0 || (found.length == 0 && l.query.isEmpty())) {
+            // No way to read the choice: the page says so and offers nothing it could not store. An empty search is not "no data":
+            // the service lists places only for a typed name, and the page of an app opens this page only when the image has them.
+            if (current < 0) {
                 screen.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.place_none)));
                 return;
             }
@@ -139,6 +140,9 @@ public final class ExitPlaceActivity extends CollapsingToolbarBaseActivity {
             }
             for (CompartmentsPlace p : found) {
                 screen.addPreference(radio(ctx, p.name, p.country, p.id == current, p.id));
+            }
+            if (l.query.isEmpty()) {
+                screen.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.place_search_prompt)));
             }
             FooterPreference footer = new FooterPreference(ctx);
             footer.setSummary(R.string.identity_time_zone_note);

@@ -115,6 +115,7 @@
     <string name="place_summary_automatic">Automatic · %1$s</string>
     <string name="place_search_hint">Search for a place</string>
     <string name="place_none">No place data on this phone</string>
+    <string name="place_search_prompt">To choose another place, search for its name with the magnifier at the top.</string>
     <string name="place_error">Could not set the place</string>
     <string name="identity_time_zone_note">The app is stopped when you change its place, and starts again with the new one.</string>
     <string name="persona_disagree">This app is not on Tor, so its address still shows your country while its place is in another.</string>
