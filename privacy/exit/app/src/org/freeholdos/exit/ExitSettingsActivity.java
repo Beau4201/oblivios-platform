@@ -73,6 +73,17 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
         /** The row of the default for new apps; null when the page has no identity group. */
         private Preference defaultPref;
         private ProfileClient profiles;
+        /** The defaults of the service as the last read reported them (X1, G8); null until the first read ends. */
+        private Defaults loaded;
+        private final ProfileClient.Reader<Defaults> reader = new ProfileClient.Reader<>(this::read, v -> {
+            loaded = v;
+            render();
+        });
+
+        private static final class Defaults {
+            /** Null when the service cannot say. */
+            CompartmentsAppPolicy policy;
+        }
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -92,6 +103,7 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
         public void onStart() {
             super.onStart();
             rt.setListener(this);
+            reader.run();  // the default for new apps may have changed on the page that was open
             render();
         }
 
@@ -104,6 +116,13 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
         @Override
         public void onChanged(ExitRuntime.Snapshot s) {
             main.post(this::render);
+        }
+
+        /** Runs on the worker thread. */
+        private Defaults read() {
+            Defaults d = new Defaults();
+            d.policy = profiles.available() ? profiles.getDefaults() : null;
+            return d;
         }
 
         private void render() {
@@ -120,6 +139,9 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
                     built = "owner";
                 }
                 return;
+            }
+            if (loaded == null) {
+                return;  // the first read of the service ends soon and renders again
             }
             String shape = shapeOf(s);
             if (!shape.equals(built)) {
@@ -140,7 +162,7 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
             for (Status.Promoted q : s.status.promotions) {
                 k.append('|').append(q.uid).append(':').append(q.company);
             }
-            k.append('|').append(index.listed.size()).append('|').append(profiles.available());
+            k.append('|').append(index.listed.size()).append('|').append(loaded.policy != null);
             return k.toString();
         }
 
@@ -180,7 +202,7 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
          * has no identity words: only the network address, with the list of apps in its group, and the address-only footer.
          */
         private void buildMain(Context ctx, PreferenceScreen screen, ExitRuntime.Snapshot s) {
-            CompartmentsAppPolicy defaults = profiles.available() ? profiles.getDefaults() : null;
+            CompartmentsAppPolicy defaults = loaded.policy;
             boolean identity = defaults != null;
             if (identity) {
                 TopIntroPreference intro = new TopIntroPreference(ctx);
@@ -280,7 +302,7 @@ public final class ExitSettingsActivity extends CollapsingToolbarBaseActivity {
                 }
             }
             if (defaultPref != null) {
-                CompartmentsAppPolicy d = profiles.getDefaults();
+                CompartmentsAppPolicy d = loaded.policy;
                 defaultPref.setSummary(d == null ? null : getString(ProfileText.profileName(d.profile)));
             }
             if (defaultPref == null && appsPref != null) {

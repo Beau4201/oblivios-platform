@@ -61,6 +61,15 @@ public final class ExitIdentityActivity extends CollapsingToolbarBaseActivity {
         /** Null for the default for new apps. */
         private String pkg;
         private ApplicationInfo info;
+        private final ProfileClient.Reader<Loaded> reader = new ProfileClient.Reader<>(this::read, this::render);
+
+        /** What the service reports, read off the main thread (X1, G8). */
+        private static final class Loaded {
+            boolean available;
+            CompartmentsAppPolicy defaults;
+            CompartmentsAppPolicy app;
+            boolean configured;
+        }
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -75,9 +84,8 @@ public final class ExitIdentityActivity extends CollapsingToolbarBaseActivity {
                 }
             }
             setPreferenceScreen(getPreferenceManager().createPreferenceScreen(ctx));
-            // Nothing to set: no service, a package that is not installed, an exempt package or a system uid.
-            if (!profiles.available() || (pkg != null && (info == null || Policy.EXEMPT_PACKAGES.contains(pkg)
-                    || !UidRanges.isAppUid(info.uid)))) {
+            // Nothing to set: a package that is not installed, an exempt package or a system uid (no service: see render).
+            if (pkg != null && (info == null || Policy.EXEMPT_PACKAGES.contains(pkg) || !UidRanges.isAppUid(info.uid))) {
                 requireActivity().finish();
             }
         }
@@ -85,18 +93,36 @@ public final class ExitIdentityActivity extends CollapsingToolbarBaseActivity {
         @Override
         public void onStart() {
             super.onStart();
-            render();
+            reader.run();
         }
 
-        private void render() {
+        /** Runs on the worker thread. */
+        private Loaded read() {
+            Loaded l = new Loaded();
+            l.available = profiles.available();
+            if (!l.available) {
+                return l;
+            }
+            l.defaults = profiles.getDefaults();
+            l.app = pkg == null ? null : profiles.getApp(pkg);
+            String[] configured = pkg == null ? null : profiles.getConfigured();
+            l.configured = configured != null && Arrays.asList(configured).contains(pkg);
+            return l;
+        }
+
+        private void render(Loaded l) {
             Context ctx = getContext();
-            if (ctx == null || !profiles.available()) {
+            if (ctx == null) {
+                return;
+            }
+            if (!l.available) {
+                requireActivity().finish();  // no service: nothing to set
                 return;
             }
             PreferenceScreen screen = getPreferenceScreen();
             screen.removeAll();
-            CompartmentsAppPolicy defaults = profiles.getDefaults();
-            CompartmentsAppPolicy app = pkg == null ? null : profiles.getApp(pkg);
+            CompartmentsAppPolicy defaults = l.defaults;
+            CompartmentsAppPolicy app = l.app;
             if (defaults == null || (pkg != null && app == null)) {
                 screen.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.identity_error)));
                 return;
@@ -112,8 +138,7 @@ public final class ExitIdentityActivity extends CollapsingToolbarBaseActivity {
                 Preference header = ExitSettingsActivity.note(ctx, pm.getApplicationLabel(info), null);
                 header.setIcon(pm.getApplicationIcon(info));
                 screen.addPreference(header);
-                String[] configured = profiles.getConfigured();
-                selected = ProfileRows.selectedChoice(configured != null && Arrays.asList(configured).contains(pkg), app.profile);
+                selected = ProfileRows.selectedChoice(l.configured, app.profile);
                 choices = ProfileRows.profileChoices(false);
                 screen.addPreference(radio(ctx, ProfileRows.CHOICE_FOLLOW_DEFAULT, selected, R.string.identity_follow_default,
                         getString(R.string.identity_follow_default_summary, getString(ProfileText.profileName(defaults.profile)))));
@@ -139,19 +164,21 @@ public final class ExitIdentityActivity extends CollapsingToolbarBaseActivity {
 
         /** A refused or failed change says so and changes nothing; the page is built again from the service either way. */
         private void choose(int value) {
-            boolean ok;
-            if (pkg == null) {
-                ok = profiles.setDefaultProfile(value);
-            } else if (value == ProfileRows.CHOICE_FOLLOW_DEFAULT) {
-                ok = profiles.clearApp(pkg);
-            } else {
-                ok = profiles.setProfile(pkg, value);
-            }
-            if (!ok) {
-                String why = profiles.refusal();
-                Toast.makeText(requireContext(), why != null ? why : getString(R.string.identity_error), Toast.LENGTH_LONG).show();
-            }
-            render();
+            ProfileClient.write(() -> {
+                if (pkg == null) {
+                    return profiles.setDefaultProfile(value);
+                }
+                return value == ProfileRows.CHOICE_FOLLOW_DEFAULT ? profiles.clearApp(pkg) : profiles.setProfile(pkg, value);
+            }, ok -> {
+                if (getContext() == null) {
+                    return;
+                }
+                if (!ok) {
+                    String why = profiles.refusal();
+                    Toast.makeText(requireContext(), why != null ? why : getString(R.string.identity_error), Toast.LENGTH_LONG).show();
+                }
+                reader.run();
+            });
         }
     }
 }

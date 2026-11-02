@@ -18,6 +18,7 @@ import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 import com.android.settingslib.preference.PreferenceFragment;
 import com.android.settingslib.widget.FooterPreference;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -78,6 +79,22 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
         private String built = "";
         private final Map<String, Preference> rows = new HashMap<>();
         private ProfileClient profiles;
+        /** The identities as the service reported them, read off the main thread (X1, G8); null until the first read ends. */
+        private Identities identities;
+        /** The rows that are shown, for the summaries. */
+        private List<Presenter.AppRow> listed = new ArrayList<>();
+        private final ProfileClient.Reader<Identities> reader = new ProfileClient.Reader<>(this::read, v -> {
+            identities = v;
+            summaries();
+        });
+
+        private static final class Identities {
+            /** Null when the service cannot say. */
+            Set<String> configured;
+            CompartmentsAppPolicy defaults;
+            /** The identity of each configured app (a ProfileRows.IDENTITY_*), -1 when the service cannot say. */
+            final Map<String, Integer> own = new HashMap<>();
+        }
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -158,40 +175,68 @@ public final class ExitAppsActivity extends CollapsingToolbarBaseActivity {
                 screen.addPreference(footer);
                 built = shape.toString();
             }
-            // The identity of an app (ADR-209): its own when the user set it (Custom when a detail differs), else the default for
-            // new apps; one call per configured app and one for the defaults, however long the list is.
-            Set<String> configured = null;
-            CompartmentsAppPolicy defaults = null;
-            if (profiles.available()) {
-                String[] set = profiles.getConfigured();
-                defaults = profiles.getDefaults();
-                if (set != null && defaults != null) {
-                    configured = new HashSet<>(Arrays.asList(set));
-                }
+            listed = list;
+            summaries();
+            reader.run();
+        }
+
+        /**
+         * The identity of an app (ADR-209): its own when the user set it (Custom when a detail differs), else the default for
+         * new apps; one call per configured app and one for the defaults, however long the list is. Runs on the worker thread.
+         */
+        private Identities read() {
+            Identities v = new Identities();
+            if (!profiles.available()) {
+                return v;
             }
-            for (Presenter.AppRow r : list) {
-                Preference p = rows.get(r.pkg);
-                if (p != null) {
-                    String address = getString(hintOf(r.choice));
-                    String identity = configured == null ? null
-                            : configured.contains(r.pkg) ? ownIdentity(r.pkg) : getString(ProfileText.profileName(defaults.profile));
-                    p.setSummary(identity == null ? address
-                            : r.choice == Choices.Choice.DIRECT ? identity : identity + " · " + address);
-                }
+            String[] set = profiles.getConfigured();
+            v.defaults = profiles.getDefaults();
+            if (set == null || v.defaults == null) {
+                return v;
+            }
+            v.configured = new HashSet<>(Arrays.asList(set));
+            for (String pkg : set) {
+                v.own.put(pkg, ownIdentity(pkg));
+            }
+            return v;
+        }
+
+        /** The identity the user set for an app, or -1 when the service cannot say. */
+        private int ownIdentity(String pkg) {
+            CompartmentsAppPolicy a = profiles.getApp(pkg);
+            if (a == null) {
+                return -1;
+            }
+            try {
+                return ProfileRows.identityOf(a.profile, a.sensors, a.loopback, a.settings, a.location);
+            } catch (IllegalArgumentException e) {
+                return -1;
             }
         }
 
-        /** The identity the user set for an app, or null when the service cannot say. */
-        private String ownIdentity(String pkg) {
-            CompartmentsAppPolicy a = profiles.getApp(pkg);
-            if (a == null) {
-                return null;
+        /** Sets the summary of every shown row from what was read last; the address only until the first read ends. */
+        private void summaries() {
+            if (getContext() == null) {
+                return;
             }
-            try {
-                int identity = ProfileRows.identityOf(a.profile, a.sensors, a.loopback, a.settings, a.location);
-                return getString(identity == ProfileRows.IDENTITY_CUSTOM ? R.string.identity_custom : ProfileText.profileName(identity));
-            } catch (IllegalArgumentException e) {
-                return null;
+            Identities v = identities;
+            for (Presenter.AppRow r : listed) {
+                Preference p = rows.get(r.pkg);
+                if (p != null) {
+                    String address = getString(hintOf(r.choice));
+                    String identity = null;
+                    if (v != null && v.configured != null) {
+                        if (!v.configured.contains(r.pkg)) {
+                            identity = getString(ProfileText.profileName(v.defaults.profile));
+                        } else {
+                            int own = v.own.get(r.pkg);
+                            identity = own < 0 ? null
+                                    : getString(own == ProfileRows.IDENTITY_CUSTOM ? R.string.identity_custom : ProfileText.profileName(own));
+                        }
+                    }
+                    p.setSummary(identity == null ? address
+                            : r.choice == Choices.Choice.DIRECT ? identity : identity + " · " + address);
+                }
             }
         }
 

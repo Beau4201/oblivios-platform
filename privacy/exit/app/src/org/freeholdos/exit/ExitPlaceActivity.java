@@ -66,7 +66,18 @@ public final class ExitPlaceActivity extends CollapsingToolbarBaseActivity {
     public static final class PlaceFragment extends PreferenceFragment {
         private ProfileClient profiles;
         private String pkg;
-        private String query = "";
+        /** Read on the worker thread, so it is volatile; the reader takes the latest value when it runs again. */
+        private volatile String query = "";
+        private final ProfileClient.Reader<Loaded> reader = new ProfileClient.Reader<>(this::read, this::render);
+
+        /** What the service reports, read off the main thread (X1, G8). */
+        private static final class Loaded {
+            String query;
+            int current = -1;
+            CompartmentsPlace[] found = new CompartmentsPlace[0];
+            /** The place that is set when the search no longer finds it, else null. */
+            CompartmentsPlace set;
+        }
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -78,43 +89,53 @@ public final class ExitPlaceActivity extends CollapsingToolbarBaseActivity {
         @Override
         public void onStart() {
             super.onStart();
-            render();
+            reader.run();
         }
 
         void setQuery(String q) {
             String next = q == null ? "" : q.trim();
             if (!next.equals(query)) {
                 query = next;
-                render();
+                reader.run();
             }
         }
 
-        private void render() {
+        /** Runs on the worker thread. */
+        private Loaded read() {
+            Loaded l = new Loaded();
+            l.query = query;
+            l.current = pkg == null || !profiles.available() ? -1 : profiles.getPlaceId(pkg);
+            if (l.current < 0) {
+                return l;
+            }
+            l.found = profiles.searchPlaces(l.query, MAX_RESULTS);
+            boolean listed = l.current == 0;
+            for (CompartmentsPlace p : l.found) {
+                listed |= p.id == l.current;
+            }
+            // The place that is set is always listed, even when the search no longer finds it.
+            l.set = listed ? null : profiles.getPlace(l.current);
+            return l;
+        }
+
+        private void render(Loaded l) {
             Context ctx = getContext();
             if (ctx == null || profiles == null) {
                 return;
             }
             PreferenceScreen screen = getPreferenceScreen();
             screen.removeAll();
-            int current = pkg == null || !profiles.available() ? -1 : profiles.getPlaceId(pkg);
-            CompartmentsPlace[] found = current < 0 ? new CompartmentsPlace[0] : profiles.searchPlaces(query, MAX_RESULTS);
+            int current = l.current;
+            CompartmentsPlace[] found = l.found;
             // No data and no way to read the choice: the page says so and offers nothing it could not store.
-            if (current < 0 || (found.length == 0 && query.isEmpty())) {
+            if (current < 0 || (found.length == 0 && l.query.isEmpty())) {
                 screen.addPreference(ExitSettingsActivity.note(ctx, null, getString(R.string.place_none)));
                 return;
             }
             screen.addPreference(radio(ctx, getString(R.string.place_automatic), getString(R.string.place_automatic_summary),
                     current == 0, 0));
-            // The place that is set is always listed, even when the search no longer finds it.
-            boolean listed = current == 0;
-            for (CompartmentsPlace p : found) {
-                listed |= p.id == current;
-            }
-            if (!listed) {
-                CompartmentsPlace set = profiles.getPlace(current);
-                if (set != null) {
-                    screen.addPreference(radio(ctx, set.name, set.country, true, set.id));
-                }
+            if (l.set != null) {
+                screen.addPreference(radio(ctx, l.set.name, l.set.country, true, l.set.id));
             }
             for (CompartmentsPlace p : found) {
                 screen.addPreference(radio(ctx, p.name, p.country, p.id == current, p.id));
@@ -136,12 +157,15 @@ public final class ExitPlaceActivity extends CollapsingToolbarBaseActivity {
             radio.setTitle(title);
             radio.setSummary(summary);
             radio.setChecked(checked);
-            radio.setOnClickListener(p -> {
-                if (!profiles.setPlace(pkg, id)) {
+            radio.setOnClickListener(p -> ProfileClient.write(() -> profiles.setPlace(pkg, id), ok -> {
+                if (getContext() == null) {
+                    return;
+                }
+                if (!ok) {
                     Toast.makeText(requireContext(), refusalOr(R.string.place_error), Toast.LENGTH_LONG).show();
                 }
-                render();
-            });
+                reader.run();
+            }));
             return radio;
         }
     }

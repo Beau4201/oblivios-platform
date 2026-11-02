@@ -76,6 +76,19 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         private int placeId = -1;
         /** The place the persona has now (also an Automatic one), 0 when none can be made, -1 when the location is not substituted. */
         private int personaPlaceId = -1;
+        /** The place of {@link #placeId} and the place of {@link #personaPlaceId}, read with them; null when there is none. */
+        private CompartmentsPlace place;
+        private CompartmentsPlace personaPlace;
+        private final ProfileClient.Reader<Loaded> reader = new ProfileClient.Reader<>(this::read, this::show);
+
+        /** What the service reports about this app, read off the main thread (X1, G8). */
+        private static final class Loaded {
+            CompartmentsAppPolicy policy;
+            int placeId = -1;
+            int personaPlaceId = -1;
+            CompartmentsPlace place;
+            CompartmentsPlace personaPlace;
+        }
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -129,7 +142,44 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 }
                 return;
             }
-            boolean fixed = Policy.EXEMPT_PACKAGES.contains(pkg) || !UidRanges.isAppUid(info.uid);
+            if (isFixed()) {
+                show(new Loaded());
+            } else {
+                reader.run();
+            }
+        }
+
+        private boolean isFixed() {
+            return Policy.EXEMPT_PACKAGES.contains(pkg) || !UidRanges.isAppUid(info.uid);
+        }
+
+        /** Runs on the worker thread: every call to the service that the page needs, in one pass. */
+        private Loaded read() {
+            Loaded l = new Loaded();
+            if (!profiles.available()) {
+                return l;
+            }
+            l.policy = profiles.getApp(pkg);
+            if (l.policy != null && l.policy.location == ProfileRows.VALUE_SUBSTITUTE) {
+                l.placeId = profiles.getPlaceId(pkg);
+                l.personaPlaceId = profiles.getPersonaPlaceId(pkg);
+                l.place = l.placeId > 0 ? profiles.getPlace(l.placeId) : null;
+                l.personaPlace = l.personaPlaceId > 0 ? profiles.getPlace(l.personaPlaceId) : null;
+            }
+            return l;
+        }
+
+        private void show(Loaded l) {
+            Context ctx = getContext();
+            if (ctx == null || rt == null || info == null) {
+                return;
+            }
+            ExitRuntime.Snapshot s = rt.snapshot();
+            PreferenceScreen screen = getPreferenceScreen();
+            if (!rt.runsHere() || s == null) {
+                return;  // render() puts up the owner note
+            }
+            boolean fixed = isFixed();
             List<Presenter.OverrideRow> shown = new ArrayList<>();
             for (Presenter.OverrideRow r : Presenter.overrideRows(s.choices, names)) {
                 if (r.pkg.equals(pkg)) {
@@ -142,7 +192,7 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                     promoted.add(q);
                 }
             }
-            CompartmentsAppPolicy policy = fixed || !profiles.available() ? null : profiles.getApp(pkg);
+            CompartmentsAppPolicy policy = fixed ? null : l.policy;
             StringBuilder shape = new StringBuilder().append(fixed);
             for (Presenter.OverrideRow r : shown) {
                 shape.append('|').append(r.company);
@@ -152,8 +202,10 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
             }
             if (policy != null) {
                 // a change of the profile or of a value builds the rows again: which rows exist and what they show follow it
-                placeId = policy.location == ProfileRows.VALUE_SUBSTITUTE ? profiles.getPlaceId(pkg) : -1;
-                personaPlaceId = policy.location == ProfileRows.VALUE_SUBSTITUTE ? profiles.getPersonaPlaceId(pkg) : -1;
+                placeId = l.placeId;
+                personaPlaceId = l.personaPlaceId;
+                place = l.place;
+                personaPlace = l.personaPlace;
                 shape.append("|i").append(policy.profile).append(policy.sensors).append(policy.loopback).append(policy.settings)
                         .append(policy.location).append('p').append(placeId).append('q').append(personaPlaceId)
                         .append(s.choices.choiceOf(pkg));
@@ -285,7 +337,8 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
                 ListPreference pref = ProfileText.choice(ctx, "app_class_" + cls, ProfileText.classTitle(cls), r.values,
                         v -> ProfileText.valueName(cls, v), r.current);
                 pref.setOnPreferenceChangeListener((p, v) -> {
-                    changed(profiles.setClassValue(pkg, cls, Integer.parseInt((String) v)));
+                    int value = Integer.parseInt((String) v);
+                    ProfileClient.write(() -> profiles.setClassValue(pkg, cls, value), this::changed);
                     return false;
                 });
                 details.addPreference(pref);
@@ -321,7 +374,6 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
             Preference row = new Preference(ctx);
             row.setPersistent(false);
             row.setTitle(R.string.place_title);
-            CompartmentsPlace place = placeId > 0 ? profiles.getPlace(placeId) : null;
             if (placeId == 0) {
                 row.setSummary(getString(R.string.place_summary_automatic, AndroidPlatform.ownCountry(ctx)));
             } else if (place != null) {
@@ -339,17 +391,19 @@ public final class ExitAppActivity extends CollapsingToolbarBaseActivity {
         /** What the place of this app asks of its exit; a place in the country the phone is in asks nothing. */
         private Presenter.Exit personaExit(Context ctx) {
             // the place the persona has now, also an Automatic one that was kept from before a trip (X5)
-            int effective = profiles.getPersonaPlaceId(pkg);
-            CompartmentsPlace place = effective > 0 ? profiles.getPlace(effective) : null;
+            CompartmentsPlace persona = personaPlace;
             ExitRuntime.Snapshot s = rt.snapshot();
-            if (place == null || place.country == null || s == null) {
+            if (persona == null || persona.country == null || s == null) {
                 return Presenter.Exit.NONE;
             }
-            return Presenter.exitFor(place.country.toUpperCase(Locale.ROOT), AndroidPlatform.ownCountry(ctx), s.choices.choiceOf(pkg));
+            return Presenter.exitFor(persona.country.toUpperCase(Locale.ROOT), AndroidPlatform.ownCountry(ctx), s.choices.choiceOf(pkg));
         }
 
         /** A refused or failed change says so and changes nothing; the page is built again from the service either way. */
         private void changed(boolean ok) {
+            if (getContext() == null) {
+                return;
+            }
             if (!ok) {
                 String why = profiles.refusal();  // the reason of the service, when it gave one (X2)
                 Toast.makeText(requireContext(), why != null ? why : getString(R.string.identity_error), Toast.LENGTH_LONG).show();
