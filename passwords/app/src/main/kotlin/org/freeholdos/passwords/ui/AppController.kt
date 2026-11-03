@@ -269,10 +269,12 @@ class AppController(val activity: SecureActivity) {
     fun confirmThen(then: () -> Unit) = confirmUser { ok -> if (ok) then() }
 
     /**
-     * A fresh strong biometric, or the passphrase when biometrics are off. [messageRes] is what the passphrase prompt says;
+     * A fresh strong biometric, or the passphrase when biometrics are off, unless the user unlocked or confirmed less than a
+     * minute ago (ADR-215, like sudo's timestamp: fixed from the last authentication, not renewed by use). [messageRes] is what the passphrase prompt says;
      * the default is about a password, the actions that take everything out or remove something say [R.string.pm_confirm_action].
      */
     private fun confirmUser(messageRes: Int = R.string.pm_confirm_reveal, done: (Boolean) -> Unit) {
+        if (session.confirmedRecently()) return done(true)
         if (hasBiometrics()) {
             session.confirmWithBiometrics(activity, done)
         } else {

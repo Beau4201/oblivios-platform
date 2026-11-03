@@ -67,7 +67,61 @@ fun main() {
     anUnlockInTheForegroundDropsAStaleTimer()
     passphraseFailuresStartOverAfterASuccess()
     forgettingStartsOver()
+    theConfirmationGraceIsAMinuteFromTheLastAuthentication()
+    everyLockEndsTheConfirmationGrace()
     Check.done("LockPolicyTest")
+}
+
+private fun theConfirmationGraceIsAMinuteFromTheLastAuthentication() {
+    val w = World()
+    Check.that("a fresh process has no grace", !w.policy.confirmedRecently())
+    w.unlockWithPassphrase()
+    Check.that("an unlock starts the grace", w.policy.confirmedRecently())
+    w.clock.advance(MINUTE - 1)
+    Check.that("59.999 s later it still holds", w.policy.confirmedRecently())
+    w.clock.advance(1)
+    Check.that("at 60 s it is over", !w.policy.confirmedRecently())
+    w.policy.onAuthenticated()
+    Check.that("a confirmation starts it again", w.policy.confirmedRecently())
+    w.clock.advance(30_000)
+    Check.that("asking inside the window does not renew it", w.policy.confirmedRecently())
+    w.clock.advance(30_000)
+    Check.that("so it ends a minute after the confirmation", !w.policy.confirmedRecently())
+    w.policy.onUnlocked(viaPassphrase = false)
+    Check.that("a fingerprint unlock starts it too", w.policy.confirmedRecently())
+}
+
+private fun everyLockEndsTheConfirmationGrace() {
+    val w = World()
+    w.unlockWithPassphrase()
+    w.policy.onDeviceLocked()
+    Check.that("a device lock ends the grace", !w.policy.confirmedRecently())
+
+    // A confirmation half a minute before the lock, so the window would still be open if the lock did not end it.
+    w.unlockWithPassphrase()
+    w.policy.onBackgrounded()
+    w.clock.advance(30_000)
+    w.policy.onAuthenticated()
+    w.clock.advance(30_000)
+    w.policy.onTick()
+    Check.that("the background lock by tick ends it", !w.policy.confirmedRecently())
+
+    w.unlockWithPassphrase()
+    w.policy.onBackgrounded()
+    w.clock.advance(30_000)
+    w.policy.onAuthenticated()
+    w.clock.advance(30_000)
+    w.policy.onForegrounded()
+    Check.that("the background lock on return ends it", !w.policy.confirmedRecently())
+
+    w.unlockWithPassphrase()
+    w.policy.onBackgrounded()
+    w.clock.advance(MINUTE - 1)
+    w.policy.onForegrounded()
+    Check.that("a return before the minute leaves it alone", w.policy.confirmedRecently())
+
+    w.policy.forget()
+    Check.that("forgetting the vault ends it", !w.policy.confirmedRecently())
 }
 
 private fun startStateNeedsThePassphraseAfterARestart() {

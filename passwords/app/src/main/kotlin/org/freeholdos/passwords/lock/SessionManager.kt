@@ -221,6 +221,7 @@ class SessionManager(
         return when (r.code) {
             Code.OK -> {
                 VaultCore.lock(r.handle)
+                policy.onAuthenticated()
                 PassphraseOutcome.Opened
             }
             Code.BAD_CREDENTIALS -> {
@@ -237,10 +238,16 @@ class SessionManager(
         fun finish(ok: Boolean) { if (finished.compareAndSet(false, true)) done(ok) }
         val p = prompt(activity, false) { finish(false) }
         p.authenticate(CancellationSignal(), activity.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = finish(true)
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                policy.onAuthenticated()
+                finish(true)
+            }
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) = finish(false)
         })
     }
+
+    /** An unlock or a confirmation less than a minute ago (ADR-215): the confirmation asks nothing. Never true on a locked vault. */
+    fun confirmedRecently(): Boolean = state is LockState.Unlocked && policy.confirmedRecently()
 
     /**
      * Deletes a vault that cannot be opened (its hardware secret is gone) so that a new one can be made. Only on the

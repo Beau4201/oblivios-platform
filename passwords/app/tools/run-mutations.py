@@ -104,6 +104,20 @@ MUTATIONS = [
     ("tick: fires again and again", P, "        if (!backgroundDue()) return null\n        backgroundedAtMs = -1L\n        return stateAtStart()", "        if (!backgroundDue()) return null\n        return stateAtStart()"),
     ("device lock: the timer is not cleared", P, "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n", "    fun onDeviceLocked(): LockState {\n"),
     ("device lock: does not report the state", P, "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n        return stateAtStart()", "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n        return LockState.Locked"),
+    # ADR-215: the confirmation grace
+    ("grace: shortened", P, "const val CONFIRM_GRACE_MS = 60_000L", "const val CONFIRM_GRACE_MS = 59_000L"),
+    ("grace: lengthened", P, "const val CONFIRM_GRACE_MS = 60_000L", "const val CONFIRM_GRACE_MS = 61_000L"),
+    ("grace: ends one millisecond late", P, "clock.elapsedMs() - authenticatedAtMs < CONFIRM_GRACE_MS", "clock.elapsedMs() - authenticatedAtMs <= CONFIRM_GRACE_MS"),
+    ("grace: never", P, "fun confirmedRecently() = authenticatedAtMs >= 0 && ", "fun confirmedRecently() = false && "),
+    ("grace: an untouched policy is inside it", P, "fun confirmedRecently() = authenticatedAtMs >= 0 && ", "fun confirmedRecently() = "),
+    ("grace: an unlock does not start it", P, "        onAuthenticated()\n        store.biometricFailures = 0\n", "        store.biometricFailures = 0\n"),
+    ("grace: a confirmation does not start it", P, "    fun onAuthenticated() {\n        authenticatedAtMs = clock.elapsedMs()\n", "    fun onAuthenticated() {\n"),
+    ("grace: the wall clock instead of the monotonic one", P, "authenticatedAtMs = clock.elapsedMs()", "authenticatedAtMs = clock.nowMs()"),
+    ("grace: the device lock keeps it", P, "        backgroundedAtMs = -1L\n        authenticatedAtMs = -1L\n        return stateAtStart()\n    }\n\n    private fun backgroundDue", "        backgroundedAtMs = -1L\n        return stateAtStart()\n    }\n\n    private fun backgroundDue"),
+    ("grace: the tick lock keeps it", P, "        backgroundedAtMs = -1L\n        authenticatedAtMs = -1L\n        return stateAtStart()\n    }\n\n    /** The vault was deleted", "        backgroundedAtMs = -1L\n        return stateAtStart()\n    }\n\n    /** The vault was deleted"),
+    ("grace: the lock on return keeps it", P, "        if (due) authenticatedAtMs = -1L\n", ""),
+    ("grace: a return before the minute ends it", P, "        if (due) authenticatedAtMs = -1L\n", "        authenticatedAtMs = -1L\n"),
+    ("grace: forgetting the vault keeps it", P, "    fun forget() {\n        backgroundedAtMs = -1L\n        authenticatedAtMs = -1L\n", "    fun forget() {\n        backgroundedAtMs = -1L\n"),
 
     # FieldClassifier.kt
     ("classify: username hints ignored", F, "h in USERNAME_HINTS -> return FieldRole.Username", "h in USERNAME_HINTS -> return FieldRole.Other"),

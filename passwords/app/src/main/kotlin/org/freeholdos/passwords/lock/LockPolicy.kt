@@ -27,6 +27,9 @@ interface Environment {
 }
 
 const val BACKGROUND_LOCK_MS = 60_000L
+
+/** After a successful unlock or confirmation the actions that ask for one skip it for this long, like sudo's timestamp (ADR-215). */
+const val CONFIRM_GRACE_MS = 60_000L
 const val PASSPHRASE_MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
 const val MAX_BIOMETRIC_FAILURES = 5
 const val MAX_THROTTLE_MS = 300_000L
@@ -51,6 +54,7 @@ fun passphraseThrottleMs(consecutiveFailures: Int): Long {
  */
 class LockPolicy(private val clock: Clock, private val store: PolicyStore, private val env: Environment) {
     private var backgroundedAtMs = -1L
+    private var authenticatedAtMs = -1L
 
     /** The locked state the vault is in now: what a fresh process shows, and what every lock lands on. */
     fun stateAtStart(): LockState {
@@ -75,6 +79,7 @@ class LockPolicy(private val clock: Clock, private val store: PolicyStore, priva
      */
     fun onUnlocked(viaPassphrase: Boolean, inForeground: Boolean = true) {
         backgroundedAtMs = if (inForeground) -1L else clock.elapsedMs()
+        onAuthenticated()
         store.biometricFailures = 0
         if (viaPassphrase) {
             store.lastPassphraseMs = clock.nowMs()
@@ -83,6 +88,14 @@ class LockPolicy(private val clock: Clock, private val store: PolicyStore, priva
             store.lastPassphraseFailureMs = 0L
         }
     }
+
+    /** The user just proved who they are (an unlock or a confirmation): the grace window starts now, fixed, not renewed by use. */
+    fun onAuthenticated() {
+        authenticatedAtMs = clock.elapsedMs()
+    }
+
+    /** True while the last authentication is less than [CONFIRM_GRACE_MS] old. Every lock ends it, so it only means something while unlocked. */
+    fun confirmedRecently() = authenticatedAtMs >= 0 && clock.elapsedMs() - authenticatedAtMs < CONFIRM_GRACE_MS
 
     fun onPassphraseFailed() {
         store.passphraseFailures++
@@ -105,6 +118,7 @@ class LockPolicy(private val clock: Clock, private val store: PolicyStore, priva
     fun onForegrounded(): LockState? {
         val due = backgroundDue()
         backgroundedAtMs = -1L
+        if (due) authenticatedAtMs = -1L
         return if (due) stateAtStart() else null
     }
 
@@ -112,12 +126,14 @@ class LockPolicy(private val clock: Clock, private val store: PolicyStore, priva
     fun onTick(): LockState? {
         if (!backgroundDue()) return null
         backgroundedAtMs = -1L
+        authenticatedAtMs = -1L
         return stateAtStart()
     }
 
     /** The vault was deleted: nothing of the old one is remembered (counts, times, the boot count). */
     fun forget() {
         backgroundedAtMs = -1L
+        authenticatedAtMs = -1L
         store.lastPassphraseMs = 0L
         store.bootCount = -1
         store.biometricFailures = 0
@@ -127,6 +143,7 @@ class LockPolicy(private val clock: Clock, private val store: PolicyStore, priva
 
     fun onDeviceLocked(): LockState {
         backgroundedAtMs = -1L
+        authenticatedAtMs = -1L
         return stateAtStart()
     }
 
