@@ -59,6 +59,16 @@ final class PolicyStore {
             return o != null ? o : Profiles.defaultValue(profile, c);
         }
 
+        /** True when the user set a class to a value its profile does not give: the identity then reads Custom (ADR-209). */
+        boolean isCustom() {
+            for (Value o : overrides) {
+                if (o != null) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /** A new profile clears what the user set per class, and the place unless the app stays Isolated. */
         AppPolicy withProfile(Profile p) {
             return new AppPolicy(p, new Value[Cls.values().length], profile == Profile.ISOLATED && p == Profile.ISOLATED ? place : 0);

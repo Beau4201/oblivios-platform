@@ -1,0 +1,60 @@
+From 0a5d5694a060cc57edb18607a127d2983ed567c9 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Tue, 3 Nov 2026 16:27:01 +0100
+Subject: [PATCH] Settings: the info row of an app reads Custom when a detail
+ differs
+
+The summary of the Compartments row came from getProfile and so never
+said Custom, which the Compartments pages do. It now reads getIdentity.
+---
+ res/values/strings_ext.xml                             |  2 ++
+ .../spa/app/appinfo/AppCompartmentsPreference.kt       | 10 ++++++----
+ 2 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index 1d9f0f8..63e5e4c 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -382,6 +382,8 @@ For compatibility, this app can still see clipboard metadata, such as whether an
+     <string name="app_compartments_profile_trusted">Identified</string>
+     <string name="app_compartments_profile_protected">Unlinked</string>
+     <string name="app_compartments_profile_isolated">Substituted</string>
++    <!-- The same row when the user set a detail to something the identity does not give (as on the Compartments pages). -->
++    <string name="app_compartments_profile_custom">Custom</string>
+     <!-- The row of Compartments on the Network & internet page, which the Settings search finds (keywords: the plain words a person
+          would type). -->
+     <string name="compartments_title">Compartments</string>
+diff --git a/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+index e139154..39f14aa 100644
+--- a/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
++++ b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+@@ -37,8 +37,9 @@ private const val COMPARTMENTS_SERVICE = "compartments"
+  * and only this app holds the permission to open it; the row is absent where Compartments is not installed or does not run (in a
+  * user other than the owner), for a system uid and for Compartments itself.
+  *
+- * The summary is the profile of the app (ADR-208). It is the one thing read from Compartments: one label, through a method of the
+- * policy service that only this app may call (READ_COMPARTMENT_PROFILE); it is read again whenever the page comes back, because
++ * The summary is the identity of the app (ADR-208, ADR-209): its profile, or Custom when a detail differs from it, as on the
++ * Compartments pages. It is the one thing read from Compartments: one label, through a method of the policy service that only
++ * this app may call (READ_COMPARTMENT_PROFILE); it is read again whenever the page comes back, because
+  * the page that the row opens changes it. Where the service is missing, refuses or fails, the row shows no summary.
+  */
+ @Composable
+@@ -71,11 +72,12 @@ fun AppCompartmentsPreference(app: ApplicationInfo) {
+     })
+ }
+ 
+-/** The words of the profile of one package, or an empty string where the service does not answer. */
++/** The words of the identity of one package, or an empty string where the service does not answer. */
+ private fun profileLabel(context: Context, packageName: String): String =
+     try {
+         val service = ICompartmentsPolicy.Stub.asInterface(ServiceManager.getService(COMPARTMENTS_SERVICE))
+-        when (service?.getProfile(packageName)) {
++        when (service?.getIdentity(packageName)) {
++            ICompartmentsPolicy.IDENTITY_CUSTOM -> context.getString(R.string.app_compartments_profile_custom)
+             ICompartmentsPolicy.PROFILE_TRUSTED -> context.getString(R.string.app_compartments_profile_trusted)
+             ICompartmentsPolicy.PROFILE_PROTECTED -> context.getString(R.string.app_compartments_profile_protected)
+             ICompartmentsPolicy.PROFILE_ISOLATED -> context.getString(R.string.app_compartments_profile_isolated)
+-- 
+2.56.0
+

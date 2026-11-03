@@ -1,5 +1,9 @@
 # Source record: network exit (ADR-178)
 
+## Fix 2026-11-03: the info row reads Custom (`packages-apps-Settings/0005`)
+
+Found by the owner on lynx `2026110203`: the Compartments row of the info page of an app read Unlinked where the Compartments pages read Custom. The row now reads `ICompartmentsPolicy.getIdentity` (`privacy/compartments-profiles` `frameworks-base/0025`) and shows the new string `app_compartments_profile_custom` (Custom) for `IDENTITY_CUSTOM`. Base: `packages/apps/Settings` `freeholdos-2026100600` at `dcb63695a6fb`; authored in `.worktrees/identity-custom-settings`, landed with `git am` as `ade153015958`, tree clean, sha256 of both files equal to the disposable repository. Compiled: no (Settings has no host-side type check, the first module build is the check). Run on a device: no (row `CMP-048`).
+
 Design: `docs/superpowers/specs/2026-10-18-network-exit-design.md` in `freeholdos-foundation`. The patch was authored 2026-10-18 in the disposable repository `.worktrees/exit-oem-pref` from a read-only copy of the file and landed on the build server with `git am` (branch `freeholdos-2026100600` in `packages/modules/Connectivity`, commit `35b54c20e0`).
 
 ## Base

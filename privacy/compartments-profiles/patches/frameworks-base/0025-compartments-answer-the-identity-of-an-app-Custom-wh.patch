@@ -1,0 +1,109 @@
+From a3c22a927fcdd15b6bacd4c30f43d0b5b63c7fa1 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Tue, 3 Nov 2026 16:27:01 +0100
+Subject: [PATCH] compartments: answer the identity of an app, Custom when a
+ detail differs
+
+getProfile gives the profile only, so the info page of an app in Settings
+read Unlinked for an app that the Compartments pages name Custom.
+getIdentity returns the profile, or IDENTITY_CUSTOM when the user set a
+class to a value its profile does not give (AppPolicy.isCustom, the rule
+of ProfileRows.identityOf). Same permissions as getProfile; the method is
+appended to the interface so the transaction order of the others holds.
+---
+ .../compartments/ICompartmentsPolicy.aidl        | 13 +++++++++++--
+ .../compartments/CompartmentsPolicyService.java  | 16 ++++++++++++++--
+ .../android/server/compartments/PolicyStore.java | 10 ++++++++++
+ 3 files changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+index 48da73b..6783545 100644
+--- a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
++++ b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+@@ -10,8 +10,8 @@ import com.android.internal.compartments.CompartmentsPlace;
+ /**
+  * The Binder interface of the Compartments policy service (ADR-208). Every call acts on the owner
+  * user's store. The first eight methods need org.freeholdos.permission.MANAGE_COMPARTMENTS, which
+- * only the exit app holds; getProfile also accepts org.freeholdos.permission.READ_COMPARTMENT_PROFILE,
+- * which only the Settings app holds.
++ * only the exit app holds; getProfile and getIdentity also accept
++ * org.freeholdos.permission.READ_COMPARTMENT_PROFILE, which only the Settings app holds.
+  *
+  * <p>The transaction order is part of the contract with the app, which compiles its own copy of
+  * this file: new methods are added at the end. The numbers of the constants are the order of the
+@@ -22,6 +22,9 @@ interface ICompartmentsPolicy {
+     const int PROFILE_PROTECTED = 1;
+     const int PROFILE_ISOLATED = 2;
+ 
++    /** What getIdentity returns for an app with a class set to a value its profile does not give. */
++    const int IDENTITY_CUSTOM = -1;
++
+     const int CLASS_SENSORS = 0;
+     const int CLASS_LOOPBACK = 1;
+     const int CLASS_SETTINGS = 2;
+@@ -81,4 +84,10 @@ interface ICompartmentsPolicy {
+      * app has no persona (its location is not substituted, or no place can be made). Needs MANAGE_COMPARTMENTS.
+      */
+     int getPersonaPlaceId(String packageName);
++
++    /**
++     * The identity of one package as the Compartments pages name it: PROFILE_* when every class has the value its profile
++     * gives, IDENTITY_CUSTOM when the user set one class to another value. Nothing else about the app.
++     */
++    int getIdentity(String packageName);
+ }
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index fe75c63..a5b016a 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -240,12 +240,24 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+ 
+     @Override
+     public int getProfile(String packageName) {
++        enforceManageOrReadProfile();
++        requireValidName(packageName);
++        return mStore.policyOf(packageName).profile.ordinal();
++    }
++
++    @Override
++    public int getIdentity(String packageName) {
++        enforceManageOrReadProfile();
++        requireValidName(packageName);
++        AppPolicy p = mStore.policyOf(packageName);
++        return p.isCustom() ? IDENTITY_CUSTOM : p.profile.ordinal();
++    }
++
++    private void enforceManageOrReadProfile() {
+         if (mContext.checkCallingPermission(MANAGE) != PackageManager.PERMISSION_GRANTED
+                 && mContext.checkCallingPermission(READ_PROFILE) != PackageManager.PERMISSION_GRANTED) {
+             throw new SecurityException("needs " + MANAGE + " or " + READ_PROFILE);
+         }
+-        requireValidName(packageName);
+-        return mStore.policyOf(packageName).profile.ordinal();
+     }
+ 
+     @Override
+diff --git a/services/core/java/com/android/server/compartments/PolicyStore.java b/services/core/java/com/android/server/compartments/PolicyStore.java
+index e0b29a6..a498d7e 100644
+--- a/services/core/java/com/android/server/compartments/PolicyStore.java
++++ b/services/core/java/com/android/server/compartments/PolicyStore.java
+@@ -59,6 +59,16 @@ final class PolicyStore {
+             return o != null ? o : Profiles.defaultValue(profile, c);
+         }
+ 
++        /** True when the user set a class to a value its profile does not give: the identity then reads Custom (ADR-209). */
++        boolean isCustom() {
++            for (Value o : overrides) {
++                if (o != null) {
++                    return true;
++                }
++            }
++            return false;
++        }
++
+         /** A new profile clears what the user set per class, and the place unless the app stays Isolated. */
+         AppPolicy withProfile(Profile p) {
+             return new AppPolicy(p, new Value[Cls.values().length], profile == Profile.ISOLATED && p == Profile.ISOLATED ? place : 0);
+-- 
+2.56.0
+

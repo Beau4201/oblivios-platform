@@ -10,8 +10,8 @@ import com.android.internal.compartments.CompartmentsPlace;
 /**
  * The Binder interface of the Compartments policy service (ADR-208). Every call acts on the owner
  * user's store. The first eight methods need org.freeholdos.permission.MANAGE_COMPARTMENTS, which
- * only the exit app holds; getProfile also accepts org.freeholdos.permission.READ_COMPARTMENT_PROFILE,
- * which only the Settings app holds.
+ * only the exit app holds; getProfile and getIdentity also accept
+ * org.freeholdos.permission.READ_COMPARTMENT_PROFILE, which only the Settings app holds.
  *
  * <p>The transaction order is part of the contract with the app, which compiles its own copy of
  * this file: new methods are added at the end. The numbers of the constants are the order of the
@@ -21,6 +21,9 @@ interface ICompartmentsPolicy {
     const int PROFILE_TRUSTED = 0;
     const int PROFILE_PROTECTED = 1;
     const int PROFILE_ISOLATED = 2;
+
+    /** What getIdentity returns for an app with a class set to a value its profile does not give. */
+    const int IDENTITY_CUSTOM = -1;
 
     const int CLASS_SENSORS = 0;
     const int CLASS_LOOPBACK = 1;
@@ -81,4 +84,10 @@ interface ICompartmentsPolicy {
      * app has no persona (its location is not substituted, or no place can be made). Needs MANAGE_COMPARTMENTS.
      */
     int getPersonaPlaceId(String packageName);
+
+    /**
+     * The identity of one package as the Compartments pages name it: PROFILE_* when every class has the value its profile
+     * gives, IDENTITY_CUSTOM when the user set one class to another value. Nothing else about the app.
+     */
+    int getIdentity(String packageName);
 }

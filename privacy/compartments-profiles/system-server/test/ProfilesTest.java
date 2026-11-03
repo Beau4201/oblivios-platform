@@ -127,6 +127,18 @@ public final class ProfilesTest {
         check(custom.withProfile(Profile.ISOLATED).value(Cls.SENSORS) == Value.SUBSTITUTE, "isolated default");
         check(custom.withProfile(Profile.TRUSTED).value(Cls.SENSORS) == Value.REAL, "profile change clears overrides");
 
+        // the identity reads Custom (ADR-209) when a class differs from the profile, and only then; the service answers
+        // getIdentity from this (the info page of an app in Settings reads that answer)
+        check(!AppPolicy.PROTECTED.isCustom(), "a plain profile is no custom identity");
+        check(!AppPolicy.PROTECTED.withProfile(Profile.ISOLATED).isCustom(), "a plain isolated profile is no custom identity");
+        check(custom.isCustom(), "a class that differs from the profile is a custom identity");
+        check(AppPolicy.PROTECTED.withProfile(Profile.ISOLATED).withValue(Cls.LOCATION, Value.REAL).isCustom(),
+                "isolated with the real location is custom");
+        check(AppPolicy.PROTECTED.withValue(Cls.LOCATION, Value.SUBSTITUTE).isCustom(), "the last class counts too");
+        check(!AppPolicy.PROTECTED.withValue(Cls.SENSORS, Value.REAL).isCustom(), "a value equal to the default is not custom");
+        check(!custom.withProfile(Profile.TRUSTED).isCustom(), "a new profile clears the custom identity");
+        check(!PolicyStore.EMPTY.policyOf("x.y").isCustom(), "an app without an entry follows the defaults, not custom");
+
         check(Arrays.equals(
                 PolicyStore.EMPTY.withApp("x.y", AppPolicy.PROTECTED.withValue(Cls.SENSORS, Value.REAL)).encode(),
                 PolicyStore.EMPTY.withApp("x.y", AppPolicy.PROTECTED).encode()), "a value equal to the default is no override");

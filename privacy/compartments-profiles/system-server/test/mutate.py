@@ -5,6 +5,11 @@ import pathlib, shutil, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MUTANTS = [
+    # ADR-209: the identity reads Custom when a class differs from the profile (getIdentity)
+    ("PolicyStore.java", "a changed class is no custom identity", "                if (o != null) {\n                    return true;", "                if (o == null) {\n                    return true;"),
+    ("PolicyStore.java", "no class makes the identity custom", "                    return true;\n                }\n            }\n            return false;", "                    return false;\n                }\n            }\n            return false;"),
+    ("PolicyStore.java", "every identity is custom", "            return false;\n        }\n\n        /** A new profile clears", "            return true;\n        }\n\n        /** A new profile clears"),
+    ("PolicyStore.java", "the last class does not count for the identity", "            for (Value o : overrides) {\n                if (o != null) {", "            for (int i = 0; i < overrides.length - 1; i++) {\n                Value o = overrides[i];\n                if (o != null) {"),
     # D5 (Isolated defaults give an app without an entry a persona)
     ("PolicyStore.java", "Isolated defaults leave the location of an unconfigured app real", "c == Cls.LOCATION && defaults.profile != Profile.ISOLATED ? Value.REAL", "c == Cls.LOCATION ? Value.REAL"),
     ("MirrorPlan.java", "the apps without an entry are not withheld without place data", "if (s.defaults.profile == Profiles.Profile.ISOLATED && places == null) {", "if (false) {"),
