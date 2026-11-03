@@ -1,0 +1,61 @@
+From e797d3328e00af469e91397f1b44464737cf55bd Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Tue, 3 Nov 2026 16:36:08 +0100
+Subject: [PATCH] compartments: getIdentity names a platform-signed package
+ System
+
+The Compartments pages list a package signed with the platform key as
+System (ADR-211) while the info page of the app in Settings read the
+profile. getIdentity returns IDENTITY_SYSTEM for such a package, by the
+rule MirrorPlan.UidResolver.platformPackages uses (checkSignatures
+against the android package).
+---
+ .../internal/compartments/ICompartmentsPolicy.aidl       | 9 ++++++++-
+ .../server/compartments/CompartmentsPolicyService.java   | 4 ++++
+ 2 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+index 6783545..97188d6 100644
+--- a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
++++ b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+@@ -25,6 +25,12 @@ interface ICompartmentsPolicy {
+     /** What getIdentity returns for an app with a class set to a value its profile does not give. */
+     const int IDENTITY_CUSTOM = -1;
+ 
++    /**
++     * What getIdentity returns for a package signed with the platform key: part of the system, with no profile of its own
++     * (ADR-211). -2 is left out on purpose: the exit app keeps its own -2 for an identity it could not read.
++     */
++    const int IDENTITY_SYSTEM = -3;
++
+     const int CLASS_SENSORS = 0;
+     const int CLASS_LOOPBACK = 1;
+     const int CLASS_SETTINGS = 2;
+@@ -87,7 +93,8 @@ interface ICompartmentsPolicy {
+ 
+     /**
+      * The identity of one package as the Compartments pages name it: PROFILE_* when every class has the value its profile
+-     * gives, IDENTITY_CUSTOM when the user set one class to another value. Nothing else about the app.
++     * gives, IDENTITY_CUSTOM when the user set one class to another value, IDENTITY_SYSTEM for a package signed with the platform
++     * key. Nothing else about the app.
+      */
+     int getIdentity(String packageName);
+ }
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index a5b016a..1a8a7d6 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -249,6 +249,10 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     public int getIdentity(String packageName) {
+         enforceManageOrReadProfile();
+         requireValidName(packageName);
++        // the rule of MirrorPlan.UidResolver.platformPackages: a platform-signed package is the system and follows no profile
++        if (mContext.getPackageManager().checkSignatures(packageName, "android") == PackageManager.SIGNATURE_MATCH) {
++            return IDENTITY_SYSTEM;
++        }
+         AppPolicy p = mStore.policyOf(packageName);
+         return p.isCustom() ? IDENTITY_CUSTOM : p.profile.ordinal();
+     }
+-- 
+2.56.0
+

@@ -25,6 +25,12 @@ interface ICompartmentsPolicy {
     /** What getIdentity returns for an app with a class set to a value its profile does not give. */
     const int IDENTITY_CUSTOM = -1;
 
+    /**
+     * What getIdentity returns for a package signed with the platform key: part of the system, with no profile of its own
+     * (ADR-211). -2 is left out on purpose: the exit app keeps its own -2 for an identity it could not read.
+     */
+    const int IDENTITY_SYSTEM = -3;
+
     const int CLASS_SENSORS = 0;
     const int CLASS_LOOPBACK = 1;
     const int CLASS_SETTINGS = 2;
@@ -87,7 +93,8 @@ interface ICompartmentsPolicy {
 
     /**
      * The identity of one package as the Compartments pages name it: PROFILE_* when every class has the value its profile
-     * gives, IDENTITY_CUSTOM when the user set one class to another value. Nothing else about the app.
+     * gives, IDENTITY_CUSTOM when the user set one class to another value, IDENTITY_SYSTEM for a package signed with the platform
+     * key. Nothing else about the app.
      */
     int getIdentity(String packageName);
 }

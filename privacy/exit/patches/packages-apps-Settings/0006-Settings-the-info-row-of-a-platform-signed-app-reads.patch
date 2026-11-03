@@ -1,0 +1,40 @@
+From 70b533100f40eb37590881bc9564a3b8327c6c66 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Tue, 3 Nov 2026 16:36:08 +0100
+Subject: [PATCH] Settings: the info row of a platform-signed app reads System
+
+Same cause as Custom: the row showed the profile where the Compartments
+pages show System (ADR-211). It reads IDENTITY_SYSTEM of getIdentity.
+---
+ res/values/strings_ext.xml                                      | 2 ++
+ .../settings/spa/app/appinfo/AppCompartmentsPreference.kt       | 1 +
+ 2 files changed, 3 insertions(+)
+
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index 63e5e4c..7a74b5a 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -384,6 +384,8 @@ For compatibility, this app can still see clipboard metadata, such as whether an
+     <string name="app_compartments_profile_isolated">Substituted</string>
+     <!-- The same row when the user set a detail to something the identity does not give (as on the Compartments pages). -->
+     <string name="app_compartments_profile_custom">Custom</string>
++    <!-- And for a package signed with the platform key, which follows no identity (ADR-211). -->
++    <string name="app_compartments_profile_system">System</string>
+     <!-- The row of Compartments on the Network & internet page, which the Settings search finds (keywords: the plain words a person
+          would type). -->
+     <string name="compartments_title">Compartments</string>
+diff --git a/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+index 39f14aa..ce2a33d 100644
+--- a/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
++++ b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+@@ -78,6 +78,7 @@ private fun profileLabel(context: Context, packageName: String): String =
+         val service = ICompartmentsPolicy.Stub.asInterface(ServiceManager.getService(COMPARTMENTS_SERVICE))
+         when (service?.getIdentity(packageName)) {
+             ICompartmentsPolicy.IDENTITY_CUSTOM -> context.getString(R.string.app_compartments_profile_custom)
++            ICompartmentsPolicy.IDENTITY_SYSTEM -> context.getString(R.string.app_compartments_profile_system)
+             ICompartmentsPolicy.PROFILE_TRUSTED -> context.getString(R.string.app_compartments_profile_trusted)
+             ICompartmentsPolicy.PROFILE_PROTECTED -> context.getString(R.string.app_compartments_profile_protected)
+             ICompartmentsPolicy.PROFILE_ISOLATED -> context.getString(R.string.app_compartments_profile_isolated)
+-- 
+2.56.0
+

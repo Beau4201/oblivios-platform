@@ -1,5 +1,9 @@
 # Source record: network exit (ADR-178)
 
+## Fix 2026-11-03: the info row reads System (`packages-apps-Settings/0006`)
+
+Same cause as the next entry, reported by the owner: the row read the profile for a package signed with the platform key, where the Compartments pages read System (ADR-211). It reads `IDENTITY_SYSTEM` of `getIdentity` (`privacy/compartments-profiles` `frameworks-base/0026`) and shows the new string `app_compartments_profile_system`. Landed with `git am` as `1fc2d361130a` after `ade153015958`, tree clean, sha256 of both files equal to the disposable repository. Compiled: no. Run on a device: no (row `CMP-048`).
+
 ## Fix 2026-11-03: the info row reads Custom (`packages-apps-Settings/0005`)
 
 Found by the owner on lynx `2026110203`: the Compartments row of the info page of an app read Unlinked where the Compartments pages read Custom. The row now reads `ICompartmentsPolicy.getIdentity` (`privacy/compartments-profiles` `frameworks-base/0025`) and shows the new string `app_compartments_profile_custom` (Custom) for `IDENTITY_CUSTOM`. Base: `packages/apps/Settings` `freeholdos-2026100600` at `dcb63695a6fb`; authored in `.worktrees/identity-custom-settings`, landed with `git am` as `ade153015958`, tree clean, sha256 of both files equal to the disposable repository. Compiled: no (Settings has no host-side type check, the first module build is the check). Run on a device: no (row `CMP-048`).
