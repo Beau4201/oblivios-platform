@@ -77,7 +77,7 @@ MUTATIONS = [
     ("failed: reported one early", P, "return if (store.biometricFailures >= MAX_BIOMETRIC_FAILURES) stateAtStart() else null", "return if (store.biometricFailures >= MAX_BIOMETRIC_FAILURES - 1) stateAtStart() else null"),
     ("failed: always reported", P, "return if (store.biometricFailures >= MAX_BIOMETRIC_FAILURES) stateAtStart() else null", "return stateAtStart()"),
     # unlocked
-    ("unlocked: failures not cleared", P, "        backgroundedAtMs = if (inForeground) -1L else clock.elapsedMs()\n        store.biometricFailures = 0\n", "        backgroundedAtMs = if (inForeground) -1L else clock.elapsedMs()\n"),
+    ("unlocked: failures not cleared", P, "        onAuthenticated()\n        store.biometricFailures = 0\n", "        onAuthenticated()\n"),
     ("unlocked: timer not cleared", P, "backgroundedAtMs = if (inForeground) -1L else clock.elapsedMs()", "backgroundedAtMs = backgroundedAtMs"),
     ("unlocked: from the background never starts the minute", P, "backgroundedAtMs = if (inForeground) -1L else clock.elapsedMs()", "backgroundedAtMs = -1L"),
     ("unlocked: the foreground flag inverted", P, "backgroundedAtMs = if (inForeground) -1L else clock.elapsedMs()", "backgroundedAtMs = if (inForeground) clock.elapsedMs() else -1L"),
@@ -100,10 +100,10 @@ MUTATIONS = [
     ("foreground: the timer is not cleared", P, "        val due = backgroundDue()\n        backgroundedAtMs = -1L\n", "        val due = backgroundDue()\n"),
     ("foreground: never locks", P, "return if (due) stateAtStart() else null", "return null"),
     ("foreground: always locks", P, "return if (due) stateAtStart() else null", "return stateAtStart()"),
-    ("tick: never locks", P, "        if (!backgroundDue()) return null\n        backgroundedAtMs = -1L\n        return stateAtStart()", "        return null"),
-    ("tick: fires again and again", P, "        if (!backgroundDue()) return null\n        backgroundedAtMs = -1L\n        return stateAtStart()", "        if (!backgroundDue()) return null\n        return stateAtStart()"),
+    ("tick: never locks", P, "        if (!backgroundDue()) return null\n        backgroundedAtMs = -1L\n        authenticatedAtMs = -1L\n        return stateAtStart()", "        return null"),
+    ("tick: fires again and again", P, "        if (!backgroundDue()) return null\n        backgroundedAtMs = -1L\n        authenticatedAtMs = -1L\n        return stateAtStart()", "        if (!backgroundDue()) return null\n        authenticatedAtMs = -1L\n        return stateAtStart()"),
     ("device lock: the timer is not cleared", P, "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n", "    fun onDeviceLocked(): LockState {\n"),
-    ("device lock: does not report the state", P, "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n        return stateAtStart()", "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n        return LockState.Locked"),
+    ("device lock: does not report the state", P, "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n        authenticatedAtMs = -1L\n        return stateAtStart()", "    fun onDeviceLocked(): LockState {\n        backgroundedAtMs = -1L\n        authenticatedAtMs = -1L\n        return LockState.Locked"),
     # ADR-215: the confirmation grace
     ("grace: shortened", P, "const val CONFIRM_GRACE_MS = 60_000L", "const val CONFIRM_GRACE_MS = 59_000L"),
     ("grace: lengthened", P, "const val CONFIRM_GRACE_MS = 60_000L", "const val CONFIRM_GRACE_MS = 61_000L"),
