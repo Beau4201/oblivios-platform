@@ -22,8 +22,10 @@ device without one stayed as stock.
 - Base: `frameworks/base` `freeholdos-2026100600` at `dac38e875e45`. Authored in a disposable local
   repository seeded from the build server (both files' sha256 equal to the tree before the edit); the
   patch applies with `git am` to that baseline and gives the identical diff.
-- Landed on the build server: no (the permission classifier refuses writes to the build tree). Compiled:
-  no. Run on a device: no (`GRB-017` re-run, then the lock-screen surfaces by eye).
+- Landed on the build server 2026-11-03: `git am` on `freeholdos-2026100600`, commit `10000dab31e8` on top of
+  `dac38e875e45`, tree clean afterwards, both files' sha256 equal to the disposable repository. Compiled:
+  no (the first module build is the check). Run on a device: no (`GRB-017` re-run, then the lock-screen
+  surfaces by eye).
 
 ## Feature 2026-11-02: a password as the second credential (`packages-apps-settings/0003`)
 
