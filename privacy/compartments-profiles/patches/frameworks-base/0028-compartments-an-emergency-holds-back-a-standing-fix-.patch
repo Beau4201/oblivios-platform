@@ -1,0 +1,45 @@
+From 86914deede3ce65c167211dc9ab1ef4521d3a788 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@localhost>
+Date: Tue, 3 Nov 2026 22:07:19 +0100
+Subject: [PATCH] compartments: an emergency holds back a standing fix without
+ making the next alarm due at once
+
+A standing fix that an emergency held back left the time of the last
+one alone, so it was due again at once and the alarm of the
+registration fired every millisecond for as long as the emergency
+state lasted, each time asking telephony. The time is now set when a
+fix is due, whether or not it is made.
+---
+ .../location/provider/LocationProviderManager.java | 14 +++++++++-----
+ 1 file changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/services/core/java/com/android/server/location/provider/LocationProviderManager.java b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+index f2b2488..1b7f3bf 100644
+--- a/services/core/java/com/android/server/location/provider/LocationProviderManager.java
++++ b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+@@ -589,13 +589,17 @@ public class LocationProviderManager extends
+                     return;
+                 }
+                 long nowMs = SystemClock.elapsedRealtime();
+-                // in an emergency the real position is what the app needs: no standing fix, and the alarm goes on
+-                if (!inEmergency && persona.track.standingDelayMs(nowMs, mStandingActiveMs, mStandingLastMs,
++                if (persona.track.standingDelayMs(nowMs, mStandingActiveMs, mStandingLastMs,
+                         getRequest().getIntervalMillis()) <= 0) {
++                    // the next one is an interval away whether or not this one is made: a fix held back by an emergency that left
++                    // mStandingLastMs alone would be due at once again, and the alarm would fire every millisecond
+                     mStandingLastMs = nowMs;
+-                    StandingFix.Fix fix = persona.track.stand(
+-                            SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), standingSource());
+-                    executeOperation(acceptStandingFix(LocationResult.wrap(standingLocation(fix))));
++                    // in an emergency the real position is what the app needs: no standing fix, and the alarm goes on
++                    if (!inEmergency) {
++                        StandingFix.Fix fix = persona.track.stand(
++                                SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), standingSource());
++                        executeOperation(acceptStandingFix(LocationResult.wrap(standingLocation(fix))));
++                    }
+                 }
+                 scheduleStanding();
+             }
+-- 
+2.56.0
+
