@@ -38,6 +38,8 @@ public final class ExitController {
     public static final long PROMOTION_STALE_MS = 2 * POLL_MS;
     /** How long to wait before the platform is asked again for a preference that it refused (the call itself may take 10 s). */
     public static final long PREFS_RETRY_MS = 5000;
+    /** The least time between two registrations of a Tor network that the platform took down again. */
+    public static final long NETWORK_RETRY_MS = 3000;
 
     private final DaemonApi daemon;
     private final RouteApi route;
@@ -53,6 +55,7 @@ public final class ExitController {
     private int attempts;
     private long nextAttemptMs;
     private long nextPollMs;
+    private long nextNetworkMs;
     private int daemonState = -1;
     private String lastError;
 
@@ -124,6 +127,19 @@ public final class ExitController {
             return;
         }
         if (phase == Status.Phase.RUNNING) {
+            if (netId != 0 && nowMs >= nextNetworkMs && !platform.torNetworkLive()) {
+                // The platform took the Tor network down (NET-009: a second change of the apps on Tor within about 35 s left
+                // them without a network for minutes): register it again. The apps stay closed meanwhile (preference + guard).
+                nextNetworkMs = nowMs + NETWORK_RETRY_MS;
+                netId = 0;
+                try {
+                    push(false);
+                    publish();
+                } catch (IOException | RuntimeException e) {
+                    lost(nowMs, e);
+                    return;
+                }
+            }
             if (nowMs >= nextPollMs) {
                 nextPollMs = nowMs + POLL_MS;
                 try {

@@ -42,6 +42,9 @@ public final class ControllerChecks {
         boolean placesUnreadable;
         String own = "NL";
         long netId = 101;
+        /** Whether the platform still holds the Tor network; a registration sets it again unless {@link #registerLeavesDead}. */
+        boolean torLive = true;
+        boolean registerLeavesDead;
         /** Method names ("daemon.connect", "daemon.poll", ...) that throw once or for ever. */
         final Map<String, Integer> failures = new TreeMap<>();
         List<DaemonApi.Failure> nextFailures = new ArrayList<>();
@@ -174,7 +177,13 @@ public final class ControllerChecks {
             public long registerTorNetwork(String iface) throws IOException {
                 log.add("net.register:" + iface);
                 maybeFail("net.register");
+                torLive = !registerLeavesDead;
                 return netId;
+            }
+
+            @Override
+            public boolean torNetworkLive() {
+                return torLive;
             }
 
             @Override
@@ -315,6 +324,64 @@ public final class ControllerChecks {
         check(w.log.size() == again, "no retry before 1 s after the second loss");
         w.controller.tick(12000);
         check(w.last.phase == Status.Phase.RUNNING, "one second after the second loss, not two: " + w.last);
+    }
+
+    /** NET-009: the platform takes the Tor network down after a preference change; the controller registers it again. */
+    private static void networkTakenDownByThePlatform() {
+        World w = world();
+        w.choices.set("org.a.one", Choices.Choice.TOR);
+        w.controller.start(0);
+        w.controller.tick(0);
+        check(w.last.phase == Status.Phase.RUNNING && w.count("net.register") == 1, "running with one network: " + w.log);
+        for (long t = 1000; t < 5000; t += 1000) {
+            w.controller.tick(t);
+        }
+        check(w.count("net.register") == 1, "a network that is live is not registered again: " + w.log);
+        w.torLive = false; // the platform tore it down
+        int mark = w.log.size();
+        w.controller.tick(5000);
+        inOrder(w, mark, "net.register:exit0", "route.apply:net=101", "status:RUNNING");
+        check(w.count("net.register") == 2 && w.last.phase == Status.Phase.RUNNING, "registered again once: " + w.log);
+        check(w.indexOf("daemon.connect", mark) < 0 && w.indexOf("prefs:", mark) < 0 && w.indexOf("net.unregister", mark) < 0,
+                "only the network and the rules are redone, not the daemon or the preferences: " + w.log);
+        int after = w.log.size();
+        w.controller.tick(6000);
+        check(w.count("net.register") == 2, "live again, nothing more: " + w.log.subList(after, w.log.size()));
+
+        // A network that the platform keeps taking down is registered at most once in NETWORK_RETRY_MS.
+        World d = world();
+        d.choices.set("org.a.one", Choices.Choice.TOR);
+        d.registerLeavesDead = true;
+        d.controller.start(0);
+        d.controller.tick(0);
+        check(d.count("net.register") == 1 && !d.torLive, "the first registration is not live");
+        d.controller.tick(1000);
+        check(d.count("net.register") == 2, "the first loss is answered at once");
+        d.controller.tick(2000);
+        d.controller.tick(3999);
+        check(d.count("net.register") == 2, "no registration within 3 s of the last: " + d.log);
+        d.controller.tick(4000);
+        check(d.count("net.register") == 3, "one registration after 3 s: " + d.log);
+
+        // A registration that fails is a lost link: paused, and the next connect brings the network back.
+        World f = world();
+        f.choices.set("org.a.one", Choices.Choice.TOR);
+        f.controller.start(0);
+        f.controller.tick(0);
+        f.torLive = false;
+        f.failures.put("net.register", 1);
+        f.controller.tick(1000);
+        check(f.last.phase == Status.Phase.PAUSED, "a failed registration pauses: " + f.last);
+        f.controller.tick(2000);
+        check(f.last.phase == Status.Phase.RUNNING && f.count("net.register") == 3, "and recovers: " + f.log);
+
+        // With nobody on Tor there is no network to lose: a dead flag alone does nothing.
+        World m = world();
+        m.controller.start(0);
+        m.controller.tick(0);
+        m.torLive = false;
+        m.controller.tick(1000);
+        check(m.count("net.register") == 0, "no network, no registration: " + m.log);
     }
 
     private static void backoff() {
@@ -803,6 +870,11 @@ public final class ControllerChecks {
             public void unregisterTorNetwork() {}
 
             @Override
+            public boolean torNetworkLive() {
+                return true;
+            }
+
+            @Override
             public void setOemPreferences(Map<String, Integer> prefs) {}
 
             @Override
@@ -1167,6 +1239,7 @@ public final class ControllerChecks {
     public static void run() throws Exception {
         bootOrder();
         daemonRestart();
+        networkTakenDownByThePlatform();
         backoff();
         idleWithoutConsentOrTorApps();
         maskedOnly();

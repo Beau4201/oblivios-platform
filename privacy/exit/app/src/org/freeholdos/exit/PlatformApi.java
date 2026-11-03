@@ -25,6 +25,13 @@ public interface PlatformApi {
     /** Removes the Tor network; safe when there is none. */
     void unregisterTorNetwork();
 
+    /**
+     * Whether the registered Tor network still exists. The platform takes it down on its own when it no longer serves a
+     * request (for example while a new network preference replaces the old one) and tells the agent it is unwanted; the
+     * controller then registers it again.
+     */
+    boolean torNetworkLive();
+
     /** Sets the network preference of the given packages (package to preference); an empty map removes every preference. */
     void setOemPreferences(Map<String, Integer> prefs) throws IOException;
 

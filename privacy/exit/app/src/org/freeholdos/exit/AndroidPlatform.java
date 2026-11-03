@@ -51,7 +51,10 @@ final class AndroidPlatform implements PlatformApi {
     private ProfileClient profiles;
     private final Map<Integer, String> placeCountry = new HashMap<>();
     private NetworkProvider provider;
-    private NetworkAgent agent;
+    // The agent is set on the worker and read on the main looper (the callback), the flag the other way round.
+    private volatile NetworkAgent agent;
+    /** The platform told the current agent that its network is unwanted (it tears it down): the controller registers again. */
+    private volatile boolean agentGone;
 
     interface StatusSink {
         void accept(Status s);
@@ -193,11 +196,25 @@ final class AndroidPlatform implements PlatformApi {
         } catch (java.net.UnknownHostException e) {
             throw new IOException("bad constant address", e);
         }
+        agentGone = false;
         agent = new NetworkAgent(ctx, Looper.getMainLooper(), TAG, nc, lp, new NetworkScore.Builder().build(),
-                new NetworkAgentConfig.Builder().build(), provider) { };
+                new NetworkAgentConfig.Builder().build(), provider) {
+            @Override
+            public void onNetworkUnwanted() {
+                // A late callback of an agent that was replaced must not mark the new one (it is compared by identity).
+                if (agent == this) {
+                    agentGone = true;
+                }
+            }
+        };
         agent.register();
         agent.markConnected();
         return agent.getNetwork().getNetId();
+    }
+
+    @Override
+    public boolean torNetworkLive() {
+        return agent != null && !agentGone;
     }
 
     @Override
