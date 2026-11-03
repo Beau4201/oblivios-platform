@@ -1,5 +1,30 @@
 # Source record
 
+## Fix 2026-11-03: no user switching on a locked device (`frameworks-base/0007`)
+
+Decision of the owner (2026-11-03, after `GRB-017` failed on `lynx` `2026110203`): a locked screen never
+offers a user switch, with or without a decoy. Cause `[measured]`: after a grab lock the owner switched
+from the lock screen to a second user without a secure lock screen; the log shows
+`sendContinueUserSwitchLU-0-to-13` at 15:59:11 and `init: auto_reboot: on_device_unlocked: stopped timer`
+at 15:59:12, so the 60 second restart of the grab lock never came. The earlier rule
+(`frameworks-base/0002`) hid the switcher on a locked device only when a decoy existed, on purpose, so a
+device without one stayed as stock.
+
+- `frameworks-base/0007`: `UserManagerService.isUserSwitcherEnabled` returns false while the keyguard
+  shows, whatever users exist; the helper `hasDecoyUser()` that only served the old condition is removed.
+  The six surfaces of ADR-067 route through this method `[assumption]`: they were not audited again, the
+  device run of `GRB-017` is the check.
+- The method stays display-only: `UserController.switchUser` does not consult it, so a caller that may
+  switch users still can. Enforcement at `switchUser` is not built; add it if a locked-screen path that
+  skips this method is found.
+- Tests in `UserManagerServiceTest`: a locked device without a decoy now gives false (it gave true), and
+  an unlocked one without a decoy gives the real value. Host-side only a build runs them.
+- Base: `frameworks/base` `freeholdos-2026100600` at `dac38e875e45`. Authored in a disposable local
+  repository seeded from the build server (both files' sha256 equal to the tree before the edit); the
+  patch applies with `git am` to that baseline and gives the identical diff.
+- Landed on the build server: no (the permission classifier refuses writes to the build tree). Compiled:
+  no. Run on a device: no (`GRB-017` re-run, then the lock-screen surfaces by eye).
+
 ## Feature 2026-11-02: a password as the second credential (`packages-apps-settings/0003`)
 
 The owner asked for a password as the Duress Unlock second credential (ADR-145 had made it PIN-only
