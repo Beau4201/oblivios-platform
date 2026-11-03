@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mutation check for the Compartments policy core: every mutant must make a test assertion fail.
-Usage: mutate.py   (run from anywhere; reads the sources next to this file)"""
+Usage: mutate.py [FILE.java ...]   (run from anywhere; reads the sources next to this file; with names, only the mutants of those files)"""
 import pathlib, shutil, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -233,7 +233,7 @@ MUTANTS = [
     ("PolicyStore.java", "a Trusted default is accepted when read", "if (d == null || !validDefaults(d)) {", "if (d == null) {"),
     ("Geo.java", "a negative longitude is not wrapped", "if (x < 0) {\n            x += 360.0;\n        }", ""),
     ("Geo.java", "the latitude is not clamped", "return Math.max(-90.0, Math.min(90.0, lat));", "return lat;"),
-    ("PersonaTrack.java", "the first fix is not the place", "setAnchor(lat, lon, placeLat, placeLon);\n        } else if", "setAnchor(lat, lon, lat, lon);\n        } else if"),
+    ("PersonaTrack.java", "the first fix is not the place", "setAnchor(lat, lon, hasLast ? lastLat : placeLat, hasLast ? lastLon : placeLon);\n        } else if", "setAnchor(lat, lon, lat, lon);\n        } else if"),
     ("PersonaTrack.java", "a re-anchor jumps to the place", "setAnchor(lat, lon, here[0], here[1]);", "setAnchor(lat, lon, placeLat, placeLon);"),
     ("PersonaTrack.java", "the north displacement is dropped", "fakeLat + north", "fakeLat"),
     ("PersonaTrack.java", "the east displacement is not scaled", "east * scale", "east"),
@@ -365,7 +365,125 @@ MUTANTS = [
     ("Places.java", "the preference is not copied", "return new Places(places, new HashSet<>(ids));", "return new Places(places, ids);"),
     ("Places.java", "the preferred places lose the others", "return new Places(places, new HashSet<>(ids));", "return new Places(new ArrayList<>(), new HashSet<>(ids));"),
     ("CellSubset.java", "no place has cells", "return Collections.unmodifiableSet(byPlace.keySet());", "return Collections.emptySet();"),
+    # ADR-214: the standing fix (StandingFix, the standing part of PersonaTrack)
+    ('StandingFix.java', 'a step is taken at the minimum step too late', 'if (dt >= MIN_STEP_S) {', 'if (dt > MIN_STEP_S) {'),
+    ('StandingFix.java', 'every call steps', 'if (dt >= MIN_STEP_S) {', 'if (dt >= 0) {'),
+    ('StandingFix.java', 'the time of a step is not kept', '                step(dt);\n                stepAtNs = nowNs;', '                step(dt);'),
+    ('StandingFix.java', 'the step time is read in the wrong unit', 'double dt = (nowNs - stepAtNs) / 1e9;', 'double dt = (nowNs - stepAtNs) / 1e8;'),
+    ('StandingFix.java', 'the latitude takes the east offset', 'centreLat + offNorthM / M_PER_DEG', 'centreLat + offEastM / M_PER_DEG'),
+    ('StandingFix.java', 'the longitude ignores the latitude', 'offEastM / (M_PER_DEG * cosLat)', 'offEastM / M_PER_DEG'),
+    ('StandingFix.java', 'the cosine is not bounded', 'private static final double MIN_COS = 0.05;', 'private static final double MIN_COS = 0.0;'),
+    ('StandingFix.java', 'the lag starts at 19 ms', 'MIN_LATENCY_MS = 20;', 'MIN_LATENCY_MS = 19;'),
+    ('StandingFix.java', 'the lag span is one short', 'LATENCY_SPAN_MS = 41;', 'LATENCY_SPAN_MS = 40;'),
+    ('StandingFix.java', 'an equal elapsed time is kept', 'if (elapsed <= lastElapsedNs) {', 'if (elapsed < lastElapsedNs) {'),
+    ('StandingFix.java', 'elapsed time may go back', 'if (elapsed <= lastElapsedNs) {', 'if (false) {'),
+    ('StandingFix.java', 'the bump is two milliseconds', 'elapsed = lastElapsedNs + NANOS_PER_MS;', 'elapsed = lastElapsedNs + 2 * NANOS_PER_MS;'),
+    ('StandingFix.java', 'the bump keeps the old elapsed time', 'elapsed = lastElapsedNs + NANOS_PER_MS;', 'elapsed = lastElapsedNs;'),
+    ('StandingFix.java', 'the last elapsed time is not kept', '        lastElapsedNs = elapsed;\n', '        '),
+    ('StandingFix.java', 'the wall time ignores the bump', 'long timeMs = wallMs - (nowNs - elapsed) / NANOS_PER_MS;', 'long timeMs = wallMs - latencyMs;'),
+    ('StandingFix.java', 'the wall time is the delivery time', 'long timeMs = wallMs - (nowNs - elapsed) / NANOS_PER_MS;', 'long timeMs = wallMs;'),
+    ('StandingFix.java', 'the coin is inverted', 'speed = rnd.nextBoolean() ? 0f :', 'speed = !rnd.nextBoolean() ? 0f :'),
+    ('StandingFix.java', 'the speed may be negative', '(float) (Math.abs(rnd.nextGaussian()) * 0.05)', '(float) (rnd.nextGaussian() * 0.05)'),
+    ('StandingFix.java', 'the speed is ten times larger', 'Math.abs(rnd.nextGaussian()) * 0.05)', 'Math.abs(rnd.nextGaussian()) * 0.5)'),
+    ('StandingFix.java', 'the speed accuracy is larger', '(float) (0.1 + 0.2 * rnd.nextDouble())', '(float) (0.1 + 0.3 * rnd.nextDouble())'),
+    ('StandingFix.java', 'the speed accuracy starts at zero', '(float) (0.1 + 0.2 * rnd.nextDouble())', '(float) (0.0 + 0.2 * rnd.nextDouble())'),
+    ('StandingFix.java', 'a network fix has a speed', 'float speed = 0f;\n        float speedAcc = 0f;\n        if (source.hasSpeed) {', 'float speed = 0f;\n        float speedAcc = 0f;\n        if (true) {'),
+    ('StandingFix.java', 'a GNSS fix has no speed', 'float speed = 0f;\n        float speedAcc = 0f;\n        if (source.hasSpeed) {', 'float speed = 0f;\n        float speedAcc = 0f;\n        if (false) {'),
+    ('StandingFix.java', 'the fix says it has a speed when it has none', 'return new Fix(lat, lon, (float) acc, source.hasSpeed,', 'return new Fix(lat, lon, (float) acc, true,'),
+    ('StandingFix.java', 'the accuracy is the log', '(float) acc, source.hasSpeed', '(float) lnAcc, source.hasSpeed'),
+    ('StandingFix.java', 'the times are swapped', 'speedAcc, elapsed, timeMs);', 'speedAcc, timeMs, elapsed);'),
+    ('StandingFix.java', 'the first accuracy is not drawn', 'lnAcc = clampLn(Math.log(source.medianAccM) + SIGMA_LN_ACC * rnd.nextGaussian());', 'lnAcc = clampLn(Math.log(source.medianAccM));'),
+    ('StandingFix.java', 'the first north offset is not drawn', 'offNorthM = sigma * rnd.nextGaussian();', 'offNorthM = 0.0;'),
+    ('StandingFix.java', 'the first east offset is not drawn', 'offEastM = sigma * rnd.nextGaussian();', 'offEastM = 0.0;'),
+    ('StandingFix.java', 'a start is always fresh', '        if (freshStart) {', '        if (true) {'),
+    ('StandingFix.java', 'a start is never fresh', '        if (freshStart) {', '        if (false) {'),
+    ('StandingFix.java', 'the first draw is not capped', '            offEastM = sigma * rnd.nextGaussian();\n            cap();', '            offEastM = sigma * rnd.nextGaussian();'),
+    ('StandingFix.java', 'the first spread is the accuracy itself', 'double sigma = Math.exp(lnAcc) * POS_SIGMA_PER_ACC;', 'double sigma = Math.exp(lnAcc);'),
+    ('StandingFix.java', 'a reset does not start again', '    void reset(boolean fresh) {\n        started = false;', '    void reset(boolean fresh) {\n        started = started;'),
+    ('StandingFix.java', 'a reset ignores fresh', '        freshStart = fresh;', '        freshStart = true;'),
+    ('StandingFix.java', 'a reset never fresh', '        freshStart = fresh;', '        freshStart = false;'),
+    ('StandingFix.java', 'the accuracy is pulled to the maximum', 'double mu = Math.log(source.medianAccM);', 'double mu = Math.log(source.maxAccM);'),
+    ('StandingFix.java', 'the accuracy is not pulled back', 'lnAcc = clampLn(mu + rhoAcc * (lnAcc - mu)', 'lnAcc = clampLn(mu + (lnAcc - mu)'),
+    ('StandingFix.java', 'the accuracy draw is not scaled by the decay', 'SIGMA_LN_ACC * Math.sqrt(1.0 - rhoAcc * rhoAcc) * rnd.nextGaussian());', 'SIGMA_LN_ACC * rnd.nextGaussian());'),
+    ('StandingFix.java', 'the accuracy decays the wrong way', 'double rhoAcc = Math.exp(-dt / TAU_ACC_S);', 'double rhoAcc = Math.exp(dt / TAU_ACC_S);'),
+    ('StandingFix.java', 'the position decays with the accuracy constant', 'double rho = Math.exp(-dt / TAU_POS_S);', 'double rho = Math.exp(-dt / TAU_ACC_S);'),
+    ('StandingFix.java', 'the position draw is not scaled by the decay', 'double k = acc * POS_SIGMA_PER_ACC * Math.sqrt(1.0 - rho * rho);', 'double k = acc * POS_SIGMA_PER_ACC;'),
+    ('StandingFix.java', 'the position draw ignores the accuracy', 'double k = acc * POS_SIGMA_PER_ACC * Math.sqrt(1.0 - rho * rho);', 'double k = POS_SIGMA_PER_ACC * Math.sqrt(1.0 - rho * rho);'),
+    ('StandingFix.java', 'the north offset is not pulled back', 'offNorthM = rho * offNorthM + k * rnd.nextGaussian();', 'offNorthM = offNorthM + k * rnd.nextGaussian();'),
+    ('StandingFix.java', 'the east offset is not pulled back', 'offEastM = rho * offEastM + k * rnd.nextGaussian();', 'offEastM = offEastM + k * rnd.nextGaussian();'),
+    ('StandingFix.java', 'the north offset forgets', 'offNorthM = rho * offNorthM + k * rnd.nextGaussian();', 'offNorthM = k * rnd.nextGaussian();'),
+    ('StandingFix.java', 'the east offset forgets', 'offEastM = rho * offEastM + k * rnd.nextGaussian();', 'offEastM = k * rnd.nextGaussian();'),
+    ('StandingFix.java', 'an excursion happens for a high draw', 'rnd.nextDouble() < EXCURSION_PER_S * dt', 'rnd.nextDouble() > EXCURSION_PER_S * dt'),
+    ('StandingFix.java', 'the chance of an excursion ignores the time', 'rnd.nextDouble() < EXCURSION_PER_S * dt', 'rnd.nextDouble() < EXCURSION_PER_S'),
+    ('StandingFix.java', 'an excursion is a half turn too short', 'double angle = 2.0 * Math.PI * rnd.nextDouble();', 'double angle = Math.PI * rnd.nextDouble();'),
+    ('StandingFix.java', 'an excursion is at least 0.6', 'double size = acc * (0.5 + 0.75 * rnd.nextDouble());', 'double size = acc * (0.6 + 0.75 * rnd.nextDouble());'),
+    ('StandingFix.java', 'an excursion is at most 1.3', 'double size = acc * (0.5 + 0.75 * rnd.nextDouble());', 'double size = acc * (0.5 + 0.8 * rnd.nextDouble());'),
+    ('StandingFix.java', 'an excursion ignores the accuracy', 'double size = acc * (0.5 + 0.75 * rnd.nextDouble());', 'double size = (0.5 + 0.75 * rnd.nextDouble());'),
+    ('StandingFix.java', 'an excursion north uses the sine', 'offNorthM += size * Math.cos(angle);', 'offNorthM += size * Math.sin(angle);'),
+    ('StandingFix.java', 'an excursion east uses the cosine', 'offEastM += size * Math.sin(angle);', 'offEastM += size * Math.cos(angle);'),
+    ('StandingFix.java', 'an excursion is not added north', '            offNorthM += size * Math.cos(angle);\n', '            '),
+    ('StandingFix.java', 'an excursion is not added east', '            offEastM += size * Math.sin(angle);\n', '            '),
+    ('StandingFix.java', 'the step is not capped', '            offEastM += size * Math.sin(angle);\n        }\n        cap();', '            offEastM += size * Math.sin(angle);\n        }'),
+    ('StandingFix.java', 'the cap is a multiple of the log', 'double max = Math.exp(lnAcc) * MAX_OFFSET_PER_ACC;', 'double max = lnAcc * MAX_OFFSET_PER_ACC;'),
+    ('StandingFix.java', 'the cap never applies', '        if (r > max) {', '        if (r < max) {'),
+    ('StandingFix.java', 'the cap scales the north offset the wrong way', '            offNorthM *= max / r;', '            offNorthM *= r / max;'),
+    ('StandingFix.java', 'the cap scales the east offset the wrong way', '            offEastM *= max / r;', '            offEastM *= r / max;'),
+    ('StandingFix.java', 'the cap leaves the east offset', '            offEastM *= max / r;\n', '            '),
+    ('StandingFix.java', 'the lower bound is the upper', 'Math.max(Math.log(source.minAccM), Math.min(Math.log(source.maxAccM), ln))', 'Math.max(Math.log(source.maxAccM), Math.min(Math.log(source.maxAccM), ln))'),
+    ('StandingFix.java', 'the upper bound is the lower', 'Math.max(Math.log(source.minAccM), Math.min(Math.log(source.maxAccM), ln))', 'Math.max(Math.log(source.minAccM), Math.min(Math.log(source.minAccM), ln))'),
+    ('StandingFix.java', 'the lower bound is not applied', 'Math.max(Math.log(source.minAccM), Math.min(Math.log(source.maxAccM), ln))', 'Math.min(Math.log(source.maxAccM), ln)'),
+    ('StandingFix.java', 'the upper bound is not applied', 'Math.max(Math.log(source.minAccM), Math.min(Math.log(source.maxAccM), ln))', 'Math.max(Math.log(source.minAccM), ln)'),
+    ('PersonaTrack.java', 'the network kind imitates a receiver', 'this.network = new StandingFix(StandingFix.Source.NETWORK, rnd);', 'this.network = new StandingFix(StandingFix.Source.GNSS, rnd);'),
+    ('PersonaTrack.java', 'the GNSS kind imitates the network', 'this.gnss = new StandingFix(StandingFix.Source.GNSS, rnd);', 'this.gnss = new StandingFix(StandingFix.Source.NETWORK, rnd);'),
+    ('PersonaTrack.java', 'the first real fix ignores the last longitude', 'setAnchor(lat, lon, hasLast ? lastLat : placeLat, hasLast ? lastLon : placeLon);', 'setAnchor(lat, lon, hasLast ? lastLat : placeLat, placeLon);'),
+    ('PersonaTrack.java', 'the first real fix ignores the last latitude', 'setAnchor(lat, lon, hasLast ? lastLat : placeLat, hasLast ? lastLon : placeLon);', 'setAnchor(lat, lon, placeLat, hasLast ? lastLon : placeLon);'),
+    ('PersonaTrack.java', 'the first real fix goes to the place', 'setAnchor(lat, lon, hasLast ? lastLat : placeLat, hasLast ? lastLon : placeLon);', 'setAnchor(lat, lon, placeLat, placeLon);'),
+    ('PersonaTrack.java', 'a fix does not note the position it gave', '        hasLast = true;\n        lastLat = out[0];', '        lastLat = out[0];'),
+    ('PersonaTrack.java', 'a fix notes the real latitude', '        lastLat = out[0];\n        lastLon = out[1];\n        inEpisode = false;', '        lastLat = lat;\n        lastLon = out[1];\n        inEpisode = false;'),
+    ('PersonaTrack.java', 'a fix notes the real longitude', '        lastLon = out[1];\n        inEpisode = false;', '        lastLon = lon;\n        inEpisode = false;'),
+    ('PersonaTrack.java', 'a real fix does not end the run', '        lastLon = out[1];\n        inEpisode = false;', '        lastLon = out[1];'),
+    ('PersonaTrack.java', 'an older real fix is noted', 'if (ms >= lastRealMs) {', 'if (true) {'),
+    ('PersonaTrack.java', 'a real fix at the same time is not noted', 'if (ms >= lastRealMs) {', 'if (ms > lastRealMs) {'),
+    ('PersonaTrack.java', 'a real fix is noted only when it is the same time', 'if (ms >= lastRealMs) {', 'if (ms <= lastRealMs) {'),
+    ('PersonaTrack.java', 'the real fix time is read in microseconds', 'long ms = elapsedRealtimeNanos / 1_000_000L;', 'long ms = elapsedRealtimeNanos / 1_000L;'),
+    ('PersonaTrack.java', 'a real fix does not note its speed', '            lastRealMs = ms;\n            lastRealSpeed = speedMps;', '            lastRealMs = ms;'),
+    ('PersonaTrack.java', 'a real fix does not note its time', '            lastRealMs = ms;\n            lastRealSpeed = speedMps;', '            lastRealSpeed = speedMps;'),
+    ('PersonaTrack.java', 'the delay counts from the earlier of the activation and the real fix', 'long due = Math.max(activeMs, lastRealMs) + GRACE_MS;', 'long due = Math.min(activeMs, lastRealMs) + GRACE_MS;'),
+    ('PersonaTrack.java', 'the delay ignores the real fix', 'long due = Math.max(activeMs, lastRealMs) + GRACE_MS;', 'long due = activeMs + GRACE_MS;'),
+    ('PersonaTrack.java', 'the delay ignores the activation', 'long due = Math.max(activeMs, lastRealMs) + GRACE_MS;', 'long due = lastRealMs + GRACE_MS;'),
+    ('PersonaTrack.java', 'the grace is added twice', 'long due = Math.max(activeMs, lastRealMs) + GRACE_MS;', 'long due = Math.max(activeMs, lastRealMs) + 2 * GRACE_MS;'),
+    ('PersonaTrack.java', 'a fast fix does not hold', 'if (lastRealSpeed >= MOVING_MPS) {', 'if (false) {'),
+    ('PersonaTrack.java', 'a slow fix holds', 'if (lastRealSpeed >= MOVING_MPS) {', 'if (true) {'),
+    ('PersonaTrack.java', 'the hold begins at the limit speed', 'if (lastRealSpeed >= MOVING_MPS) {', 'if (lastRealSpeed > MOVING_MPS) {'),
+    ('PersonaTrack.java', 'the hold counts from the activation', 'due = Math.max(due, lastRealMs + MOVING_HOLD_MS);', 'due = Math.max(due, activeMs + MOVING_HOLD_MS);'),
+    ('PersonaTrack.java', 'the hold shortens the delay', 'due = Math.max(due, lastRealMs + MOVING_HOLD_MS);', 'due = Math.min(due, lastRealMs + MOVING_HOLD_MS);'),
+    ('PersonaTrack.java', 'the interval is not waited', 'due = Math.max(due, lastStandingMs + Math.min(Math.max(intervalMs, MIN_INTERVAL_MS), MAX_INTERVAL_MS));', 'due = due;'),
+    ('PersonaTrack.java', 'the interval shortens the delay', 'due = Math.max(due, lastStandingMs + Math.min(', 'due = Math.min(due, lastStandingMs + Math.min('),
+    ('PersonaTrack.java', 'the interval has no floor', 'Math.min(Math.max(intervalMs, MIN_INTERVAL_MS), MAX_INTERVAL_MS)', 'Math.min(intervalMs, MAX_INTERVAL_MS)'),
+    ('PersonaTrack.java', 'the interval has no ceiling', 'Math.min(Math.max(intervalMs, MIN_INTERVAL_MS), MAX_INTERVAL_MS)', 'Math.max(intervalMs, MIN_INTERVAL_MS)'),
+    ('PersonaTrack.java', 'the interval is a ceiling of the floor', 'Math.min(Math.max(intervalMs, MIN_INTERVAL_MS), MAX_INTERVAL_MS)', 'Math.min(Math.min(intervalMs, MIN_INTERVAL_MS), MAX_INTERVAL_MS)'),
+    ('PersonaTrack.java', 'the delay is counted backwards', 'return due - nowMs;', 'return nowMs - due;'),
+    ('PersonaTrack.java', 'a run starts at the place', 'centreLat = hasLast ? lastLat : placeLat;', 'centreLat = placeLat;'),
+    ('PersonaTrack.java', 'a run starts at the last longitude of the place', 'centreLon = hasLast ? lastLon : placeLon;', 'centreLon = placeLon;'),
+    ('PersonaTrack.java', 'a run starts at the last latitude of the longitude', 'centreLat = hasLast ? lastLat : placeLat;', 'centreLat = hasLast ? lastLon : placeLat;'),
+    ('PersonaTrack.java', 'the GNSS walk is always fresh', 'gnss.reset(!hasLast);', 'gnss.reset(true);'),
+    ('PersonaTrack.java', 'the GNSS walk is never fresh', 'gnss.reset(!hasLast);', 'gnss.reset(false);'),
+    ('PersonaTrack.java', 'the network walk is always fresh', 'network.reset(!hasLast);', 'network.reset(true);'),
+    ('PersonaTrack.java', 'the network walk is never fresh', 'network.reset(!hasLast);', 'network.reset(false);'),
+    ('PersonaTrack.java', 'a run is not marked', '            inEpisode = true;\n', '            '),
+    ('PersonaTrack.java', 'every standing fix starts a run', '        if (!inEpisode) {', '        if (true) {'),
+    ('PersonaTrack.java', 'the kinds are swapped', '        if (source == StandingFix.Source.GNSS) {\n            lastGnssFix', '        if (source == StandingFix.Source.NETWORK) {\n            lastGnssFix'),
+    ('PersonaTrack.java', 'a GNSS fix does not note the position', '            hasLast = true;\n            lastLat = lastGnssFix.lat;', '            lastLat = lastGnssFix.lat;'),
+    ('PersonaTrack.java', 'a GNSS fix notes the longitude as the latitude', '            lastLat = lastGnssFix.lat;\n            lastLon = lastGnssFix.lon;', '            lastLat = lastGnssFix.lon;\n            lastLon = lastGnssFix.lon;'),
+    ('PersonaTrack.java', 'a GNSS fix does not note the longitude', '            lastLon = lastGnssFix.lon;\n', '            '),
+    ('PersonaTrack.java', 'a network fix is made by the receiver walk', 'lastNetworkFix = network.next(', 'lastNetworkFix = gnss.next('),
+    ('PersonaTrack.java', 'a network fix moves the last position', '        lastNetworkFix = network.next(centreLat, centreLon, elapsedNowNs, wallNowMs);\n        return lastNetworkFix;', '        lastNetworkFix = network.next(centreLat, centreLon, elapsedNowNs, wallNowMs);\n        lastLat = lastNetworkFix.lat;\n        lastLon = lastNetworkFix.lon;\n        hasLast = true;\n        return lastNetworkFix;'),
+    ('PersonaTrack.java', 'lastStanding swaps the kinds', 'return source == StandingFix.Source.GNSS ? lastGnssFix : lastNetworkFix;', 'return source == StandingFix.Source.GNSS ? lastNetworkFix : lastGnssFix;'),
 ]
+# A name on the command line runs only the mutants of that file (the unmutated tree is still checked first).
+if len(sys.argv) > 1:
+    MUTANTS = [m for m in MUTANTS if m[0] in sys.argv[1:]]
+
 def run_tests(src_dir, test_dir):
     """Compiles the sources with the tests and runs every test class; the worst exit status, or the compiler's."""
     out = test_dir.parent / "out"
@@ -373,7 +491,7 @@ def run_tests(src_dir, test_dir):
     if c.returncode != 0:
         return c
     runs = [subprocess.run(["java", "-ea", "-cp", str(out), "com.android.server.compartments." + test], capture_output=True, text=True)
-            for test in ("ProfilesTest", "PersonaTest", "PlacesTest", "RevokedLedgerTest", "LoopbackAppIdsTest")]
+            for test in ("ProfilesTest", "PersonaTest", "PlacesTest", "RevokedLedgerTest", "LoopbackAppIdsTest", "StandingTest")]
     return max(runs, key=lambda x: x.returncode)
 
 
@@ -402,7 +520,7 @@ for name, what, old, new in MUTANTS:
             survived += 1
             continue
         runs = [subprocess.run(["java", "-ea", "-cp", str(d / "out"), "com.android.server.compartments." + test], capture_output=True, text=True)
-                for test in ("ProfilesTest", "PersonaTest", "PlacesTest", "RevokedLedgerTest", "LoopbackAppIdsTest")]
+                for test in ("ProfilesTest", "PersonaTest", "PlacesTest", "RevokedLedgerTest", "LoopbackAppIdsTest", "StandingTest")]
         r = max(runs, key=lambda x: x.returncode)
         if r.returncode == 0:
             print("SURVIVED:", name, what)

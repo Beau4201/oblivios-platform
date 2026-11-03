@@ -10,3 +10,4 @@ java -ea -cp "$OUT" com.android.server.compartments.PersonaTest
 java -ea -cp "$OUT" com.android.server.compartments.PlacesTest
 java -ea -cp "$OUT" com.android.server.compartments.RevokedLedgerTest
 java -ea -cp "$OUT" com.android.server.compartments.LoopbackAppIdsTest
+java -ea -cp "$OUT" com.android.server.compartments.StandingTest

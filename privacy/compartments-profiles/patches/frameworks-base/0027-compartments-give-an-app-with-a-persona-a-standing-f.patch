@@ -1,0 +1,730 @@
+From 95c741b84224c27422950197022a8ad64f9d1435 Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Tue, 3 Nov 2026 16:43:25 +0100
+Subject: [PATCH] compartments: give an app with a persona a standing fix while
+ the phone has no real fix
+
+An app whose location is substituted and that has a place is given the fixes of
+a receiver that stands at the place when no real fix reaches it (ADR-214, CMP-047):
+a wakeup alarm per active registration of the gps, fused and network providers
+delivers a fix 3 s after the registration began or the last real fix arrived, then
+once per request interval, through the same filters, permission level and app-op
+note as a real fix. getLastLocation answers with the newer of the real last
+location and the standing fix. The fix is kept per app in PersonaTrack (new
+StandingFix: a mean-reverting walk, a bounded accuracy, times 20 to 60 ms before
+the delivery, a stationary speed, no altitude, bearing, extras or mock flag), so
+gps and fused agree, and the first real fix after it continues from the last
+standing position. A real fix at 1.5 m/s or more holds the standing fix back for
+120 s; an emergency gets no standing fix. The shared last-location table is
+untouched; the distance filter of a request ignores the distance between a real and
+a standing fix.
+---
+ .../server/compartments/PersonaTrack.java     | 102 ++++++++-
+ .../server/compartments/StandingFix.java      | 184 +++++++++++++++
+ .../provider/LocationProviderManager.java     | 216 +++++++++++++++++-
+ 3 files changed, 493 insertions(+), 9 deletions(-)
+ create mode 100644 services/core/java/com/android/server/compartments/StandingFix.java
+
+diff --git a/services/core/java/com/android/server/compartments/PersonaTrack.java b/services/core/java/com/android/server/compartments/PersonaTrack.java
+index 2446369..378c5b7 100644
+--- a/services/core/java/com/android/server/compartments/PersonaTrack.java
++++ b/services/core/java/com/android/server/compartments/PersonaTrack.java
+@@ -1,27 +1,61 @@
+ // SPDX-License-Identifier: Apache-2.0
+ package com.android.server.compartments;
+ 
++import java.security.SecureRandom;
++import java.util.Random;
++
+ /**
+  * The fake position of one app: the real track, moved to another place (ADR-208, spec section 4.2). The first real fix is
+  * mapped to the place and every later fix keeps the real displacement in metres, so speed, stops and heading stay the real
+  * ones. After the real position has moved more than {@link #REANCHOR_M} from the anchor the anchor moves with it, to the fake
+  * position that the track has reached, so the fake track stays continuous and the east-west scaling stays accurate.
++ *
++ * <p>ADR-214: while the phone has no real fix the track stands at the place, or where the last fix left it, and gives the
++ * fixes of a stationary receiver ({@link #stand}); the first real fix after that is mapped to the position of the last
++ * standing fix, so the app sees no jump. The track also says when the next standing fix is due ({@link #standingDelayMs}).
+  */
+ public final class PersonaTrack {
+     static final double REANCHOR_M = 100_000.0;
++    /** No real fix for this long, and the phone is taken to have none (a cold start of a receiver takes longer than this). */
++    static final long GRACE_MS = 3_000;
++    /** A standing fix is never due sooner than this after the one before it on the same registration. */
++    static final long MIN_INTERVAL_MS = 1_000;
++    /** A request for fixes that is further apart than this is served at this spacing, so the arithmetic cannot overflow. */
++    static final long MAX_INTERVAL_MS = 24L * 3_600_000L;
++    /** After a real fix at this speed or more a gap is a gap (a tunnel), not a phone that stands still: no standing fix yet. */
++    static final float MOVING_MPS = 1.5f;
++    static final long MOVING_HOLD_MS = 120_000;
+     private static final double MIN_COS = 0.05;
++    private static final long NONE = Long.MIN_VALUE;
+ 
+     private final double placeLat;
+     private final double placeLon;
++    private final StandingFix gnss;
++    private final StandingFix network;
+     private boolean anchored;
+     private double realLat, realLon, fakeLat, fakeLon;
++    // the last position that the app was given: a real fix moved to the place, or a standing fix of the GNSS kind
++    private boolean hasLast;
++    private double lastLat, lastLon;
++    // a run of standing fixes: the centre it stands around, kept until a real fix ends it
++    private boolean inEpisode;
++    private double centreLat, centreLon;
++    private long lastRealMs = NONE;
++    private float lastRealSpeed = Float.NaN;
++    private StandingFix.Fix lastGnssFix, lastNetworkFix;
+ 
+     PersonaTrack(double placeLat, double placeLon) {
++        this(placeLat, placeLon, new Random(new SecureRandom().nextLong()));
++    }
++
++    PersonaTrack(double placeLat, double placeLon, Random rnd) {
+         if (!(Math.abs(placeLat) <= 80.0) || Double.isNaN(placeLon)) {
+             throw new IllegalArgumentException("place");
+         }
+         this.placeLat = placeLat;
+         this.placeLon = Geo.wrapLon(placeLon);
++        this.gnss = new StandingFix(StandingFix.Source.GNSS, rnd);
++        this.network = new StandingFix(StandingFix.Source.NETWORK, rnd);
+     }
+ 
+     /** The fake {latitude, longitude} for a real fix. A fix with a latitude or longitude that is not finite is refused. */
+@@ -31,12 +65,18 @@ public final class PersonaTrack {
+         }
+         lon = Geo.wrapLon(lon);
+         if (!anchored) {
+-            setAnchor(lat, lon, placeLat, placeLon);
++            // the first real fix continues from where the app was last put: the place, or the last standing fix
++            setAnchor(lat, lon, hasLast ? lastLat : placeLat, hasLast ? lastLon : placeLon);
+         } else if (Geo.distanceM(realLat, realLon, lat, lon) > REANCHOR_M) {
+             double[] here = translate(lat, lon);
+             setAnchor(lat, lon, here[0], here[1]);
+         }
+-        return translate(lat, lon);
++        double[] out = translate(lat, lon);
++        hasLast = true;
++        lastLat = out[0];
++        lastLon = out[1];
++        inEpisode = false;
++        return out;
+     }
+ 
+     /** Like {@link #apply} but null for a fix that is not finite, so a delivery path never throws on a bad provider value. */
+@@ -44,6 +84,64 @@ public final class PersonaTrack {
+         return validFix(lat, lon) ? apply(lat, lon) : null;
+     }
+ 
++    /**
++     * Notes that a real fix with this elapsed time and speed (NaN when it has none) has reached the app. A fix older than the
++     * newest one noted changes nothing, so a last location from the past does not hold back the standing fixes.
++     */
++    public synchronized void noteReal(long elapsedRealtimeNanos, float speedMps) {
++        long ms = elapsedRealtimeNanos / 1_000_000L;
++        if (ms >= lastRealMs) {
++            lastRealMs = ms;
++            lastRealSpeed = speedMps;
++        }
++    }
++
++    /**
++     * Milliseconds until the next standing fix is due for a registration that became active at {@code activeMs} and was last
++     * given a standing fix at {@code lastStandingMs} ({@link Long#MIN_VALUE} for none), asked at {@code nowMs}; zero or less
++     * means now. All times are elapsed-realtime milliseconds. A standing fix is due {@link #GRACE_MS} after the registration
++     * began or the last real fix, whichever is later, and then once per request interval; after a real fix at walking speed
++     * or more it is held back for {@link #MOVING_HOLD_MS}.
++     */
++    public synchronized long standingDelayMs(long nowMs, long activeMs, long lastStandingMs, long intervalMs) {
++        long due = Math.max(activeMs, lastRealMs) + GRACE_MS;
++        if (lastRealSpeed >= MOVING_MPS) {  // NaN until a real fix has been noted
++            due = Math.max(due, lastRealMs + MOVING_HOLD_MS);
++        }
++        due = Math.max(due, lastStandingMs + Math.min(Math.max(intervalMs, MIN_INTERVAL_MS), MAX_INTERVAL_MS));
++        return due - nowMs;
++    }
++
++    /**
++     * A standing fix: the position of a receiver that stands at the place, or where the last fix put the app, with the accuracy
++     * and times of a real one. {@code elapsedNowNs} and {@code wallNowMs} are the moment it is made for. The first real fix after
++     * a run of these continues from the last GNSS-kind one. The NETWORK kind does not move that position, so a coarse fix never
++     * pulls the track away from the one that a navigation request is given.
++     */
++    public synchronized StandingFix.Fix stand(long elapsedNowNs, long wallNowMs, StandingFix.Source source) {
++        if (!inEpisode) {
++            centreLat = hasLast ? lastLat : placeLat;
++            centreLon = hasLast ? lastLon : placeLon;
++            gnss.reset(!hasLast);
++            network.reset(!hasLast);
++            inEpisode = true;
++        }
++        if (source == StandingFix.Source.GNSS) {
++            lastGnssFix = gnss.next(centreLat, centreLon, elapsedNowNs, wallNowMs);
++            hasLast = true;
++            lastLat = lastGnssFix.lat;
++            lastLon = lastGnssFix.lon;
++            return lastGnssFix;
++        }
++        lastNetworkFix = network.next(centreLat, centreLon, elapsedNowNs, wallNowMs);
++        return lastNetworkFix;
++    }
++
++    /** The newest standing fix of this kind, or null when there is none. */
++    public synchronized StandingFix.Fix lastStanding(StandingFix.Source source) {
++        return source == StandingFix.Source.GNSS ? lastGnssFix : lastNetworkFix;
++    }
++
+     private static boolean validFix(double lat, double lon) {
+         return Math.abs(lat) <= 90.0 && !Double.isNaN(lon) && !Double.isInfinite(lon);
+     }
+diff --git a/services/core/java/com/android/server/compartments/StandingFix.java b/services/core/java/com/android/server/compartments/StandingFix.java
+new file mode 100644
+index 0000000..a6962ba
+--- /dev/null
++++ b/services/core/java/com/android/server/compartments/StandingFix.java
+@@ -0,0 +1,184 @@
++// SPDX-License-Identifier: Apache-2.0
++package com.android.server.compartments;
++
++import java.util.Random;
++
++/**
++ * The fixes of a phone that stands at a place and has no GNSS fix (ADR-214, spec section 4.2): the position is a mean-reverting
++ * random walk around a centre (the model of the Location Anchor design, ADR-037), the accuracy a bounded random walk of its own,
++ * and the times lag the moment of delivery by a few tens of milliseconds, as those of a receiver do. There is no altitude, no
++ * bearing, no extras and no mock flag; a receiver on the move would report more, and the delivery path never asks for it.
++ *
++ * <p>Every constant below is an {@code [assumption]} taken from what a stationary phone reports in the open: it has not been
++ * measured against real fixes of this device, and the fix is not to be called indistinguishable before it has been. One instance
++ * is used under the lock of one {@link PersonaTrack}, so it has none of its own. Pure Java.
++ */
++public final class StandingFix {
++    /** What the fix imitates: the receiver of the phone, or the network location (coarser, and without a speed). */
++    public enum Source {
++        GNSS(4.5, 3.0, 12.0, true),
++        NETWORK(28.0, 12.0, 70.0, false);
++
++        final double medianAccM;
++        final double minAccM;
++        final double maxAccM;
++        final boolean hasSpeed;
++
++        Source(double medianAccM, double minAccM, double maxAccM, boolean hasSpeed) {
++            this.medianAccM = medianAccM;
++            this.minAccM = minAccM;
++            this.maxAccM = maxAccM;
++            this.hasSpeed = hasSpeed;
++        }
++    }
++
++    /** One fix: the values that the delivery path puts into a {@code Location}. */
++    public static final class Fix {
++        public final double lat;
++        public final double lon;
++        public final float accuracyM;
++        public final boolean hasSpeed;
++        public final float speedMps;
++        public final float speedAccuracyMps;
++        public final long elapsedRealtimeNanos;
++        public final long timeMs;
++
++        Fix(double lat, double lon, float accuracyM, boolean hasSpeed, float speedMps, float speedAccuracyMps,
++                long elapsedRealtimeNanos, long timeMs) {
++            this.lat = lat;
++            this.lon = lon;
++            this.accuracyM = accuracyM;
++            this.hasSpeed = hasSpeed;
++            this.speedMps = speedMps;
++            this.speedAccuracyMps = speedAccuracyMps;
++            this.elapsedRealtimeNanos = elapsedRealtimeNanos;
++            this.timeMs = timeMs;
++        }
++    }
++
++    /** A second call this soon after a step returns the same position and accuracy, so two registrations agree. */
++    static final double MIN_STEP_S = 0.2;
++    /** Time constants of the pull back to the centre and of the accuracy. */
++    static final double TAU_POS_S = 30.0;
++    static final double TAU_ACC_S = 60.0;
++    /** Spread of the logarithm of the accuracy. */
++    static final double SIGMA_LN_ACC = 0.3;
++    /**
++     * Standard deviation of the position per axis, as a fraction of the accuracy that is reported: with 0.6 about 75% of a
++     * still walk lies inside the accuracy, which Android defines as the radius of 68% confidence; the excursions take it to 70%.
++     */
++    static final double POS_SIGMA_PER_ACC = 0.6;
++    /** A hard cap under the model, as a multiple of the accuracy: no pathological draw runs away. */
++    static final double MAX_OFFSET_PER_ACC = 2.5;
++    /** The chance per second of a larger excursion (multipath, a satellite change) that the pull back then removes. */
++    static final double EXCURSION_PER_S = 0.01;
++    static final long MIN_LATENCY_MS = 20;
++    static final int LATENCY_SPAN_MS = 41;
++    private static final double MIN_COS = 0.05;
++    private static final double M_PER_DEG = Math.toRadians(Geo.EARTH_RADIUS_M);
++    private static final long NANOS_PER_MS = 1_000_000L;
++
++    private final Source source;
++    private final Random rnd;
++    private boolean started;
++    private boolean freshStart;
++    private double lnAcc;
++    private double offNorthM;
++    private double offEastM;
++    private long stepAtNs;
++    private long lastElapsedNs = Long.MIN_VALUE;
++
++    StandingFix(Source source, Random rnd) {
++        this.source = source;
++        this.rnd = rnd;
++    }
++
++    /**
++     * Starts again at the next fix. With {@code fresh} the first position is drawn from the spread of a stationary receiver
++     * around the centre; without it the first position is the centre, because the centre is the last position that the app was
++     * given and a standing fix then continues from it.
++     */
++    void reset(boolean fresh) {
++        started = false;
++        freshStart = fresh;
++    }
++
++    /** The next fix around the centre. {@code nowNs} is the elapsed time and {@code wallMs} the wall clock of the moment. */
++    Fix next(double centreLat, double centreLon, long nowNs, long wallMs) {
++        if (!started) {
++            start(nowNs);
++        } else {
++            double dt = (nowNs - stepAtNs) / 1e9;
++            if (dt >= MIN_STEP_S) {
++                step(dt);
++                stepAtNs = nowNs;
++            }
++        }
++        double acc = Math.exp(lnAcc);
++        double cosLat = Math.max(Math.cos(Math.toRadians(centreLat)), MIN_COS);
++        double lat = Geo.clampLat(centreLat + offNorthM / M_PER_DEG);
++        double lon = Geo.wrapLon(centreLon + offEastM / (M_PER_DEG * cosLat));
++
++        long latencyMs = MIN_LATENCY_MS + rnd.nextInt(LATENCY_SPAN_MS);
++        long elapsed = nowNs - latencyMs * NANOS_PER_MS;
++        if (elapsed <= lastElapsedNs) {
++            elapsed = lastElapsedNs + NANOS_PER_MS;
++        }
++        lastElapsedNs = elapsed;
++        long timeMs = wallMs - (nowNs - elapsed) / NANOS_PER_MS;
++
++        float speed = 0f;
++        float speedAcc = 0f;
++        if (source.hasSpeed) {
++            speed = rnd.nextBoolean() ? 0f : (float) (Math.abs(rnd.nextGaussian()) * 0.05);
++            speedAcc = (float) (0.1 + 0.2 * rnd.nextDouble());
++        }
++        return new Fix(lat, lon, (float) acc, source.hasSpeed, speed, speedAcc, elapsed, timeMs);
++    }
++
++    private void start(long nowNs) {
++        started = true;
++        stepAtNs = nowNs;
++        lnAcc = clampLn(Math.log(source.medianAccM) + SIGMA_LN_ACC * rnd.nextGaussian());
++        offNorthM = 0.0;
++        offEastM = 0.0;
++        if (freshStart) {
++            double sigma = Math.exp(lnAcc) * POS_SIGMA_PER_ACC;
++            offNorthM = sigma * rnd.nextGaussian();
++            offEastM = sigma * rnd.nextGaussian();
++            cap();
++        }
++    }
++
++    private void step(double dt) {
++        double mu = Math.log(source.medianAccM);
++        double rhoAcc = Math.exp(-dt / TAU_ACC_S);
++        lnAcc = clampLn(mu + rhoAcc * (lnAcc - mu)
++                + SIGMA_LN_ACC * Math.sqrt(1.0 - rhoAcc * rhoAcc) * rnd.nextGaussian());
++        double acc = Math.exp(lnAcc);
++        double rho = Math.exp(-dt / TAU_POS_S);
++        double k = acc * POS_SIGMA_PER_ACC * Math.sqrt(1.0 - rho * rho);
++        offNorthM = rho * offNorthM + k * rnd.nextGaussian();
++        offEastM = rho * offEastM + k * rnd.nextGaussian();
++        if (rnd.nextDouble() < EXCURSION_PER_S * dt) {
++            double angle = 2.0 * Math.PI * rnd.nextDouble();
++            double size = acc * (0.5 + 0.75 * rnd.nextDouble());
++            offNorthM += size * Math.cos(angle);
++            offEastM += size * Math.sin(angle);
++        }
++        cap();
++    }
++
++    private void cap() {
++        double max = Math.exp(lnAcc) * MAX_OFFSET_PER_ACC;
++        double r = Math.hypot(offNorthM, offEastM);
++        if (r > max) {
++            offNorthM *= max / r;
++            offEastM *= max / r;
++        }
++    }
++
++    private double clampLn(double ln) {
++        return Math.max(Math.log(source.minAccM), Math.min(Math.log(source.maxAccM), ln));
++    }
++}
+diff --git a/services/core/java/com/android/server/location/provider/LocationProviderManager.java b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+index 7b51f52..f2b2488 100644
+--- a/services/core/java/com/android/server/location/provider/LocationProviderManager.java
++++ b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+@@ -27,6 +27,7 @@ import static android.location.LocationManager.KEY_FLUSH_COMPLETE;
+ import static android.location.LocationManager.KEY_LOCATIONS;
+ import static android.location.LocationManager.KEY_LOCATION_CHANGED;
+ import static android.location.LocationManager.KEY_PROVIDER_ENABLED;
++import static android.location.LocationManager.NETWORK_PROVIDER;
+ import static android.location.LocationManager.PASSIVE_PROVIDER;
+ import static android.os.IPowerManager.LOCATION_MODE_NO_CHANGE;
+ import static android.os.PowerExemptionManager.REASON_LOCATION_PROVIDER;
+@@ -103,6 +104,7 @@ import com.android.server.FgThread;
+ import com.android.server.IoThread;
+ import com.android.server.LocalServices;
+ import com.android.server.compartments.CompartmentsInternal;
++import com.android.server.compartments.StandingFix;
+ import com.android.server.location.LocationPermissions;
+ import com.android.server.location.LocationPermissions.PermissionLevel;
+ import com.android.server.location.fudger.LocationFudger;
+@@ -400,6 +402,16 @@ public class LocationProviderManager extends
+ 
+         @Nullable private Location mLastLocation = null;
+ 
++        // FreeholdOS (ADR-214): the alarm of the standing fix of an app with a persona, and when this registration became active
++        // and was last given a standing fix (elapsed realtime, ms)
++        private final OnAlarmListener mStandingAlarm = this::onStandingAlarm;
++        @GuardedBy("mMultiplexerLock")
++        private boolean mStandingScheduled;
++        @GuardedBy("mMultiplexerLock")
++        private long mStandingActiveMs;
++        @GuardedBy("mMultiplexerLock")
++        private long mStandingLastMs = Long.MIN_VALUE;
++
+         protected Registration(LocationRequest request, CallerIdentity identity, Executor executor,
+                 LocationTransport transport, @PermissionLevel int permissionLevel) {
+             super(executor, transport);
+@@ -475,6 +487,7 @@ public class LocationProviderManager extends
+                 Log.d(TAG, mName + " provider removed registration from " + getIdentity());
+             }
+ 
++            stopStanding();
+             super.onUnregister();
+         }
+ 
+@@ -487,11 +500,13 @@ public class LocationProviderManager extends
+                 mAppOpsHelper.startOpNoThrow(OP_MONITOR_LOCATION, getIdentity());
+             }
+             onHighPowerUsageChanged();
++            startStanding();
+         }
+ 
+         @GuardedBy("mMultiplexerLock")
+         @Override
+         protected void onInactive() {
++            stopStanding();
+             onHighPowerUsageChanged();
+             if (!getRequest().isHiddenFromAppOps()) {
+                 mAppOpsHelper.finishOp(OP_MONITOR_LOCATION, getIdentity());
+@@ -511,6 +526,81 @@ public class LocationProviderManager extends
+             }
+         }
+ 
++        /**
++         * FreeholdOS (ADR-214): notes that a real fix has reached this registration, before the filters of the request decide
++         * whether the app is given it, so that an app that asks for a fix every minute is not given standing fixes between them.
++         */
++        @GuardedBy("mMultiplexerLock")
++        final void noteRealArrival(@Nullable LocationResult fineLocationResult) {
++            CompartmentsInternal.PersonaView persona =
++                    fineLocationResult == null ? null : personaOf(getIdentity());
++            if (persona != null) {
++                Location last = fineLocationResult.getLastLocation();
++                persona.track.noteReal(last.getElapsedRealtimeNanos(), last.hasSpeed() ? last.getSpeed() : Float.NaN);
++            }
++        }
++
++        @GuardedBy("mMultiplexerLock")
++        private void startStanding() {
++            mStandingActiveMs = SystemClock.elapsedRealtime();
++            mStandingLastMs = Long.MIN_VALUE;
++            scheduleStanding();
++        }
++
++        @GuardedBy("mMultiplexerLock")
++        private void stopStanding() {
++            if (mStandingScheduled) {
++                mStandingScheduled = false;
++                mAlarmHelper.cancel(mStandingAlarm);
++            }
++        }
++
++        /**
++         * FreeholdOS (ADR-214): wakes this registration when the next standing fix of its app is due. The passive provider and a
++         * passive request get none: they are given what the other requests get, and a standing fix is no report of a provider.
++         */
++        @GuardedBy("mMultiplexerLock")
++        private void scheduleStanding() {
++            long intervalMs = getRequest().getIntervalMillis();
++            if (mPassiveManager == null || intervalMs == LocationRequest.PASSIVE_INTERVAL || !isRegistered() || !isActive()) {
++                return;
++            }
++            CompartmentsInternal.PersonaView persona = personaOf(getIdentity());
++            if (persona == null) {
++                return;
++            }
++            long delayMs = persona.track.standingDelayMs(
++                    SystemClock.elapsedRealtime(), mStandingActiveMs, mStandingLastMs, intervalMs);
++            mStandingScheduled = true;
++            // like the expiry alarm: a wakeup alarm, so that a request for fixes with the screen off is served as a receiver would
++            mAlarmHelper.setDelayedAlarm(max(delayMs, 1), mStandingAlarm, null);
++        }
++
++        private void onStandingAlarm() {
++            // outside the lock: the emergency state is a call into telephony (b/426562854)
++            boolean inEmergency = mEmergencyHelper.isInEmergency(0);
++            synchronized (mMultiplexerLock) {
++                mStandingScheduled = false;
++                if (!isRegistered() || !isActive()) {
++                    return;
++                }
++                CompartmentsInternal.PersonaView persona = personaOf(getIdentity());
++                if (persona == null) {
++                    return;
++                }
++                long nowMs = SystemClock.elapsedRealtime();
++                // in an emergency the real position is what the app needs: no standing fix, and the alarm goes on
++                if (!inEmergency && persona.track.standingDelayMs(nowMs, mStandingActiveMs, mStandingLastMs,
++                        getRequest().getIntervalMillis()) <= 0) {
++                    mStandingLastMs = nowMs;
++                    StandingFix.Fix fix = persona.track.stand(
++                            SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), standingSource());
++                    executeOperation(acceptStandingFix(LocationResult.wrap(standingLocation(fix))));
++                }
++                scheduleStanding();
++            }
++        }
++
+         public @PermissionLevel int getPermissionLevel() {
+             synchronized (mMultiplexerLock) {
+                 return mPermissionLevel;
+@@ -773,6 +863,10 @@ public class LocationProviderManager extends
+         @Nullable abstract ListenerOperation<LocationTransport> acceptLocationChange(
+                 LocationResult fineLocationResult);
+ 
++        /** FreeholdOS (ADR-214): like {@link #acceptLocationChange} for a standing fix, which is already at the place of the persona. */
++        @Nullable abstract ListenerOperation<LocationTransport> acceptStandingFix(
++                LocationResult standingLocationResult);
++
+         @Override
+         public String toString() {
+             StringBuilder builder = new StringBuilder();
+@@ -816,6 +910,10 @@ public class LocationProviderManager extends
+         private int mNumLocationsDelivered = 0;
+         @GuardedBy("mMultiplexerLock")
+         private long mExpirationRealtimeMs = Long.MAX_VALUE;
++        // FreeholdOS (ADR-214): whether the last location given was a standing fix, which is in the space of the persona, not the
++        // real one that mLastLocation and the filters of the request otherwise work in
++        @GuardedBy("mMultiplexerLock")
++        private boolean mLastDeliveredStanding = false;
+ 
+         protected <TTransport extends LocationTransport & ProviderTransport> LocationRegistration(
+                 LocationRequest request,
+@@ -938,6 +1036,23 @@ public class LocationProviderManager extends
+         @Override
+         @Nullable ListenerOperation<LocationTransport> acceptLocationChange(
+                 LocationResult fineLocationResult) {
++            return acceptFix(fineLocationResult, false);
++        }
++
++        @GuardedBy("mMultiplexerLock")
++        @Override
++        @Nullable ListenerOperation<LocationTransport> acceptStandingFix(
++                LocationResult standingLocationResult) {
++            return acceptFix(standingLocationResult, true);
++        }
++
++        @GuardedBy("mMultiplexerLock")
++        @Nullable private ListenerOperation<LocationTransport> acceptFix(
++                LocationResult fineLocationResult, boolean standing) {
++            if (!standing) {
++                noteRealArrival(fineLocationResult);
++            }
++
+             // check expiration time - alarm is not guaranteed to go off at the right time,
+             // especially for short intervals
+             if (SystemClock.elapsedRealtime() >= mExpirationRealtimeMs) {
+@@ -955,6 +1070,7 @@ public class LocationProviderManager extends
+             LocationResult locationResult = permittedLocationResult.filter(
+                     new Predicate<Location>() {
+                         private Location mPreviousLocation = getLastDeliveredLocation();
++                        private boolean mPreviousStanding = mLastDeliveredStanding;
+ 
+                         @Override
+                         public boolean test(Location location) {
+@@ -987,8 +1103,9 @@ public class LocationProviderManager extends
+                                 // check smallest displacement
+                                 double smallestDisplacementM =
+                                         getRequest().getMinUpdateDistanceMeters();
+-                                if (smallestDisplacementM > 0.0 && location.distanceTo(
+-                                        mPreviousLocation)
++                                // FreeholdOS (ADR-214): a distance between a real fix and a standing one means nothing
++                                if (smallestDisplacementM > 0.0 && mPreviousStanding == standing
++                                        && location.distanceTo(mPreviousLocation)
+                                         <= smallestDisplacementM) {
+                                     if (D) {
+                                         Log.v(TAG, mName + " provider registration " + getIdentity()
+@@ -999,6 +1116,7 @@ public class LocationProviderManager extends
+                             }
+ 
+                             mPreviousLocation = location;
++                            mPreviousStanding = standing;
+                             return true;
+                         }
+                     });
+@@ -1037,6 +1155,7 @@ public class LocationProviderManager extends
+                 public void onPreExecute() {
+                     // update last delivered location
+                     setLastDeliveredLocation(locationResult.getLastLocation());
++                    mLastDeliveredStanding = standing;
+ 
+                     if (useWakeLock) {
+                         mWakeLock.acquire(WAKELOCK_TIMEOUT_MS);
+@@ -1053,8 +1172,11 @@ public class LocationProviderManager extends
+                     } else {
+                         deliverLocationResult = locationResult;
+                     }
+-                    // FreeholdOS (ADR-208): an app with a persona is delivered the fixes moved to its place
+-                    deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
++                    // FreeholdOS (ADR-208): an app with a persona is delivered the fixes moved to its place; a standing fix
++                    // (ADR-214) is there already
++                    if (!standing) {
++                        deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
++                    }
+ 
+                     listener.deliverOnLocationChanged(deliverLocationResult,
+                             useWakeLock ? mWakeLockReleaser : null);
+@@ -1359,6 +1481,23 @@ public class LocationProviderManager extends
+         @Override
+         @Nullable ListenerOperation<LocationTransport> acceptLocationChange(
+                 @Nullable LocationResult fineLocationResult) {
++            return acceptFix(fineLocationResult, false);
++        }
++
++        @GuardedBy("mMultiplexerLock")
++        @Override
++        @Nullable ListenerOperation<LocationTransport> acceptStandingFix(
++                LocationResult standingLocationResult) {
++            return acceptFix(standingLocationResult, true);
++        }
++
++        @GuardedBy("mMultiplexerLock")
++        @Nullable private ListenerOperation<LocationTransport> acceptFix(
++                @Nullable LocationResult fineLocationResult, boolean standing) {
++            if (!standing) {
++                noteRealArrival(fineLocationResult);
++            }
++
+             // check expiration time - alarm is not guaranteed to go off at the right time,
+             // especially for short intervals
+             if (SystemClock.elapsedRealtime() >= mExpirationRealtimeMs) {
+@@ -1406,8 +1545,11 @@ public class LocationProviderManager extends
+                     } else {
+                         deliverLocationResult = locationResult;
+                     }
+-                    // FreeholdOS (ADR-208): an app with a persona is delivered the fix moved to its place
+-                    deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
++                    // FreeholdOS (ADR-208): an app with a persona is delivered the fix moved to its place; a standing fix
++                    // (ADR-214) is there already
++                    if (!standing) {
++                        deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
++                    }
+ 
+                     // we currently don't hold a wakelock for getCurrentLocation deliveries
+                     listener.deliverOnLocationChanged(deliverLocationResult, null);
+@@ -1826,6 +1968,53 @@ public class LocationProviderManager extends
+         return persona == null || mEmergencyHelper.isInEmergency(0) ? null : persona;
+     }
+ 
++    /**
++     * FreeholdOS (ADR-214): the persona of the caller without the emergency check, which is a call into telephony and is made
++     * by the callers that can make it outside the lock of the multiplexer.
++     */
++    @Nullable private static CompartmentsInternal.PersonaView personaOf(CallerIdentity identity) {
++        CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
++        return compartments == null ? null : compartments.personaFor(identity.getUid());
++    }
++
++    /** FreeholdOS (ADR-214): the network provider is imitated by a coarse fix without a speed, every other one by a receiver. */
++    private StandingFix.Source standingSource() {
++        return NETWORK_PROVIDER.equals(mName) ? StandingFix.Source.NETWORK : StandingFix.Source.GNSS;
++    }
++
++    /** FreeholdOS (ADR-214): the fix as a location of this provider: no altitude, bearing, extras or mock flag. */
++    private Location standingLocation(StandingFix.Fix fix) {
++        Location location = new Location(mName);
++        location.setLatitude(fix.lat);
++        location.setLongitude(fix.lon);
++        location.setAccuracy(fix.accuracyM);
++        location.setTime(fix.timeMs);
++        location.setElapsedRealtimeNanos(fix.elapsedRealtimeNanos);
++        if (fix.hasSpeed) {
++            location.setSpeed(fix.speedMps);
++            location.setSpeedAccuracyMetersPerSecond(fix.speedAccuracyMps);
++        }
++        return location;
++    }
++
++    /**
++     * FreeholdOS (ADR-214): the last location of an app with a persona when the phone has no newer real one: the standing fix of
++     * its kind, or a new one when it has none. Null when the real last location is the newer, which the delivery path moves to the
++     * place as before.
++     */
++    @Nullable private Location standingLastLocation(CompartmentsInternal.PersonaView persona,
++            @Nullable Location real) {
++        StandingFix.Source source = standingSource();
++        StandingFix.Fix last = persona.track.lastStanding(source);
++        if (real != null && (last == null || real.getElapsedRealtimeNanos() >= last.elapsedRealtimeNanos)) {
++            return null;
++        }
++        if (last == null) {
++            last = persona.track.stand(SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), source);
++        }
++        return standingLocation(last);
++    }
++
+     /** The fixes of a result moved to the place of the persona of the caller; the result itself when it has none. */
+     @Nullable private LocationResult personaResult(@Nullable LocationResult result,
+             CallerIdentity identity) {
+@@ -1874,6 +2063,17 @@ public class LocationProviderManager extends
+                         Long.MAX_VALUE),
+                 permissionLevel);
+ 
++        // FreeholdOS (ADR-214): an app with a persona is given the standing fix when the phone has no newer real one
++        boolean standing = false;
++        CompartmentsInternal.PersonaView persona = mPassiveManager == null ? null : persona(identity);
++        if (persona != null) {
++            Location fix = getPermittedLocation(standingLastLocation(persona, location), permissionLevel);
++            if (fix != null) {
++                location = fix;
++                standing = true;
++            }
++        }
++
+         if (location != null) {
+             // lastly - note app ops
+             int op;
+@@ -1911,7 +2111,9 @@ public class LocationProviderManager extends
+             if (locationWithheld(identity)) {
+                 return null;
+             }
+-            location = personaLocation(location, identity);
++            if (!standing) {
++                location = personaLocation(location, identity);
++            }
+ 
+             // if delivering to the same process, make a copy of the location first (since
+             // location is mutable)
+-- 
+2.56.0
+
