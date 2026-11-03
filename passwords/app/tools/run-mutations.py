@@ -36,9 +36,16 @@ T = K + "core/SiteText.kt"
 OR = K + "fill/Origin.kt"
 S = "src/main/kotlin/org/freeholdos/passwords/lock/LockState.kt"
 C = K + "fill/ChipPolicy.kt"
+CG = K + "core/ClipGuard.kt"
 
 # (name, file, old, new)
 MUTATIONS = [
+    # PWM-014: the repeated notification of our own copy must not stop the clear
+    ("clip: the window is shortened to nothing", CG, "const val OWN_WINDOW_MS = 1_000L", "const val OWN_WINDOW_MS = 0L"),
+    ("clip: the window is far too long", CG, "const val OWN_WINDOW_MS = 1_000L", "const val OWN_WINDOW_MS = 60_000L"),
+    ("clip: the window ends one millisecond late", CG, "if (nowMs - setAtMs >= OWN_WINDOW_MS)", "if (nowMs - setAtMs > OWN_WINDOW_MS)"),
+    ("clip: a change inside the window counts", CG, "if (nowMs - setAtMs >= OWN_WINDOW_MS)", "if (nowMs - setAtMs < OWN_WINDOW_MS)"),
+    ("clip: a late change is forgotten", CG, "changedByOthers = true", "changedByOthers = false"),
     # constants
     ("lock: background minute shortened", P, "const val BACKGROUND_LOCK_MS = 60_000L", "const val BACKGROUND_LOCK_MS = 59_000L"),
     ("lock: background minute lengthened", P, "const val BACKGROUND_LOCK_MS = 60_000L", "const val BACKGROUND_LOCK_MS = 61_000L"),

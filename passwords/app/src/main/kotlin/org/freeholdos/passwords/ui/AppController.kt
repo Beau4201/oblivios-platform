@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.PersistableBundle
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -18,6 +19,7 @@ import org.freeholdos.passwords.PasswordsApplication
 import org.freeholdos.passwords.R
 import org.freeholdos.passwords.SecureActivity
 import org.freeholdos.passwords.core.Checkup
+import org.freeholdos.passwords.core.ClipGuard
 import org.freeholdos.passwords.core.Code
 import org.freeholdos.passwords.core.Entry
 import org.freeholdos.passwords.core.SiteText
@@ -286,24 +288,22 @@ class AppController(val activity: SecureActivity) {
      * Copies with the sensitive flag (the system hides it from previews) and clears it after 30 seconds. The usual use is
      * copy, switch to the other app, paste: 30 seconds later this app is in the background and may not read the clipboard any
      * more (Android 10 and later), so the clip is not compared with the text. A change of the clipboard after our own is
-     * somebody else's copy and is left alone (P-06). Whether a clear from the background works on this platform is a
-     * device check (PWM-014).
+     * somebody else's copy and is left alone (P-06); the platform reports our own copy twice, so [ClipGuard] counts only a
+     * change a second or more after it. Whether a clear from the background works on this platform is a device check
+     * (PWM-014).
      */
     fun copy(label: String, text: CharSequence, message: String) {
         val cm = activity.getSystemService(ClipboardManager::class.java)
         val clip = ClipData.newPlainText(label, text)
         clip.description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
-        var ownChangePending = true
-        var changedByOthers = false
-        val listener = ClipboardManager.OnPrimaryClipChangedListener {
-            if (ownChangePending) ownChangePending = false else changedByOthers = true
-        }
+        val guard = ClipGuard(SystemClock.elapsedRealtime())
+        val listener = ClipboardManager.OnPrimaryClipChangedListener { guard.onChanged(SystemClock.elapsedRealtime()) }
         cm.addPrimaryClipChangedListener(listener)
         cm.setPrimaryClip(clip)
         say(message)
         main.postDelayed({
             cm.removePrimaryClipChangedListener(listener)
-            if (!changedByOthers) cm.clearPrimaryClip()
+            if (!guard.changedByOthers) cm.clearPrimaryClip()
         }, 30_000)
     }
 

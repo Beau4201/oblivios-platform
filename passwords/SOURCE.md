@@ -43,6 +43,8 @@ The chips in the strip of the system keyboard (ADR-191, ADR-192; plan `2026-10-2
 
 The defaults the frameworks patch sets apply when the secure setting is still empty (a new user or a new install): on an existing device the owner picks the app once under Settings, Passwords and accounts.
 
+One more commit landed on 2026-11-03 with `git apply` and `git commit` (tree clean at `cefe344` before, no build running, the sha256 of `app/src/main/kotlin/org/freeholdos/passwords/ui/AppController.kt` equal to this package before the edit): `7663544ec628` (`PWM-014`: the clipboard is cleared 30 seconds after a copy although the platform reports one copy twice). New pure class `core/ClipGuard.kt` (only a change a second or more after our own set counts as a copy of somebody else) and `AppController.copy` uses it; the sha256 of both files equals this package. Checks: `tools/run-host-checks.sh` through `remote.sh host-checks` (12 test classes passed, `ClipGuard` 7 checks), `tools/run-mutations.py "clip:"` (5 of 5 mutants killed), `remote.sh typecheck` (44 Kotlin files, no error). Not built, not on a device (`PWM-014` is to be rerun after the next image). The tests and tools are in this package only, as before.
+
 ## Not shipped
 
 `app/tests/` (host checks, guard tests) and `app/tools/` (the checks, the type check, the mutation run) stay in this repository.
