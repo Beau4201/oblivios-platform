@@ -1,0 +1,79 @@
+From c3c5cec48e6e1ea29df6f0de63480d430d4d4ac1 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 4 Nov 2026 20:53:19 +0100
+Subject: [PATCH] compartments: the stops of a changed app happen at once and
+ again after a retry, and a refused grant is settled
+
+Follow-up of 0030 after the automated review of the commit. Holding the stops until every mirror was written deferred them for good when an unrelated mirror kept failing: the stop now happens at once as before and is repeated after the retry that wrote the files. A refused grant is settled again, as before: the refusal is the platform's safeguard (a fixed flag), and trying again later could override a later decision of the user or of a device policy; the background permission is still given back last.
+---
+ .../CompartmentsPolicyService.java            | 32 ++++++-------------
+ 1 file changed, 10 insertions(+), 22 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index b687b29..bb6ed33 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -108,7 +108,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     /** The wait before the mirrors are written again after a failed write; 0 when the last write went through. Guarded by mLock. */
+     private int mRetryMs;
+     private final Runnable mRetry = this::reapply;
+-    /** The packages to stop once the mirrors are written: a stop before that would start them again with the old files. Guarded by mLock. */
++    /** The packages that were stopped while a mirror failed: they are stopped again once the mirrors are written, because the first stop started them again with the old files. Guarded by mLock. */
+     private final Set<String> mPendingStop = new TreeSet<>();
+ 
+     /** The place data, read once and lazily; null when the file is missing or is not exactly a file of the format. */
+@@ -344,8 +344,12 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 writeAtomic(mPolicyFile, next.encode(), -1);
+                 mStore = next;
+                 EventLogTags.writeCompartmentsChanged(cls, value);
+-                mPendingStop.addAll(MirrorPlan.restartNeeded(previous, next));
+-                restart = mirror(previous, next, false) ? takePendingStop() : Collections.emptySet();
++                // Stopped at once in every case (a stop drops the channels an app holds); when a mirror failed they are stopped
++                // again after the retry has written the files, as the first stop restarted them with the old ones.
++                restart = MirrorPlan.restartNeeded(previous, next);
++                if (!mirror(previous, next, false)) {
++                    mPendingStop.addAll(restart);
++                }
+             }
+             stopLater(restart);
+         } finally {
+@@ -561,16 +565,10 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 pm.getPackageUidAsUser(e.pkg, 0, e.user);
+                 pm.grantRuntimePermission(e.pkg, e.permission, UserHandle.of(e.user));
+                 mLedger.settle(e);
+-            } catch (PackageManager.NameNotFoundException x) {
++            } catch (PackageManager.NameNotFoundException | SecurityException | IllegalArgumentException x) {
++                // A refusal is the platform's own safeguard (a fixed flag, a package that no longer asks): it is not tried again,
++                // so a later decision of the user or of a device policy is never overridden.
+                 mLedger.settle(e);
+-            } catch (SecurityException | IllegalArgumentException x) {
+-                // Settled only when the package no longer asks for the permission; a refusal for another reason stays for the
+-                // next change.
+-                if (requests(e)) {
+-                    Slog.w(TAG, "location permission not restored: " + x.getClass().getSimpleName());
+-                } else {
+-                    mLedger.settle(e);
+-                }
+             } catch (RuntimeException x) {
+                 Slog.w(TAG, "location permission not restored: " + x.getClass().getSimpleName());
+             }
+@@ -578,16 +576,6 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         saveLedger();
+     }
+ 
+-    /** Whether the package of the entry still asks for its permission; false for a package that is gone. */
+-    private boolean requests(RevokedLedger.Entry e) {
+-        try {
+-            PackageInfo info = mContext.getPackageManager().getPackageInfoAsUser(e.pkg, PackageManager.GET_PERMISSIONS, e.user);
+-            return info.requestedPermissions != null && Arrays.asList(info.requestedPermissions).contains(e.permission);
+-        } catch (PackageManager.NameNotFoundException | RuntimeException x) {
+-            return false;
+-        }
+-    }
+-
+     /** The location permissions with the background one first, the order to take them in. */
+     private static String[] backgroundFirst() {
+         String[] out = LOCATION_PERMISSIONS.clone();
+-- 
+2.56.0
+
