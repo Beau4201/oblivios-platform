@@ -1,5 +1,42 @@
 # Source record
 
+## Feature 2026-11-04: one enrolled finger opens the decoy (`frameworks-base/0008`, `packages-apps-settings/0004`)
+
+The owner asked for a second way into the decoy: a finger of the other hand, chosen in Settings, in place of
+the decoy PIN. Design: the internal record "duress unlock finger design" (not published); plan: the internal
+record "duress unlock finger" (not published).
+
+- `frameworks-base/0008`: `AuthenticationClient.onAuthenticated` asks `LockSettingsInternal.routeDecoyFinger`
+  about every fingerprint match before any token reaches the keystore. `DecoyFingerPolicy` (pure, JVM tests,
+  16 mutations killed together with the codec) decides: not the duress finger is the ordinary path; the duress
+  finger at the keyguard with a registered decoy, a cached credential and biometrics allowed routes; the
+  duress finger anywhere else (a `BiometricPrompt`) or without those is refused as an unrecognised finger and
+  never opens the real session. A routed match skips `addAuthToken` and reaches the keyguard as a success for
+  `UserHandle.USER_NULL`, which `KeyguardUpdateMonitor.handleFingerprintAuthenticated` ignores, so the real
+  lock screen is neither dismissed nor trusted `[verified-in-source]`. `DecoyFingerHelper` stores the finger's
+  biometric id and the decoy credential wrapped (`SyntheticPasswordCrypto`) under a key derived from the real
+  user's synthetic password (`SyntheticPassword.deriveDecoyFingerKey`), and keeps the unwrapped credential in
+  system_server memory from the real credential's verification until reboot. `DecoyProfileHelper` shares the
+  mint and switch with the typed credential (`mintAndSwitch`) and gains `routeToDecoyWithCredential`; the mint
+  stays in that class. `setDecoyProfile` for another user and `clearDecoyProfile` clear the link.
+  `ILockSettings` gains `setDecoyFinger`, `clearDecoyFinger`, `getDecoyFingerId`, appended last, write
+  permission.
+- Rejected: an escrow token for the decoy (`activateEscrowTokens` calls `destroyEscrowData` for an unmanaged
+  user at its first credential verification) and a keystore-bound credential (using the key needs the real
+  user's hardware token in the keystore).
+- `packages-apps-settings/0004`: `DuressUnlockFingerFlow` (pure rules, 10 JUnit tests, 10 mutations killed),
+  `DuressUnlockFingerOps`, `DuressUnlockFingerActivity` (the chooser: enrolled fingers, then the second
+  PIN or password), the Choose and Remove entries on the main screen, the relink after Change in
+  `DuressUnlockSetupActivity`, strings in `strings_freeholdos.xml`, the manifest entry.
+- Base: `frameworks/base` `freeholdos-2026100600` at `a32e09ce65a6`; `packages/apps/Settings`
+  `freeholdos-2026100600` at `1fc2d361130a`. Authored in disposable local worktrees seeded from the build
+  server (file checksums equal on both sides); the exported patches re-apply with `git am` onto the seeded
+  base and give the tree the worktree has.
+- Landed on the build server 2026-11-04: `git am` on `freeholdos-2026100600`, `frameworks/base` commit
+  `ce630046aa54`, `packages/apps/Settings` commit `f9920122fdf`, both trees clean afterwards, every touched file's
+  sha256 equal to the worktree. Compiled: no (the services module and Settings have no host-side type-check
+  here; the files parse and the pure classes run on the JVM). Run on a device: no (rows `DUR-020` onward).
+
 ## Fix 2026-11-03: no user switching on a locked device (`frameworks-base/0007`)
 
 Decision of the owner (2026-11-03, after `GRB-017` failed on `lynx` `2026110203`): a locked screen never
