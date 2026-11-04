@@ -1,5 +1,15 @@
 # Source record: network exit (ADR-178)
 
+## Fix 2026-11-04: the info row exists only for the owner (`packages-apps-Settings/0007`, `0008`)
+
+Found by the independent review of `docs/reviews/2026-11-unreviewed-code-review.md` (A4, A6).
+
+- `packages-apps-Settings/0007` (`205638ee63f`): `AppCompartmentsPreference` returns without a row when `UserHandle.myUserId()` is not the
+  owner, as its comment always said; before, the row resolved wherever the exit app is installed, the Duress decoy user included.
+- `packages-apps-Settings/0008` (`9d6decd08d5`): removes `out/0001-Settings-...patch`, an authoring leftover that patch `0001` added to the tree.
+- Landed 2026-11-04 on `f9920122fdf`, branch `freeholdos-2026100600`, tree clean, no build running; the blob of `AppCompartmentsPreference.kt`
+  equals the disposable repository's and `git ls-files out` is empty. Not compiled, not module-built.
+
 ## Fix 2026-11-03: the info row reads System (`packages-apps-Settings/0006`)
 
 Same cause as the next entry, reported by the owner: the row read the profile for a package signed with the platform key, where the Compartments pages read System (ADR-211). It reads `IDENTITY_SYSTEM` of `getIdentity` (`privacy/compartments-profiles` `frameworks-base/0026`) and shows the new string `app_compartments_profile_system`. Landed with `git am` as `1fc2d361130a` after `ade153015958`, tree clean, sha256 of both files equal to the disposable repository. Compiled: no. Run on a device: no (row `CMP-048`).

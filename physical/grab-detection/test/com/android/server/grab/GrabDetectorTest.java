@@ -622,6 +622,13 @@ public final class GrabDetectorTest {
         freeFallChecks();
         pulseChecks();
 
+        // the sample time is the sample's own timestamp moved by the sleep, not the moment the callback ran (review B6)
+        check("a sample is placed by its own timestamp",
+                GrabDetector.sensorUptimeMs(5_000_000_000L, 5_200L, 5_000L) == 4_800L);
+        check("a late callback does not move the sample",
+                GrabDetector.sensorUptimeMs(5_000_000_000L, 5_300L, 5_100L) == 4_800L);
+        check("no timestamp falls back to the callback time", GrabDetector.sensorUptimeMs(0L, 5_200L, 5_000L) == 5_000L);
+
         System.out.println(failures == 0 ? "all passed" : failures + " FAILED");
         System.exit(failures == 0 ? 0 : 1);
     }

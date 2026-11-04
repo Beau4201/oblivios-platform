@@ -1,5 +1,18 @@
 # Source record
 
+## Fix 2026-11-04: review of the finger work (`frameworks-base/0009`, `frameworks-base/0010`)
+
+Found by the independent review of `docs/reviews/2026-11-unreviewed-code-review.md` (B18) and by the automated review of the commit.
+
+- `frameworks-base/0009` (`9a05f2351c7a`): `DecoyFingerHelper.onOwnerSyntheticPasswordUnlocked` runs inside the real owner's credential check
+  and now catches a `RuntimeException`, leaves the cache empty and logs, so a failure of the storage read or the key derivation can never fail
+  the owner's own unlock.
+- `frameworks-base/0010` (`176cd70ae139`): `AuthenticationClient` no longer calls `resetLockoutTimeBound` for a match routed to the decoy.
+- Landed 2026-11-04 on `ce630046aa54`, branch `freeholdos-2026100600`, tree clean, no build running, authored in a disposable repository
+  from the touched files; the blobs of `DecoyFingerHelper.java` and `AuthenticationClient.java` equal the disposable repository's. Not
+  compiled, not module-built. Not done from the same review: B8 (the link is not cleared when the enrolled finger is removed; needs a hook
+  in `FingerprintService`), B19 to B23 (design questions).
+
 ## Feature 2026-11-04: one enrolled finger opens the decoy (`frameworks-base/0008`, `packages-apps-settings/0004`)
 
 The owner asked for a second way into the decoy: a finger of the other hand, chosen in Settings, in place of

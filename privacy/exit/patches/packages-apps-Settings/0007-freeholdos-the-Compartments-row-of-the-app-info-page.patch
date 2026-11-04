@@ -1,0 +1,29 @@
+From c821bf98672d04c8f4d988fcbff2e1f3522f6624 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 4 Nov 2026 20:41:12 +0100
+Subject: [PATCH] freeholdos: the Compartments row of the app info page exists
+ only for the owner
+
+The comment of AppCompartmentsPreference says the row is absent in a user other than the owner, but the code only asked whether the Compartments page resolves, which holds wherever the exit app is installed. In the Duress decoy user the row would have shown on every app info page with the identity that the owner chose for the app, a FreeholdOS-only entry in a session that must look like a fresh phone.
+---
+ .../settings/spa/app/appinfo/AppCompartmentsPreference.kt      | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+index ce2a33d..7f438a3 100644
+--- a/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
++++ b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+@@ -56,7 +56,10 @@ fun AppCompartmentsPreference(app: ApplicationInfo) {
+     val available = remember(intent) {
+         context.packageManager.resolveActivity(intent, PackageManager.MATCH_SYSTEM_ONLY) != null
+     }
++    // Only the owner has the row: in any other user (the Duress decoy among them) it would show a FreeholdOS-only entry and the owner's
++    // choice for the app, which a decoy that must look like a fresh phone cannot afford (review A4).
+     if (!available ||
++        UserHandle.myUserId() != UserHandle.USER_SYSTEM ||
+         app.packageName == COMPARTMENTS_PACKAGE ||
+         UserHandle.getAppId(app.uid) < Process.FIRST_APPLICATION_UID
+     ) {
+-- 
+2.56.0
+

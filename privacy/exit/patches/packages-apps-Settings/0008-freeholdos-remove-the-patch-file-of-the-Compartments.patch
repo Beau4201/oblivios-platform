@@ -1,0 +1,120 @@
+From 5440a93ef1d0484c4c513354ff641de2cad9113d Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 4 Nov 2026 20:41:12 +0100
+Subject: [PATCH] freeholdos: remove the patch file of the Compartments row
+ that patch 0001 left in the tree
+
+Patch 0001 of the Compartments row added out/0001-Settings-...patch, a patch of itself with another commit id, to packages/apps/Settings. It is an authoring leftover and no build input.
+---
+ ...rtments-row-on-the-info-page-of-an-a.patch | 99 -------------------
+ 1 file changed, 99 deletions(-)
+ delete mode 100644 out/0001-Settings-a-Compartments-row-on-the-info-page-of-an-a.patch
+
+diff --git a/out/0001-Settings-a-Compartments-row-on-the-info-page-of-an-a.patch b/out/0001-Settings-a-Compartments-row-on-the-info-page-of-an-a.patch
+deleted file mode 100644
+index e9ce7b0..0000000
+--- a/out/0001-Settings-a-Compartments-row-on-the-info-page-of-an-a.patch
++++ /dev/null
+@@ -1,99 +0,0 @@
+-From 9409e63eab280ed1947f8c638b6985e764b8235a Mon Sep 17 00:00:00 2001
+-From: FreeholdOS Build <build@freeholdos.local>
+-Date: Thu, 29 Oct 2026 14:00:45 +0100
+-Subject: [PATCH] Settings: a Compartments row on the info page of an app
+-
+-The row opens the per-app page of the Compartments app (org.freeholdos.exit.ExitAppActivity, data package:<name>), under the data usage row,
+-where the app's network and the hosts that see its address are set; it reads no state of Compartments and is absent where Compartments does not
+-run, for system uids and for Compartments itself.
+----
+- res/values/strings_ext.xml                    |  3 ++
+- .../app/appinfo/AppCompartmentsPreference.kt  | 51 +++++++++++++++++++
+- .../spa/app/appinfo/AppInfoSettings.kt        |  1 +
+- 3 files changed, 55 insertions(+)
+- create mode 100644 src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+-
+-diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+-index c122640..9ff1827 100644
+---- a/res/values/strings_ext.xml
+-+++ b/res/values/strings_ext.xml
+-@@ -376,4 +376,7 @@ For compatibility, this app can still see clipboard metadata, such as whether an
+-     <string name="app_clipboard_read_shared_uid_warning">"The clipboard access setting, blocked access message setting, and temporary Paste access are shared among these apps:
+- %1$s"</string>
+- 
+-+    <!-- The page of one app in Compartments (the per-app network exit): the row of the app's info page, under data usage. -->
+-+    <string name="app_compartments_label">Compartments</string>
+-+
+- </resources>
+-diff --git a/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+-new file mode 100644
+-index 0000000..c687e1d
+---- /dev/null
+-+++ b/src/com/android/settings/spa/app/appinfo/AppCompartmentsPreference.kt
+-@@ -0,0 +1,51 @@
+-+/*
+-+ * SPDX-License-Identifier: Apache-2.0
+-+ */
+-+
+-+package com.android.settings.spa.app.appinfo
+-+
+-+import android.content.ComponentName
+-+import android.content.Intent
+-+import android.content.pm.ApplicationInfo
+-+import android.net.Uri
+-+import android.os.Process
+-+import android.os.UserHandle
+-+import androidx.compose.runtime.Composable
+-+import androidx.compose.runtime.remember
+-+import androidx.compose.ui.platform.LocalContext
+-+import androidx.compose.ui.res.stringResource
+-+import com.android.settings.R
+-+import com.android.settingslib.spa.widget.preference.Preference
+-+import com.android.settingslib.spa.widget.preference.PreferenceModel
+-+import com.android.settingslib.spaprivileged.model.app.installed
+-+
+-+private const val COMPARTMENTS_PACKAGE = "org.freeholdos.exit"
+-+private const val COMPARTMENTS_PAGE = "org.freeholdos.exit.ExitAppActivity"
+-+
+-+/**
+-+ * The "Compartments" row of an app's info page: it opens the page of this app in the Compartments app, where the app's network
+-+ * (hidden trackers, Tor, never hidden) and the hosts that see its address are set. The page is the Compartments app's, and only
+-+ * this app holds the permission to open it; the row is absent where Compartments is not installed or does not run (in a user
+-+ * other than the owner), for a system uid and for Compartments itself, and no state of Compartments is read here.
+-+ */
+-+@Composable
+-+fun AppCompartmentsPreference(app: ApplicationInfo) {
+-+    val context = LocalContext.current
+-+    val intent = remember(app.packageName) {
+-+        Intent()
+-+            .setComponent(ComponentName(COMPARTMENTS_PACKAGE, COMPARTMENTS_PAGE))
+-+            .setData(Uri.fromParts("package", app.packageName, null))
+-+    }
+-+    val available = remember(intent) { context.packageManager.resolveActivity(intent, 0) != null }
+-+    if (!available ||
+-+        app.packageName == COMPARTMENTS_PACKAGE ||
+-+        UserHandle.getAppId(app.uid) < Process.FIRST_APPLICATION_UID
+-+    ) {
+-+        return
+-+    }
+-+    Preference(object : PreferenceModel {
+-+        override val title = stringResource(R.string.app_compartments_label)
+-+        override val enabled = { app.installed }
+-+        override val onClick = { runCatching { context.startActivity(intent) }; Unit }
+-+    })
+-+}
+-diff --git a/src/com/android/settings/spa/app/appinfo/AppInfoSettings.kt b/src/com/android/settings/spa/app/appinfo/AppInfoSettings.kt
+-index a099606..77b72cd 100644
+---- a/src/com/android/settings/spa/app/appinfo/AppInfoSettings.kt
+-+++ b/src/com/android/settings/spa/app/appinfo/AppInfoSettings.kt
+-@@ -171,6 +171,7 @@ private fun AppInfoSettings(packageInfoPresenter: PackageInfoPresenter) {
+-             AppStoragePreference(app)
+-             InstantAppDomainsPreference(app)
+-             AppDataUsagePreference(app)
+-+            AppCompartmentsPreference(app)
+-             AppTimeSpentPreference(app)
+-             AppBatteryPreference(app)
+-             AppLocalePreference(app)
+--- 
+-2.56.0
+-
+-- 
+2.56.0
+

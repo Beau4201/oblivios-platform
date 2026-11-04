@@ -1,0 +1,29 @@
+From 3522ccd0b8ffbc956b04f0dae9ec15d089241058 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 4 Nov 2026 20:39:10 +0100
+Subject: [PATCH] compartments: a telephony listener of an app whose position
+ is withheld gets the persona copy
+
+TelephonyRegistry.hasPersona only knew an app with a persona that has a place. An app whose persona has no place, or whose position the service withholds, still passed checkFineLocationAccess and read the real cell identity and service state through a listener, although GnssManagerService already refuses it its position. The registry now asks locationWithheld too.
+---
+ services/core/java/com/android/server/TelephonyRegistry.java | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/TelephonyRegistry.java b/services/core/java/com/android/server/TelephonyRegistry.java
+index 24956d5..e944ba3 100644
+--- a/services/core/java/com/android/server/TelephonyRegistry.java
++++ b/services/core/java/com/android/server/TelephonyRegistry.java
+@@ -4852,7 +4852,9 @@ public class TelephonyRegistry extends ITelephonyRegistry.Stub {
+      */
+     private static boolean hasPersona(int uid) {
+         CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
+-        return compartments != null && compartments.personaFor(uid) != null;
++        // An app whose persona has no place, or whose position is withheld for another reason, gets the persona copy as well:
++        // the same rule as GnssManagerService, so a telephony listener cannot read the real cell where the position is refused.
++        return compartments != null && (compartments.personaFor(uid) != null || compartments.locationWithheld(uid));
+     }
+ 
+     /**
+-- 
+2.56.0
+
