@@ -31,8 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import org.freeholdos.passwords.R
+import org.freeholdos.passwords.fill.PassphraseDialog
 import org.freeholdos.passwords.lock.LockState
-import org.freeholdos.passwords.lock.Reason
 
 @Composable
 fun FirstStartScreen(c: AppController) {
@@ -115,13 +115,7 @@ fun LockedScreen(c: AppController) {
     var show by remember { mutableStateOf(false) }
     var usePassphrase by remember(state) { mutableStateOf(state is LockState.NeedsPassphrase || !c.hasBiometrics()) }
     LaunchedEffect(state) { c.autoPromptIfNeeded() }
-    val body = when ((state as? LockState.NeedsPassphrase)?.reason) {
-        Reason.Restart -> R.string.pm_reason_restart
-        Reason.BiometricsChanged -> R.string.pm_reason_biometrics
-        Reason.FiveFailures -> R.string.pm_reason_failures
-        Reason.Expired -> R.string.pm_reason_expired
-        null -> R.string.pm_locked_body
-    }
+    val body = (state as? LockState.NeedsPassphrase)?.reason?.let(PassphraseDialog::reasonMessageRes) ?: R.string.pm_locked_body
     Column(Modifier.fillMaxSize().background(pw.bg).statusBarPadding().navigationBarPadding().verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(64.dp))
         AppLogoTile(88.dp)

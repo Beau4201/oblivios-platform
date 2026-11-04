@@ -10,6 +10,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.FrameLayout
 import org.freeholdos.passwords.R
+import org.freeholdos.passwords.lock.Reason
 
 /**
  * The passphrase prompt of the autofill step, in plain framework views (the screens of the app itself are Compose, Task
@@ -17,6 +18,14 @@ import org.freeholdos.passwords.R
  * included, offers to fill the passphrase.
  */
 object PassphraseDialog {
+    /** The sentence that says why only the passphrase opens the vault; the lock screen of the app and this dialog use the same one (PWM-026). */
+    fun reasonMessageRes(reason: Reason): Int = when (reason) {
+        Reason.Restart -> R.string.pm_reason_restart
+        Reason.BiometricsChanged -> R.string.pm_reason_biometrics
+        Reason.FiveFailures -> R.string.pm_reason_failures
+        Reason.Expired -> R.string.pm_reason_expired
+    }
+
     fun show(
         activity: Activity, forFill: Boolean, error: CharSequence?, onCancel: () -> Unit,
         titleRes: Int = R.string.pm_prompt_title, messageRes: Int? = null, hintRes: Int = R.string.pm_passphrase,

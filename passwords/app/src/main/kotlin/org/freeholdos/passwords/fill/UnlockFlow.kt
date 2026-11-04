@@ -39,7 +39,9 @@ object UnlockFlow {
         activity: SecureActivity, session: SessionManager, forFill: Boolean, error: CharSequence?,
         onOpened: () -> Unit, onCancel: () -> Unit,
     ) {
-        PassphraseDialog.show(activity, forFill, error, onCancel) { chars ->
+        // The state still says why only the passphrase opens the vault (restart, new fingerprint, failures, a week); the dialog names it.
+        val reason = (session.state as? LockState.NeedsPassphrase)?.reason
+        PassphraseDialog.show(activity, forFill, error, onCancel, messageRes = reason?.let(PassphraseDialog::reasonMessageRes)) { chars ->
             val outcome = session.unlockWithPassphrase(chars)
             chars.fill('\u0000')
             when (outcome) {
