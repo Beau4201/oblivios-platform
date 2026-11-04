@@ -1,0 +1,175 @@
+From c273771c162c11593ca4434d567e5f465a973d56 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 4 Nov 2026 20:51:48 +0100
+Subject: [PATCH 30/31] compartments: the revoked ledger gives back what it can
+ and a refused mirror stops the apps only once it is written
+
+Review A7 and A8. restoreLocation dropped an entry on any SecurityException, although only a gone package or a permission it no longer asks for should; the background permission was granted before the foreground ones and read after they were taken; a revoke with a full ledger is logged, and the permission is still taken (fail closed, the automated review of the commit flagged the first version that left it). A failed mirror write stopped the changed apps after 2 s, so they restarted with the old files and the retry 10 s later never stopped them again: the stops now wait in mPendingStop until a mirror pass succeeds.
+---
+ .../CompartmentsPolicyService.java            | 77 ++++++++++++++++---
+ 1 file changed, 67 insertions(+), 10 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index 1a8a7d6..b687b29 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -49,6 +49,7 @@ import java.nio.charset.StandardCharsets;
+ import java.nio.file.Files;
+ import java.security.SecureRandom;
+ import java.util.ArrayList;
++import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.Collections;
+ import java.util.List;
+@@ -82,6 +83,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     static final String PLACES_FILE = "/product/etc/compartments/places.tsv";
+     static final String CELLS_FILE = "/product/etc/compartments/cells.tsv";
+     private static final String[] LOCATION_PERMISSIONS = RevokedLedger.PERMISSIONS;
++    private static final String BACKGROUND_LOCATION = "android.permission.ACCESS_BACKGROUND_LOCATION";
+     /** A package that the user changed starts again after this long: the readers of the mirror files look again about once a second. */
+     private static final int STOP_DELAY_MS = 2000;
+     /** The fixes of the passive provider may come as often as this: one a second is enough for the activity of the phone. */
+@@ -106,6 +108,8 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     /** The wait before the mirrors are written again after a failed write; 0 when the last write went through. Guarded by mLock. */
+     private int mRetryMs;
+     private final Runnable mRetry = this::reapply;
++    /** The packages to stop once the mirrors are written: a stop before that would start them again with the old files. Guarded by mLock. */
++    private final Set<String> mPendingStop = new TreeSet<>();
+ 
+     /** The place data, read once and lazily; null when the file is missing or is not exactly a file of the format. */
+     private final Object mPlacesLock = new Object();
+@@ -340,8 +344,8 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 writeAtomic(mPolicyFile, next.encode(), -1);
+                 mStore = next;
+                 EventLogTags.writeCompartmentsChanged(cls, value);
+-                restart = MirrorPlan.restartNeeded(previous, next);
+-                mirror(previous, next, false);
++                mPendingStop.addAll(MirrorPlan.restartNeeded(previous, next));
++                restart = mirror(previous, next, false) ? takePendingStop() : Collections.emptySet();
+             }
+             stopLater(restart);
+         } finally {
+@@ -354,14 +358,22 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+      * again on the background thread, after 10 seconds and then after twice as long, at most 5 minutes, until all are
+      * written. The caller holds mLock.
+      */
+-    private void mirror(PolicyStore previous, PolicyStore next, boolean full) {
++    private boolean mirror(PolicyStore previous, PolicyStore next, boolean full) {
+         mHandler.removeCallbacks(mRetry);
+         if (applyMirrors(previous, next, full)) {
+             mRetryMs = 0;
+-            return;
++            return true;
+         }
+         mRetryMs = MirrorPlan.nextRetryMs(mRetryMs);
+         mHandler.postDelayed(mRetry, mRetryMs);
++        return false;
++    }
++
++    /** The packages waiting for a stop, which the caller now owes (to {@link #stopLater}); the caller holds mLock. */
++    private Set<String> takePendingStop() {
++        Set<String> out = new TreeSet<>(mPendingStop);
++        mPendingStop.clear();
++        return out;
+     }
+ 
+     /**
+@@ -495,13 +507,26 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                     continue;  // not installed for this user: nothing to take
+                 }
+                 PackageManager asUser = mContext.createContextAsUser(user, 0).getPackageManager();
++                // What the app holds is read before anything is taken, and the background permission goes first: taking a
++                // foreground one can take it along, and the app would then look as if it never held it (review A7).
++                Set<String> held = new TreeSet<>();
+                 for (String permission : LOCATION_PERMISSIONS) {
++                    if (asUser.checkPermission(permission, pkg) == PackageManager.PERMISSION_GRANTED) {
++                        held.add(permission);
++                    }
++                }
++                for (String permission : backgroundFirst()) {
+                     try {
+-                        boolean held = asUser.checkPermission(permission, pkg) == PackageManager.PERMISSION_GRANTED;
+-                        pm.revokeRuntimePermission(pkg, permission, user);
+-                        if (held && mLedger.record(user.getIdentifier(), pkg, permission)) {
+-                            noted = true;
++                        if (held.contains(permission)) {
++                            if (mLedger.record(user.getIdentifier(), pkg, permission)) {
++                                noted = true;
++                            } else {
++                                // Fail closed: the permission is taken all the same (ACCESS_MEDIA_LOCATION has no other gate),
++                                // and the user has to give it again when the app is no longer denied.
++                                Slog.w(TAG, "revoked ledger full: a location permission is taken and cannot be given back");
++                            }
+                         }
++                        pm.revokeRuntimePermission(pkg, permission, user);
+                     } catch (SecurityException | IllegalArgumentException e) {
+                         // the package does not request this permission
+                     } catch (RuntimeException e) {
+@@ -526,13 +551,26 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+             return;
+         }
+         PackageManager pm = mContext.getPackageManager();
++        // The background permission last: the permission service may insist on the foreground one being there.
++        owed.sort((a, b) -> {
++            int c = Boolean.compare(BACKGROUND_LOCATION.equals(a.permission), BACKGROUND_LOCATION.equals(b.permission));
++            return c != 0 ? c : a.compareTo(b);
++        });
+         for (RevokedLedger.Entry e : owed) {
+             try {
+                 pm.getPackageUidAsUser(e.pkg, 0, e.user);
+                 pm.grantRuntimePermission(e.pkg, e.permission, UserHandle.of(e.user));
+                 mLedger.settle(e);
+-            } catch (PackageManager.NameNotFoundException | SecurityException | IllegalArgumentException x) {
++            } catch (PackageManager.NameNotFoundException x) {
+                 mLedger.settle(e);
++            } catch (SecurityException | IllegalArgumentException x) {
++                // Settled only when the package no longer asks for the permission; a refusal for another reason stays for the
++                // next change.
++                if (requests(e)) {
++                    Slog.w(TAG, "location permission not restored: " + x.getClass().getSimpleName());
++                } else {
++                    mLedger.settle(e);
++                }
+             } catch (RuntimeException x) {
+                 Slog.w(TAG, "location permission not restored: " + x.getClass().getSimpleName());
+             }
+@@ -540,6 +578,23 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+         saveLedger();
+     }
+ 
++    /** Whether the package of the entry still asks for its permission; false for a package that is gone. */
++    private boolean requests(RevokedLedger.Entry e) {
++        try {
++            PackageInfo info = mContext.getPackageManager().getPackageInfoAsUser(e.pkg, PackageManager.GET_PERMISSIONS, e.user);
++            return info.requestedPermissions != null && Arrays.asList(info.requestedPermissions).contains(e.permission);
++        } catch (PackageManager.NameNotFoundException | RuntimeException x) {
++            return false;
++        }
++    }
++
++    /** The location permissions with the background one first, the order to take them in. */
++    private static String[] backgroundFirst() {
++        String[] out = LOCATION_PERMISSIONS.clone();
++        Arrays.sort(out, (a, b) -> Boolean.compare(!BACKGROUND_LOCATION.equals(a), !BACKGROUND_LOCATION.equals(b)));
++        return out;
++    }
++
+     private void saveLedger() {
+         try {
+             writeAtomic(mRevokedFile, mLedger.encode().getBytes(StandardCharsets.US_ASCII), -1);
+@@ -763,9 +818,11 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+     private void reapply() {
+         final long token = Binder.clearCallingIdentity();
+         try {
++            Set<String> restart;
+             synchronized (mLock) {
+-                mirror(mStore, mStore, true);
++                restart = mirror(mStore, mStore, true) ? takePendingStop() : Collections.emptySet();
+             }
++            stopLater(restart);
+         } finally {
+             Binder.restoreCallingIdentity(token);
+         }
+-- 
+2.56.0
+

@@ -1,0 +1,30 @@
+From 20934aab58b44502c33b465c8fc07fadfeb8652c Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 4 Nov 2026 20:51:48 +0100
+Subject: [PATCH 31/31] compartments: a real fix moves the standing-fix alarm
+ instead of letting it wake the device
+
+Review A9. The alarm of a persona registration was set for GRACE_MS after the last real fix at the time it was armed, and fired, found a newer real fix and was armed again: while real fixes flowed it woke the device every few seconds for nothing. noteRealArrival now sets it again for the new due time, so it fires only after the real fixes have stopped.
+---
+ .../server/location/provider/LocationProviderManager.java    | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/services/core/java/com/android/server/location/provider/LocationProviderManager.java b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+index 1b7f3bf..49bf6d9 100644
+--- a/services/core/java/com/android/server/location/provider/LocationProviderManager.java
++++ b/services/core/java/com/android/server/location/provider/LocationProviderManager.java
+@@ -537,6 +537,11 @@ public class LocationProviderManager extends
+             if (persona != null) {
+                 Location last = fineLocationResult.getLastLocation();
+                 persona.track.noteReal(last.getElapsedRealtimeNanos(), last.hasSpeed() ? last.getSpeed() : Float.NaN);
++                if (mStandingScheduled) {
++                    // The alarm was set for a time before this fix: while real fixes keep coming it would wake the device every
++                    // few seconds for nothing. Set again, it fires only once the real fixes have stopped (review A9).
++                    scheduleStanding();
++                }
+             }
+         }
+ 
+-- 
+2.56.0
+

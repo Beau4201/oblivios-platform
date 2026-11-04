@@ -1,0 +1,41 @@
+From 5de179f38b98a317cce92346e2d678a01a94370d Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 4 Nov 2026 20:51:53 +0100
+Subject: [PATCH] bluetooth: an app with a persona that asks for a periodic
+ sync is told the sync failed
+
+Review A11. registerSync of an app with a persona returned without calling the callback, so the app waited for its own sync timeout. It now gets onSyncEstablished with SYNC_NO_RESOURCES at once; no sync to the real surroundings is made.
+---
+ .../app/src/com/android/bluetooth/le_scan/ScanBinder.kt  | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/android/app/src/com/android/bluetooth/le_scan/ScanBinder.kt b/android/app/src/com/android/bluetooth/le_scan/ScanBinder.kt
+index bd582aa..72d288b 100644
+--- a/android/app/src/com/android/bluetooth/le_scan/ScanBinder.kt
++++ b/android/app/src/com/android/bluetooth/le_scan/ScanBinder.kt
+@@ -27,6 +27,7 @@ import android.bluetooth.IBluetoothScan
+ import android.bluetooth.State
+ import android.bluetooth.le.IPeriodicAdvertisingCallback
+ import android.bluetooth.le.IScannerCallback
++import android.bluetooth.le.PeriodicAdvertisingCallback.SYNC_NO_RESOURCES
+ import android.bluetooth.le.ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED
+ import android.bluetooth.le.ScanCallback.SCAN_FAILED_INTERNAL_ERROR
+ import android.bluetooth.le.ScanFilter
+@@ -175,7 +176,13 @@ class ScanBinder(
+         callback: IPeriodicAdvertisingCallback,
+         source: AttributionSource,
+     ) {
+-        if (persona.hasPersona(Binder.getCallingUid())) return
++        if (persona.hasPersona(Binder.getCallingUid())) {
++            // No sync to the real surroundings, and the app is told at once instead of waiting for its timeout.
++            runCatching {
++                callback.onSyncEstablished(0, scanResult.device, scanResult.advertisingSid, skip, timeout, SYNC_NO_RESOURCES)
++            }
++            return
++        }
+         withControllerRunOnScanThread(source, "registerSync") {
+             registerSync(scanResult, skip, timeout, callback)
+         }
+-- 
+2.56.0
+
