@@ -1,0 +1,32 @@
+From 015f948a86c2ecfdcfd83b436ef4504bbe5d6bd3 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Wed, 4 Nov 2026 20:54:34 +0100
+Subject: [PATCH] compartments: a mirror pass that succeeds also stops the apps
+ that an earlier failed pass left
+
+Follow-up of 0032 after the automated review of the commit. A change whose mirror failed left its packages in mPendingStop and scheduled a retry; a second change that succeeded cancelled that retry and never drained the set, so the first change's apps were not stopped again. Every successful pass in change() now drains the set, as reapply() does.
+---
+ .../server/compartments/CompartmentsPolicyService.java     | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+index bb6ed33..12da6f6 100644
+--- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
++++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
+@@ -346,8 +346,11 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
+                 EventLogTags.writeCompartmentsChanged(cls, value);
+                 // Stopped at once in every case (a stop drops the channels an app holds); when a mirror failed they are stopped
+                 // again after the retry has written the files, as the first stop restarted them with the old ones.
+-                restart = MirrorPlan.restartNeeded(previous, next);
+-                if (!mirror(previous, next, false)) {
++                restart = new TreeSet<>(MirrorPlan.restartNeeded(previous, next));
++                if (mirror(previous, next, false)) {
++                    // a pass that succeeded also owes the stops that an earlier failed pass left (its retry was cancelled)
++                    restart.addAll(takePendingStop());
++                } else {
+                     mPendingStop.addAll(restart);
+                 }
+             }
+-- 
+2.56.0
+
