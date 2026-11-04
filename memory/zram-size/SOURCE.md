@@ -115,10 +115,12 @@ read `false` before.
   against 1135 and 887 MB. `lynx` never ran out of swap in either configuration, so a reduction
   of lmkd kills is not measured. `stallion` is a `user` build and refuses the same override
   (`mmd_native/zram.size` is not on the DeviceConfig allowlist), so its effect needs a build.
-- Flash writeback: the images set `mmd.zram.writeback.limit.enabled=false`, so mmd applies no
+- Flash writeback: the images up to `2026101002` set `mmd.zram.writeback.limit.enabled=false`, so mmd applies no
   per-run limit (`system/memory/mmd/src/zram/writeback.rs`: `update_writeback_limit` returns at
   once, and `calculate_idle_writeback_limit`, which scales with used over total zram, is unused).
-  The 1 GiB backing file is the only bound. Whether 100% writes more to flash than 50% is not
+  The 1 GiB backing file is the only bound there; the images on tag `2026100600` set the limit to `true` with
+  `mmd.zram.writeback.max_bytes_per_day=25769803776` (24 GiB a day) [measured: `build.prop` of `lynx` `2026110204`], so the
+  daily cap bounds the writes. Whether 100% writes more to flash than 50% is not
   measured (`MEM-005`). The comment of patch `0001` and its commit message still say the ceiling
   does not grow with the size; that wording is inaccurate and is left in the landed commit
   (changing it would stale the `adevtool` pin and need a rebuild); correct it the next time a
