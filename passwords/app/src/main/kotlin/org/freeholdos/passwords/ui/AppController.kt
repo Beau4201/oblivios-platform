@@ -275,15 +275,14 @@ class AppController(val activity: SecureActivity) {
      */
     private fun confirmUser(messageRes: Int = R.string.pm_confirm_reveal, done: (Boolean) -> Unit) {
         if (session.confirmedRecently()) return done(true)
-        if (hasBiometrics()) {
-            session.confirmWithBiometrics(activity, done)
-        } else {
+        val askPassphrase: () -> Unit = {
             PassphraseDialog.show(activity, forFill = false, error = null, onCancel = { done(false) }, titleRes = R.string.pm_confirm_passphrase_title, messageRes = messageRes) { chars ->
                 val r = session.verifyPassphrase(chars)
                 chars.fill('\u0000')
                 done(r == PassphraseOutcome.Opened)
             }
         }
+        if (hasBiometrics()) session.confirmWithBiometrics(activity, askPassphrase, done) else askPassphrase()
     }
 
     /**
@@ -495,17 +494,24 @@ class AppController(val activity: SecureActivity) {
             return
         }
         pendingImport = data
-        PassphraseDialog.show(activity, forFill = false, error = null, onCancel = { pendingImport = null }, titleRes = R.string.pm_settings_import, messageRes = R.string.pm_import_passphrase) { chars ->
-            val bytes = StandardCharsets.UTF_8.encode(CharBuffer.wrap(chars)).let { b -> ByteArray(b.remaining()).also { b.get(it) } }
-            chars.fill('\u0000')
-            val added = repo.importFile(pendingImport ?: ByteArray(0), bytes)
-            bytes.fill(0)
-            pendingImport = null
-            if (added >= 0) {
-                refresh()
-                say(activity.resources.getQuantityString(R.plurals.pm_import_done, added, added))
-            } else {
-                say(activity.getString(R.string.pm_import_failed))
+        // Like the CSV import: whoever holds an open phone must not merge entries of a file and a passphrase of their own unasked.
+        confirmUser(R.string.pm_confirm_action) { who ->
+            if (!who) {
+                pendingImport = null
+                return@confirmUser
+            }
+            PassphraseDialog.show(activity, forFill = false, error = null, onCancel = { pendingImport = null }, titleRes = R.string.pm_settings_import, messageRes = R.string.pm_import_passphrase) { chars ->
+                val bytes = StandardCharsets.UTF_8.encode(CharBuffer.wrap(chars)).let { b -> ByteArray(b.remaining()).also { b.get(it) } }
+                chars.fill('\u0000')
+                val added = repo.importFile(pendingImport ?: ByteArray(0), bytes)
+                bytes.fill(0)
+                pendingImport = null
+                if (added >= 0) {
+                    refresh()
+                    say(activity.resources.getQuantityString(R.plurals.pm_import_done, added, added))
+                } else {
+                    say(activity.getString(R.string.pm_import_failed))
+                }
             }
         }
     }

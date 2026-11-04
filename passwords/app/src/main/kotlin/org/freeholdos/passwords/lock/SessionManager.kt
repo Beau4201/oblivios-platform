@@ -232,17 +232,25 @@ class SessionManager(
         }
     }
 
-    /** A fresh strong-biometric authentication, no key involved: the eye of the detail screen asks for it. */
-    fun confirmWithBiometrics(activity: Activity, done: (Boolean) -> Unit) {
+    /**
+     * A fresh strong-biometric authentication, no key involved: the eye of the detail screen asks for it. The button
+     * "Use passphrase" and a biometric lockout call [onPassphrase] instead of ending the confirmation, so a finger that
+     * will not read never shuts the user out of reveal, copy, export and delete.
+     */
+    fun confirmWithBiometrics(activity: Activity, onPassphrase: () -> Unit, done: (Boolean) -> Unit) {
         val finished = AtomicBoolean(false)
         fun finish(ok: Boolean) { if (finished.compareAndSet(false, true)) done(ok) }
-        val p = prompt(activity, false) { finish(false) }
+        fun fallBack() { if (finished.compareAndSet(false, true)) onPassphrase() }
+        val p = prompt(activity, false) { fallBack() }
         p.authenticate(CancellationSignal(), activity.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 policy.onAuthenticated()
                 finish(true)
             }
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) = finish(false)
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
+                if (errorCode == BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT || errorCode == BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT_PERMANENT) fallBack()
+                else finish(false)
+            }
         })
     }
 

@@ -48,9 +48,12 @@ class CredentialAuthActivity : SecureActivity() {
             val origin = app.originPolicy.resolve(pkg, null) as? Origin.App ?: return cancel() // a browser is never an app (P-04)
             val response = BeginGetCredentialResponse.Builder()
             app.repository.accounts(null, origin.packageName).orEmpty().forEach { a ->
+                val hex = a.entryId.joinToString("") { "%02x".format(it) }
+                // The entry id is also the data of the intent: PendingIntents are told apart by data and never by extras, so two
+                // ids with the same 32-bit hash (the request code) cannot share one and answer with each other's password.
                 val pending = android.app.PendingIntent.getActivity(
                     this, a.entryId.contentHashCode(),
-                    Intent(this, CredentialAuthActivity::class.java).putExtra(EXTRA_ENTRY, a.entryId.joinToString("") { "%02x".format(it) }),
+                    Intent(this, CredentialAuthActivity::class.java).setData(android.net.Uri.fromParts("freeholdos-entry", hex, null)).putExtra(EXTRA_ENTRY, hex),
                     android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
                 )
                 response.addCredentialEntry(PasswordCredentialEntry.Builder(this, a.username.ifEmpty { getString(org.freeholdos.passwords.R.string.pm_chip_generic) }, pending, option).build())
