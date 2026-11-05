@@ -1,0 +1,49 @@
+From 9dfd87a90dd42b0c81717e8cbf9771d3cbf4429d Mon Sep 17 00:00:00 2001
+From: FreeholdOS Build <build@freeholdos.local>
+Date: Thu, 5 Nov 2026 14:32:47 +0100
+Subject: [PATCH] freeholdos: do not ship the upstream boot animation zip
+ (ADR-152)
+
+GrapheneOS tag 2026110200 installs bootanimation_zip into every product
+through base_product.mk. BootAnimation plays /product/media/bootanimation.zip
+in preference to the textures of framework-res, so the FreeholdOS boot picture
+of ADR-152 never showed (lynx 2026110501: upstream logo, empty bar window).
+
+Drop the package from the product list and from the generic filesystem
+module list. The built-in renderer and its textures take over again.
+---
+ target/product/base_product.mk    | 4 +++-
+ target/product/generic/Android.bp | 1 -
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/target/product/base_product.mk b/target/product/base_product.mk
+index 612fa4c..1547a4f 100644
+--- a/target/product/base_product.mk
++++ b/target/product/base_product.mk
+@@ -15,8 +15,10 @@
+ #
+ 
+ # Base modules and settings for the product partition.
++# FreeholdOS: bootanimation_zip (upstream GrapheneOS logo animation) is not shipped. The boot
++# animation service plays /product/media/bootanimation.zip in preference to the textures of
++# framework-res, so the zip would hide the FreeholdOS boot picture (ADR-152).
+ PRODUCT_PACKAGES += \
+-    bootanimation_zip \
+     build_flag_product \
+     fs_config_dirs_product \
+     fs_config_files_product \
+diff --git a/target/product/generic/Android.bp b/target/product/generic/Android.bp
+index 413a9e6..8a4ba42 100644
+--- a/target/product/generic/Android.bp
++++ b/target/product/generic/Android.bp
+@@ -433,7 +433,6 @@ android_filesystem_defaults {
+         ///////////////////////////////////////////
+ 
+         // Base modules and settings for the product partition.
+-        "bootanimation_zip",
+         "build_flag_product",
+         "fs_config_dirs_product",
+         "fs_config_files_product",
+-- 
+2.56.0
+

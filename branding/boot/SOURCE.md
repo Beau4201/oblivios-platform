@@ -1,5 +1,13 @@
 # Source record
 
+## Fix 2026-11-05: the upstream boot animation zip is not shipped (`build-make/0001`)
+
+Tag `2026110200` adds the upstream project `branding` and installs its `bootanimation_zip` (GrapheneOS logo, 540 frames) into every product through `build/make` `target/product/base_product.mk` (upstream commit `90e8e1d7f2`, 2026-10-09). The boot animation service plays `/product/media/bootanimation.zip` in preference to the textures of `framework-res.apk`, so on `lynx` `2026110501` the boot showed the GrapheneOS logo and the bar window stayed black although the two PNGs of `0002` were in the image `[measured: framework-res.apk and the source blobs equal, a replay of the service on the flashed image]`. With `/product/media` hidden by an empty tmpfs the same replay showed the track `1A3B35` and the segment `4AC2A3`.
+
+- `build-make/0001`: removes `bootanimation_zip` from `PRODUCT_PACKAGES` in `base_product.mk` and from the generic filesystem module list in `target/product/generic/Android.bp` (the emulator products). Why it diverges from upstream: see the comment in the patch.
+- Base: `build/make` `3ec7131c58`, branch `freeholdos-2026110200` (new, made from the detached HEAD of the tag). Authored in a disposable repository seeded from the build server (blob checksums equal), landed with `git am -3` as `b965238b6d`, tree clean, every touched file's sha256 equal to the disposable repository's. Not built.
+- Check on the next image: no `bootanimation.zip` under `/product/media`, then `BOOT-009`, then the owner's `BOOT-003`.
+
 ## Refreshed for manifest tag 2026110200 (2026-11-05)
 
 `patches/frameworks-base/0002` was regenerated against the textures of the new upstream revision (`frameworks/base` `ad133394d443`): upstream replaced `android-logo-mask.png` and `android-logo-shine.png` again, so the old binary diff no longer applied. The post-image blobs are unchanged (`d2a775989077` and `6761fae91b8d`, read back from the new patch); only the pre-image of each file and the byte counts of the stat changed. Message, author and date are the original ones. `BOOT-009` is to be rechecked on the first image of the tag.
