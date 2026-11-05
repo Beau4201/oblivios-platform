@@ -10,7 +10,7 @@ Tag `2026110200` adds the upstream project `branding` and installs its `bootanim
 
 ## Refreshed for manifest tag 2026110200 (2026-11-05)
 
-`patches/frameworks-base/0002` was regenerated against the textures of the new upstream revision (`frameworks/base` `ad133394d443`): upstream replaced `android-logo-mask.png` and `android-logo-shine.png` again, so the old binary diff no longer applied. The post-image blobs are unchanged (`d2a775989077` and `6761fae91b8d`, read back from the new patch); only the pre-image of each file and the byte counts of the stat changed. Message, author and date are the original ones. `BOOT-009` is to be rechecked on the first image of the tag.
+`patches/frameworks-base/0002` was regenerated against the textures of the new upstream revision (`frameworks/base` `ad133394d443`): upstream replaced `android-logo-mask.png` and `android-logo-shine.png` again, so the old binary diff no longer applied. The post-image blobs are unchanged (`d2a775989077` and `6761fae91b8d`, read back from the new patch); only the pre-image of each file and the byte counts of the stat changed. Message, author and date are the original ones. `BOOT-009` failed on the first image of the tag (`lynx` `2026110501`) because of the upstream boot animation zip, not because of these textures (the fix is `build-make/0001`, above); it is to be run again on the next image.
 
 ## Approved design
 
