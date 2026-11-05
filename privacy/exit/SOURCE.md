@@ -1,5 +1,9 @@
 # Source record: network exit (ADR-178)
 
+## Landing 2026-11-05: the Tor agent identity (review finding A10)
+
+Platform commit `37fc7da` (`app/src/org/freeholdos/exit/AndroidPlatform.java`: the gone Tor agent is an identity, not a flag a late callback can set on its successor) landed on `vendor/freeholdos/exit` as `ff3b24c` with a copy (tree clean at `87a78a1`, no job running, a dry-run `rsync -rlc --exclude tests --exclude tools` of `app/` showed this one file, its sha256 equals this repository's, a second dry run empty). Not compiled: the next module build or image build compiles it (hidden platform API).
+
 ## Fix 2026-11-04: the info row exists only for the owner (`packages-apps-Settings/0007`, `0008`)
 
 Found by the independent review of `docs/reviews/2026-11-unreviewed-code-review.md` (A4, A6).

@@ -1,4 +1,4 @@
-From fde4699cf4811946da57569c593fb850a12fc2c1 Mon Sep 17 00:00:00 2001
+From 7be034dc7a28b4e3c4c43bb32b6d375054ef4f9f Mon Sep 17 00:00:00 2001
 From: FreeholdOS Build <build@freeholdos.local>
 Date: Thu, 6 Aug 2026 02:32:15 +0200
 Subject: [PATCH] freeholdos: add Guardian to the emulator base_phone product
@@ -19,37 +19,15 @@ Found by Task 7 real build (soong_build error: internal error: Device
 makefile produces files inside build/make/target/product/generic_system.mk
 artifact path requirement).
 
-freeholdos: bump emulator dynamic-partitions budget for Guardian
-
-BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE 2800->3000 (MiB blocks). Guardian
-GuardianApp bundles an unshrunk Compose runtime (optimize.enabled=false),
-pushing the dynamic-partition group ~64MB over the original 2.75GiB
-budget. Found by Task 8's real super.img build (lpmake: not enough
-space on device for partition vendor).
+Not carried on 2026110200: the bump of BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE in
+64bitonly/product/sdk_phone64_x86_64.mk. Upstream removed that line and sets 8 GiB in
+board/BoardConfigCommon.mk, which is above the 3000 MiB this patch used.
 ---
- 64bitonly/product/sdk_phone64_x86_64.mk |  6 ++++--
- product/base_phone.mk                   | 13 +++++++++++++
- 2 files changed, 17 insertions(+), 2 deletions(-)
+ product/base_phone.mk | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
 
-diff --git a/64bitonly/product/sdk_phone64_x86_64.mk b/64bitonly/product/sdk_phone64_x86_64.mk
-index 405f414..27d5d4a 100644
---- a/64bitonly/product/sdk_phone64_x86_64.mk
-+++ b/64bitonly/product/sdk_phone64_x86_64.mk
-@@ -15,8 +15,10 @@
- #
- PRODUCT_USE_DYNAMIC_PARTITIONS := true
- 
--# 2.75 GiB
--BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE ?= $(shell expr 2800 \* 1048576 )
-+# 2.75 GiB, bumped to ~2.86 GiB for FreeholdOS Guardian (adds a Compose-based
-+# priv-app; unshrunk build put the dynamic-partition group ~64MB over the
-+# original 2800 budget) -- see freeholdos-foundation ADR <to be filled in Task 9>
-+BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE ?= $(shell expr 3000 \* 1048576 )
- BOARD_SUPER_PARTITION_SIZE := $(shell expr $(BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE) + 8388608 )  # +8M
- 
- $(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit_only.mk)
 diff --git a/product/base_phone.mk b/product/base_phone.mk
-index b630dd1..e5fbae4 100644
+index b630dd1..07fee34 100644
 --- a/product/base_phone.mk
 +++ b/product/base_phone.mk
 @@ -26,6 +26,19 @@ PRODUCT_PACKAGES += GoldfishSkinConfig \

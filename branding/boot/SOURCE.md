@@ -1,5 +1,9 @@
 # Source record
 
+## Refreshed for manifest tag 2026110200 (2026-11-05)
+
+`patches/frameworks-base/0002` was regenerated against the textures of the new upstream revision (`frameworks/base` `ad133394d443`): upstream replaced `android-logo-mask.png` and `android-logo-shine.png` again, so the old binary diff no longer applied. The post-image blobs are unchanged (`d2a775989077` and `6761fae91b8d`, read back from the new patch); only the pre-image of each file and the byte counts of the stat changed. Message, author and date are the original ones. `BOOT-009` is to be rechecked on the first image of the tag.
+
 ## Approved design
 
 - Reference page: the internal record "lighthouse" (not published),

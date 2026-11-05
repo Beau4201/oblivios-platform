@@ -1,5 +1,9 @@
 # Guardian — Source Provenance
 
+## Emulator patch refreshed for manifest tag 2026110200 (2026-11-05)
+
+`patches/device-generic-goldfish/0001` no longer carries the hunk that raised `BOARD_EMULATOR_DYNAMIC_PARTITIONS_SIZE` in `64bitonly/product/sdk_phone64_x86_64.mk`: upstream (`device/generic/goldfish` `160f9d95c508`) removed that line and sets 8 GiB in `board/BoardConfigCommon.mk`, above the 3000 MiB of the old hunk. The `base_phone.mk` hunk (Guardian in `PRODUCT_PACKAGES`) is unchanged. On the build server the `git am` result differs from upstream in `product/base_phone.mk` only. Emulator only; the Pixel products do not use this project.
+
 ## guardian-core.jar
 
 - Source: `sovereignos-services` commit `c9ac0dfc28454824e8c049d9d5222ee79fce28b5`
