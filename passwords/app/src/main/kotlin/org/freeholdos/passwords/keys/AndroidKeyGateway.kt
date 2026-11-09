@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.freeholdos.passwords.keys
 
+import android.security.KeyStoreException
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
+import java.security.InvalidKeyException
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -69,6 +71,10 @@ class AndroidKeyGateway : KeyGateway {
             true
         } catch (e: KeyPermanentlyInvalidatedException) {
             false
+        } catch (e: InvalidKeyException) {
+            // A locked device cannot answer (the key needs it unlocked; Keystore reports DEVICE_LOCKED as this public code):
+            // the key is not invalid, so it is neither dropped nor called changed. Any other failure is not hidden.
+            if ((e.cause as? KeyStoreException)?.numericErrorCode == KeyStoreException.ERROR_USER_AUTHENTICATION_REQUIRED) true else throw e
         }
     }
 

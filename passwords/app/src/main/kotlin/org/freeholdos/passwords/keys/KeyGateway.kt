@@ -45,7 +45,10 @@ interface KeyGateway {
     /** After the prompt succeeded: the vault key. */
     fun finishUnwrap(cipher: BiometricCipher, wrapped: ByteArray): ByteArray
 
-    /** False when the biometric key is gone or the enrolled biometrics changed since it was made. */
+    /**
+     * False when the biometric key is gone or the enrolled biometrics changed since it was made. Never throws because the
+     * device is locked: a locked device cannot tell, and the key is not invalid then, so the answer is true.
+     */
     fun biometricsStillValid(): Boolean
 
     /** True when the keys sit in a StrongBox. */
