@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Makes the mask list of the exit daemon (ADR-181, ADR-186) from the Data Map classifier.
 
-    make-mask-list.py CLASSIFIER.tsv DENYLIST ALLOWLIST IDS OUT.tsv
+    make-mask-list.py CLASSIFIER.tsv DENYLIST ALLOWLIST IDS OUT.tsv [EASYLIST_HOSTS]
 
 IDS is mask-company-ids.tsv: it is read, and written again with the ids of any new company appended (see read_ids).
+EASYLIST_HOSTS is the output of import-easylist.py (rule 4); without it the list is the classifier's alone.
 
 The classifier says who runs a domain and which category it has. It is a classification of domains, not a statement that
 the whole domain is only a tracker: google.com, facebook.com and android.com are all `advertising` in it. So the list is
@@ -17,6 +18,8 @@ made with three rules, and every row of the output says which one applies:
    `prefix:` line each, with a reason.
 3. Every domain of the DENYLIST, and every domain of the categories core, cdn, social and identity, is *protected* (company
    id 0): no name under it is masked, even when a less specific row would mask it.
+4. A host of EasyPrivacy or EasyList (EASYLIST_HOSTS: whole hosts only, see import-easylist.py) is masked, its company the
+   registrable domain, unless a row of rules 1 to 3 is at or above it: a protected row shields it, a masked row already masks it.
 
 Output format: see exit-daemon/src/masklist.rs. The output is deterministic (sorted; a company keeps the id that IDS holds, a new company gets the next free id in the order of its name).
 """
@@ -27,8 +30,16 @@ import sys
 MASK_CATS = {"advertising", "analytics", "attribution"}
 PROTECT_CATS = {"core", "cdn", "social", "identity"}
 HEADER = "exit-mask-list\t1"
-MAX_ENTRIES = 8192
+EASYLIST_HEADER = "easylist-hosts\t1"
+# The limits of the daemon (masklist.rs) and of the resolver (ExitMaskList.cpp): rows, and a company id of 32 bits.
+MAX_ENTRIES = 262144
+MAX_ID = 4294967295
 MAX_NAME = 64
+# shortcut: a short list of two-level public suffixes instead of the Public Suffix List; a host under another one gets the
+# company of its last two labels, which only groups its rows differently. Upgrade if the grouping is ever shown to a user.
+TWO_LEVEL = {"co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.jp", "ne.jp", "or.jp", "com.br", "com.cn",
+             "net.cn", "org.cn", "co.in", "net.in", "co.kr", "or.kr", "com.tr", "com.mx", "co.za", "com.tw", "co.nz", "com.ar",
+             "com.sg", "com.hk", "co.id", "co.il", "com.ua", "com.ru", "com.pl", "com.es", "com.de", "co.th", "com.vn", "com.ph"}
 _LABEL = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
@@ -69,18 +80,41 @@ def read_list(text):
     return exact, prefixes
 
 
+def registrable(host):
+    p = host.split(".")
+    return ".".join(p[-3:]) if len(p) >= 3 and ".".join(p[-2:]) in TWO_LEVEL else ".".join(p[-2:])
+
+
+def read_easylist(text):
+    """The output of import-easylist.py: the header, `#` lines, then `host<TAB>tag`. -> the hosts, sorted."""
+    lines = text.splitlines()
+    if not lines or lines[0] != EASYLIST_HEADER:
+        raise SystemExit("the easylist hosts file has no header")
+    hosts, seen = [], set()
+    for n, line in enumerate(lines[1:], 2):
+        if not line or line.startswith("#"):
+            continue
+        host, _, tag = line.partition("\t")
+        if not valid_domain(host) or host != host.lower() or tag not in ("EP", "EL", "EP+EL") or host in seen:
+            raise SystemExit(f"easylist hosts, line {n}: a lower-case host name once, and a tag EP, EL or EP+EL are required")
+        seen.add(host)
+        hosts.append(host)
+    return hosts
+
+
 def read_ids(text):
     """Lines `company key<TAB>id`; `#` starts a comment. -> {key: id}. The ids are kept in a committed file so that a company keeps its
     id across every regeneration (the exit app stores "show my address to company N"; an id that moved would point at another
     company after an update)."""
-    ids = {}
+    ids, seen = {}, set()
     for n, line in enumerate(text.splitlines(), 1):
         if not line.strip() or line.startswith("#"):
             continue
         key, _, num = line.partition("\t")
-        if not key or not num.isdigit() or not 1 <= int(num) <= 65535 or key in ids or int(num) in ids.values():
-            raise SystemExit(f"company ids, line {n}: a key and a unique id of 1 to 65535 are required")
+        if not key or not num.isdigit() or not 1 <= int(num) <= MAX_ID or key in ids or int(num) in seen:
+            raise SystemExit(f"company ids, line {n}: a key and a unique id of 1 to {MAX_ID} are required")
         ids[key] = int(num)
+        seen.add(int(num))
     return ids
 
 
@@ -90,11 +124,11 @@ def write_ids(ids):
     return head + "".join(f"{k}\t{i}\n" for k, i in sorted(ids.items(), key=lambda kv: kv[1]))
 
 
-def build(classifier_text, deny_text, allow_text):
-    return build_with_ids(classifier_text, deny_text, allow_text, "")[0]
+def build(classifier_text, deny_text, allow_text, easylist_text=""):
+    return build_with_ids(classifier_text, deny_text, allow_text, "", easylist_text)[0]
 
 
-def build_with_ids(classifier_text, deny_text, allow_text, ids_text):
+def build_with_ids(classifier_text, deny_text, allow_text, ids_text, easylist_text=""):
     """-> (the mask list, the company ids file to commit)"""
     services, owners = read_classifier(classifier_text)
     deny, deny_prefixes = read_list(deny_text)
@@ -119,6 +153,14 @@ def build_with_ids(classifier_text, deny_text, allow_text, ids_text):
                 rows[d] = ("o:" + owner) if owner != "-" else ("d:" + d)
     for d in deny:
         rows[d] = None
+    # Rule 4: a host of EasyPrivacy or EasyList is masked unless a row at or above it exists. A protected row above it shields it
+    # (no host of google.com, a platform owner or a protected domain is masked because a list names it, the allow list decides
+    # those); a masked row above it already masks it. The company is the registrable domain of the host.
+    if easylist_text:
+        for h in sorted(read_easylist(easylist_text), key=lambda x: (x.count("."), x)):  # a parent first: its subhosts are then redundant
+            labels = h.split(".")
+            if not any(".".join(labels[i:]) in rows for i in range(len(labels) - 1)):
+                rows[h] = "d:" + registrable(h)
 
     def name_of(key):
         if key.startswith("o:"):
@@ -133,11 +175,13 @@ def build_with_ids(classifier_text, deny_text, allow_text, ids_text):
     companies = sorted({k for k in rows.values() if k is not None}, key=lambda k: (name_of(k).lower(), k))
     known = read_ids(ids_text)
     ids = dict(known)
+    last = max(ids.values(), default=0)
     for k in companies:  # a new company, in the order of its name, gets the next free id
         if k not in ids:
-            if max(ids.values(), default=0) >= 65535:
-                raise SystemExit("more than 65535 companies")
-            ids[k] = max(ids.values(), default=0) + 1
+            if last >= MAX_ID:
+                raise SystemExit(f"more than {MAX_ID} companies")
+            last += 1
+            ids[k] = last
     if len(rows) > MAX_ENTRIES:
         raise SystemExit(f"{len(rows)} rows are more than the {MAX_ENTRIES} the daemon accepts")
     out = [HEADER]
@@ -148,12 +192,13 @@ def build_with_ids(classifier_text, deny_text, allow_text, ids_text):
 
 
 def main(argv):
-    if len(argv) != 6:
+    if len(argv) not in (6, 7):
         raise SystemExit(__doc__)
     cls, deny, allow = (open(p, encoding="utf-8").read() for p in argv[1:4])
     ids_path, out = argv[4], argv[5]
+    easylist = open(argv[6], encoding="utf-8").read() if len(argv) == 7 else ""
     ids_text = open(ids_path, encoding="utf-8").read() if os.path.exists(ids_path) else ""
-    text, new_ids = build_with_ids(cls, deny, allow, ids_text)
+    text, new_ids = build_with_ids(cls, deny, allow, ids_text, easylist)
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
     with open(ids_path, "w", encoding="utf-8", newline="\n") as f:

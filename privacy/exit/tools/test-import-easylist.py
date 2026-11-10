@@ -34,12 +34,20 @@ for line, why in [("||t.example/path/x.js", "shape"), ("||t.example^path", "shap
                   ("||t.example^$csp=script-src", "option"), ("||t.example^$redirect=noopjs", "option"), ("||t.example^$script,removeparam=x", "option"),
                   ("||1.2.3.4^", "not a host"), ("||localhost^", "not a host"), ("||-bad.example^", "not a host"), ("||" + "a" * 64 + ".example^", "not a host"),
                   ("||" + ".".join(["abcdefghij"] * 26) + "^", "not a host")]:
-    b, a, s = iel.parse(line + "\n")
-    check(not b and not a and s == {why: 1}, f"left out ({why}): {line}")
-check(iel.parse("! comment\n[Adblock Plus 1.1]\n\nexample.com##.ad\nexample.com#@#.ad\n#$#abort-on-property-read x\n") == (set(), set(), {"shape": 3}), "comments are ignored, element hiding is counted")
+    b, t, h, s = iel.parse(line + "\n")
+    check(not b and not t and not h and s == {why: 1}, f"left out ({why}): {line}")
+check(iel.parse("! comment\n[Adblock Plus 1.1]\n\nexample.com##.ad\nexample.com#@#.ad\n#$#abort-on-property-read x\n") == (set(), set(), set(), {"shape": 3}), "comments are ignored, element hiding is counted")
 
 # An exception removes the host and what is below it, whatever its options, but not a parent or a neighbour.
-check(iel.parse("@@||ok.example^$domain=a.com\n")[1] == {"ok.example"}, "exception with domain= counts")
+check(iel.parse("@@||ok.example^$domain=a.com\n")[1:3] == (set(), {"ok.example"}), "an exception with domain= clears that host only")
+check(iel.parse("@@||ok.example^$~third-party\n")[1:3] == (set(), {"ok.example"}), "an exception with a negated option clears that host only")
+check(iel.parse("@@||ok.example^$script,image\n@@||all.example^\n")[1:3] == ({"ok.example", "all.example"}, set()), "an exception with resource types clears the tree")
+check([l.split("\t")[0] for l in iel.build("||ok.example^\n||x.ok.example^\n", "@@||ok.example^$domain=a.com\n").splitlines()[3:]] == ["x.ok.example"],
+      "a conditional exception keeps the subhosts")
+for page in ("generichide", "elemhide", "specifichide", "genericblock", "document", "content", "jsinject", "urlblock", "script,generichide"):
+    check(iel.parse(f"@@||ok.example^${page}\n") == (set(), set(), set(), {"page exception": 1}), f"an exception of the page ({page}) clears nothing")
+check([l.split("\t")[0] for l in iel.build("||ok.example^\n||x.ok.example^\n", "@@||ok.example^$generichide\n").splitlines()[3:]] == ["ok.example", "x.ok.example"],
+      "a page exception removes no host")
 text = iel.build("||ok.example^\n||x.ok.example^\n||ok.example.net^\n||example^x\n||keep.example^\n||ok.example^\n", "@@||ok.example^$script\n||ok.example^\n")
 rows = [l.split("\t")[0] for l in text.splitlines() if l and l[0] not in "#e"]
 check(rows == ["keep.example", "ok.example.net"], f"exception removes host and subhosts only: {rows}")
@@ -58,7 +66,7 @@ check(iel.build("||a.example^\n", "") != iel.build("||b.example^\n", ""), "the h
 d = os.environ.get("EASYLIST_DIR")
 if d:
     ep, el = (open(os.path.join(d, n), encoding="utf-8").read() for n in ("easyprivacy.txt", "easylist.txt"))
-    b, a, s = iel.parse(ep)
+    b = iel.parse(ep)[0]
     check(len(b) > 20000 and "google-analytics.com" in b, f"real EasyPrivacy: {len(b)} hosts")
     out = iel.build(ep, el)
     check(len(out.splitlines()) - 3 > 60000, "real lists give tens of thousands of hosts")

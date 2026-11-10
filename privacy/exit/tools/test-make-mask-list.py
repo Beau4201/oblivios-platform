@@ -97,11 +97,36 @@ check("adnet.example" not in rows(out3) and rows(out3)["aaa-ads.example"] == aft
 check(mml.read_ids(ids3)["o:adco"] == mml.read_ids(ids1)["o:adco"], "a company that left keeps its id reserved")
 newer = gone + "owner\tzzz\tZZZ Last\tZZZ\tUS\tNYC\t0\t0\tWD-10\nservice\tzzz-ads.example\tzzz\tadvertising\tADG\n"
 check(rows(mml.build_with_ids(newer, DENY, ALLOW, ids3)[0])["zzz-ads.example"][0] not in set(mml.read_ids(ids3).values()), "an id is never reused")
-for bad_ids in ["o:a\t0\n", "o:a\t65536\n", "o:a\tx\n", "o:a\t1\no:b\t1\n", "o:a\t1\no:a\t2\n", "o:a\n"]:
+for bad_ids in ["o:a\t0\n", "o:a\t4294967296\n", "o:a\tx\n", "o:a\t1\no:b\t1\n", "o:a\t1\no:a\t2\n", "o:a\n"]:
     check(refused(lambda: mml.read_ids(bad_ids)), f"registry {bad_ids!r} should be refused")
 check(mml.read_ids("# c\n\no:a\t1\n") == {"o:a": 1}, "comments and blank lines in the registry")
-# The id space is 65535: a new company after the last id is an error, not a wrapped or oversized id.
-check(refused(lambda: mml.build_with_ids(more, DENY, ALLOW, "o:last-one\t65535\n")), "no id is left for a new company")
+check(mml.read_ids("o:a\t65536\no:b\t4294967295\n") == {"o:a": 65536, "o:b": 4294967295}, "an id has 32 bits")
+# The id space is 32 bits: a new company after the last id is an error, not a wrapped or oversized id.
+check(refused(lambda: mml.build_with_ids(more, DENY, ALLOW, "o:last-one\t4294967295\n")), "no id is left for a new company")
+
+# Rule 4: the hosts of EasyPrivacy and EasyList.
+EL = "easylist-hosts\t1\n# easyprivacy 1 sha256 x\n"
+el_rows = ["tracker.example", "a.t.example", "t.example", "b.t.example", "ads.foo.co.uk", "m.metrics.adnet.example",
+           "ev.accounts.google.com", "x.google.com", "doubleclick.net", "sub.auth.example", "auth.example", "new.news.example", "k.l.m.example"]
+els = EL + "".join(f"{h}\tEP\n" for h in el_rows)
+r4 = rows(mml.build(CLASSIFIER, DENY, ALLOW, els))
+check("tracker.example" in r4 and r4["tracker.example"][0] > 0 and r4["tracker.example"][1] == "tracker.example", "an easylist host is masked")
+check("a.t.example" not in r4 and "b.t.example" not in r4 and r4["t.example"][0] > 0, "a parent host makes its subhosts redundant")
+check(r4["ads.foo.co.uk"][1] == "foo.co.uk" and r4["k.l.m.example"][1] == "m.example", "the company is the registrable domain")
+check("m.metrics.adnet.example" not in r4, "a host under a masked row is not repeated")
+check("ev.accounts.google.com" not in r4 and "x.google.com" not in r4 and "sub.auth.example" not in r4 and "new.news.example" not in r4,
+      "a protected row shields the hosts below it: platform owner, identity, deny list, social")
+check(r4["doubleclick.net"][0] > 0 and r4["auth.example"][0] == 0, "an existing row is not changed by the list")
+base = rows(mml.build(CLASSIFIER, DENY, ALLOW))  # ids differ (new companies sort in), so compare the state and the name
+check(all((r4[k][0] == 0, r4[k][1]) == (v[0] == 0, v[1]) for k, v in base.items()), "the classifier rows are unchanged by rule 4")
+for bad in ["", "tracker.example\tEP\n", EL + "Tracker.Example\tEP\n", EL + "a.example\tXX\n", EL + "a.example\tEP\na.example\tEL\n", EL + "bad_host.example\tEP\n"]:
+    check(refused(lambda: mml.read_easylist(bad)), f"easylist file {bad!r} should be refused")
+# More than 65535 companies work, with stable ids, and the same input gives the same output.
+big = EL + "".join(f"h.c{i}.net\tEP\n" for i in range(70000))
+ob, ib = mml.build_with_ids(CLASSIFIER, DENY, ALLOW, "", big)
+check(max(mml.read_ids(ib).values()) > 65535 and len(mml.read_ids(ib)) == len(set(mml.read_ids(ib).values())), "ids above 65535 are unique")
+check(mml.build_with_ids(CLASSIFIER, DENY, ALLOW, ib, big) == (ob, ib), "ids are stable on a second run")
+check(len(ob.splitlines()) - 1 <= mml.MAX_ENTRIES, "70000 hosts fit the row limit")
 # A domain that the classifier lists twice is an error, not a quiet choice of one of the two.
 check(refused(lambda: mml.build(CLASSIFIER + "service\tgoogle.com\tgoogle\tcore\tADG\n", DENY, ALLOW)), "a duplicate domain should be refused")
 # A deny entry for a domain that is not in the classifier still protects it.
