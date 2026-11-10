@@ -1,5 +1,5 @@
 From 3b165003e439ae22dcb765f1fc3de2220a90b50e Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Thu, 6 Aug 2026 19:35:26 +0200
 Subject: [PATCH] guardian: ship GuardianApp on every Pixel target via
  device-common.mk
@@ -24,12 +24,12 @@ index 4302cb5a6..645425224 100644
  
  PRODUCT_PRODUCT_PROPERTIES += persist.vendor.intelligence=off
 +
-+# FreeholdOS: Guardian REVOKE_BACKGROUND_LOCATION ships on every Pixel target
++# ObliviOS: Guardian REVOKE_BACKGROUND_LOCATION ships on every Pixel target
 +# (real hardware, no test fixture). Kept here, not per device: the per-device
 +# entry for lynx silently left stallion without Guardian (2026-09-28).
 +PRODUCT_PACKAGES += \
 +    GuardianApp \
-+    privapp-permissions-org.freeholdos.guardian.xml
++    privapp-permissions-org.oblivios.guardian.xml
 -- 
 2.56.0
 

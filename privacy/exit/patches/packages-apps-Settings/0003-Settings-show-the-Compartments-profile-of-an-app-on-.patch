@@ -1,5 +1,5 @@
 From 1d1750b472b4d491a8b0d5845c7b253c2dd581a6 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 15:05:08 +0100
 Subject: [PATCH] Settings: show the Compartments profile of an app on its info
  row
@@ -23,8 +23,8 @@ index cb56f7e..b0a7d29 100644
      <uses-permission android:name="android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS"/>
      <uses-permission android:name="android.permission.READ_PRINT_SERVICES" />
      <uses-permission android:name="android.permission.NETWORK_SETTINGS" />
-+    <!-- FreeholdOS (ADR-208): the profile label of one app, for the summary of the Compartments row on its info page. -->
-+    <uses-permission android:name="org.freeholdos.permission.READ_COMPARTMENT_PROFILE" />
++    <!-- ObliviOS (ADR-208): the profile label of one app, for the summary of the Compartments row on its info page. -->
++    <uses-permission android:name="org.oblivios.permission.READ_COMPARTMENT_PROFILE" />
      <uses-permission android:name="android.permission.TEST_BLACKLISTED_PASSWORD" />
      <uses-permission android:name="android.permission.USE_RESERVED_DISK" />
      <uses-permission android:name="android.permission.MANAGE_SCOPED_ACCESS_DIRECTORY_PERMISSIONS" />
@@ -73,8 +73,8 @@ index 957b2ec..e139154 100644
  import com.android.settingslib.spa.widget.preference.PreferenceModel
  import com.android.settingslib.spaprivileged.model.app.installed
  
- private const val COMPARTMENTS_PACKAGE = "org.freeholdos.exit"
- private const val COMPARTMENTS_PAGE = "org.freeholdos.exit.ExitAppActivity"
+ private const val COMPARTMENTS_PACKAGE = "org.oblivios.exit"
+ private const val COMPARTMENTS_PAGE = "org.oblivios.exit.ExitAppActivity"
 +private const val COMPARTMENTS_SERVICE = "compartments"
  
  /**

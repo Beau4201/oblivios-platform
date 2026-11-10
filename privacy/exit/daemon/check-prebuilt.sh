@@ -27,7 +27,7 @@ have_list="$(sha256sum "$LIST" | cut -d' ' -f1)"
 # The exit app speaks one control protocol version; a daemon of another one answers Hello with Unsupported and the exit
 # is never up. The version of the recorded build must be the app's (ADR-208 moved it from 3 to 4 with the country).
 want_proto="$(sed -n 's/^| Control protocol | \([0-9][0-9]*\) |$/\1/p' "$HERE/SOURCE.md")"
-app_proto="$(sed -n 's/.*DAEMON_PROTOCOL = \([0-9][0-9]*\);.*/\1/p' "$HERE/../app/src/org/freeholdos/exit/ControlCodec.java")"
+app_proto="$(sed -n 's/.*DAEMON_PROTOCOL = \([0-9][0-9]*\);.*/\1/p' "$HERE/../app/src/org/oblivios/exit/ControlCodec.java")"
 [[ -n "$want_proto" && -n "$app_proto" ]] || { echo "no Control protocol row in SOURCE.md or no DAEMON_PROTOCOL in ControlCodec.java" >&2; exit 1; }
 [[ "$want_proto" == "$app_proto" ]] || { echo "control protocol mismatch: exitd builds as $want_proto, the exit app speaks $app_proto: rebuild exitd (SOURCE.md)" >&2; exit 1; }
 

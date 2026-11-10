@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Mutation check of the pure Java of the exit app (model: freeholdos-services/exit-daemon/tools/run-mutations.py).
+"""Mutation check of the pure Java of the exit app (model: oblivios-services/exit-daemon/tools/run-mutations.py).
 
 Copies the app directory to a temporary directory, applies ONE mutation at a time (an exact, unique string replaced by
 another) and runs tools/run-host-checks.sh on the copy. A mutation is killed when the host checks fail for it. One that
@@ -25,7 +25,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-J = "src/org/freeholdos/exit/"
+J = "src/org/oblivios/exit/"
 U, C, K, P, L, D, X, DC, RC, LK, PRE, CN, TN, ST, PR = (J + n + ".java" for n in ("UidRanges", "Choices", "Consent", "Policy", "Ladder", "ControlCodec", "ExitController", "DaemonClient", "RouteClient", "Link", "Presenter", "CompanyNames", "TunNet", "Status", "ProfileRows"))
 
 # (name, file, old, new)

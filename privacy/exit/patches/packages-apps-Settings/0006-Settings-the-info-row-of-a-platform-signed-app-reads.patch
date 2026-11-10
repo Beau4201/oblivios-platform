@@ -1,5 +1,5 @@
 From 70b533100f40eb37590881bc9564a3b8327c6c66 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Tue, 3 Nov 2026 16:36:08 +0100
 Subject: [PATCH] Settings: the info row of a platform-signed app reads System
 

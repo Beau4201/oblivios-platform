@@ -1,5 +1,5 @@
 From 6beaa40303ad49d0b26fa3a137dcc69ed70a1568 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 2 Oct 2026 19:23:37 +0200
 Subject: [PATCH 3/5] airpods: add BluetoothDevice#setAirPodsAudioRoute behind
  MANAGE_AIRPODS_IDENTITY
@@ -43,7 +43,7 @@ index 4716910..aaf01b5 100644
      boolean setAirPodsMetadata(in BluetoothDevice device, in int key, in byte[] value, in AttributionSource attributionSource);
  
 +    // For the AirPods audio route (ADR-125). Also requires
-+    // org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
++    // org.oblivios.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
 +    // AdapterServiceBinder, see setAirPodsIdentity above for why the annotation cannot carry it).
 +    // The device must be bonded and registered. The token is a binder of the caller: if it dies
 +    // while the AirPods are routed away, the route is restored.
@@ -61,7 +61,7 @@ index 27922c7..268b1b4 100644
  
      private final Object mLock = new Object();
  
-+    // FreeholdOS ADR-125: what was taken out of the active slots because the AirPods are out of the
++    // ObliviOS ADR-125: what was taken out of the active slots because the AirPods are out of the
 +    // ears. Own lock; only ever changed while holding mLock here so a change and its bookkeeping
 +    // cannot interleave with an active-device event.
 +    private final AirPodsRouteTracker mAirPodsRoute = new AirPodsRouteTracker();
@@ -98,7 +98,7 @@ index 27922c7..268b1b4 100644
      }
  
 +    /**
-+     * FreeholdOS ADR-125: the AirPods are out of the ears. If {@code device} is the active A2DP
++     * ObliviOS ADR-125: the AirPods are out of the ears. If {@code device} is the active A2DP
 +     * and/or HFP device, make no device active for that profile, so the audio (and a call) plays on
 +     * the phone. Never selects another device. Remembers exactly what it removed so
 +     * {@link #routeAirPodsBack} restores that and nothing else.
@@ -124,7 +124,7 @@ index 27922c7..268b1b4 100644
 +    }
 +
 +    /**
-+     * FreeholdOS ADR-125: the AirPods are in an ear again (or the app is gone). Make the device
++     * ObliviOS ADR-125: the AirPods are in an ear again (or the app is gone). Make the device
 +     * active again on exactly the profiles {@link #routeAirPodsAway} removed it from, and only
 +     * where the slot is still free: no other classic device, LE Audio device or hearing aid has taken
 +     * it since. HFP first, as in {@link #setActiveDevice}.
@@ -160,10 +160,10 @@ index 909a7db..481f4d2 100644
 --- a/android/app/src/com/android/bluetooth/btservice/AdapterService.java
 +++ b/android/app/src/com/android/bluetooth/btservice/AdapterService.java
 @@ -321,6 +321,22 @@ public class AdapterService extends Service {
-     // FreeholdOS ADR-115/ADR-117: which bonded peers the AirPods app has registered.
+     // ObliviOS ADR-115/ADR-117: which bonded peers the AirPods app has registered.
      private final AirPodsIdentityTracker mAirPodsIdentity = new AirPodsIdentityTracker();
  
-+    // FreeholdOS ADR-125: one death recipient per AirPods address that was routed away, so the
++    // ObliviOS ADR-125: one death recipient per AirPods address that was routed away, so the
 +    // route is restored if the calling process dies.
 +    // The entry keeps the caller's binder itself: a death link lives on the BinderProxy, and when
 +    // the proxy is garbage collected the link is gone, so a recipient alone would never fire.
@@ -187,9 +187,9 @@ index 909a7db..481f4d2 100644
      }
  
 +    /**
-+     * FreeholdOS ADR-125: takes the registered AirPods out of the active A2DP/HFP slots
++     * ObliviOS ADR-125: takes the registered AirPods out of the active A2DP/HFP slots
 +     * ({@code away}) or puts them back. The caller (AdapterServiceBinder) has already enforced
-+     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
++     * org.oblivios.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
 +     * accepted, under the same lock as register and unbond. {@code token} is a binder of the
 +     * calling process: if it dies while the AirPods are routed away, the route is restored.
 +     *
@@ -269,7 +269,7 @@ index 4e85f53..6b04636 100644
  
 +    /**
 +     * Takes the registered AirPods out of the active audio slots, or puts them back (ADR-125).
-+     * Scoped to the caller holding org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY, never a
++     * Scoped to the caller holding org.oblivios.permission.MANAGE_AIRPODS_IDENTITY, never a
 +     * general BLUETOOTH_PRIVILEGED holder; the bond and registration checks are in {@link
 +     * AdapterService#setAirPodsAudioRoute}.
 +     */
@@ -284,7 +284,7 @@ index 4e85f53..6b04636 100644
 +        }
 +
 +        service.enforceCallingOrSelfPermission(
-+                "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY", null);
++                "org.oblivios.permission.MANAGE_AIRPODS_IDENTITY", null);
 +
 +        return service.setAirPodsAudioRoute(device, away, token);
 +    }
@@ -322,7 +322,7 @@ index 0000000..873bc18
 +import java.util.Map;
 +
 +/**
-+ * FreeholdOS ADR-125: the record of which active-device slots (A2DP, HFP) were taken away from a
++ * ObliviOS ADR-125: the record of which active-device slots (A2DP, HFP) were taken away from a
 + * registered AirPods device because the pods are out of the ears. It decides nothing about Bluetooth
 + * state; {@link ActiveDeviceManager} passes in what is active and acts on the answer. The record is
 + * what lets the restore touch only what this feature removed. In memory only; bounded by the
@@ -481,7 +481,7 @@ index 0000000..2ba3245
 +import org.junit.Test;
 +import org.junit.runner.RunWith;
 +
-+/** FreeholdOS ADR-125: what the AirPods route tracker removes and restores. */
++/** ObliviOS ADR-125: what the AirPods route tracker removes and restores. */
 +@SmallTest
 +@RunWith(AndroidJUnit4.class)
 +public class AirPodsRouteTrackerTest {
@@ -620,7 +620,7 @@ index 956b231..23c1ebf 100644
 +     * turned off, or the calling process dies.
 +     *
 +     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
-+     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
++     * org.oblivios.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
 +     * not require {@code BLUETOOTH_PRIVILEGED} or {@code MODIFY_AUDIO_ROUTING}.
 +     *
 +     * @return true when the request was applied or there was nothing to do; false when refused or on

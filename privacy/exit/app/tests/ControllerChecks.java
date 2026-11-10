@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.exit;
+package org.oblivios.exit;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -253,7 +253,7 @@ public final class ControllerChecks {
         World w = new World();
         w.apps.add(new Policy.App("org.a.one", 10100));
         w.apps.add(new Policy.App("org.a.two", 10101));
-        w.apps.add(new Policy.App("org.freeholdos.exit", 10050));
+        w.apps.add(new Policy.App("org.oblivios.exit", 10050));
         return w;
     }
 

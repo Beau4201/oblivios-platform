@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.guardian.ui
+package org.oblivios.guardian.ui
 
 import java.time.Instant
 import java.time.ZoneId
@@ -7,14 +7,14 @@ import java.util.Locale
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.freeholdos.guardian.contracts.GuardianIncidentV1
-import org.freeholdos.guardian.evidence.GuardianEvidenceRetentionPeriod
-import org.freeholdos.guardian.overview.GuardianMeaningfulChangeType
-import org.freeholdos.guardian.overview.GuardianOverviewEntry
-import org.freeholdos.guardian.overview.GuardianOverviewSnapshot
-import org.freeholdos.guardian.overview.GuardianProtectionLifecycle
-import org.freeholdos.guardianui.screens.GuardianIncidentTone
-import org.freeholdos.guardianui.screens.GuardianRetentionOption
+import org.oblivios.guardian.contracts.GuardianIncidentV1
+import org.oblivios.guardian.evidence.GuardianEvidenceRetentionPeriod
+import org.oblivios.guardian.overview.GuardianMeaningfulChangeType
+import org.oblivios.guardian.overview.GuardianOverviewEntry
+import org.oblivios.guardian.overview.GuardianOverviewSnapshot
+import org.oblivios.guardian.overview.GuardianProtectionLifecycle
+import org.oblivios.guardianui.screens.GuardianIncidentTone
+import org.oblivios.guardianui.screens.GuardianRetentionOption
 import org.junit.jupiter.api.Test
 
 /**

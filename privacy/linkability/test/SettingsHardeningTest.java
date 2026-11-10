@@ -42,8 +42,8 @@ public final class SettingsHardeningTest {
         String[] hidden = {"device_name", "boot_count", "database_creation_buildid",
                 "default_input_method", "next_alarm_formatted", "system_locales",
                 "screen_brightness", "ringtone", "adb_enabled", "enabled_notification_listeners",
-                "autofill_service", "freeholdos_settings_open",
-                "freeholdos_settings_real_packages", "freeholdos_loopback_open"};
+                "autofill_service", "oblivios_settings_open",
+                "oblivios_settings_real_packages", "oblivios_loopback_open"};
         for (String key : hidden) {
             check(!SettingsHardening.isAllowedForApps(key), "hidden: " + key);
         }

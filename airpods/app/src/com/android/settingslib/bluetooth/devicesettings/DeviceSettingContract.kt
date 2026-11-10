@@ -22,7 +22,7 @@ object DeviceSettingContract {
 
     /**
      * Boolean extra on a [ToggleInfo]: draw the toggle's label inside its button instead of an
-     * icon with the label in a separate row below. FreeholdOS: the approved AirPods design shows
+     * icon with the label in a separate row below. ObliviOS: the approved AirPods design shows
      * the listening-mode text in the buttons; absent or false keeps the stock rendering.
      */
     const val TOGGLE_LABEL_IN_BUTTON = "TOGGLE_LABEL_IN_BUTTON"

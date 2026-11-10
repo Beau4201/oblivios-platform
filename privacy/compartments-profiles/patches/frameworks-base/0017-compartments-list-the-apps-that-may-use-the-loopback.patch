@@ -1,12 +1,12 @@
 From 1a8ac1e17877fa6ec9e0942e94783cc3d4390e36 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 20:57:19 +0100
 Subject: [PATCH] compartments: list the apps that may use the loopback
  interface in a global setting
 
 A runtime grant of USE_LOOPBACK_INTERFACE needs the app to declare it, so the profile Trusted did
 nothing for an app that does not (CMP-005). The service writes the app ids of the Trusted apps
-that are installed in the owner user into the global setting freeholdos_loopback_app_ids at every
+that are installed in the owner user into the global setting oblivios_loopback_app_ids at every
 mirror (MirrorPlan.loopbackAppIds, LoopbackAppIds), for the connectivity module to read.
 ---
  .../CompartmentsPolicyService.java            | 12 +++
@@ -20,11 +20,11 @@ index 5861c2b..d0dde38 100644
 --- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
 +++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
 @@ -76,6 +76,8 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
-     static final String READ_PROFILE = "org.freeholdos.permission.READ_COMPARTMENT_PROFILE";
-     static final String EXIT_PACKAGE = "org.freeholdos.exit";
-     static final String SETTINGS_REAL_PACKAGES = "freeholdos_settings_real_packages";
+     static final String READ_PROFILE = "org.oblivios.permission.READ_COMPARTMENT_PROFILE";
+     static final String EXIT_PACKAGE = "org.oblivios.exit";
+     static final String SETTINGS_REAL_PACKAGES = "oblivios_settings_real_packages";
 +    /** The app ids of the Trusted apps, for the connectivity module, which adds the loopback bit to their uids (LoopbackAppIds). */
-+    static final String SETTINGS_LOOPBACK_APP_IDS = "freeholdos_loopback_app_ids";
++    static final String SETTINGS_LOOPBACK_APP_IDS = "oblivios_loopback_app_ids";
      private static final String LOOPBACK_PERMISSION = "android.permission.USE_LOOPBACK_INTERFACE";
      static final String PLACES_FILE = "/product/etc/compartments/places.tsv";
      static final String CELLS_FILE = "/product/etc/compartments/cells.tsv";

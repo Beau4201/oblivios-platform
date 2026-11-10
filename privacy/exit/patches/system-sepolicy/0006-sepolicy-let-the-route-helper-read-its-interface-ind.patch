@@ -1,5 +1,5 @@
 From 143d4d7c61b6763747e61b39b18943f7a12a771e Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos-local>
+From: ObliviOS Build <build@oblivios-local>
 Date: Thu, 29 Oct 2026 18:56:33 +0100
 Subject: [PATCH] sepolicy: let the route helper read its interface index
  (nlmsg_readpriv for RTM_GETLINK)

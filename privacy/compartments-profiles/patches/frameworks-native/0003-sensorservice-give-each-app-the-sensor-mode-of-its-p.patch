@@ -1,5 +1,5 @@
 From 41311f50a539d50073f5d54ece90864ce3b004f3 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 14:50:14 +0100
 Subject: [PATCH] sensorservice: give each app the sensor mode of its profile
 
@@ -39,11 +39,11 @@ index 26dffaf..cbb01e9 100644
          return INVALID_OPERATION;
      }
  
--    // FreeholdOS (ADR-167): the HAL writes direct events into shared memory without passing
+-    // ObliviOS (ADR-167): the HAL writes direct events into shared memory without passing
 -    // SensorEventConnection::sendEvents, so the bias of the uncalibrated sensors cannot be
 -    // folded there. An app gets no direct channel for them.
 -    if (shouldFoldFor(mUid) && eventCarriesBias(s.getType()) &&
-+    // FreeholdOS (ADR-167, ADR-208): the HAL writes direct events into shared memory without passing
++    // ObliviOS (ADR-167, ADR-208): the HAL writes direct events into shared memory without passing
 +    // SensorEventConnection::sendEvents, so neither the folding of the bias nor an invented or blocked
 +    // stream can be applied there. An app gets no direct channel for the sensors that its mode changes.
 +    // A channel that was configured before a change of the profile keeps delivering until its
@@ -69,10 +69,10 @@ index 6d0421b..ae91795 100644
  
      int count = 0;
      Mutex::Autolock _l(mConnectionLock);
--    // FreeholdOS (ADR-167): every app gets the uncalibrated sensors without the bias estimate,
+-    // ObliviOS (ADR-167): every app gets the uncalibrated sensors without the bias estimate,
 -    // which identifies the device. Native daemons and platform uids keep the unchanged event.
 -    const bool foldBias = shouldFoldFor(mUid);
-+    // FreeholdOS (ADR-167, ADR-208): every app gets the uncalibrated sensors without the bias estimate,
++    // ObliviOS (ADR-167, ADR-208): every app gets the uncalibrated sensors without the bias estimate,
 +    // which identifies the device. On top of that the user's profile of the app decides whether it gets
 +    // the raw events (Trusted), invented events (Isolated) or no motion events. The system server writes
 +    // the choice to a file; a file that cannot be used leaves every app on the folded events.
@@ -122,7 +122,7 @@ index 0000000..aeba443
 +++ b/services/sensorservice/SensorModeProduction.h
 @@ -0,0 +1,23 @@
 +/*
-+ * FreeholdOS (ADR-208): the one table that the connections of the sensor service ask for the mode of an app.
++ * ObliviOS (ADR-208): the one table that the connections of the sensor service ask for the mode of an app.
 + *
 + * Why this diverges from upstream: SensorEventConnection and SensorDirectConnection both decide per app uid what an app may
 + * see, and the decision comes from a file of the system server (SensorModeSource). One function-local static serves both, so
@@ -151,7 +151,7 @@ index 0000000..a1e3f27
 +++ b/services/sensorservice/SensorModeSource.h
 @@ -0,0 +1,95 @@
 +/*
-+ * FreeholdOS (ADR-208): where the sensor service gets its SensorModeTable from.
++ * ObliviOS (ADR-208): where the sensor service gets its SensorModeTable from.
 + *
 + * Why this diverges from upstream: the policy lives in the system server and the sensor service is a separate process, so the
 + * system server writes the table to a file that only it may write and this class reads it. A file that is missing, too large,
@@ -252,7 +252,7 @@ index 0000000..9c0fb1d
 +++ b/services/sensorservice/SensorModes.h
 @@ -0,0 +1,172 @@
 +/*
-+ * FreeholdOS (ADR-208): what the sensor service does for an app, as set by the Compartments profile of the app.
++ * ObliviOS (ADR-208): what the sensor service does for an app, as set by the Compartments profile of the app.
 + *
 + * Why this diverges from upstream: ADR-167 folds the bias of the uncalibrated sensors into the readings for every app. A profile
 + * lets the user keep an app raw (Trusted), give it invented data (Isolated) or no motion events (Blocked). The system server
@@ -430,7 +430,7 @@ index 0000000..8ec37cb
 +++ b/services/sensorservice/SubstituteStream.h
 @@ -0,0 +1,140 @@
 +/*
-+ * FreeholdOS (ADR-208): invented motion data for an app on the Isolated profile, and the single place that applies a
++ * ObliviOS (ADR-208): invented motion data for an app on the Isolated profile, and the single place that applies a
 + * SensorMode to an event.
 + *
 + * Why this diverges from upstream: an app that demands the motion sensors must keep working and must learn nothing true. The

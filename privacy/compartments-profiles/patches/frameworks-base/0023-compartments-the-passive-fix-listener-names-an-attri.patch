@@ -1,5 +1,5 @@
 From dac38e875e4502a688d850e06db37a96de2ff680 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 2 Nov 2026 21:51:36 +0100
 Subject: [PATCH] compartments: the passive fix listener names an attribution
  tag

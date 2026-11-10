@@ -1,5 +1,5 @@
 From 56027ac772610e2a7654d2d9179d2f898ce62bf7 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 12 Oct 2026 16:55:29 +0200
 Subject: [PATCH] datamap: keep the history to the hour and only from the
  moment it is switched on

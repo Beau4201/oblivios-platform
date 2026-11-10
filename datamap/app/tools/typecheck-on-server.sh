@@ -5,7 +5,7 @@
 #   typecheck-on-server.sh SCRATCH_DIR     SCRATCH_DIR holds a copy of the app directory as SCRATCH_DIR/app
 set -o errexit -o nounset -o pipefail
 W="$(cd "$1" && pwd)"
-T="${AOSP_TREE:-/srv/freeholdos/platform-primary}"
+T="${AOSP_TREE:-/srv/oblivios/platform-primary}"
 OBJ="${AOSP_OUT:-$T/out-lynx}"
 ANDROID_JAR="${ANDROID_JAR:-$T/prebuilts/sdk/current/system/android.jar}"
 AAPT2="$OBJ/host/linux-x86/bin/aapt2"

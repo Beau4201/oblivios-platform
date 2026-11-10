@@ -1,5 +1,5 @@
 From e797d3328e00af469e91397f1b44464737cf55bd Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Tue, 3 Nov 2026 16:36:08 +0100
 Subject: [PATCH] compartments: getIdentity names a platform-signed package
  System

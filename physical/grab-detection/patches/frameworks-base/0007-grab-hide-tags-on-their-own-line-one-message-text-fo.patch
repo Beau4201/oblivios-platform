@@ -14,7 +14,7 @@ index 1f8b701..e9d6cb9 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
 @@ -14460,28 +14460,52 @@ public final class Settings {
-         // FreeholdOS grab detection (ADR-169). Not @Protected on purpose: `adb shell settings
+         // ObliviOS grab detection (ADR-169). Not @Protected on purpose: `adb shell settings
          // put global` must work on a user build to tune the shadow mode and to switch back to it.
  
 -        /** 0 off, 1 shadow (log only), 2 active @hide */
@@ -80,7 +80,7 @@ index 1568422..584299e 100644
 +++ b/packages/SystemUI/res-keyguard/values/strings.xml
 @@ -202,7 +202,7 @@
      <string name="kg_prompt_after_user_lockdown_pin">PIN is required after lockdown</string>
-     <!-- FreeholdOS grab detection (ADR-169): shown above the PIN entry after the phone locked
+     <!-- ObliviOS grab detection (ADR-169): shown above the PIN entry after the phone locked
           itself because it was pulled out of a hand. 60 matches the restart timer of the service. -->
 -    <string name="kg_prompt_after_grab">Sudden movement detected. Enter your PIN within 60 seconds or the phone restarts</string>
 +    <string name="kg_prompt_after_grab">Sudden movement detected. Unlock within 60 seconds or the phone restarts</string>

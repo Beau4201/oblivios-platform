@@ -69,7 +69,7 @@ if [[ -d "$KT" ]]; then
   # watching which chips stay.
   while IFS= read -r hit; do
     fail "$hit: a dataset value without NO_FILTER"
-  done < <(grep -n -E '\.setValue\(' -r "$KT/org/freeholdos/passwords/fill" --include='*.kt' | grep -v -E ':[0-9]+:\s*(//|\*|/\*)' | grep -v 'NO_FILTER' || true)
+  done < <(grep -n -E '\.setValue\(' -r "$KT/org/oblivios/passwords/fill" --include='*.kt' | grep -v -E ':[0-9]+:\s*(//|\*|/\*)' | grep -v 'NO_FILTER' || true)
 fi
 
 # The feature switch of the chips: without it the system never asks the keyboard for them.

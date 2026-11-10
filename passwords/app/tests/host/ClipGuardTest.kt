@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.core.ClipGuard
+import org.oblivios.passwords.core.ClipGuard
 
 fun main() {
     nothingChangedMeansClear()

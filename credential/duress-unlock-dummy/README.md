@@ -1,9 +1,9 @@
 # Duress Unlock — hardware-backed dummy-cost credential check
 
-This package implements Stage 1 of FreeholdOS's Duress Unlock feature: a
+This package implements Stage 1 of ObliviOS's Duress Unlock feature: a
 cost-symmetric "dummy" credential check, so that a failed real-credential
 attempt costs the same real GateKeeper/Weaver round-trip whether or not an
-FreeholdOS decoy profile is registered on the device. Without this, failed-login
+ObliviOS decoy profile is registered on the device. Without this, failed-login
 timing would itself reveal whether a decoy profile exists — the exact
 side-channel this package closes.
 
@@ -14,7 +14,7 @@ reviews, one fixed defect): the internal record "duress dummy cost primitive" (n
 ## Boundary
 
 Do not apply this package to a Phase 1 (or later) baseline tree without a
-corresponding ADR in `docs/governance/decision-log.md` in `freeholdos-docs`
+corresponding ADR in `docs/governance/decision-log.md` in `oblivios-docs`
 naming this exact patch set (`CONTRIBUTING.md`'s hard rule). That
 ADR is **ADR-040** (2026-08-15, updated 2026-08-16) — it names the exact
 commit hashes below. The Phase 1 baseline itself is
@@ -37,13 +37,13 @@ checkout — this package is the durable record; the checkout's own
 operational history is not tracked in version control). Generated via
 `git format-patch`, one file per real commit; the diff content is
 unmodified, but the commit author identity was rewritten from the build
-server's local git config to a generic `FreeholdOS Build` identity before
+server's local git config to a generic `ObliviOS Build` identity before
 committing here, per this project's standing rule against copying host/
 account details into commits.
 
 | Tree | Base commit | Patches |
 | --- | --- | --- |
-| `frameworks/base` | `7d7001f9c4e4` (`freeholdos: apply approved boot-identity assets`, ADR-019) | `patches/frameworks-base/0001` |
+| `frameworks/base` | `7d7001f9c4e4` (`oblivios: apply approved boot-identity assets`, ADR-019) | `patches/frameworks-base/0001` |
 | `system/sepolicy` | `87a06ed71fd6` (`update zygote policy for zygote_next exec spawning support`, upstream) | `patches/system-sepolicy/0001` |
 | `system/core` | `84ebea5e2111` (`use lazy preloading for compat zygote`, upstream) | `patches/system-core/0001` |
 

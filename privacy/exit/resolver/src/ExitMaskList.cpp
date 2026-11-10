@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// See ExitMaskList.h. The format and the matching are those of `masklist.rs` of the exit daemon (freeholdos-services,
-// exit-daemon); `resolver/test/differential.py` of freeholdos-platform compares the two on the real list.
+// See ExitMaskList.h. The format and the matching are those of `masklist.rs` of the exit daemon (oblivios-services,
+// exit-daemon); `resolver/test/differential.py` of oblivios-platform compares the two on the real list.
 
 #include "ExitMaskList.h"
 

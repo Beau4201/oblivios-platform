@@ -1,5 +1,5 @@
 From a2e07f709987604649fd01932245687aa41ad5c1 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Wed, 21 Oct 2026 22:40:33 +0200
 Subject: [PATCH] sepolicy: add the domains of the Compartments exit service
 
@@ -188,10 +188,10 @@ index 8d0fe3d..af49d4e 100644
  user=_app seinfo=media isPrivApp=true name=com.android.providers.media.module domain=mediaprovider_app type=privapp_data_file levelFrom=all
  user=_app seinfo=media isPrivApp=true name=com.android.providers.media.module:* domain=mediaprovider_app type=privapp_data_file levelFrom=all
  user=_app seinfo=platform isPrivApp=true name=com.android.permissioncontroller domain=permissioncontroller_app type=privapp_data_file levelFrom=all
-+user=_app seinfo=platform isPrivApp=true name=org.freeholdos.exit domain=exit_app type=app_data_file levelFrom=all
++user=_app seinfo=platform isPrivApp=true name=org.oblivios.exit domain=exit_app type=app_data_file levelFrom=all
  user=_app isPrivApp=true name=com.android.rkpdapp domain=rkpdapp type=privapp_data_file levelFrom=all
  user=_app isPrivApp=true name=app.grapheneos.logviewer domain=logviewer_app type=app_data_file levelFrom=all
- user=_app isPrivApp=true name=org.freeholdos.datamap domain=datamap_app type=app_data_file levelFrom=all
+ user=_app isPrivApp=true name=org.oblivios.datamap domain=datamap_app type=app_data_file levelFrom=all
 -- 
 2.56.0
 

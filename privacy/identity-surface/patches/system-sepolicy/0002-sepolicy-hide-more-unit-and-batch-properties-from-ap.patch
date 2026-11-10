@@ -25,7 +25,7 @@ index a054d9d21..a38966397 100644
  system_internal_prop(fastbootd_protocol_prop)
  system_internal_prop(gsid_prop)
  system_internal_prop(hsum_boot_strategy_prop)
-+# FreeholdOS: epoch of the last fatal reboot, readable by init only (see property_contexts).
++# ObliviOS: epoch of the last fatal reboot, readable by init only (see property_contexts).
 +system_internal_prop(init_fatal_reboot_epoch_prop)
  system_internal_prop(init_mnt_ns_prop)
  system_internal_prop(init_perf_lsm_hooks_prop)
@@ -47,7 +47,7 @@ index 670a3746c..046bd635c 100644
  
  # Epoch time at which last fatal reboot was performed
 -persist.init.svc.last_fatal_reboot_epoch u:object_r:init_service_status_private_prop:s0 exact int
-+# FreeholdOS: its own type. init_service_status_private_prop is readable by coredomain, which includes
++# ObliviOS: its own type. init_service_status_private_prop is readable by coredomain, which includes
 +# every app, and this value is a timestamp that survives reboots and is the same in every app.
 +persist.init.svc.last_fatal_reboot_epoch u:object_r:init_fatal_reboot_epoch_prop:s0 exact int
  
@@ -57,7 +57,7 @@ index 670a3746c..046bd635c 100644
  ro.boot.hardware.pcbcfg         u:object_r:unit_boot_prop:s0 exact string
  ro.boot.hw.soc.id               u:object_r:unit_boot_prop:s0 exact string
  ro.boot.vbmeta.device           u:object_r:unit_boot_prop:s0 exact string
-+# FreeholdOS: supply-chain and batch level values. No app reads them; the only reader found in the
++# ObliviOS: supply-chain and batch level values. No app reads them; the only reader found in the
 +# tree is perfetto, which logs an error and goes on (docs/research/linkability-catalogue.md).
 +ro.boot.ddr_info                u:object_r:unit_boot_prop:s0 exact string
 +ro.boot.hardware.ddr            u:object_r:unit_boot_prop:s0 exact string

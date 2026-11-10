@@ -1,5 +1,5 @@
 From f18707c3dce50ba2750c2d73d6c3a84a483df80e Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 21:25:18 +0100
 Subject: [PATCH] telephony: bring the copy of CellSubset up to its source
 

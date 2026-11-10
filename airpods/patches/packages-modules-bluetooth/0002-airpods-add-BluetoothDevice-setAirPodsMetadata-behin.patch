@@ -1,5 +1,5 @@
 From f61c5f21a4b0b1b18adfc5eb8fc476d8d37d133f Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Tue, 29 Sep 2026 17:42:04 +0200
 Subject: [PATCH 2/5] airpods: add BluetoothDevice#setAirPodsMetadata behind
  MANAGE_AIRPODS_IDENTITY
@@ -38,7 +38,7 @@ index 0e21c4d..4716910 100644
      boolean setAirPodsIdentity(in BluetoothDevice device, in boolean recognized, in AttributionSource attributionSource);
  
 +    // For AirPods metadata (ADR-117). Also requires
-+    // org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY at runtime
++    // org.oblivios.permission.MANAGE_AIRPODS_IDENTITY at runtime
 +    // (enforced in AdapterServiceBinder, see setAirPodsIdentity above for why the
 +    // annotation cannot carry it). The device must be bonded and registered.
 +    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
@@ -55,7 +55,7 @@ index 15151c2..909a7db 100644
      private final SilenceDeviceManager mSilenceDeviceManager;
      private final BluetoothStorageManager mStorage;
  
-+    // FreeholdOS ADR-115/ADR-117: which bonded peers the AirPods app has registered.
++    // ObliviOS ADR-115/ADR-117: which bonded peers the AirPods app has registered.
 +    private final AirPodsIdentityTracker mAirPodsIdentity = new AirPodsIdentityTracker();
 +
      /**
@@ -85,7 +85,7 @@ index 15151c2..909a7db 100644
 +    /**
 +     * Writes one metadata value on a bonded device that the AirPods app has registered (ADR-117).
 +     * The caller (AdapterServiceBinder) has already enforced
-+     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY.
++     * org.oblivios.permission.MANAGE_AIRPODS_IDENTITY.
 +     *
 +     * @return true when the stored value now equals {@code value} (including when it already did);
 +     *     false when the key or value is outside {@link AirPodsMetadataPolicy}, the device is not
@@ -110,7 +110,7 @@ index 15151c2..909a7db 100644
 @@ -4540,8 +4572,11 @@ public class AdapterService extends Service {
          mStorage.onBondStateChanged(device, fromState, toState);
  
-         // FreeholdOS ADR-115: an AirPods identity registration never outlives the bond.
+         // ObliviOS ADR-115: an AirPods identity registration never outlives the bond.
 +        // ADR-117: the Java record is cleared under the same lock the metadata write takes.
          if (toState == BluetoothDevice.BOND_NONE) {
 -            mNativeInterface.setAirPodsIdentity(device.getAddress(), false);
@@ -130,7 +130,7 @@ index f250486..4e85f53 100644
  
 +    /**
 +     * Writes one AirPods-related metadata value on a bonded, registered AirPods device (ADR-117).
-+     * Scoped to the caller holding org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY, never a
++     * Scoped to the caller holding org.oblivios.permission.MANAGE_AIRPODS_IDENTITY, never a
 +     * general BLUETOOTH_PRIVILEGED holder; the key allow-list and the bond and registration
 +     * checks are in {@link AdapterService#setAirPodsMetadata}.
 +     */
@@ -144,7 +144,7 @@ index f250486..4e85f53 100644
 +        }
 +
 +        service.enforceCallingOrSelfPermission(
-+                "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY", null);
++                "org.oblivios.permission.MANAGE_AIRPODS_IDENTITY", null);
 +
 +        return service.setAirPodsMetadata(device, key, value);
 +    }
@@ -183,7 +183,7 @@ index 0000000..8b94a14
 +import java.util.function.BooleanSupplier;
 +
 +/**
-+ * FreeholdOS ADR-115/ADR-117: the Java-side record of which bonded addresses the AirPods app has
++ * ObliviOS ADR-115/ADR-117: the Java-side record of which bonded addresses the AirPods app has
 + * registered as AirPods (the native registry has no getter). One lock makes register, unbond and
 + * metadata write atomic with respect to each other, so a write can never run against an address
 + * whose unbond has already completed.
@@ -278,7 +278,7 @@ index 0000000..b6afd5d
 +import java.util.Arrays;
 +
 +/**
-+ * FreeholdOS ADR-117: what {@link AdapterService#setAirPodsMetadata} may write.
++ * ObliviOS ADR-117: what {@link AdapterService#setAirPodsMetadata} may write.
 + *
 + * <p>The allow-list is the set of keys Settings reads to draw the AirPods rings and device page
 + * (icons, battery, charging, low-battery threshold for left, right, case and main, the
@@ -361,9 +361,9 @@ index b8627d0..c3fbbd3 100644
          private const val INVALID_TRANSPORT_NEGATIVE = -1
          private const val INVALID_TRANSPORT_POSITIVE = 3
 +
-+        // FreeholdOS ADR-117
++        // ObliviOS ADR-117
 +        private const val MANAGE_AIRPODS_IDENTITY =
-+            "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY"
++            "org.oblivios.permission.MANAGE_AIRPODS_IDENTITY"
 +        private const val AIRPODS_KEY = BluetoothDevice.METADATA_UNTETHERED_LEFT_BATTERY
 +        private val AIRPODS_VALUE = "82".toByteArray()
      }
@@ -761,7 +761,7 @@ index f88ce3d..956b231 100644
 +     * clears the key. The metadata is removed by the platform when the bond is removed.
 +     *
 +     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
-+     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
++     * org.oblivios.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
 +     * not require {@code BLUETOOTH_PRIVILEGED}.
 +     *
 +     * @param key one of the accepted keys above

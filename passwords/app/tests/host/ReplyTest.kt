@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.core.Code
-import org.freeholdos.passwords.core.CreatedVault
-import org.freeholdos.passwords.core.Reply
-import org.freeholdos.passwords.core.handleOrCode
+import org.oblivios.passwords.core.Code
+import org.oblivios.passwords.core.CreatedVault
+import org.oblivios.passwords.core.Reply
+import org.oblivios.passwords.core.handleOrCode
 
 fun main() {
     replyStatusAndPayload()

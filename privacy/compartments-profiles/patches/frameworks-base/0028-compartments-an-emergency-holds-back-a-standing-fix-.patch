@@ -1,5 +1,5 @@
 From 86914deede3ce65c167211dc9ab1ef4521d3a788 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@localhost>
+From: ObliviOS Build <build@localhost>
 Date: Tue, 3 Nov 2026 22:07:19 +0100
 Subject: [PATCH] compartments: an emergency holds back a standing fix without
  making the next alarm due at once

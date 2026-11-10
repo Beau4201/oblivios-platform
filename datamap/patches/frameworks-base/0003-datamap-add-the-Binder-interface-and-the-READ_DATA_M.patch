@@ -1,10 +1,10 @@
 From 8e93e6d3cd94e2e5739020f10c6169002e36b68a Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 11 Oct 2026 15:38:01 +0200
 Subject: [PATCH 3/4] datamap: add the Binder interface and the READ_DATA_MAP
  permission
 
-org.freeholdos.permission.READ_DATA_MAP is signature|privileged and only the Data Map app holds it.
+org.oblivios.permission.READ_DATA_MAP is signature|privileged and only the Data Map app holds it.
 Structured parcelables, so that the app compiles the same files and no hand-written Parcelable is
 needed.
 ---
@@ -213,7 +213,7 @@ index 0000000..ed3cb28
 +
 +/**
 + * The Binder interface of the Data Map service. Every call acts on the calling user; there is no
-+ * user argument. Each call needs org.freeholdos.permission.READ_DATA_MAP, which only the Data Map
++ * user argument. Each call needs org.oblivios.permission.READ_DATA_MAP, which only the Data Map
 + * app holds.
 + *
 + * <p>The transaction order is part of the contract with the app, which compiles its own copy of
@@ -250,11 +250,11 @@ index 5c9e490..e4b025a 100644
          android:protectionLevel="signature|privileged"
          android:featureFlag="com.android.window.flags.enable_fullscreen_in_new_task_preference" />
  
-+    <!-- Allows the FreeholdOS Data Map app to read which services each app contacts, for its own
++    <!-- Allows the ObliviOS Data Map app to read which services each app contacts, for its own
 +         user. Only that app holds it (ADR-157). -->
-+    <permission android:name="org.freeholdos.permission.READ_DATA_MAP"
-+        android:label="@string/permlab_freeholdosReadDataMap"
-+        android:description="@string/permdesc_freeholdosReadDataMap"
++    <permission android:name="org.oblivios.permission.READ_DATA_MAP"
++        android:label="@string/permlab_obliviosReadDataMap"
++        android:description="@string/permdesc_obliviosReadDataMap"
 +        android:protectionLevel="signature|privileged" />
 +
      <!-- Allows an app to update the verification status of E2EE contact keys owned by other apps.
@@ -269,10 +269,10 @@ index 4d56413..697a663 100644
      <string name="permdesc_manageProfileAndDeviceOwners">Allows apps to set the profile owners and the device owner.</string>
  
 +    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-+    <string name="permlab_freeholdosReadDataMap">read which services apps contact</string>
-+    <!-- Description of an application permission. Only the FreeholdOS Data Map app holds it.
++    <string name="permlab_obliviosReadDataMap">read which services apps contact</string>
++    <!-- Description of an application permission. Only the ObliviOS Data Map app holds it.
 +     [CHAR LIMIT=NONE] -->
-+    <string name="permdesc_freeholdosReadDataMap">Allows the Data Map app to read the names and counts of the services that apps of the same user contact.</string>
++    <string name="permdesc_obliviosReadDataMap">Allows the Data Map app to read the names and counts of the services that apps of the same user contact.</string>
 +
      <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
      <string name="permlab_reorderTasks">reorder running apps</string>

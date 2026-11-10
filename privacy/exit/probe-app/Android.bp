@@ -18,11 +18,11 @@ android_app {
     libs: ["framework-connectivity.stubs.module_lib"],
     certificate: "platform",
     privileged: true,
-    required: ["privapp-permissions-org.freeholdos.exitprobe.xml"],
+    required: ["privapp-permissions-org.oblivios.exitprobe.xml"],
 }
 
 prebuilt_etc {
-    name: "privapp-permissions-org.freeholdos.exitprobe.xml",
-    src: "privapp-permissions-org.freeholdos.exitprobe.xml",
+    name: "privapp-permissions-org.oblivios.exitprobe.xml",
+    src: "privapp-permissions-org.oblivios.exitprobe.xml",
     sub_dir: "permissions",
 }

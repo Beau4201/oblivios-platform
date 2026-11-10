@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.guardian.ui
+package org.oblivios.guardian.ui
 
-import org.freeholdos.guardian.application.GuardianApplicationResult
-import org.freeholdos.guardian.overview.GuardianOverviewSnapshot
-import org.freeholdos.guardian.remediation.RemediationOutcome
+import org.oblivios.guardian.application.GuardianApplicationResult
+import org.oblivios.guardian.overview.GuardianOverviewSnapshot
+import org.oblivios.guardian.remediation.RemediationOutcome
 
 interface GuardianUiScenario {
     fun detectBackgroundLocation(): GuardianApplicationResult

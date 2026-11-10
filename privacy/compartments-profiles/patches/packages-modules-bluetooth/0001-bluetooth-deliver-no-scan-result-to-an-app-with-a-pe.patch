@@ -235,7 +235,7 @@ index 36d0275..24d3483 100644
  
      private final AdapterService mAdapterService;
 +
-+    /** FreeholdOS (ADR-208): which apps have a persona; no scan result of the real place is delivered to them. */
++    /** ObliviOS (ADR-208): which apps have a persona; no scan result of the real place is delivered to them. */
 +    private final PersonaReader mPersona = new PersonaReader();
 +
 +    private boolean hasPersona(ScannerApp app) {

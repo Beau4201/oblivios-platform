@@ -1,5 +1,5 @@
 From 96c770b9e163b7a06833481a034c889552616941 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 2 Nov 2026 13:40:04 +0100
 Subject: [PATCH] wifi: treat an app with a persona but no place as an app with
  a persona
@@ -215,7 +215,7 @@ index 341d9bd..6574551 100644
 @@ -5425,7 +5425,7 @@ public class WifiServiceImpl extends IWifiManager.Stub {
                              + "(uid=" + uid + ")");
                  }
-                 // FreeholdOS (ADR-208): an app with a persona keeps the redaction, as an app without the permission does
+                 // ObliviOS (ADR-208): an app with a persona keeps the redaction, as an app without the permission does
 -                if (mPersona.placeOf(uid) == 0) {
 +                if (!mPersona.hasPersona(uid)) {
                      redactions &= ~NetworkCapabilities.REDACT_FOR_ACCESS_FINE_LOCATION;
@@ -224,7 +224,7 @@ index 341d9bd..6574551 100644
 @@ -5474,7 +5474,7 @@ public class WifiServiceImpl extends IWifiManager.Stub {
              mWifiPermissionsUtil.enforceCanAccessScanResults(callingPackage, callingFeatureId,
                      uid, null);
-             // FreeholdOS (ADR-208): an app with a persona sees no access point of the real place
+             // ObliviOS (ADR-208): an app with a persona sees no access point of the real place
 -            if (mPersona.placeOf(uid) != 0) {
 +            if (mPersona.hasPersona(uid)) {
                  return new ParceledListSlice<>(Collections.emptyList());
@@ -233,7 +233,7 @@ index 341d9bd..6574551 100644
 @@ -5562,7 +5562,7 @@ public class WifiServiceImpl extends IWifiManager.Stub {
              mWifiPermissionsUtil.enforceCanAccessScanResults(callingPackage, callingFeatureId,
                      uid, null);
-             // FreeholdOS (ADR-208): an app with a persona sees no access point of the real place
+             // ObliviOS (ADR-208): an app with a persona sees no access point of the real place
 -            if (mPersona.placeOf(uid) != 0) {
 +            if (mPersona.hasPersona(uid)) {
                  return Collections.emptyMap();

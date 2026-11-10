@@ -1,5 +1,5 @@
 From a878358584c0bf79db14a946950c1e0fef9ff402 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sat, 31 Oct 2026 02:04:07 +0100
 Subject: [PATCH] wifi: refuse location-gated access to an app with a persona
 

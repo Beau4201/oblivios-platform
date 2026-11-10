@@ -18,7 +18,7 @@ index 9efbb58..1568422 100644
  
      <!-- Message shown for pin/pattern/password when we are on bouncer after user triggered lockdown.  [CHAR LIMIT=70] -->
      <string name="kg_prompt_after_user_lockdown_pin">PIN is required after lockdown</string>
-+    <!-- FreeholdOS grab detection (ADR-169): shown above the PIN entry after the phone locked
++    <!-- ObliviOS grab detection (ADR-169): shown above the PIN entry after the phone locked
 +         itself because it was pulled out of a hand. 60 matches the restart timer of the service. -->
 +    <string name="kg_prompt_after_grab">Sudden movement detected. Enter your PIN within 60 seconds or the phone restarts</string>
  

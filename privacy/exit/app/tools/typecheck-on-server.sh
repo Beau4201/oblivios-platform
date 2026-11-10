@@ -6,7 +6,7 @@
 #   typecheck-on-server.sh SCRATCH_DIR     SCRATCH_DIR holds a copy of the app directory as SCRATCH_DIR/app
 set -o errexit -o nounset -o pipefail
 W="$(cd "$1" && pwd)"
-T="${AOSP_TREE:-/srv/freeholdos/platform-primary}"
+T="${AOSP_TREE:-/srv/oblivios/platform-primary}"
 OBJ="${AOSP_OUT:-$T/out-lynx}"
 API="$(ls "$T/prebuilts/sdk" | grep -E '^[0-9]+$' | sort -n | tail -1)"
 ML="$T/prebuilts/sdk/$API/module-lib"
@@ -28,8 +28,8 @@ printf '<resources><style name="Theme.SubSettingsBase" parent="android:Theme.Dev
 "$AAPT2" link -o "$OUT/app.apk" -I "$ML/android.jar" --manifest "$A/AndroidManifest.xml" --java "$OUT/gen" \
   --min-sdk-version 36 --target-sdk-version 37 "$OUT/res.zip" "$OUT/stub.zip"
 # The notifier starts ExitSettingsActivity by class: a stand-in with the same name lets it compile.
-mkdir -p "$OUT/stubsrc/org/freeholdos/exit"
-printf 'package org.freeholdos.exit;\npublic class ExitSettingsActivity extends android.app.Activity {}\n' > "$OUT/stubsrc/org/freeholdos/exit/ExitSettingsActivity.java"
+mkdir -p "$OUT/stubsrc/org/oblivios/exit"
+printf 'package org.oblivios.exit;\npublic class ExitSettingsActivity extends android.app.Activity {}\n' > "$OUT/stubsrc/org/oblivios/exit/ExitSettingsActivity.java"
 # The two .aidl files of the Compartments policy service (ADR-208) are compiled with the tree's own tool, as Soong does.
 AIDL="$OBJ/host/linux-x86/bin/aidl"
 test -e "$AIDL" || { echo "missing: $AIDL" >&2; exit 2; }
@@ -50,7 +50,7 @@ if [ -n "$STMT_FILE" ]; then
   # the options hold paths relative to the tree
   (cd "$T" && "$JAVAC" -proc:none -Xlint:-options -Xlint:unchecked -Xlint:deprecation $BOOT $CPOPT -d "$OUT/classes" $SRCS)
 else
-  SRCS=$(find "$A/src" "$OUT/gen" -name '*.java' | grep -v -E '/(ExitSettingsActivity|ExitAppsActivity|ExitAppActivity|ExitOverridesActivity|ExitVisibleActivity)\.java$'; echo "$OUT/stubsrc/org/freeholdos/exit/ExitSettingsActivity.java")
+  SRCS=$(find "$A/src" "$OUT/gen" -name '*.java' | grep -v -E '/(ExitSettingsActivity|ExitAppsActivity|ExitAppActivity|ExitOverridesActivity|ExitVisibleActivity)\.java$'; echo "$OUT/stubsrc/org/oblivios/exit/ExitSettingsActivity.java")
   SRCS=$(echo "$SRCS" | sort)
   "$JAVAC" -proc:none -Xlint:-options -Xlint:unchecked -Xlint:deprecation -cp "$CP" -d "$OUT/classes" $SRCS
 fi

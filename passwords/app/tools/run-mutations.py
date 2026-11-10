@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Mutation check of the pure Kotlin of the Passwords app (model: freeholdos-services/vault-core/tools/run-mutations.py).
+"""Mutation check of the pure Kotlin of the Passwords app (model: oblivios-services/vault-core/tools/run-mutations.py).
 
 Copies the app directory to a temporary directory, applies ONE mutation at a time (an exact, unique string replaced by
 another) and runs `remote.sh host-checks` on the copy. A mutation is killed when the host checks fail for it. One that
@@ -24,7 +24,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-K = "src/main/kotlin/org/freeholdos/passwords/"
+K = "src/main/kotlin/org/oblivios/passwords/"
 P = K + "lock/LockPolicy.kt"
 F = K + "fill/FieldClassifier.kt"
 L = K + "fill/FillPlanner.kt"
@@ -34,7 +34,7 @@ O = K + "ui/LogoPack.kt"
 Q = K + "fill/PendingSave.kt"
 T = K + "core/SiteText.kt"
 OR = K + "fill/Origin.kt"
-S = "src/main/kotlin/org/freeholdos/passwords/lock/LockState.kt"
+S = "src/main/kotlin/org/oblivios/passwords/lock/LockState.kt"
 C = K + "fill/ChipPolicy.kt"
 CG = K + "core/ClipGuard.kt"
 
@@ -345,7 +345,7 @@ def main() -> int:
         print(f"all {len(muts)} mutations apply")
         shutil.rmtree(work, ignore_errors=True)
         return 0
-    env = dict(os.environ, PWM_SRC=copy, PWM_WORK="/srv/freeholdos/scratch/pwapp-mut")
+    env = dict(os.environ, PWM_SRC=copy, PWM_WORK="/srv/oblivios/scratch/pwapp-mut")
     remote = os.path.join(ROOT, "tools", "remote.sh")
     base = subprocess.run(["bash", remote, "host-checks"], env=env, capture_output=True, text=True)
     if base.returncode != 0:

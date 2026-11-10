@@ -1,9 +1,9 @@
 From 18ef32d2d551e887776a1b25207b04ffd4a05f30 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Thu, 29 Oct 2026 14:00:45 +0100
 Subject: [PATCH] Settings: a Compartments row on the info page of an app
 
-The row opens the per-app page of the Compartments app (org.freeholdos.exit.ExitAppActivity, data package:<name>), under the data usage row,
+The row opens the per-app page of the Compartments app (org.oblivios.exit.ExitAppActivity, data package:<name>), under the data usage row,
 where the app's network and the hosts that see its address are set; it reads no state of Compartments and is absent where Compartments does not
 run, for system uids and for Compartments itself.
 ---
@@ -22,11 +22,11 @@ index 0000000..e9ce7b0
 +++ b/out/0001-Settings-a-Compartments-row-on-the-info-page-of-an-a.patch
 @@ -0,0 +1,99 @@
 +From 9409e63eab280ed1947f8c638b6985e764b8235a Mon Sep 17 00:00:00 2001
-+From: FreeholdOS Build <build@freeholdos.local>
++From: ObliviOS Build <build@oblivios.local>
 +Date: Thu, 29 Oct 2026 14:00:45 +0100
 +Subject: [PATCH] Settings: a Compartments row on the info page of an app
 +
-+The row opens the per-app page of the Compartments app (org.freeholdos.exit.ExitAppActivity, data package:<name>), under the data usage row,
++The row opens the per-app page of the Compartments app (org.oblivios.exit.ExitAppActivity, data package:<name>), under the data usage row,
 +where the app's network and the hosts that see its address are set; it reads no state of Compartments and is absent where Compartments does not
 +run, for system uids and for Compartments itself.
 +---
@@ -75,8 +75,8 @@ index 0000000..e9ce7b0
 ++import com.android.settingslib.spa.widget.preference.PreferenceModel
 ++import com.android.settingslib.spaprivileged.model.app.installed
 ++
-++private const val COMPARTMENTS_PACKAGE = "org.freeholdos.exit"
-++private const val COMPARTMENTS_PAGE = "org.freeholdos.exit.ExitAppActivity"
+++private const val COMPARTMENTS_PACKAGE = "org.oblivios.exit"
+++private const val COMPARTMENTS_PAGE = "org.oblivios.exit.ExitAppActivity"
 ++
 ++/**
 ++ * The "Compartments" row of an app's info page: it opens the page of this app in the Compartments app, where the app's network
@@ -160,8 +160,8 @@ index 0000000..957b2ec
 +import com.android.settingslib.spa.widget.preference.PreferenceModel
 +import com.android.settingslib.spaprivileged.model.app.installed
 +
-+private const val COMPARTMENTS_PACKAGE = "org.freeholdos.exit"
-+private const val COMPARTMENTS_PAGE = "org.freeholdos.exit.ExitAppActivity"
++private const val COMPARTMENTS_PACKAGE = "org.oblivios.exit"
++private const val COMPARTMENTS_PAGE = "org.oblivios.exit.ExitAppActivity"
 +
 +/**
 + * The "Compartments" row of an app's info page: it opens the page of this app in the Compartments app, where the app's network

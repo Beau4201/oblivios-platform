@@ -3,7 +3,7 @@
 <!-- Compartments exit app (ADR-184, ADR-186): owns the policy and drives the exit daemon and the route helper. It has no
      INTERNET permission: it talks to its two services over local sockets and registers a network for the daemon's tun. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.freeholdos.exit">
+    package="org.oblivios.exit">
 
     <uses-permission android:name="android.permission.NETWORK_FACTORY" />
     <uses-permission android:name="android.permission.CONTROL_OEM_PAID_NETWORK_PREFERENCE" />
@@ -17,7 +17,7 @@
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS_FULL" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <!-- The policy service of the profiles (ADR-208) checks this permission on every call but getProfile; only this app holds it. -->
-    <uses-permission android:name="org.freeholdos.permission.MANAGE_COMPARTMENTS" />
+    <uses-permission android:name="org.oblivios.permission.MANAGE_COMPARTMENTS" />
 
     <!-- Persistent and direct-boot aware: the process starts at boot, before the first unlock, and the apps on Tor lose the
          default network from that moment (F11). -->

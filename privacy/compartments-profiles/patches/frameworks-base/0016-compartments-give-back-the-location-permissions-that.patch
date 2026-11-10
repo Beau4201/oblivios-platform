@@ -1,5 +1,5 @@
 From 9e74ba40324471582108e4b842731acf4c5c1f44 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 20:48:35 +0100
 Subject: [PATCH 16/16] compartments: give back the location permissions that
  the service took

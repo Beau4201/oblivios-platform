@@ -1,5 +1,5 @@
 From 40c630197df7cebcf9812c4f450f6113e4324df5 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 20:18:07 +0100
 Subject: [PATCH] telephony: keep the last persona table when the file cannot
  be read

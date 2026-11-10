@@ -1,5 +1,5 @@
 From b6acc102bf81fd9b0e60761b11123e1cdc670077 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 12 Oct 2026 00:28:55 +0200
 Subject: [PATCH] datamap: hide the READ_DATA_MAP permission from the public
  API
@@ -18,13 +18,13 @@ index e4b025a..a421805 100644
 @@ -950,7 +950,8 @@
          android:featureFlag="com.android.window.flags.enable_fullscreen_in_new_task_preference" />
  
-     <!-- Allows the FreeholdOS Data Map app to read which services each app contacts, for its own
+     <!-- Allows the ObliviOS Data Map app to read which services each app contacts, for its own
 -         user. Only that app holds it (ADR-157). -->
 +         user. Only that app holds it (ADR-157).
 +         @hide -->
-     <permission android:name="org.freeholdos.permission.READ_DATA_MAP"
-         android:label="@string/permlab_freeholdosReadDataMap"
-         android:description="@string/permdesc_freeholdosReadDataMap"
+     <permission android:name="org.oblivios.permission.READ_DATA_MAP"
+         android:label="@string/permlab_obliviosReadDataMap"
+         android:description="@string/permdesc_obliviosReadDataMap"
 -- 
 2.56.0
 

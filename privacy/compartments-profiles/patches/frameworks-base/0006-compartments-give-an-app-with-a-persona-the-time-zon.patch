@@ -38,7 +38,7 @@ index 2c9b544..054b15d 100644
          @Override
          public void updateTimeZone() {
              TimeZone.setDefault(null);
-+            // FreeholdOS (ADR-208): an app with a persona stays in the time zone of its persona
++            // ObliviOS (ADR-208): an app with a persona stays in the time zone of its persona
 +            PersonaProcess.applyTimeZone();
          }
  
@@ -48,7 +48,7 @@ index 2c9b544..054b15d 100644
          TimeZone.setDefault(null);
  
 +        /*
-+         * FreeholdOS (ADR-208): an app with a persona lives in the time zone, the network country and the operator of its place.
++         * ObliviOS (ADR-208): an app with a persona lives in the time zone, the network country and the operator of its place.
 +         * The system server put them in the core settings of this process; they are read here once (a later push of the core
 +         * settings carries none), and the default time zone is the one of the persona.
 +         */
@@ -89,9 +89,9 @@ index 0000000..0d474a4
 + * @hide
 + */
 +public final class PersonaProcess {
-+    public static final String KEY_TIME_ZONE = "freeholdos_persona_tz";
-+    public static final String KEY_COUNTRY = "freeholdos_persona_country";
-+    public static final String KEY_OPERATOR = "freeholdos_persona_operator";
++    public static final String KEY_TIME_ZONE = "oblivios_persona_tz";
++    public static final String KEY_COUNTRY = "oblivios_persona_country";
++    public static final String KEY_OPERATOR = "oblivios_persona_operator";
 +
 +    private static final Object LOCK = new Object();
 +    private static boolean sSet;
@@ -182,7 +182,7 @@ index ee20dde..17e9488 100644
      }
  
 +    /**
-+     * FreeholdOS (ADR-208): an app with a persona never gets the real cell or the real service area through a listener, as an
++     * ObliviOS (ADR-208): an app with a persona never gets the real cell or the real service area through a listener, as an
 +     * app without the location permission does not: the service state is the copy without location information and the cell
 +     * info and the cell location are not delivered. Its pull calls are answered by the Telephony app with the cells of its place.
 +     */
@@ -236,7 +236,7 @@ index cde8742..588f00c 100644
      }
  
 +    /**
-+     * FreeholdOS (ADR-208): the core settings of one process. An app with a persona gets a copy with the time zone, the network
++     * ObliviOS (ADR-208): the core settings of one process. An app with a persona gets a copy with the time zone, the network
 +     * country and the operator of its place added; every other process gets the shared bundle as it was.
 +     */
 +    private Bundle coreSettingsFor(ProcessRecord app) {
@@ -409,7 +409,7 @@ index bd63e77..d2df6af 100644
 --- a/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
 +++ b/services/core/java/com/android/server/compartments/CompartmentsPolicyService.java
 @@ -72,6 +72,7 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
-     static final String SETTINGS_REAL_PACKAGES = "freeholdos_settings_real_packages";
+     static final String SETTINGS_REAL_PACKAGES = "oblivios_settings_real_packages";
      private static final String LOOPBACK_PERMISSION = "android.permission.USE_LOOPBACK_INTERFACE";
      static final String PLACES_FILE = "/product/etc/compartments/places.tsv";
 +    static final String CELLS_FILE = "/product/etc/compartments/cells.tsv";
@@ -501,7 +501,7 @@ index 8c6ec20..28c2e60 100644
       */
      @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
      public String getNetworkOperatorName(int subId) {
-+        // FreeholdOS (ADR-208): an app with a persona is on a network of its place, whose name is not known
++        // ObliviOS (ADR-208): an app with a persona is on a network of its place, whose name is not known
 +        if (PersonaProcess.operator() != null) {
 +            return "";
 +        }
@@ -512,7 +512,7 @@ index 8c6ec20..28c2e60 100644
       **/
      @UnsupportedAppUsage
      public String getNetworkOperatorForPhone(int phoneId) {
-+        // FreeholdOS (ADR-208): the operator of the place of an app with a persona
++        // ObliviOS (ADR-208): the operator of the place of an app with a persona
 +        String persona = PersonaProcess.operator();
 +        if (persona != null) {
 +            return persona;
@@ -524,7 +524,7 @@ index 8c6ec20..28c2e60 100644
      @RequiresFeature(PackageManager.FEATURE_TELEPHONY_RADIO_ACCESS)
      @NonNull
      public String getNetworkCountryIso(int slotIndex) {
-+        // FreeholdOS (ADR-208): the country of the place of an app with a persona
++        // ObliviOS (ADR-208): the country of the place of an app with a persona
 +        String persona = PersonaProcess.country();
 +        if (persona != null) {
 +            return persona;

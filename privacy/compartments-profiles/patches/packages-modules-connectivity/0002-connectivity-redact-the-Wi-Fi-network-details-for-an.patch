@@ -1,5 +1,5 @@
 From f8bf58b20792f4028803c8787ecdd49aa9eb2d3e Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 20:59:45 +0100
 Subject: [PATCH] connectivity: redact the Wi-Fi network details for an app
  with a persona
@@ -34,7 +34,7 @@ index 3c1f278..ca57493 100644
      private final AppOpsManager mAppOpsManager;
  
      private final LocationPermissionChecker mLocationPermissionChecker;
-+    // FreeholdOS (ADR-208): an app with a persona holds the location permission (its position is the persona's) but is not to
++    // ObliviOS (ADR-208): an app with a persona holds the location permission (its position is the persona's) but is not to
 +    // learn where the phone is, so for what a network reveals of the place it counts as having none: the SSID, the BSSID and the
 +    // other location-sensitive parts of NetworkCapabilities (WifiInfo) stay redacted for it.
 +    private final PersonaReader mPersonaReader = new PersonaReader();

@@ -1,5 +1,5 @@
 From 004940b58f73ccf128275694fbfc48b94f90a46d Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 15:32:53 +0100
 Subject: [PATCH] compartments: parse the place and cell data without a regex
  and read the cells under their own lock

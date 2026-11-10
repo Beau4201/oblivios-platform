@@ -1,5 +1,5 @@
 From a3c22a927fcdd15b6bacd4c30f43d0b5b63c7fa1 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Tue, 3 Nov 2026 16:27:01 +0100
 Subject: [PATCH] compartments: answer the identity of an app, Custom when a
  detail differs
@@ -23,11 +23,11 @@ index 48da73b..6783545 100644
 @@ -10,8 +10,8 @@ import com.android.internal.compartments.CompartmentsPlace;
  /**
   * The Binder interface of the Compartments policy service (ADR-208). Every call acts on the owner
-  * user's store. The first eight methods need org.freeholdos.permission.MANAGE_COMPARTMENTS, which
-- * only the exit app holds; getProfile also accepts org.freeholdos.permission.READ_COMPARTMENT_PROFILE,
+  * user's store. The first eight methods need org.oblivios.permission.MANAGE_COMPARTMENTS, which
+- * only the exit app holds; getProfile also accepts org.oblivios.permission.READ_COMPARTMENT_PROFILE,
 - * which only the Settings app holds.
 + * only the exit app holds; getProfile and getIdentity also accept
-+ * org.freeholdos.permission.READ_COMPARTMENT_PROFILE, which only the Settings app holds.
++ * org.oblivios.permission.READ_COMPARTMENT_PROFILE, which only the Settings app holds.
   *
   * <p>The transaction order is part of the contract with the app, which compiles its own copy of
   * this file: new methods are added at the end. The numbers of the constants are the order of the

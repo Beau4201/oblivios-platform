@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- ADR-208. The one hidden API the exit app uses is ServiceManager.getService, to find the Compartments policy service; it is
-     covered by this single-package entry, as for the Data Map app (datamap/app/hidden-api-whitelisted-app-org.freeholdos.datamap.xml). -->
-<config>
-    <hidden-api-whitelisted-app package="org.freeholdos.exit"/>
-</config>

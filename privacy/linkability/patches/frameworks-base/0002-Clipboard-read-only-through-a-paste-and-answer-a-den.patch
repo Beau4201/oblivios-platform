@@ -46,7 +46,7 @@ index e987884..0d5353f 100644
 +    }
 +
 +    /**
-+     * FreeholdOS: what a caller that may not read the clip learns about it. The label, the time it
++     * ObliviOS: what a caller that may not read the clip learns about it. The label, the time it
 +     * was set, the MIME types, whether it is styled and whether there is a clip at all are all
 +     * chosen by the app that wrote the clip, so each is a way for two apps to pass a message
 +     * without a grant. The answer is therefore the same for every clip: the types the Paste entry
@@ -69,7 +69,7 @@ index e987884..0d5353f 100644
 +        final PayloadReadAccess access = getPayloadReadAccessLocked(readAllowedForPackage,
 +                intendingUid, intendingUserId, intendingDeviceId);
 +        if (access == PayloadReadAccess.DENIED) {
-+            // FreeholdOS: presence is a bit an app can flip at will; the answer is constant.
++            // ObliviOS: presence is a bit an app can flip at will; the answer is constant.
 +            return true;
          }
 -        final ClipDescription descriptionWithoutLabel = new ClipDescription(null, mimeTypes);
@@ -89,7 +89,7 @@ index e987884..0d5353f 100644
                  intendingUid, intendingUserId, intendingDeviceId);
 +        if (access == PayloadReadAccess.DENIED) {
 +            // Some apps use this query to decide whether the system toolbar should offer Paste.
-+            // FreeholdOS: constant, so that presence carries no message (see
++            // ObliviOS: constant, so that presence carries no message (see
 +            // newDeniedClipDescription).
 +            return true;
 +        }
@@ -129,7 +129,7 @@ index f89f3b1..1eec110 100644
                      ListenerInfo li = (ListenerInfo)
                              clipboard.primaryClipListeners.getBroadcastCookie(i);
  
-+                    // FreeholdOS: a listener hears that a clip changed only if it may read the
++                    // ObliviOS: a listener hears that a clip changed only if it may read the
 +                    // clip. The moment a clip is set is otherwise a message from the app that
 +                    // set it to any focused app that listens.
                      if (clipboardAccessAllowed(

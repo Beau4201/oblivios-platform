@@ -1,5 +1,5 @@
 From 0a5d5694a060cc57edb18607a127d2983ed567c9 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Tue, 3 Nov 2026 16:27:01 +0100
 Subject: [PATCH] Settings: the info row of an app reads Custom when a detail
  differs

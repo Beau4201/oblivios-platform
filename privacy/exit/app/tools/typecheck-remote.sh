@@ -5,7 +5,7 @@
 set -o errexit -o nounset -o pipefail
 : "${EXIT_BUILD_SSH:?set EXIT_BUILD_SSH=user@host}"
 APP="$(cd "$(dirname "$0")/.." && pwd)"
-SCRATCH="${EXIT_APP_SCRATCH:-/srv/freeholdos/exit-app-typecheck}"
+SCRATCH="${EXIT_APP_SCRATCH:-/srv/oblivios/exit-app-typecheck}"
 ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "mkdir -p $SCRATCH/app"
 rsync -rlpgoD --checksum --delete --exclude '.typecheck-*' -e "ssh -o BatchMode=yes" "$APP"/ "$EXIT_BUILD_SSH:$SCRATCH/app/"
 ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "bash $SCRATCH/app/tools/typecheck-on-server.sh $SCRATCH"

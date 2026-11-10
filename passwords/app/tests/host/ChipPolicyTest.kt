@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.fill.ChipPolicy
-import org.freeholdos.passwords.fill.DatasetPlan
-import org.freeholdos.passwords.fill.FillPlan
+import org.oblivios.passwords.fill.ChipPolicy
+import org.oblivios.passwords.fill.DatasetPlan
+import org.oblivios.passwords.fill.FillPlan
 
 private val anna = DatasetPlan(byteArrayOf(0x0a, 0xff.toByte()), "anna", listOf("u1"), listOf("p1"))
 private val bob = DatasetPlan(byteArrayOf(0x02), "bob", listOf("u1"), listOf("p1"))

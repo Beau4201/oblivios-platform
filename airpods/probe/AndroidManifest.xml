@@ -4,7 +4,7 @@
      userdebug device. It opens the AirPods accessory channel and logs what the AirPods send, to
      capture real frames for the codec. Not added to PRODUCT_PACKAGES. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.freeholdos.airpods.probe">
+    package="org.oblivios.airpods.probe">
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- AIR-148 capture only (ScanActivity): granted with pm grant for the run, revoked afterwards. -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"

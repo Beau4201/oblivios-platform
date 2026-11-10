@@ -1,5 +1,5 @@
 /*
- * FreeholdOS (ADR-208): where the sensor service gets its SensorModeTable from.
+ * ObliviOS (ADR-208): where the sensor service gets its SensorModeTable from.
  *
  * Why this diverges from upstream: the policy lives in the system server and the sensor service is a separate process, so the
  * system server writes the table to a file that only it may write and this class reads it. A file that is missing, too large,

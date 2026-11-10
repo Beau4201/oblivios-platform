@@ -1,5 +1,5 @@
 From 3279e3820c7998010ea7beefb187e0b394bc8232 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 20:50:49 +0100
 Subject: [PATCH] sensorservice: give a Substituted app an invented air
  pressure, reduce the phase in double, read the table without a lock

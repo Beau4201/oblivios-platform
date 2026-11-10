@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.ui.PatternColors
-import org.freeholdos.passwords.ui.contrastRatio
-import org.freeholdos.passwords.ui.patternFor
+import org.oblivios.passwords.ui.PatternColors
+import org.oblivios.passwords.ui.contrastRatio
+import org.oblivios.passwords.ui.patternFor
 
 // Pinned against a port of the algorithm in JavaScript (node), not against the reference page: the page's own hash puts
 // every name on one of a few patterns (888 of 1000 domains collided), so the app adds an avalanche step; see Pattern.kt.

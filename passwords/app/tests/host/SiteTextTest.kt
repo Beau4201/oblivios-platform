@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.core.SiteText
+import org.oblivios.passwords.core.SiteText
 
 fun main() {
     hostsAreCutAndLowered()

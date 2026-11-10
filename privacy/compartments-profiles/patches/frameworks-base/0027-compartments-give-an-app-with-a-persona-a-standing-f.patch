@@ -1,5 +1,5 @@
 From 95c741b84224c27422950197022a8ad64f9d1435 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Tue, 3 Nov 2026 16:43:25 +0100
 Subject: [PATCH] compartments: give an app with a persona a standing fix while
  the phone has no real fix
@@ -391,7 +391,7 @@ index 7b51f52..f2b2488 100644
  
          @Nullable private Location mLastLocation = null;
  
-+        // FreeholdOS (ADR-214): the alarm of the standing fix of an app with a persona, and when this registration became active
++        // ObliviOS (ADR-214): the alarm of the standing fix of an app with a persona, and when this registration became active
 +        // and was last given a standing fix (elapsed realtime, ms)
 +        private final OnAlarmListener mStandingAlarm = this::onStandingAlarm;
 +        @GuardedBy("mMultiplexerLock")
@@ -431,7 +431,7 @@ index 7b51f52..f2b2488 100644
          }
  
 +        /**
-+         * FreeholdOS (ADR-214): notes that a real fix has reached this registration, before the filters of the request decide
++         * ObliviOS (ADR-214): notes that a real fix has reached this registration, before the filters of the request decide
 +         * whether the app is given it, so that an app that asks for a fix every minute is not given standing fixes between them.
 +         */
 +        @GuardedBy("mMultiplexerLock")
@@ -460,7 +460,7 @@ index 7b51f52..f2b2488 100644
 +        }
 +
 +        /**
-+         * FreeholdOS (ADR-214): wakes this registration when the next standing fix of its app is due. The passive provider and a
++         * ObliviOS (ADR-214): wakes this registration when the next standing fix of its app is due. The passive provider and a
 +         * passive request get none: they are given what the other requests get, and a standing fix is no report of a provider.
 +         */
 +        @GuardedBy("mMultiplexerLock")
@@ -512,7 +512,7 @@ index 7b51f52..f2b2488 100644
          @Nullable abstract ListenerOperation<LocationTransport> acceptLocationChange(
                  LocationResult fineLocationResult);
  
-+        /** FreeholdOS (ADR-214): like {@link #acceptLocationChange} for a standing fix, which is already at the place of the persona. */
++        /** ObliviOS (ADR-214): like {@link #acceptLocationChange} for a standing fix, which is already at the place of the persona. */
 +        @Nullable abstract ListenerOperation<LocationTransport> acceptStandingFix(
 +                LocationResult standingLocationResult);
 +
@@ -523,7 +523,7 @@ index 7b51f52..f2b2488 100644
          private int mNumLocationsDelivered = 0;
          @GuardedBy("mMultiplexerLock")
          private long mExpirationRealtimeMs = Long.MAX_VALUE;
-+        // FreeholdOS (ADR-214): whether the last location given was a standing fix, which is in the space of the persona, not the
++        // ObliviOS (ADR-214): whether the last location given was a standing fix, which is in the space of the persona, not the
 +        // real one that mLastLocation and the filters of the request otherwise work in
 +        @GuardedBy("mMultiplexerLock")
 +        private boolean mLastDeliveredStanding = false;
@@ -568,7 +568,7 @@ index 7b51f52..f2b2488 100644
                                          getRequest().getMinUpdateDistanceMeters();
 -                                if (smallestDisplacementM > 0.0 && location.distanceTo(
 -                                        mPreviousLocation)
-+                                // FreeholdOS (ADR-214): a distance between a real fix and a standing one means nothing
++                                // ObliviOS (ADR-214): a distance between a real fix and a standing one means nothing
 +                                if (smallestDisplacementM > 0.0 && mPreviousStanding == standing
 +                                        && location.distanceTo(mPreviousLocation)
                                          <= smallestDisplacementM) {
@@ -594,9 +594,9 @@ index 7b51f52..f2b2488 100644
                      } else {
                          deliverLocationResult = locationResult;
                      }
--                    // FreeholdOS (ADR-208): an app with a persona is delivered the fixes moved to its place
+-                    // ObliviOS (ADR-208): an app with a persona is delivered the fixes moved to its place
 -                    deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
-+                    // FreeholdOS (ADR-208): an app with a persona is delivered the fixes moved to its place; a standing fix
++                    // ObliviOS (ADR-208): an app with a persona is delivered the fixes moved to its place; a standing fix
 +                    // (ADR-214) is there already
 +                    if (!standing) {
 +                        deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
@@ -632,9 +632,9 @@ index 7b51f52..f2b2488 100644
                      } else {
                          deliverLocationResult = locationResult;
                      }
--                    // FreeholdOS (ADR-208): an app with a persona is delivered the fix moved to its place
+-                    // ObliviOS (ADR-208): an app with a persona is delivered the fix moved to its place
 -                    deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
-+                    // FreeholdOS (ADR-208): an app with a persona is delivered the fix moved to its place; a standing fix
++                    // ObliviOS (ADR-208): an app with a persona is delivered the fix moved to its place; a standing fix
 +                    // (ADR-214) is there already
 +                    if (!standing) {
 +                        deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
@@ -647,7 +647,7 @@ index 7b51f52..f2b2488 100644
      }
  
 +    /**
-+     * FreeholdOS (ADR-214): the persona of the caller without the emergency check, which is a call into telephony and is made
++     * ObliviOS (ADR-214): the persona of the caller without the emergency check, which is a call into telephony and is made
 +     * by the callers that can make it outside the lock of the multiplexer.
 +     */
 +    @Nullable private static CompartmentsInternal.PersonaView personaOf(CallerIdentity identity) {
@@ -655,12 +655,12 @@ index 7b51f52..f2b2488 100644
 +        return compartments == null ? null : compartments.personaFor(identity.getUid());
 +    }
 +
-+    /** FreeholdOS (ADR-214): the network provider is imitated by a coarse fix without a speed, every other one by a receiver. */
++    /** ObliviOS (ADR-214): the network provider is imitated by a coarse fix without a speed, every other one by a receiver. */
 +    private StandingFix.Source standingSource() {
 +        return NETWORK_PROVIDER.equals(mName) ? StandingFix.Source.NETWORK : StandingFix.Source.GNSS;
 +    }
 +
-+    /** FreeholdOS (ADR-214): the fix as a location of this provider: no altitude, bearing, extras or mock flag. */
++    /** ObliviOS (ADR-214): the fix as a location of this provider: no altitude, bearing, extras or mock flag. */
 +    private Location standingLocation(StandingFix.Fix fix) {
 +        Location location = new Location(mName);
 +        location.setLatitude(fix.lat);
@@ -676,7 +676,7 @@ index 7b51f52..f2b2488 100644
 +    }
 +
 +    /**
-+     * FreeholdOS (ADR-214): the last location of an app with a persona when the phone has no newer real one: the standing fix of
++     * ObliviOS (ADR-214): the last location of an app with a persona when the phone has no newer real one: the standing fix of
 +     * its kind, or a new one when it has none. Null when the real last location is the newer, which the delivery path moves to the
 +     * place as before.
 +     */
@@ -700,7 +700,7 @@ index 7b51f52..f2b2488 100644
                          Long.MAX_VALUE),
                  permissionLevel);
  
-+        // FreeholdOS (ADR-214): an app with a persona is given the standing fix when the phone has no newer real one
++        // ObliviOS (ADR-214): an app with a persona is given the standing fix when the phone has no newer real one
 +        boolean standing = false;
 +        CompartmentsInternal.PersonaView persona = mPassiveManager == null ? null : persona(identity);
 +        if (persona != null) {

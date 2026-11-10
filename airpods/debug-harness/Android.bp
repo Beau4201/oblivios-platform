@@ -5,7 +5,7 @@ package {
 
 // ADR-120: userdebug-only validation harness for AIR-029..032 and AIR-036. Wired through
 // PRODUCT_PACKAGES_DEBUG (vendor/adevtool patch 0002), so a `user` image never contains
-// it; tools/check-required-packages.sh (in freeholdos-docs) enforces that. Same sources, three
+// it; tools/check-required-packages.sh (in oblivios-docs) enforces that. Same sources, three
 // permission sets. All three are priv-apps with the same single-package hidden-API
 // exemption as AirPodsApp, so a refusal is caused by the permission and not by app class.
 
@@ -17,8 +17,8 @@ android_app {
     sdk_version: "system_current",
     privileged: true,
     required: [
-        "privapp-permissions-org.freeholdos.airpods.debugharness.xml",
-        "hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml",
+        "privapp-permissions-org.oblivios.airpods.debugharness.xml",
+        "hidden-api-whitelisted-app-org.oblivios.airpods.debugharness.xml",
     ],
 }
 
@@ -29,7 +29,7 @@ android_app {
     resource_dirs: ["res"],
     sdk_version: "system_current",
     privileged: true,
-    required: ["hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml"],
+    required: ["hidden-api-whitelisted-app-org.oblivios.airpods.debugharness.xml"],
 }
 
 android_app {
@@ -40,21 +40,21 @@ android_app {
     sdk_version: "system_current",
     privileged: true,
     required: [
-        "privapp-permissions-org.freeholdos.airpods.debugharness.xml",
-        "hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml",
+        "privapp-permissions-org.oblivios.airpods.debugharness.xml",
+        "hidden-api-whitelisted-app-org.oblivios.airpods.debugharness.xml",
     ],
 }
 
 prebuilt_etc {
-    name: "privapp-permissions-org.freeholdos.airpods.debugharness.xml",
-    src: "privapp-permissions-org.freeholdos.airpods.debugharness.xml",
+    name: "privapp-permissions-org.oblivios.airpods.debugharness.xml",
+    src: "privapp-permissions-org.oblivios.airpods.debugharness.xml",
     sub_dir: "permissions",
 }
 
 // Same mechanism and same /system/etc/sysconfig location as AirPodsApp (ADR-118): all three
 // apps get the same hidden-API standing, so only the permission set differs between them.
 prebuilt_etc {
-    name: "hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml",
-    src: "hidden-api-whitelisted-app-org.freeholdos.airpods.debugharness.xml",
+    name: "hidden-api-whitelisted-app-org.oblivios.airpods.debugharness.xml",
+    src: "hidden-api-whitelisted-app-org.oblivios.airpods.debugharness.xml",
     sub_dir: "sysconfig",
 }

@@ -31,7 +31,7 @@ index f259f9c..24f5db4 100644
      boolean shouldLockdownMediaStoreVersion() {
 -        return versionLockdown() && CompatChanges.isChangeEnabled(
 -                LOCKDOWN_MEDIASTORE_VERSION, mCallingIdentity.get().uid);
-+        // FreeholdOS: always on. Upstream applies the lockdown only to apps that target API 36 or
++        // ObliviOS: always on. Upstream applies the lockdown only to apps that target API 36 or
 +        // higher, so an app that targets an older API read the raw version and the random uuid of
 +        // the media database, the same value for every app on the device and stable until the
 +        // database is reset: a device identifier. Every app now gets a hash that differs per app.

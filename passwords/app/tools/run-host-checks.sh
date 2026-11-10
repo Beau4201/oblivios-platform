@@ -7,7 +7,7 @@
 # run in which no class printed it fails: a green exit with no check proves nothing.
 set -o errexit -o nounset -o pipefail
 APP="$(cd "$1" && pwd)"; shift
-T="${AOSP_TREE:-/srv/freeholdos/platform-primary}"
+T="${AOSP_TREE:-/srv/oblivios/platform-primary}"
 J="$T/prebuilts/jdk/jdk21/linux-x86/bin/java"
 K="$T/external/kotlinc/lib"
 OUT="${HOST_OUT:-$(mktemp -d)}"
@@ -27,7 +27,7 @@ classes=("$@")
 if [[ ${#classes[@]} -eq 0 ]]; then
   while IFS= read -r f; do
     if grep -q '^fun main()' "$f"; then
-      base="$(basename "$f" .kt)"; classes+=("org.freeholdos.passwords.hosttest.${base}Kt")
+      base="$(basename "$f" .kt)"; classes+=("org.oblivios.passwords.hosttest.${base}Kt")
     fi
   done < <(printf '%s\n' "${TESTS[@]}")
 fi

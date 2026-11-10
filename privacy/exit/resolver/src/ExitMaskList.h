@@ -25,7 +25,7 @@ namespace android::net {
 
 class ExitMaskList {
   public:
-    static constexpr const char* kPath = "/system/etc/freeholdos/exit-mask-list.tsv";
+    static constexpr const char* kPath = "/system/etc/oblivios/exit-mask-list.tsv";
     // The limits of the daemon's reader (`masklist.rs`): rows and bytes of the file.
     static constexpr size_t kMaxRows = 262144;
     static constexpr size_t kMaxFile = 16 * 1024 * 1024;

@@ -1,5 +1,5 @@
 /*
- * FreeholdOS (ADR-208): what the sensor service does for an app, as set by the Compartments profile of the app.
+ * ObliviOS (ADR-208): what the sensor service does for an app, as set by the Compartments profile of the app.
  *
  * Why this diverges from upstream: ADR-167 folds the bias of the uncalibrated sensors into the readings for every app. A profile
  * lets the user keep an app raw (Trusted), give it invented data (Isolated) or no motion events (Blocked). The system server

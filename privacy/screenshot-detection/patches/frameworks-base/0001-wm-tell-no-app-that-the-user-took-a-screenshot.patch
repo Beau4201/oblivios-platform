@@ -19,7 +19,7 @@ index 13fc8538688a..48211f73e218 100644
      }
  
  
-+    // freeholdos: see notifyScreenshotListeners.
++    // oblivios: see notifyScreenshotListeners.
 +    private static final boolean NOTIFY_SCREENSHOT_LISTENERS = false;
 +
      /**
@@ -29,7 +29,7 @@ index 13fc8538688a..48211f73e218 100644
                  "notifyScreenshotListeners()")) {
              throw new SecurityException("Requires STATUS_BAR_SERVICE permission");
          }
-+        // freeholdos: no app learns that the user took a screenshot. Upstream calls the
++        // oblivios: no app learns that the user took a screenshot. Upstream calls the
 +        // Activity.ScreenCaptureCallback of every visible activity that registered one (and
 +        // SystemUI then tells the user which apps were notified). Nothing is notified and the
 +        // empty list tells SystemUI so. FLAG_SECURE is unaffected: it blocks the capture itself.

@@ -1,5 +1,5 @@
 From 201d9b7d3ac55ec7eb0cb5dd7787691f235577aa Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 11 Oct 2026 18:11:25 +0200
 Subject: [PATCH] sepolicy: keep system_app and traceur_app from finding the
  Data Map service

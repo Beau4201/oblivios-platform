@@ -1,4 +1,4 @@
-# App drawer (FreeholdOS platform integration)
+# App drawer (ObliviOS platform integration)
 
 Launcher3 patches that make the app drawer follow the home screen's themed
 icons and show the apps as automatic category groups that open as a frosted,

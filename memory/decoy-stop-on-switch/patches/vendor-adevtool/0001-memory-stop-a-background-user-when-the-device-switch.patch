@@ -1,5 +1,5 @@
 From d69bb4785b30e5f4f8523164e664f34d5435f2e1 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 23 Oct 2026 17:55:28 +0200
 Subject: [PATCH] memory: stop a background user when the device switches away
  from it
@@ -24,7 +24,7 @@ index 7149531..f518d16 100644
  
  PRODUCT_PRODUCT_PROPERTIES += persist.vendor.intelligence=off
  
-+# FreeholdOS: stop a background user when the device switches away from it. The Duress decoy
++# ObliviOS: stop a background user when the device switches away from it. The Duress decoy
 +# user is meant to stay stopped between uses (docs/superpowers/specs/2026-08-21-duress-decoy-
 +# user-switch-design.md), but the return path (ReturnToRealUserHelper) only switches back, and
 +# stock UserController.stopUserOnSwitchIfEnforced is off unless this property or
@@ -34,6 +34,6 @@ index 7149531..f518d16 100644
 +# stopped by it, and the guest user is already stopped on switch by stock code.
 +PRODUCT_PRODUCT_PROPERTIES += fw.stop_bg_users_on_switch=1
 +
- # FreeholdOS: Guardian REVOKE_BACKGROUND_LOCATION ships on every Pixel target
+ # ObliviOS: Guardian REVOKE_BACKGROUND_LOCATION ships on every Pixel target
  # (real hardware, no test fixture). Kept here, not per device: the per-device
  # entry for lynx silently left stallion without Guardian (2026-09-28).

@@ -8,7 +8,7 @@ usage: run-mutations.py [APP_DIR]
 import pathlib, shutil, subprocess, sys, tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
-PKG = "src/org/freeholdos/datamap/model/"
+PKG = "src/org/oblivios/datamap/model/"
 
 # (name, file, old, new, count) -- `old` must occur exactly `count` times
 MUTATIONS = [

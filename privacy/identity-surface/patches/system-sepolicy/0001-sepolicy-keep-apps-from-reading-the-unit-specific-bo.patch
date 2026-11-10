@@ -23,7 +23,7 @@ index 4c49bef..9a3d9a5 100644
  get_prop(domain, arm64_memtag_prop)
  get_prop(domain, bluetooth_config_prop)
  get_prop(domain, bootloader_prop)
-+# FreeholdOS (ADR-167): every domain except the apps and the app zygotes, which run app code
++# ObliviOS (ADR-167): every domain except the apps and the app zygotes, which run app code
 +# and are not appdomain; an app can tell devices apart by these.
 +get_prop({ domain -appdomain -app_zygote -native_app_zygote }, unit_boot_prop)
  get_prop(domain, build_odm_prop)
@@ -37,7 +37,7 @@ index 384cd3c..c0617ab 100644
  system_restricted_prop(service_sf_present_timestamp_prop)
  system_restricted_prop(statsd_atoms_list_version_prop)
  system_restricted_prop(trusty_coverage_prop)
-+# FreeholdOS (ADR-167): ro.boot.* values that identify a unit or a production batch.
++# ObliviOS (ADR-167): ro.boot.* values that identify a unit or a production batch.
 +system_restricted_prop(unit_boot_prop)
  system_restricted_prop(pcc_audit_mode_client_prop)
  system_restricted_prop(dumpstate_last_id_prop)
@@ -50,7 +50,7 @@ index 3839fa0..74df868 100644
  ro.boot.vbmeta.public_key_digest  u:object_r:bootloader_prop:s0 exact string
  ro.boot.verifiedbootstate  u:object_r:bootloader_prop:s0 exact string
  ro.boot.veritymode         u:object_r:bootloader_prop:s0 exact string
-+# FreeholdOS (ADR-167): no app reads these; the system, the HALs and init keep their access.
++# ObliviOS (ADR-167): no app reads these; the system, the HALs and init keep their access.
 +ro.boot.cdt_hwid                u:object_r:unit_boot_prop:s0 exact string
 +ro.boot.hardware.devcfg         u:object_r:unit_boot_prop:s0 exact string
 +ro.boot.hardware.pcbcfg         u:object_r:unit_boot_prop:s0 exact string

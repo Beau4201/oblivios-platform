@@ -1,5 +1,5 @@
 From def727a63a352b02fda0c66590ebb0793724e839 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sat, 31 Oct 2026 23:18:25 +0100
 Subject: [PATCH] sepolicy: let init stay out of the Compartments data file
  neverallow

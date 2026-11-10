@@ -24,7 +24,7 @@ index 26d376950c..71a439775b 100644
 -            // Use EUI64 address generation for link-local IPv6 addresses.
 -            prov.withRandomMacAddress();
 -        }
-+        // FreeholdOS: the link-local IPv6 address is never derived from the interface MAC. With MAC
++        // ObliviOS: the link-local IPv6 address is never derived from the interface MAC. With MAC
 +        // randomisation the EUI-64 form is the random MAC itself, which is stable per network, and
 +        // LinkProperties hands that address to every app that holds ACCESS_NETWORK_STATE, while
 +        // WifiInfo redacts the same MAC. The default of ProvisioningConfiguration is the stable

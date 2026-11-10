@@ -3,7 +3,7 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-// The Rust core of the Passwords app (ADR-185): built outside the tree from freeholdos-services/vault-core (SOURCE.md
+// The Rust core of the Passwords app (ADR-185): built outside the tree from oblivios-services/vault-core (SOURCE.md
 // holds the commit, the toolchain and the hash; check-prebuilt.sh compares the file with it). arm64 only: lynx and
 // stallion are the only targets. NDK variant, so the check of the ELF files holds it to libc, libdl and libm.
 cc_prebuilt_library_shared {

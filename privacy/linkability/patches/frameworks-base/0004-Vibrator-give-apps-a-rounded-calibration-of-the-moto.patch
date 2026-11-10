@@ -21,7 +21,7 @@ index 8e10dd7..acf7bd8 100644
      }
  
 +    /**
-+     * FreeholdOS (ADR-173): a copy without the calibration of this unit. The resonant frequency and
++     * ObliviOS (ADR-173): a copy without the calibration of this unit. The resonant frequency and
 +     * the Q factor are measured per unit at the factory, to many decimals, and the frequency to
 +     * acceleration curve is measured the same way, so together they identify the phone to every
 +     * app that reads them. The copy keeps the resonant frequency to 10 Hz and the Q factor to 0.5,
@@ -66,7 +66,7 @@ index 3ac6a03..caf3230 100644
      @Nullable
      public VibratorInfo getVibratorInfo(int vibratorId) {
 +        final VibratorInfo info = getVibratorInfoInternal(vibratorId);
-+        // FreeholdOS (ADR-173): the calibration of the motor identifies the unit; an app gets it
++        // ObliviOS (ADR-173): the calibration of the motor identifies the unit; an app gets it
 +        // rounded (see VibratorInfo#withCoarseCalibration), the system gets it as measured.
 +        if (info != null && UserHandle.isApp(Binder.getCallingUid())) {
 +            return info.withCoarseCalibration();

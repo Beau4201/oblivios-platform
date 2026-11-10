@@ -1,5 +1,5 @@
 From 9b098a405addeb006904be45cdfaa733f80cb55f Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 17:38:03 +0100
 Subject: [PATCH] compartments: add location, the place of an app, the persona
 
@@ -274,8 +274,8 @@ index 44ae98d..cad9af3 100644
   * <p>The store is the one of the owner user and belongs to packages, so a profile reaches an app in
   * every user. A store that cannot be read at boot reads as Protected for every app. The event log
 @@ -55,16 +71,60 @@ public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
-     static final String EXIT_PACKAGE = "org.freeholdos.exit";
-     static final String SETTINGS_REAL_PACKAGES = "freeholdos_settings_real_packages";
+     static final String EXIT_PACKAGE = "org.oblivios.exit";
+     static final String SETTINGS_REAL_PACKAGES = "oblivios_settings_real_packages";
      private static final String LOOPBACK_PERMISSION = "android.permission.USE_LOOPBACK_INTERFACE";
 +    static final String PLACES_FILE = "/product/etc/compartments/places.tsv";
 +    private static final String[] LOCATION_PERMISSIONS = {

@@ -1,5 +1,5 @@
 From d249c88dafbef5d1d93b6d047a5d12321d07f8b6 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 26 Oct 2026 16:31:19 +0100
 Subject: [PATCH] grab: choose how strict the impact route is
 
@@ -53,7 +53,7 @@ index 0000000..866f1eb
 +++ b/src/com/android/settings/security/GrabImpactLevelPrefController.java
 @@ -0,0 +1,42 @@
 +/*
-+ * Copyright (C) 2026 FreeholdOS
++ * Copyright (C) 2026 ObliviOS
 + * SPDX-License-Identifier: Apache-2.0
 + */
 +

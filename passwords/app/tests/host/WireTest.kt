@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.core.Checkup
-import org.freeholdos.passwords.core.Entry
-import org.freeholdos.passwords.core.HistoryItem
-import org.freeholdos.passwords.core.Summary
-import org.freeholdos.passwords.core.Wire
-import org.freeholdos.passwords.core.WeakReason
+import org.oblivios.passwords.core.Checkup
+import org.oblivios.passwords.core.Entry
+import org.oblivios.passwords.core.HistoryItem
+import org.oblivios.passwords.core.Summary
+import org.oblivios.passwords.core.Wire
+import org.oblivios.passwords.core.WeakReason
 
 // The same strings as the Rust test `the_wire_format_is_pinned` (vault-core/tests/jni_handles.rs).
 private const val GOLDEN_ENTRY =

@@ -150,7 +150,7 @@ public final class ProfilesTest {
             check(!PolicyStore.validPackage(bad), "invalid package name " + bad);
         }
         check(throwsIllegal(() -> PolicyStore.EMPTY.withApp("a,b.c", bank)), "invalid package refused");
-        check(PolicyStore.validPackage("org.freeholdos.exit"), "valid package name");
+        check(PolicyStore.validPackage("org.oblivios.exit"), "valid package name");
 
         PolicyStore many = PolicyStore.EMPTY;
         for (int i = 0; i < PolicyStore.MAX_APPS; i++) {

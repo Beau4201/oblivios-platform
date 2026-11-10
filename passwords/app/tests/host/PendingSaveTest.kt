@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.fill.FieldRole
-import org.freeholdos.passwords.fill.PendingSaveSlot
-import org.freeholdos.passwords.fill.SaveCandidate
+import org.oblivios.passwords.fill.FieldRole
+import org.oblivios.passwords.fill.PendingSaveSlot
+import org.oblivios.passwords.fill.SaveCandidate
 
 private fun candidate(password: String = "hunter2-extra") =
     SaveCandidate.of(listOf(FieldRole.Username to "anna", FieldRole.Password to password))!!

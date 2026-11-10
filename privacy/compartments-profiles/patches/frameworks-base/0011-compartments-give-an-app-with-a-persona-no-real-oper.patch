@@ -1,5 +1,5 @@
 From 243adcc3ea01c87736d98b99ca21146ebaede9d5 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sat, 31 Oct 2026 21:01:33 +0100
 Subject: [PATCH] compartments: give an app with a persona no real operator in
  its service state or time zone broadcast
@@ -22,7 +22,7 @@ index 054b15d..28a2f26 100644
                  + ", comp=" + data.intent.getComponent().toShortString()
                  + ", dir=" + packageInfo.getAppDir());
  
-+            // FreeholdOS (ADR-208): an app with a persona is not told the real time zone
++            // ObliviOS (ADR-208): an app with a persona is not told the real time zone
 +            PersonaProcess.timeZoneChanged(data.intent);
              sCurrentBroadcastIntent.set(data.intent);
              receiver.setPendingResult(data);
@@ -43,7 +43,7 @@ index 13637ec..c9f0fe6 100644
                          intent.prepareToEnterProcess(ActivityThread.isProtectedBroadcast(intent),
                                  mContext.getAttributionSource());
                          setExtrasClassLoader(cl);
-+                        // FreeholdOS (ADR-208): an app with a persona is not told the real time zone
++                        // ObliviOS (ADR-208): an app with a persona is not told the real time zone
 +                        PersonaProcess.timeZoneChanged(intent);
                          receiver.setPendingResult(this);
                          if (GmsCompat.isEnabled()) {
@@ -134,7 +134,7 @@ index 59045cf..d7acdba 100644
      }
  
 +    /**
-+     * FreeholdOS (ADR-208): the copy for an app with a persona. The cell identity (which keeps the MCC, MNC and the operator
++     * ObliviOS (ADR-208): the copy for an app with a persona. The cell identity (which keeps the MCC, MNC and the operator
 +     * names after {@link #sanitizeLocationInfo}) and the registered PLMN are dropped.
 +     *
 +     * @hide
@@ -157,7 +157,7 @@ index cda465c..87524c8 100644
          state.mOperatorAlphaLong = null;
          state.mOperatorAlphaShort = null;
          state.mOperatorNumeric = null;
-+        // FreeholdOS: the raw names are the same operator names; they stayed in the copy, in toString and in the
++        // ObliviOS: the raw names are the same operator names; they stayed in the copy, in toString and in the
 +        // notifier bundle of the sticky SERVICE_STATE broadcast
 +        state.mOperatorAlphaLongRaw = null;
 +        state.mOperatorAlphaShortRaw = null;
@@ -166,7 +166,7 @@ index cda465c..87524c8 100644
      }
  
 +    /**
-+     * FreeholdOS (ADR-208): the copy for an app with a persona (P7). Besides what {@link #createLocationInfoSanitizedCopy}
++     * ObliviOS (ADR-208): the copy for an app with a persona (P7). Besides what {@link #createLocationInfoSanitizedCopy}
 +     * removes, the registrations lose their cell identities and registered PLMN, which still carry the real MCC, MNC and
 +     * operator names, and the channel number and bandwidths of the real radio go.
 +     *

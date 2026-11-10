@@ -234,7 +234,7 @@ index 249c1ce..341d9bd 100644
      private final FrameworkFacade mFrameworkFacade;
  
      private final WifiPermissionsUtil mWifiPermissionsUtil;
-+    /** FreeholdOS (ADR-208): which apps have a persona; they are shown no access point and no network name. */
++    /** ObliviOS (ADR-208): which apps have a persona; they are shown no access point and no network name. */
 +    private final PersonaReader mPersona = new PersonaReader();
  
      private final TetheredSoftApTracker mTetheredSoftApTracker;
@@ -244,7 +244,7 @@ index 249c1ce..341d9bd 100644
                              + "(uid=" + uid + ")");
                  }
 -                redactions &= ~NetworkCapabilities.REDACT_FOR_ACCESS_FINE_LOCATION;
-+                // FreeholdOS (ADR-208): an app with a persona keeps the redaction, as an app without the permission does
++                // ObliviOS (ADR-208): an app with a persona keeps the redaction, as an app without the permission does
 +                if (mPersona.placeOf(uid) == 0) {
 +                    redactions &= ~NetworkCapabilities.REDACT_FOR_ACCESS_FINE_LOCATION;
 +                }
@@ -255,7 +255,7 @@ index 249c1ce..341d9bd 100644
          try {
              mWifiPermissionsUtil.enforceCanAccessScanResults(callingPackage, callingFeatureId,
                      uid, null);
-+            // FreeholdOS (ADR-208): an app with a persona sees no access point of the real place
++            // ObliviOS (ADR-208): an app with a persona sees no access point of the real place
 +            if (mPersona.placeOf(uid) != 0) {
 +                return new ParceledListSlice<>(Collections.emptyList());
 +            }
@@ -266,7 +266,7 @@ index 249c1ce..341d9bd 100644
          try {
              mWifiPermissionsUtil.enforceCanAccessScanResults(callingPackage, callingFeatureId,
                      uid, null);
-+            // FreeholdOS (ADR-208): an app with a persona sees no access point of the real place
++            // ObliviOS (ADR-208): an app with a persona sees no access point of the real place
 +            if (mPersona.placeOf(uid) != 0) {
 +                return Collections.emptyMap();
 +            }

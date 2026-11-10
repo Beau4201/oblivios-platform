@@ -1,10 +1,10 @@
 From 3fd04d0f97faf45efc067bb0428cdf896634ff42 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 14:08:22 +0100
 Subject: [PATCH] compartments: ship the persona place data on every Pixel
  target via device-common.mk
 
-ADR-208. The offline place data (places.tsv, cells.tsv) goes to /product/etc/compartments through the two prebuilt_etc modules of vendor/freeholdos/compartments-data. Kept in the common file like the Data Map address data, so every Pixel target carries it.
+ADR-208. The offline place data (places.tsv, cells.tsv) goes to /product/etc/compartments through the two prebuilt_etc modules of vendor/oblivios/compartments-data. Kept in the common file like the Data Map address data, so every Pixel target carries it.
 ---
  config/mk/google_devices/common/device-common.mk | 8 ++++++++
  1 file changed, 8 insertions(+)
@@ -17,16 +17,16 @@ index 4926f4c..7ed04a8 100644
      exitd \
      ExitApp
  
-+# FreeholdOS Compartments persona (ADR-208): the offline place data of an Isolated app, read by the policy service and the
++# ObliviOS Compartments persona (ADR-208): the offline place data of an Isolated app, read by the policy service and the
 +# Telephony app from /product/etc/compartments. Without places.tsv an Isolated app gets no place and no location; without
-+# cells.tsv it gets no operator and no cell identity. The modules are defined in vendor/freeholdos/compartments-data.
++# cells.tsv it gets no operator and no cell identity. The modules are defined in vendor/oblivios/compartments-data.
 +# check-required-packages.sh requires both files in the product output.
 +PRODUCT_PACKAGES += \
 +    compartments-places.tsv \
 +    compartments-cells.tsv
 +
- # FreeholdOS Passwords app (ADR-185): the local password manager, autofill service and credential provider. It is
- # unprivileged. The module is defined in vendor/freeholdos/passwords and pulls in the prebuilt Rust core libvault_core.
+ # ObliviOS Passwords app (ADR-185): the local password manager, autofill service and credential provider. It is
+ # unprivileged. The module is defined in vendor/oblivios/passwords and pulls in the prebuilt Rust core libvault_core.
  # Kept in the common file like Guardian, AirPods and the Data Map, so every Pixel target carries it.
 -- 
 2.56.0

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.lock.Clock
-import org.freeholdos.passwords.lock.Environment
-import org.freeholdos.passwords.lock.LockPolicy
-import org.freeholdos.passwords.lock.LockState
-import org.freeholdos.passwords.lock.PolicyStore
-import org.freeholdos.passwords.lock.Reason
-import org.freeholdos.passwords.lock.passphraseThrottleMs
+import org.oblivios.passwords.lock.Clock
+import org.oblivios.passwords.lock.Environment
+import org.oblivios.passwords.lock.LockPolicy
+import org.oblivios.passwords.lock.LockState
+import org.oblivios.passwords.lock.PolicyStore
+import org.oblivios.passwords.lock.Reason
+import org.oblivios.passwords.lock.passphraseThrottleMs
 
 private const val MINUTE = 60_000L
 private const val DAY = 24 * 60 * MINUTE

@@ -1,5 +1,5 @@
 From da29edc7c371d084d65dfa17151d1d06bf61d8d0 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 26 Oct 2026 16:31:19 +0100
 Subject: [PATCH] grab: an impact after a short free fall is a set-down and
  does not lock, with a strictness setting

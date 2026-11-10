@@ -1,5 +1,5 @@
 From 44b6bff70182b606a9e4e8e72eb7b512f66148cf Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 11 Oct 2026 15:38:01 +0200
 Subject: [PATCH 4/4] datamap: add the Data Map service and start it with the
  system server
@@ -24,7 +24,7 @@ index c604779..0f2beea 100644
  51630 timezone_request_nothing (token|3)
  51631 timezone_nothing_complete (token|3)
 +
-+# FreeholdOS Data Map (ADR-157): what the user changed, never what was collected
++# ObliviOS Data Map (ADR-157): what the user changed, never what was collected
 +51700 datamap_collecting (user|1), (enabled|1)
 +51701 datamap_history (user|1), (enabled|1), (days|1)
 +51702 datamap_cleared (user|1)
@@ -192,14 +192,14 @@ index 0000000..7a67989
 + * be linked through one. It observes only: it reads the names and counts that netd reports, keeps them
 + * in memory per user, and keeps a history on disk only when the user asks for one.
 + *
-+ * <p>The only caller is the Data Map app, which holds org.freeholdos.permission.READ_DATA_MAP. Every
++ * <p>The only caller is the Data Map app, which holds org.oblivios.permission.READ_DATA_MAP. Every
 + * call acts on the calling user. Nothing here is exported, and the service never touches the
 + * network.
 + */
 +public final class DataMapService extends IDataMapService.Stub implements DataMapCollector.Recorder {
 +    static final String TAG = "DataMapService";
 +    static final String SERVICE_NAME = "datamap";
-+    static final String PERMISSION = "org.freeholdos.permission.READ_DATA_MAP";
++    static final String PERMISSION = "org.oblivios.permission.READ_DATA_MAP";
 +    private static final String CLASSIFIER_PATH = "/system/etc/datamap/classifier.tsv";
 +    private static final int MAX_CLASSIFIER_BYTES = 4 * 1024 * 1024;
 +    private static final long MAX_HISTORY_BYTES = 64L * 1024 * 1024;

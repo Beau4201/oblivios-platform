@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The app never asks for BLUETOOTH_CONNECT: it is a system component of Settings' device page, so the grant is
+     given by default (DefaultPermissionGrantPolicy: every user on first start and after every build change).
+     Not fixed: the owner can still revoke it. The app does nothing in a user other than the system user. -->
+<exceptions>
+    <exception package="org.oblivios.airpods">
+        <permission name="android.permission.BLUETOOTH_CONNECT" fixed="false"/>
+    </exception>
+</exceptions>

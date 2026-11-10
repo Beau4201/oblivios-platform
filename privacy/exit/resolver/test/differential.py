@@ -23,9 +23,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PLATFORM = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
-SERVER_DIR = "/srv/freeholdos/scratch/dnsresolver-cache"
-RUSTC = "/srv/freeholdos/platform-primary/prebuilts/rust-toolchain/linux-x86/1.93.1/bin/rustc"
-LINKER = "/srv/freeholdos/exit-daemon-work/toolchain/host-clang"
+SERVER_DIR = "/srv/oblivios/scratch/dnsresolver-cache"
+RUSTC = "/srv/oblivios/platform-primary/prebuilts/rust-toolchain/linux-x86/1.93.1/bin/rustc"
+LINKER = "/srv/oblivios/exit-daemon-work/toolchain/host-clang"
 
 HEADER = "exit-mask-list\t1\n"
 
@@ -125,7 +125,7 @@ def fixtures(rows):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", default=os.path.join(PLATFORM, "privacy/exit/daemon/exit-mask-list.tsv"))
-    ap.add_argument("--masklist", default=os.path.join(PLATFORM, "../freeholdos-services/exit-daemon/src/masklist.rs"))
+    ap.add_argument("--masklist", default=os.path.join(PLATFORM, "../oblivios-services/exit-daemon/src/masklist.rs"))
     ap.add_argument("--cpp-bin", required=True, help="the compiled ExitMaskList_test")
     args = ap.parse_args()
     ssh = os.environ.get("EXIT_BUILD_SSH") or sys.exit("EXIT_BUILD_SSH=user@host is needed (read it from the local server memory)")

@@ -1,5 +1,5 @@
 From b811ed8e039fe8fd6647e081448b2060e9618dcc Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 14:43:44 +0100
 Subject: [PATCH] compartments: add the policy service of Compartments
  (ADR-208)
@@ -95,10 +95,10 @@ index 0000000..44ae98d
 +public final class CompartmentsPolicyService extends ICompartmentsPolicy.Stub {
 +    static final String TAG = "CompartmentsPolicy";
 +    static final String SERVICE_NAME = "compartments";
-+    static final String MANAGE = "org.freeholdos.permission.MANAGE_COMPARTMENTS";
-+    static final String READ_PROFILE = "org.freeholdos.permission.READ_COMPARTMENT_PROFILE";
-+    static final String EXIT_PACKAGE = "org.freeholdos.exit";
-+    static final String SETTINGS_REAL_PACKAGES = "freeholdos_settings_real_packages";
++    static final String MANAGE = "org.oblivios.permission.MANAGE_COMPARTMENTS";
++    static final String READ_PROFILE = "org.oblivios.permission.READ_COMPARTMENT_PROFILE";
++    static final String EXIT_PACKAGE = "org.oblivios.exit";
++    static final String SETTINGS_REAL_PACKAGES = "oblivios_settings_real_packages";
 +    private static final String LOOPBACK_PERMISSION = "android.permission.USE_LOOPBACK_INTERFACE";
 +    private static final int MAX_STORE_BYTES = 1024 * 1024;
 +

@@ -17,7 +17,7 @@ Network access, rate limited on purpose. Run by hand, never during a build.
 import json, sys, time, urllib.parse, urllib.request
 
 ENDPOINT = "https://query.wikidata.org/sparql"
-UA = "freeholdos-classifier-research/1.0 (privacy-oriented Android OS; contact via project repository)"
+UA = "oblivios-classifier-research/1.0 (privacy-oriented Android OS; contact via project repository)"
 CHUNK = 120
 
 

@@ -1,4 +1,4 @@
-# Keyboard autofill chips (FreeholdOS platform integration)
+# Keyboard autofill chips (ObliviOS platform integration)
 
 Two LatinIME patches that show the logins of the Passwords app as chips in the suggestion strip of the on-screen keyboard. The chip appears by itself when a login field gets focus, never takes focus, ends when the user types and returns when the field is empty again (ADR-207). The system draws the chip in another process; the keyboard receives a surface only and sets an exact size for it. Any other keyboard keeps the system list. Plan: the internal record "keyboard autofill chips plan" (not published); research: the internal record "inline autofill chip path" (not published); ADR-191 and ADR-192 in the decision log.
 

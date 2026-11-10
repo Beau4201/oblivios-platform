@@ -19,7 +19,7 @@ index caf32300391f..58d4c5875c8e 100644
 +++ b/services/core/java/com/android/server/vibrator/VibratorManagerService.java
 @@ -454,7 +454,11 @@ public class VibratorManagerService extends IVibratorManagerService.Stub {
          final VibratorInfo info = getVibratorInfoInternal(vibratorId);
-         // FreeholdOS (ADR-173): the calibration of the motor identifies the unit; an app gets it
+         // ObliviOS (ADR-173): the calibration of the motor identifies the unit; an app gets it
          // rounded (see VibratorInfo#withCoarseCalibration), the system gets it as measured.
 -        if (info != null && UserHandle.isApp(Binder.getCallingUid())) {
 +        // Every uid from the first application id up is an app: UserHandle.isApp() stops at the

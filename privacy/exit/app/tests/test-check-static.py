@@ -27,10 +27,10 @@ CASES = [
     ("AndroidManifest.xml", 'android:name=".ExitAppsActivity"\n            android:label="@string/apps_title"\n            android:excludeFromRecents="true"\n            android:exported="false"',
      'android:name=".ExitAppsActivity"\n            android:label="@string/apps_title"\n            android:excludeFromRecents="true"\n            android:exported="true"', "exported without a permission"),
     ("AndroidManifest.xml", '<uses-permission android:name="android.permission.MANAGE_USERS" />', '', "only listed"),
-    ("privapp-permissions-org.freeholdos.exit.xml", '<permission name="android.permission.MANAGE_USERS"/>', '', "only requested"),
-    ("privapp-permissions-org.freeholdos.exit.xml", '<permission name="android.permission.MANAGE_USERS"/>',
+    ("privapp-permissions-org.oblivios.exit.xml", '<permission name="android.permission.MANAGE_USERS"/>', '', "only requested"),
+    ("privapp-permissions-org.oblivios.exit.xml", '<permission name="android.permission.MANAGE_USERS"/>',
      '<permission name="android.permission.MANAGE_USERS"/><permission name="android.permission.CREATE_USERS"/>', "only listed"),
-    ("default-permissions-org.freeholdos.exit.xml", 'android.permission.POST_NOTIFICATIONS', 'android.permission.READ_CONTACTS',
+    ("default-permissions-org.oblivios.exit.xml", 'android.permission.POST_NOTIFICATIONS', 'android.permission.READ_CONTACTS',
      "default-permissions grants"),
 ]
 for fname, old, new, want in CASES:
@@ -47,7 +47,7 @@ for fname, old, new, want in CASES:
 # The copy keeps src, so the source scan sees the call of getUserHandles.
 d = tempfile.mkdtemp()
 shutil.copytree(APP, os.path.join(d, "a"), ignore=shutil.ignore_patterns("tests", ".typecheck-*"))
-for fname in ("AndroidManifest.xml", "privapp-permissions-org.freeholdos.exit.xml"):
+for fname in ("AndroidManifest.xml", "privapp-permissions-org.oblivios.exit.xml"):
     p = os.path.join(d, "a", fname)
     text = open(p).read()
     assert text.count("android.permission.MANAGE_USERS") >= 1
@@ -56,9 +56,9 @@ problems = cs.check(os.path.join(d, "a"))
 assert any("getUserHandles" in x and "MANAGE_USERS" in x for x in problems), problems
 shutil.rmtree(d)
 # ADR-208: the allowlist and the manifest agree on MANAGE_COMPARTMENTS in both directions.
-MANAGE = "org.freeholdos.permission.MANAGE_COMPARTMENTS"
+MANAGE = "org.oblivios.permission.MANAGE_COMPARTMENTS"
 for fname, old, want in (
-        ("privapp-permissions-org.freeholdos.exit.xml", f'<permission name="{MANAGE}"/>', "only requested"),
+        ("privapp-permissions-org.oblivios.exit.xml", f'<permission name="{MANAGE}"/>', "only requested"),
         ("AndroidManifest.xml", f'<uses-permission android:name="{MANAGE}" />', "only listed")):
     d = tempfile.mkdtemp()
     shutil.copytree(APP, os.path.join(d, "a"), ignore=shutil.ignore_patterns("src", "tests", ".typecheck-*"))
@@ -75,7 +75,7 @@ for fname, old, want in (
 d = tempfile.mkdtemp()
 shutil.copytree(APP, os.path.join(d, "a"), ignore=shutil.ignore_patterns("tests", ".typecheck-*"))
 for fname, old in (("AndroidManifest.xml", f'<uses-permission android:name="{MANAGE}" />'),
-                   ("privapp-permissions-org.freeholdos.exit.xml", f'<permission name="{MANAGE}"/>')):
+                   ("privapp-permissions-org.oblivios.exit.xml", f'<permission name="{MANAGE}"/>')):
     p = os.path.join(d, "a", fname)
     text = open(p).read()
     assert text.count(old) == 1, (fname, old)
@@ -194,7 +194,7 @@ for old, new, want in (
         ("    public static final int VALUE_BLOCKED = 2;\n", "", "VALUE_ constants")):
     d = tempfile.mkdtemp()
     shutil.copytree(APP, os.path.join(d, "a"), ignore=shutil.ignore_patterns("tests", ".typecheck-*"))
-    p = os.path.join(d, "a", "src", "org", "freeholdos", "exit", "ProfileRows.java")
+    p = os.path.join(d, "a", "src", "org", "oblivios", "exit", "ProfileRows.java")
     text = open(p).read()
     assert text.count(old) == 1, old
     open(p, "w").write(text.replace(old, new))

@@ -4,7 +4,7 @@ package {
 }
 
 // The exit daemon and the route helper of Compartments (ADR-184, ADR-186): one executable, started by exit.rc in two
-// domains. Built outside the tree from freeholdos-services/exit-daemon (SOURCE.md holds the commit, the toolchain and the
+// domains. Built outside the tree from oblivios-services/exit-daemon (SOURCE.md holds the commit, the toolchain and the
 // hash; check-prebuilt.sh compares the file with it). arm64 only: lynx and stallion are the only targets.
 cc_prebuilt_binary {
     name: "exitd",
@@ -49,5 +49,5 @@ prebuilt_etc {
 prebuilt_etc {
     name: "exit-mask-list.tsv",
     src: "exit-mask-list.tsv",
-    sub_dir: "freeholdos",
+    sub_dir: "oblivios",
 }

@@ -19,7 +19,7 @@ index 1eec110..b35778a 100644
 @@ -1173,8 +1173,9 @@ public class ClipboardService extends SystemService {
                              clipboard.primaryClipListeners.getBroadcastCookie(i);
  
-                     // FreeholdOS: a listener hears that a clip changed only if it may read the
+                     // ObliviOS: a listener hears that a clip changed only if it may read the
 -                    // clip. The moment a clip is set is otherwise a message from the app that
 -                    // set it to any focused app that listens.
 +                    // clip: the app that set it, an app holding a paste grant or an app with the

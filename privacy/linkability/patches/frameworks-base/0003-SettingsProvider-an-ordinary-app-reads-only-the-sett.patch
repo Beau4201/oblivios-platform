@@ -8,8 +8,8 @@ All 262 readable settings were readable by any app, together a
 fingerprint of the phone and its owner, with boot_count and device_name
 among them. An app that is not a system app, platform-signed or test-only
 now sees 14 keys that the framework reads inside the app process; every
-other key reads as unset. freeholdos_settings_open = 1 switches this off
-and freeholdos_settings_real_packages names the packages that read the
+other key reads as unset. oblivios_settings_open = 1 switches this off
+and oblivios_settings_real_packages names the packages that read the
 real settings.
 ---
  .../providers/settings/SettingsHardening.java | 48 +++++++++++++
@@ -28,7 +28,7 @@ index 0000000..3ecbb23
 +import java.util.Set;
 +
 +/**
-+ * FreeholdOS (ADR-173): which settings an ordinary app may read. A settings table holds the
++ * ObliviOS (ADR-173): which settings an ordinary app may read. A settings table holds the
 + * configuration of one phone; read together, its values identify the phone and the person who
 + * configured it, and two apps that read the same values can be linked by them. An app that is not
 + * a system app therefore sees the keys below and nothing else: every other key reads as unset,
@@ -41,9 +41,9 @@ index 0000000..3ecbb23
 + */
 +final class SettingsHardening {
 +    /** Global setting: 1 switches the hardening off for every app. */
-+    static final String OPEN_SETTING = "freeholdos_settings_open";
++    static final String OPEN_SETTING = "oblivios_settings_open";
 +    /** Global setting: comma-separated package names that read the real settings. */
-+    static final String REAL_PACKAGES_SETTING = "freeholdos_settings_real_packages";
++    static final String REAL_PACKAGES_SETTING = "oblivios_settings_real_packages";
 +
 +    private static final Set<String> ALLOWED_FOR_APPS = Set.of(
 +            "airplane_mode_on", "animator_duration_scale", "transition_animation_scale",
@@ -176,7 +176,7 @@ index 1fbd8bc..07aa020 100644
      }
  
 +    /**
-+     * FreeholdOS (ADR-173): true if this read must answer as if the key were unset: the caller is
++     * ObliviOS (ADR-173): true if this read must answer as if the key were unset: the caller is
 +     * an ordinary app and the key is not one of {@link SettingsHardening#isAllowedForApps}.
 +     */
 +    private boolean isHiddenFromCaller(String name) {
@@ -184,10 +184,10 @@ index 1fbd8bc..07aa020 100644
 +    }
 +
 +    /**
-+     * FreeholdOS (ADR-173): true if the caller reads the hardened view of the settings. That is
++     * ObliviOS (ADR-173): true if the caller reads the hardened view of the settings. That is
 +     * every ordinary app (not a system app, not platform-signed, not test-only), unless the
-+     * global setting freeholdos_settings_open is 1 or the package is named in
-+     * freeholdos_settings_real_packages.
++     * global setting oblivios_settings_open is 1 or the package is named in
++     * oblivios_settings_real_packages.
 +     */
 +    private boolean isHardenedCaller() {
 +        if (UserHandle.getAppId(Binder.getCallingUid()) < Process.FIRST_APPLICATION_UID) {

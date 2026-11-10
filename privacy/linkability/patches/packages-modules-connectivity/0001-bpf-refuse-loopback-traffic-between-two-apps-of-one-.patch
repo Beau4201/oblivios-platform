@@ -7,7 +7,7 @@ The loopback check judged only traffic between profiles; two apps of one
 user always passed, so two apps could link themselves through 127.0.0.1
 without any permission. Two different app ids of one user now pass only
 if either side holds USE_LOOPBACK_INTERFACE. The global setting
-freeholdos_loopback_open = 1 switches the check off at boot.
+oblivios_loopback_open = 1 switches the check off at boot.
 ---
  bpf/progs/netd.c                               | 18 ++++++++++++++----
  service/src/com/android/server/BpfNetMaps.java | 17 ++++++++++++++++-
@@ -33,7 +33,7 @@ index de72e54..03125ea 100644
 +    bool same_profile =
 +        sender_uid / AID_USER_OFFSET == receiver_uid / AID_USER_OFFSET;
 +    if (same_profile) {
-+        // FreeholdOS: two different apps of one user may not talk over the loopback interface
++        // ObliviOS: two different apps of one user may not talk over the loopback interface
 +        // (127.0.0.0/8 and ::1). It is a channel by which two apps link themselves to one
 +        // device without any permission; the upstream check only covers traffic between
 +        // profiles. Either side holding
@@ -64,14 +64,14 @@ index 426a356..2ac530e 100644
      }
  
 +    /**
-+     * FreeholdOS: the loopback check now judges two apps of one user. The global setting
-+     * freeholdos_loopback_open = 1 switches the check off for the whole device (read once, at
++     * ObliviOS: the loopback check now judges two apps of one user. The global setting
++     * oblivios_loopback_open = 1 switches the check off for the whole device (read once, at
 +     * boot). Unset or unreadable means the check stays on.
 +     */
 +    private static boolean isLoopbackOpenSetting(final Context context) {
 +        try {
 +            return Settings.Global.getInt(context.getContentResolver(),
-+                    "freeholdos_loopback_open", 0) != 0;
++                    "oblivios_loopback_open", 0) != 0;
 +        } catch (RuntimeException e) {
 +            return false;
 +        }

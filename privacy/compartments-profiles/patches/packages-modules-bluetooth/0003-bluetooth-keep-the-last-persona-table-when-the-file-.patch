@@ -1,5 +1,5 @@
 From 9f4226f3db56a1208a8dd349c16e93b8223f1ca9 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 20:17:31 +0100
 Subject: [PATCH] bluetooth: keep the last persona table when the file cannot
  be read

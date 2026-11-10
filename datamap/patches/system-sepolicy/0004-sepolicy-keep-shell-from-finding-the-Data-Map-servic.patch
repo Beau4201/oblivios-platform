@@ -1,5 +1,5 @@
 From 901e2eb0c27e5e7c45060b42fc0ba0c6c23949a0 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 23 Oct 2026 02:57:09 +0200
 Subject: [PATCH] sepolicy: keep shell from finding the Data Map service
 

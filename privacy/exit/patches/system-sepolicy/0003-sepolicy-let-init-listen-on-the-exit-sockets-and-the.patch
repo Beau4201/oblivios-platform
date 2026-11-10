@@ -1,5 +1,5 @@
 From 19078a3031cd77c342c8da2bfce33747c3134a94 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sat, 24 Oct 2026 16:09:39 +0200
 Subject: [PATCH] sepolicy: let init listen on the exit sockets and the exit
  services write to kmsg

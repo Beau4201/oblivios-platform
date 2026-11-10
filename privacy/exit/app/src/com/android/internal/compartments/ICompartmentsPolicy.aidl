@@ -9,9 +9,9 @@ import com.android.internal.compartments.CompartmentsPlace;
 
 /**
  * The Binder interface of the Compartments policy service (ADR-208). Every call acts on the owner
- * user's store. The first eight methods need org.freeholdos.permission.MANAGE_COMPARTMENTS, which
+ * user's store. The first eight methods need org.oblivios.permission.MANAGE_COMPARTMENTS, which
  * only the exit app holds; getProfile and getIdentity also accept
- * org.freeholdos.permission.READ_COMPARTMENT_PROFILE, which only the Settings app holds.
+ * org.oblivios.permission.READ_COMPARTMENT_PROFILE, which only the Settings app holds.
  *
  * <p>The transaction order is part of the contract with the app, which compiles its own copy of
  * this file: new methods are added at the end. The numbers of the constants are the order of the

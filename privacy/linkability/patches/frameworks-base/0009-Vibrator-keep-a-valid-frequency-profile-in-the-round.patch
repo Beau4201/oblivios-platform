@@ -25,7 +25,7 @@ index 000000000000..7dfc875a8a87
 +++ b/core/java/android/os/VibratorCoarse.java
 @@ -0,0 +1,46 @@
 +/*
-+ * Copyright (C) 2026 The FreeholdOS Project
++ * Copyright (C) 2026 The ObliviOS Project
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
 + * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ index 000000000000..7dfc875a8a87
 +package android.os;
 +
 +/**
-+ * FreeholdOS (ADR-173): the rounding that {@link VibratorInfo#withCoarseCalibration} applies to the
++ * ObliviOS (ADR-173): the rounding that {@link VibratorInfo#withCoarseCalibration} applies to the
 + * measured calibration of the motor, apart from VibratorInfo so that a host test can run it.
 + */
 +final class VibratorCoarse {
@@ -111,7 +111,7 @@ index acf7bd8a8929..80eb7080936e 100644
          }
  
 +        /**
-+         * FreeholdOS (ADR-173): a copy that keeps the range an app can use (the lowest and highest
++         * ObliviOS (ADR-173): a copy that keeps the range an app can use (the lowest and highest
 +         * frequency to 10 Hz, the resonant frequency to 10 Hz) and replaces the measured curve of
 +         * the unit by a flat one at the maximum acceleration to 0.5 G. An empty profile has no
 +         * per-unit data and is returned as it is.

@@ -1,5 +1,5 @@
 From 104abdcdd4a1765705404696d6e5567d5b7bf808 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 17:59:53 +0100
 Subject: [PATCH] compartments: give an app with a persona the fixes of its place
 
@@ -69,7 +69,7 @@ index f21a9fe..84e049e 100644
          }
  
          CallerIdentity identity = registration.getIdentity();
-+        // FreeholdOS (ADR-208): the status, NMEA sentences, measurements and navigation messages carry the real satellites and
++        // ObliviOS (ADR-208): the status, NMEA sentences, measurements and navigation messages carry the real satellites and
 +        // position, so an app with a persona is never called (the registration stays, as for an app in the background); this
 +        // is looked at again whenever the app changes between foreground and background
 +        if (GnssManagerService.hasPersona(identity)) {
@@ -95,14 +95,14 @@ index 6d59e1e..cd05565 100644
  
          CallerIdentity identity = CallerIdentity.fromBinder(mContext, packageName, attributionTag,
                  listenerId);
-+        // FreeholdOS (ADR-208): accepted and never called, as the other GNSS listeners of an app with a persona
++        // ObliviOS (ADR-208): accepted and never called, as the other GNSS listeners of an app with a persona
 +        if (hasPersona(identity)) {
 +            return;
 +        }
          mGnssAntennaInfoProvider.addListener(identity, listener);
      }
  
-+    /** FreeholdOS (ADR-208): whether the Compartments service gives this app a persona (an Isolated app with a place). */
++    /** ObliviOS (ADR-208): whether the Compartments service gives this app a persona (an Isolated app with a place). */
 +    static boolean hasPersona(CallerIdentity identity) {
 +        CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
 +        return compartments != null && compartments.personaFor(identity.getUid()) != null;
@@ -127,7 +127,7 @@ index 76cf820..439d7d4 100644
                      } else {
                          deliverLocationResult = locationResult;
                      }
-+                    // FreeholdOS (ADR-208): an app with a persona is delivered the fixes moved to its place
++                    // ObliviOS (ADR-208): an app with a persona is delivered the fixes moved to its place
 +                    deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
  
                      listener.deliverOnLocationChanged(deliverLocationResult,
@@ -136,7 +136,7 @@ index 76cf820..439d7d4 100644
                      } else {
                          deliverLocationResult = locationResult;
                      }
-+                    // FreeholdOS (ADR-208): an app with a persona is delivered the fix moved to its place
++                    // ObliviOS (ADR-208): an app with a persona is delivered the fix moved to its place
 +                    deliverLocationResult = personaResult(deliverLocationResult, getIdentity());
  
                      // we currently don't hold a wakelock for getCurrentLocation deliveries
@@ -146,7 +146,7 @@ index 76cf820..439d7d4 100644
      }
  
 +    /**
-+     * FreeholdOS (ADR-208): the persona of the caller, or null when it has none or the phone is in an emergency, when the real
++     * ObliviOS (ADR-208): the persona of the caller, or null when it has none or the phone is in an emergency, when the real
 +     * position is what the user needs the app to have. The Compartments service decides who has a persona.
 +     */
 +    @Nullable private CompartmentsInternal.PersonaView persona(CallerIdentity identity) {
@@ -196,7 +196,7 @@ index 76cf820..439d7d4 100644
                  return null;
              }
  
-+            // FreeholdOS (ADR-208): an app with a persona is given the last fix moved to its place
++            // ObliviOS (ADR-208): an app with a persona is given the last fix moved to its place
 +            location = personaLocation(location, identity);
 +
              // if delivering to the same process, make a copy of the location first (since

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.keys.BiometricKeyInvalidated
+import org.oblivios.passwords.keys.BiometricKeyInvalidated
 
 /** Contract tests of KeyGateway against the fake; the real Keystore is checked on a device (PWM-007, PWM-008). */
 fun main() {

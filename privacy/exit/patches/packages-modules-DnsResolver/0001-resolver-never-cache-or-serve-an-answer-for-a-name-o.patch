@@ -46,8 +46,8 @@ index 0000000..47c22e0
 +++ b/ExitMaskList.cpp
 @@ -0,0 +1,170 @@
 +// SPDX-License-Identifier: Apache-2.0
-+// See ExitMaskList.h. The format and the matching are those of `masklist.rs` of the exit daemon (freeholdos-services,
-+// exit-daemon); `resolver/test/differential.py` of freeholdos-platform compares the two on the real list.
++// See ExitMaskList.h. The format and the matching are those of `masklist.rs` of the exit daemon (oblivios-services,
++// exit-daemon); `resolver/test/differential.py` of oblivios-platform compares the two on the real list.
 +
 +#include "ExitMaskList.h"
 +
@@ -248,7 +248,7 @@ index 0000000..3f68719
 +
 +class ExitMaskList {
 +  public:
-+    static constexpr const char* kPath = "/system/etc/freeholdos/exit-mask-list.tsv";
++    static constexpr const char* kPath = "/system/etc/oblivios/exit-mask-list.tsv";
 +    // The limits of the daemon's reader (`masklist.rs`): rows and bytes of the file.
 +    static constexpr size_t kMaxRows = 8192;
 +    static constexpr size_t kMaxFile = 4 * 1024 * 1024;

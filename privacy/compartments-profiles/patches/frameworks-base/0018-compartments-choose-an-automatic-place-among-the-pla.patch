@@ -1,5 +1,5 @@
 From cacb637b3db42daec989f599b3123437dd02fb8b Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 21:24:58 +0100
 Subject: [PATCH] compartments: choose an automatic place among the places that
  have cell towers

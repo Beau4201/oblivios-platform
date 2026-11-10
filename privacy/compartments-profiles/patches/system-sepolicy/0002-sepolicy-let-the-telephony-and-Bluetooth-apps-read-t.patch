@@ -1,5 +1,5 @@
 From dfd378689f4fd5ff6fe514da2f1ff17ad32414ec Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 17:42:56 +0100
 Subject: [PATCH] sepolicy: let the telephony and Bluetooth apps read the
  persona file

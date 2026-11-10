@@ -1,5 +1,5 @@
 From 80a487f2350acda644b7ec61c827b0b6766ffdca Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 2 Nov 2026 21:50:15 +0100
 Subject: [PATCH] compartments: the Settings permission is allowlisted in the
  system_ext file
@@ -24,7 +24,7 @@ index 2456d02ac8eb..c5517d403de4 100644
          <permission name="android.permission.SET_BIOMETRIC_DIALOG_ADVANCED" />
          <permission name="android.permission.MANAGE_SAFETY_CENTER" />
          <permission name="android.permission.CONTROL_SIM_AUTO_PIN_MANAGEMENT"/>
-+        <permission name="org.freeholdos.permission.READ_COMPARTMENT_PROFILE"/>
++        <permission name="org.oblivios.permission.READ_COMPARTMENT_PROFILE"/>
      </privapp-permissions>
  </permissions>
 diff --git a/data/etc/privapp-permissions-platform.xml b/data/etc/privapp-permissions-platform.xml
@@ -35,7 +35,7 @@ index 635e86a71120..593c84d2dc00 100644
          <permission name="android.permission.SEND_SAFETY_CENTER_UPDATE" />
          <permission name="android.permission.READ_SYSTEM_GRAMMATICAL_GENDER"/>
          <permission name="android.permission.CONTROL_SIM_AUTO_PIN_MANAGEMENT"/>
--        <permission name="org.freeholdos.permission.READ_COMPARTMENT_PROFILE"/>
+-        <permission name="org.oblivios.permission.READ_COMPARTMENT_PROFILE"/>
      </privapp-permissions>
  
      <privapp-permissions package="com.android.bips">

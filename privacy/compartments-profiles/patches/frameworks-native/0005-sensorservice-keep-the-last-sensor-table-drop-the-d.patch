@@ -1,5 +1,5 @@
 From 8d2a02a9dfb8f075222f0c70026522a5fb54aa31 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 20:22:17 +0100
 Subject: [PATCH] sensorservice: keep the last sensor table, drop the derived
  motion types

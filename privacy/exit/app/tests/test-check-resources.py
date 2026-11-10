@@ -14,8 +14,8 @@ spec.loader.exec_module(cr)
 assert cr.check(APP) == [], cr.check(APP)
 
 STRINGS = "res/values/strings.xml"
-ACT = "src/org/freeholdos/exit/ExitSettingsActivity.java"
-NOTIFIER = "src/org/freeholdos/exit/Notifier.java"
+ACT = "src/org/oblivios/exit/ExitSettingsActivity.java"
+NOTIFIER = "src/org/oblivios/exit/Notifier.java"
 CASES = [
     (STRINGS, '<string name="owner_only">', '<string name="unused_one">x</string>\n    <string name="owner_only">', "unused_one is defined and not used"),
     (ACT, "R.string.owner_only", "R.string.not_there", "not_there is used and not defined"),

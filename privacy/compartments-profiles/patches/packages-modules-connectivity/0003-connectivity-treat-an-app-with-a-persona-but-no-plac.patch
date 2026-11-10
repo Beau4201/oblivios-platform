@@ -1,5 +1,5 @@
 From 36c90b2b3170e83aeb44f1795aece376b5a9b2c6 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 2 Nov 2026 13:40:05 +0100
 Subject: [PATCH] connectivity: treat an app with a persona but no place as an
  app with a persona

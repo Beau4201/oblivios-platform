@@ -11,7 +11,7 @@ trap 'rm -rf "$WORK"' EXIT
 fails=0
 
 fresh() { rm -rf "$WORK/app"; cp -r "$APP" "$WORK/app"; echo "$WORK/app"; }
-KT() { echo "$1/src/main/kotlin/org/freeholdos/passwords"; }
+KT() { echo "$1/src/main/kotlin/org/oblivios/passwords"; }
 
 # expect_fail NAME CHECK-COMMAND... : the command must exit non-zero
 expect_fail() {
@@ -41,15 +41,15 @@ expect_pass "the real app: JNI sync" "${JNI[@]}" "$APP"
 
 # --- check-resources.py ---
 d="$(fresh)"; mkdir -p "$(KT "$d")/ui"
-printf 'package org.freeholdos.passwords.ui\nfun f() { Text("Hello world") }\n' > "$(KT "$d")/ui/Bad.kt"
+printf 'package org.oblivios.passwords.ui\nfun f() { Text("Hello world") }\n' > "$(KT "$d")/ui/Bad.kt"
 expect_fail "resources: quoted user-visible string in ui/" python3 "$d/tools/check-resources.py" "$d"
 
 d="$(fresh)"; mkdir -p "$(KT "$d")/ui"
-printf 'package org.freeholdos.passwords.ui\nfun f() { Text(text = "Hello world") // i18n-ok\n  val k = "state_key"\n}\n' > "$(KT "$d")/ui/Ok.kt"
+printf 'package org.oblivios.passwords.ui\nfun f() { Text(text = "Hello world") // i18n-ok\n  val k = "state_key"\n}\n' > "$(KT "$d")/ui/Ok.kt"
 expect_pass "resources: an i18n-ok line and a key without space are allowed" python3 "$d/tools/check-resources.py" "$d"
 
 d="$(fresh)"; mkdir -p "$(KT "$d")/ui"
-printf 'package org.freeholdos.passwords.ui\nfun f() = R.string.pm_does_not_exist\n' > "$(KT "$d")/ui/Missing.kt"
+printf 'package org.oblivios.passwords.ui\nfun f() = R.string.pm_does_not_exist\n' > "$(KT "$d")/ui/Missing.kt"
 expect_fail "resources: R.string name missing from strings.xml" python3 "$d/tools/check-resources.py" "$d"
 
 d="$(fresh)"; printf '<vector xmlns:android="http://schemas.android.com/apk/res/android"/>\n' > "$d/res/drawable/ic_extra.xml"
@@ -85,42 +85,42 @@ expect_fail "static: allowBackup true" bash "$d/tools/check-static.sh" "$d"
 d="$(fresh)"; sed -i 's#android:allowBackup="false"##' "$d/AndroidManifest.xml"
 expect_fail "static: allowBackup missing" bash "$d/tools/check-static.sh" "$d"
 
-d="$(fresh)"; sed -i 's#android:name="org.freeholdos.passwords.MainActivity"#android:name="org.freeholdos.passwords.MainActivity" android:allowTaskReparenting="true" android:process=":x"#' "$d/AndroidManifest.xml"
+d="$(fresh)"; sed -i 's#android:name="org.oblivios.passwords.MainActivity"#android:name="org.oblivios.passwords.MainActivity" android:allowTaskReparenting="true" android:process=":x"#' "$d/AndroidManifest.xml"
 expect_fail "static: a component in another process" bash "$d/tools/check-static.sh" "$d"
 
 d="$(fresh)"; sed -i 's#<application#<application android:networkSecurityConfig="@xml/net"#' "$d/AndroidManifest.xml"
 expect_fail "static: a network security config" bash "$d/tools/check-static.sh" "$d"
 
-d="$(fresh)"; printf 'package org.freeholdos.passwords\nclass Other : ComponentActivity()\n' > "$(KT "$d")/Other.kt"
+d="$(fresh)"; printf 'package org.oblivios.passwords\nclass Other : ComponentActivity()\n' > "$(KT "$d")/Other.kt"
 expect_fail "static: an Activity that is not a SecureActivity" bash "$d/tools/check-static.sh" "$d"
 
 d="$(fresh)"; sed -i 's#FLAG_SECURE#FLAG_KEEP_SCREEN_ON#g' "$(KT "$d")/SecureActivity.kt"
 expect_fail "static: SecureActivity without FLAG_SECURE" bash "$d/tools/check-static.sh" "$d"
 
 d="$(fresh)"; mkdir -p "$(KT "$d")/ui"
-printf 'package org.freeholdos.passwords.ui\nfun f() {\n  AlertDialog(onDismissRequest = {}, confirmButton = {})\n}\n' > "$(KT "$d")/ui/D.kt"
+printf 'package org.oblivios.passwords.ui\nfun f() {\n  AlertDialog(onDismissRequest = {}, confirmButton = {})\n}\n' > "$(KT "$d")/ui/D.kt"
 expect_fail "static: a Compose dialog without a secure policy" bash "$d/tools/check-static.sh" "$d"
 
 d="$(fresh)"; mkdir -p "$(KT "$d")/ui"
-printf 'package org.freeholdos.passwords.ui\nfun f() {\n  AlertDialog(onDismissRequest = {}, confirmButton = {}, properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn))\n}\n' > "$(KT "$d")/ui/D.kt"
+printf 'package org.oblivios.passwords.ui\nfun f() {\n  AlertDialog(onDismissRequest = {}, confirmButton = {}, properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn))\n}\n' > "$(KT "$d")/ui/D.kt"
 expect_pass "static: a Compose dialog with SecureOn" bash "$d/tools/check-static.sh" "$d"
 
-d="$(fresh)"; printf 'package org.freeholdos.passwords\nfun f(a: android.app.Activity) { android.app.AlertDialog.Builder(a).create().show() }\n' > "$(KT "$d")/Dlg.kt"
+d="$(fresh)"; printf 'package org.oblivios.passwords\nfun f(a: android.app.Activity) { android.app.AlertDialog.Builder(a).create().show() }\n' > "$(KT "$d")/Dlg.kt"
 expect_fail "static: a framework dialog without FLAG_SECURE" bash "$d/tools/check-static.sh" "$d"
 
-d="$(fresh)"; printf 'package org.freeholdos.passwords\nfun f(a: android.app.Activity) { val d = android.app.AlertDialog.Builder(a).create(); d.window?.setFlags(8192, 8192) // FLAG_SECURE\n d.show() }\n' > "$(KT "$d")/Dlg.kt"
+d="$(fresh)"; printf 'package org.oblivios.passwords\nfun f(a: android.app.Activity) { val d = android.app.AlertDialog.Builder(a).create(); d.window?.setFlags(8192, 8192) // FLAG_SECURE\n d.show() }\n' > "$(KT "$d")/Dlg.kt"
 expect_pass "static: a framework dialog that sets FLAG_SECURE" bash "$d/tools/check-static.sh" "$d"
 
-d="$(fresh)"; mkdir -p "$(KT "$d")/ui"; printf 'package org.freeholdos.passwords.ui\nfun f() { val s = rememberSaveable { 1 } }\n' > "$(KT "$d")/ui/Saved.kt"
+d="$(fresh)"; mkdir -p "$(KT "$d")/ui"; printf 'package org.oblivios.passwords.ui\nfun f() { val s = rememberSaveable { 1 } }\n' > "$(KT "$d")/ui/Saved.kt"
 expect_fail "static: rememberSaveable in a screen" bash "$d/tools/check-static.sh" "$d"
 
-d="$(fresh)"; printf 'package org.freeholdos.passwords\nfun f() { android.util.Log.d("tag", "x") }\n' > "$(KT "$d")/Logs.kt"
+d="$(fresh)"; printf 'package org.oblivios.passwords\nfun f() { android.util.Log.d("tag", "x") }\n' > "$(KT "$d")/Logs.kt"
 expect_fail "static: a log call in the app" bash "$d/tools/check-static.sh" "$d"
 
-d="$(fresh)"; printf 'package org.freeholdos.passwords.fill\nfun f(b: android.service.autofill.Dataset.Builder, id: android.view.autofill.AutofillId) { b.setValue(id, null) }\n' > "$(KT "$d")/fill/NoFilter.kt"
+d="$(fresh)"; printf 'package org.oblivios.passwords.fill\nfun f(b: android.service.autofill.Dataset.Builder, id: android.view.autofill.AutofillId) { b.setValue(id, null) }\n' > "$(KT "$d")/fill/NoFilter.kt"
 expect_fail "static: a dataset value without NO_FILTER" bash "$d/tools/check-static.sh" "$d"
 
-d="$(fresh)"; printf 'package org.freeholdos.passwords.fill\nfun f(b: android.service.autofill.Dataset.Builder, id: android.view.autofill.AutofillId) {\n  // b.setValue(id, null)\n  b.setValue(id, null, NO_FILTER, null)\n}\n' > "$(KT "$d")/fill/WithFilter.kt"
+d="$(fresh)"; printf 'package org.oblivios.passwords.fill\nfun f(b: android.service.autofill.Dataset.Builder, id: android.view.autofill.AutofillId) {\n  // b.setValue(id, null)\n  b.setValue(id, null, NO_FILTER, null)\n}\n' > "$(KT "$d")/fill/WithFilter.kt"
 expect_pass "static: a dataset value with NO_FILTER and a commented call" bash "$d/tools/check-static.sh" "$d"
 
 d="$(fresh)"; sed -i 's#supportsInlineSuggestions="true"#supportsInlineSuggestions="false"#' "$d/res/xml/pm_autofill_service.xml"

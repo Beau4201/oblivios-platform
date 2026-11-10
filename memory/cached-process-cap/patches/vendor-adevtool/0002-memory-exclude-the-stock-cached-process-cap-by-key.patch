@@ -19,7 +19,7 @@ index 9855c545a..b41186fbd 100644
        - "android:array/config_notificationMsgPkgsAllowedAsConvos =\ " # already empty in fw/base
        - "android:string/config_satellite_service_package =\ " # already empty in fw/base
        - "android:string/config_secondaryLocationTimeZoneProviderPackageName =\ "
-+      # FreeholdOS (ADR-151): the vendor overlay would override the cached process cap set in frameworks/base.
++      # ObliviOS (ADR-151): the vendor overlay would override the cached process cap set in frameworks/base.
 +      # Leaving the value out of overlay-inclusion.yml is not enough: an unknown entry is included.
 +      - android:integer/config_customizedMaxCachedProcesses = 1024
        - android:array/config_accessComputerControlKnownSigners = 1975B2F17177BC89A5DFF31F9E64A6CAE281A53DC1D1D59B1D147FE1C82AFA00;7075F275C3B82619A37B1FA393B8F9D793F0B3F55148C6251AA959C340BB74B4;103938EE4537E59E8EE792F654504FB8346FC6B346D0BBC4415FC339FCFC8EC1

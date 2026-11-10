@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.ui.LogoPack
+import org.oblivios.passwords.ui.LogoPack
 
 private val DOMAINS = "com\tgithub\nuk\tbbc\ngithub.com\tgithub\ncodeberg.org\tcodeberg\nbbc.co.uk\tbbc\nbroken.example\tmissing\n"
 private val ICONS = "github\tM0 0h24v24H0z\tGitHub\ncodeberg\tM1 1h2v2H1z\tCodeberg\nbbc\tM2 2h2v2H2z\tBBC\n"

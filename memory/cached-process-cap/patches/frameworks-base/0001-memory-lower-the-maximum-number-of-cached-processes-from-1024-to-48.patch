@@ -1,5 +1,5 @@
 From eb4138d4688d328d7358adc8e6c6c22c44224146 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sat, 10 Oct 2026 03:48:20 +0200
 Subject: [PATCH] memory: lower the maximum number of cached processes from
  1024 to 48
@@ -22,7 +22,7 @@ index d7a4004a27d6..fe141dfd5b35 100644
  
      <!-- the number of the max cached processes in the system. -->
 -    <integer name="config_customizedMaxCachedProcesses">1024</integer>
-+    <!-- FreeholdOS: 48 instead of 1024. Secure app spawning makes every app process about 43 MB
++    <!-- ObliviOS: 48 instead of 1024. Secure app spawning makes every app process about 43 MB
 +         larger and not shareable with the zygote, so a long tail of cached processes fills the
 +         swap. 48 keeps the twelve most recent apps (cached limit 24, empty limit 24). The Pixel
 +         vendor overlay of 1024 is not carried (vendor/adevtool overlay-inclusion.yml). -->

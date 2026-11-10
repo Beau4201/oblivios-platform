@@ -1,5 +1,5 @@
 From be6b53668fafd65aee253115c034afa50a10a0ec Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Thu, 29 Oct 2026 18:55:08 +0100
 Subject: [PATCH] Settings: Compartments is a row of the Network & internet
  page that search finds
@@ -58,7 +58,7 @@ index 0ed7956c448..aeedc874215 100644
          settings:controller="com.android.settings.network.AirplaneModePreferenceController"
          settings:userRestriction="no_airplane_mode"/>
  
-+    <!-- freeholdos: the entry of Compartments (the per-app network exit) is a preference of this page and not a tile that the
++    <!-- oblivios: the entry of Compartments (the per-app network exit) is a preference of this page and not a tile that the
 +         exit app injects, because the Settings search does not index injected tiles: it finds this row by its title and
 +         keywords. The row opens the main page of the exit app by its component. -->
 +    <Preference
@@ -70,8 +70,8 @@ index 0ed7956c448..aeedc874215 100644
 +        settings:keywords="@string/keywords_compartments">
 +        <intent
 +            android:action="android.intent.action.MAIN"
-+            android:targetPackage="org.freeholdos.exit"
-+            android:targetClass="org.freeholdos.exit.ExitSettingsActivity" />
++            android:targetPackage="org.oblivios.exit"
++            android:targetClass="org.oblivios.exit.ExitSettingsActivity" />
 +    </Preference>
 +
      <com.android.settingslib.RestrictedPreference

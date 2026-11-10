@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The exit app may post the notification about a host that fails while the address is hidden (ADR-181 section 4.4). -->
+<exceptions>
+    <exception package="org.oblivios.exit">
+        <permission name="android.permission.POST_NOTIFICATIONS" fixed="false"/>
+    </exception>
+</exceptions>

@@ -1,12 +1,12 @@
-# freeholdos-platform
+# oblivios-platform
 
-Isolated FreeholdOS framework and platform patches layered over pinned GrapheneOS
+Isolated ObliviOS framework and platform patches layered over pinned GrapheneOS
 revisions. Android source trees, build output, vendor blobs, signing material
 and device logs do not belong in this repository.
 
 ## Current packages
 
-- [`branding/boot`](branding/boot/README.md) — the FreeholdOS lighthouse boot
+- [`branding/boot`](branding/boot/README.md) — the ObliviOS lighthouse boot
   picture: reproducible textures and three `frameworks/base` patches
   (ADR-152, superseding ADR-019).
 - [`credential/duress-unlock-dummy`](credential/duress-unlock-dummy/README.md) —
@@ -33,20 +33,20 @@ and device logs do not belong in this repository.
 - [`physical/grab-detection`](physical/grab-detection/README.md) — the phone locks when it is pulled out
   of a hand in use and restarts after 60 seconds without a PIN (ADR-169).
 - [`release/ota-server-url`](release/ota-server-url/README.md) — points
-  the Updater app at FreeholdOS's private lynx OTA server (ADR-052, amending
+  the Updater app at ObliviOS's private lynx OTA server (ADR-052, amending
   ADR-045).
 
 All packages are patches layered over the pinned GrapheneOS manifest tag
-recorded in `freeholdos-manifest`; none are applied to a baseline tree without
+recorded in `oblivios-manifest`; none are applied to a baseline tree without
 the ADR their own README cites.
 
 ## Stage
 
 Source only. No builds, images or update service are offered, and no device is
 supported. See `CONTRIBUTING.md` for how a package is laid out and the rules for
-a patch. The pinned upstream baseline is in `freeholdos-manifest`.
+a patch. The pinned upstream baseline is in `oblivios-manifest`.
 
 ## Licence
 
 Apache-2.0, see `LICENSE` and `NOTICE`. Each patch keeps the licence of the
-upstream file it modifies. The name FreeholdOS and its logo are not licensed.
+upstream file it modifies. The name ObliviOS and its logo are not licensed.

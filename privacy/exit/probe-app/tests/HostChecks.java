@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import java.util.HashMap;
 import java.util.Map;
-import org.freeholdos.exitprobe.PacketSummary;
-import org.freeholdos.exitprobe.ProbeArgs;
+import org.oblivios.exitprobe.PacketSummary;
+import org.oblivios.exitprobe.ProbeArgs;
 
 /** Host checks of the pure Java of the probe (no Android class). Exits 1 on the first failure. */
 public final class HostChecks {

@@ -1,5 +1,5 @@
 From e8d0eaa4a5f0b6c3cabda86b45f04f1b27ebfb2d Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 14:02:09 +0100
 Subject: [PATCH] Settings: name the Compartments identity on the info row
 

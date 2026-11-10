@@ -3,5 +3,5 @@
 <!-- Chips in the strip of the system keyboard (ADR-191). A keyboard that ChipPolicy does not trust, or one without
      inline support, gets the system list instead. -->
 <autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:settingsActivity="org.freeholdos.passwords.MainActivity"
+    android:settingsActivity="org.oblivios.passwords.MainActivity"
     android:supportsInlineSuggestions="true" />

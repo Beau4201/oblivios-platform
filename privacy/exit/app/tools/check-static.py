@@ -16,7 +16,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 ANDROID = "{http://schemas.android.com/apk/res/android}"
-PKG = "org.freeholdos.exit"
+PKG = "org.oblivios.exit"
 # Permissions the platform grants without listing them in the privapp allowlist (normal, runtime or signature-only).
 NOT_PRIVILEGED = {
     "android.permission.ACCESS_NETWORK_STATE",
@@ -37,7 +37,7 @@ API_PERMISSIONS = [
     (r"\.createContextAsUser\(", {"INTERACT_ACROSS_USERS_FULL"}),
     (r"\.(getInstalledApplications|queryIntentActivities)\(", {"QUERY_ALL_PACKAGES"}),
     # The Compartments policy service (ADR-208) checks MANAGE_COMPARTMENTS on every call but getProfile. A name with a dot is the full name.
-    (r"ServiceManager|ICompartmentsPolicy", {"org.freeholdos.permission.MANAGE_COMPARTMENTS"}),
+    (r"ServiceManager|ICompartmentsPolicy", {"org.oblivios.permission.MANAGE_COMPARTMENTS"}),
 ]
 
 # ADR-206, ADR-208: no string claims what the image does not hold. A string of the app that names a location, a place, the time
@@ -127,7 +127,7 @@ def check(app, package=PACKAGE):
     if granted != [(PKG, "android.permission.POST_NOTIFICATIONS")]:
         problems.append(f"default-permissions grants {granted}")
     problems += receiver_scopes(os.path.join(app, "src"))
-    rows_java = os.path.join(app, "src", "org", "freeholdos", "exit", "ProfileRows.java")
+    rows_java = os.path.join(app, "src", "org", "oblivios", "exit", "ProfileRows.java")
     problems += patch_claims(os.path.join(app, "res", "values", "strings.xml"), package)
     problems += row_patches(rows_java, package)
     problems += row_numbers(rows_java)

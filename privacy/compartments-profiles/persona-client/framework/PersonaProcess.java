@@ -22,9 +22,9 @@ import java.util.TimeZone;
  * @hide
  */
 public final class PersonaProcess {
-    public static final String KEY_TIME_ZONE = "freeholdos_persona_tz";
-    public static final String KEY_COUNTRY = "freeholdos_persona_country";
-    public static final String KEY_OPERATOR = "freeholdos_persona_operator";
+    public static final String KEY_TIME_ZONE = "oblivios_persona_tz";
+    public static final String KEY_COUNTRY = "oblivios_persona_country";
+    public static final String KEY_OPERATOR = "oblivios_persona_operator";
 
     private static final Object LOCK = new Object();
     private static boolean sSet;

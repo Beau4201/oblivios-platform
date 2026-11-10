@@ -1,5 +1,5 @@
 From 9ed59f888d2693ae6646cf72426a0d650ce382a7 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sat, 31 Oct 2026 00:42:45 +0100
 Subject: [PATCH] compartments: withhold the position of a blocked app at
  delivery, persona properties, review fixes
@@ -44,7 +44,7 @@ index 18b207a..3127968 100644
      @SystemApi
      public static String get(@NonNull String key) {
          if (TRACK_KEY_ACCESS) onKeyAccess(key);
-+        // FreeholdOS (ADR-208): an app with a persona reads the time zone and network operator of its place
++        // ObliviOS (ADR-208): an app with a persona reads the time zone and network operator of its place
 +        String persona = PersonaProcess.property(key);
 +        if (persona != null) return persona;
          return native_get(key);
@@ -54,7 +54,7 @@ index 18b207a..3127968 100644
      @SystemApi
      public static String get(@NonNull String key, @Nullable String def) {
          if (TRACK_KEY_ACCESS) onKeyAccess(key);
-+        // FreeholdOS (ADR-208): as in get(String)
++        // ObliviOS (ADR-208): as in get(String)
 +        String persona = PersonaProcess.property(key);
 +        if (persona != null) return persona;
          return native_get(key, def);
@@ -383,9 +383,9 @@ index cd05565..9ccc221 100644
          mGnssAntennaInfoProvider.addListener(identity, listener);
      }
  
--    /** FreeholdOS (ADR-208): whether the Compartments service gives this app a persona (an Isolated app with a place). */
+-    /** ObliviOS (ADR-208): whether the Compartments service gives this app a persona (an Isolated app with a place). */
 +    /**
-+     * FreeholdOS (ADR-208): whether the Compartments service gives this app a persona (an Isolated app with a place), or no
++     * ObliviOS (ADR-208): whether the Compartments service gives this app a persona (an Isolated app with a place), or no
 +     * position at all (a blocked location, or a substituted one without a place): the real GNSS data are never called for it.
 +     */
      static boolean hasPersona(CallerIdentity identity) {
@@ -404,7 +404,7 @@ index 439d7d4..7b51f52 100644
                  return null;
              }
  
-+            // FreeholdOS (ADR-208): an app whose location is blocked, or substituted without a persona, is given nothing, whatever
++            // ObliviOS (ADR-208): an app whose location is blocked, or substituted without a persona, is given nothing, whatever
 +            // permission it holds
 +            if (locationWithheld(getIdentity())) {
 +                return null;
@@ -417,7 +417,7 @@ index 439d7d4..7b51f52 100644
                      }
                      fineLocationResult = null;
                  }
-+                // FreeholdOS (ADR-208): as for the registrations of the other kind, nothing for a withheld app
++                // ObliviOS (ADR-208): as for the registrations of the other kind, nothing for a withheld app
 +                if (fineLocationResult != null && locationWithheld(getIdentity())) {
 +                    fineLocationResult = null;
 +                }
@@ -428,14 +428,14 @@ index 439d7d4..7b51f52 100644
          }
      }
  
-+    /** FreeholdOS (ADR-208): whether the Compartments service gives the caller no position at all (see {@code locationWithheld}). */
++    /** ObliviOS (ADR-208): whether the Compartments service gives the caller no position at all (see {@code locationWithheld}). */
 +    private static boolean locationWithheld(CallerIdentity identity) {
 +        CompartmentsInternal compartments = LocalServices.getService(CompartmentsInternal.class);
 +        return compartments != null && compartments.locationWithheld(identity.getUid());
 +    }
 +
      /**
-      * FreeholdOS (ADR-208): the persona of the caller, or null when it has none or the phone is in an emergency, when the real
+      * ObliviOS (ADR-208): the persona of the caller, or null when it has none or the phone is in an emergency, when the real
       * position is what the user needs the app to have. The Compartments service decides who has a persona.
 @@ -1825,17 +1841,16 @@ public class LocationProviderManager extends
  
@@ -465,8 +465,8 @@ index 439d7d4..7b51f52 100644
                  return null;
              }
  
--            // FreeholdOS (ADR-208): an app with a persona is given the last fix moved to its place
-+            // FreeholdOS (ADR-208): nothing for an app whose location is blocked or has no persona; the others are given the
+-            // ObliviOS (ADR-208): an app with a persona is given the last fix moved to its place
++            // ObliviOS (ADR-208): nothing for an app whose location is blocked or has no persona; the others are given the
 +            // last fix moved to the place of their persona
 +            if (locationWithheld(identity)) {
 +                return null;

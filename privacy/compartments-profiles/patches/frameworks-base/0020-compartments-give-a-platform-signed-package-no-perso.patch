@@ -1,5 +1,5 @@
 From 93542bdb504f87c236343edddcf94fe4edcef15d Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 2 Nov 2026 19:01:12 +0100
 Subject: [PATCH] compartments: give a platform-signed package no persona and
  real sensors by default

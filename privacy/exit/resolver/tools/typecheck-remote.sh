@@ -3,7 +3,7 @@
 # The part of typecheck-on-server.sh that runs on the build server (see there). $1: the scratch directory with patched/.
 set -uo pipefail
 scratch=$1
-tree=/srv/freeholdos/platform-primary
+tree=/srv/oblivios/platform-primary
 out=out-lynx
 variant=libnetd_resolv/android_arm64_armv8-2a-dotprod_cortex-a76_static_cfi_apex31
 obj=$out/soong/.intermediates/packages/modules/DnsResolver/$variant/obj/packages/modules/DnsResolver/res_cache.o

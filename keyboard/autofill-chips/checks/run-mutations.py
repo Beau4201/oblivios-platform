@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Mutation check of AutofillChipPolicy (model: freeholdos-platform/passwords/app/tools/run-mutations.py).
+"""Mutation check of AutofillChipPolicy (model: oblivios-platform/passwords/app/tools/run-mutations.py).
 
 Applies ONE mutation at a time (an exact, unique text replaced by another) to a copy of the policy, compiles it with the
 host check and runs the check. A mutation is killed when the check fails. One that does not compile proves nothing and

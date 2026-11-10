@@ -22,7 +22,7 @@ index 0401d67..5a88775 100644
          interface.
          @FlaggedApi(android.permission.flags.Flags.FLAG_FULL_LOOPBACK_PROTECTIONS_ENABLED)
 -        <p>Protection level: normal -->
-+        FreeholdOS: dangerous, so that the user and not the manifest decides whether an app may use
++        ObliviOS: dangerous, so that the user and not the manifest decides whether an app may use
 +        the loopback interface with other apps. An app that is not granted it can still reach
 +        itself and the system.
 +        <p>Protection level: dangerous -->

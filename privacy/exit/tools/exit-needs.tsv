@@ -32,7 +32,7 @@ allow	exitd	exitd_data_file	file	create open read write getattr lock setattr ren
 allow	exitd	system_data_file	dir	search getattr	required	fs-mistrust stats every ancestor of the state directory (/data/misc)
 allow	exitd	system_data_root_file	dir	search getattr	required	the same for /data
 allow	exitd	rootfs	dir	search getattr	required	the same for /
-allow	exitd	system_file	dir	search getattr open read	required	/system/etc/freeholdos
+allow	exitd	system_file	dir	search getattr open read	required	/system/etc/oblivios
 allow	exitd	system_file	file	open read getattr	required	the mask list
 allow	exitd	self	file	open read getattr	required	/proc/self/mountinfo and /proc/self/cgroup
 allow	exitd	self	lnk_file	read getattr	required	readlink /proc/self/exe

@@ -38,29 +38,29 @@ android_app {
     certificate: "platform",
     privileged: true,
     required: [
-        "privapp-permissions-org.freeholdos.exit.xml",
-        "default-permissions-org.freeholdos.exit.xml",
-        "hidden-api-whitelisted-app-org.freeholdos.exit.xml",
+        "privapp-permissions-org.oblivios.exit.xml",
+        "default-permissions-org.oblivios.exit.xml",
+        "hidden-api-whitelisted-app-org.oblivios.exit.xml",
     ],
 }
 
 // Read by SystemConfig only from /system/etc/sysconfig, as for DataMapApp and AirPodsApp (ADR-208, Compartments policy service).
 prebuilt_etc {
-    name: "hidden-api-whitelisted-app-org.freeholdos.exit.xml",
-    src: "hidden-api-whitelisted-app-org.freeholdos.exit.xml",
+    name: "hidden-api-whitelisted-app-org.oblivios.exit.xml",
+    src: "hidden-api-whitelisted-app-org.oblivios.exit.xml",
     sub_dir: "sysconfig",
 }
 
 prebuilt_etc {
-    name: "privapp-permissions-org.freeholdos.exit.xml",
-    src: "privapp-permissions-org.freeholdos.exit.xml",
+    name: "privapp-permissions-org.oblivios.exit.xml",
+    src: "privapp-permissions-org.oblivios.exit.xml",
     sub_dir: "permissions",
 }
 
 // POST_NOTIFICATIONS is a runtime permission: a system app gets it from the default-permission policy, not from the
 // privapp list.
 prebuilt_etc {
-    name: "default-permissions-org.freeholdos.exit.xml",
-    src: "default-permissions-org.freeholdos.exit.xml",
+    name: "default-permissions-org.oblivios.exit.xml",
+    src: "default-permissions-org.oblivios.exit.xml",
     sub_dir: "default-permissions",
 }

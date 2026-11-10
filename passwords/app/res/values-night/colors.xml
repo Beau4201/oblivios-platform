@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Dark roles of the framework palette, read from docs/design/password-manager-2026-10-20.html (freeholdos-foundation). -->
+<!-- Dark roles of the framework palette, read from docs/design/password-manager-2026-10-20.html (oblivios-foundation). -->
 <resources>
     <color name="pm_bg">#17191F</color>
     <color name="pm_row">#292C34</color>

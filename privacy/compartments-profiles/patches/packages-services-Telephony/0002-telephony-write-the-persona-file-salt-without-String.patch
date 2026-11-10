@@ -1,5 +1,5 @@
 From 388ac3ffd952cc1b7f44574c4ff537a1f31c5a65 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 20:05:54 +0100
 Subject: [PATCH] telephony: write the persona file salt without String.format
 

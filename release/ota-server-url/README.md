@@ -1,6 +1,6 @@
-# OTA server URL (FreeholdOS platform integration)
+# OTA server URL (ObliviOS platform integration)
 
-Points GrapheneOS's real Updater app at FreeholdOS's own private lynx OTA
+Points GrapheneOS's real Updater app at ObliviOS's own private lynx OTA
 server (`update.beautenberge.dev`) instead of the upstream default
 (`releases.grapheneos.org`), per
 the internal record "lynx ota update server" (not published) (Task 5) and
@@ -17,7 +17,7 @@ corresponding ADR naming this exact patch set
 
 This concerns the update channel, not a device-security feature or
 Guardian. the internal record "repository topology" (not published) designates a
-separate `freeholdos-release` repository for this class of concern, but that
+separate `oblivios-release` repository for this class of concern, but that
 repository does not yet exist despite its own creation-order rule saying it
 should (before any signed alpha artifact — one has already shipped). This
 package is the pragmatic real location until that gap is separately

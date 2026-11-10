@@ -1,13 +1,13 @@
 # linkability
 
 Fourteen patches that close channels through which two apps of one user link themselves to one device or fingerprint it
-(ADR-174, amended by ADR-175 and ADR-179). The design is `docs/superpowers/specs/2026-10-18-linkability-kills-design.md` in `freeholdos-foundation`. Landed on the build server
+(ADR-174, amended by ADR-175 and ADR-179). The design is `docs/superpowers/specs/2026-10-18-linkability-kills-design.md` in `oblivios-foundation`. Landed on the build server
 and module-built (2026-10-18); the `lynx` image `2026101802` carries the first ten (`IMG-009`, `IMG-010`) and `2026102101` the four of ADR-179 (`IMG-011`, `IMG-012`). `SOURCE.md` holds the base revisions, the reason for each
 patch and the checks.
 
 | Patch | Project | Effect |
 | --- | --- | --- |
-| `patches/packages-modules-connectivity/0001` | `packages/modules/Connectivity` | The BPF loopback check also refuses traffic between two apps of one user unless either side holds `USE_LOOPBACK_INTERFACE`; `freeholdos_loopback_open` = 1 switches it off. |
+| `patches/packages-modules-connectivity/0001` | `packages/modules/Connectivity` | The BPF loopback check also refuses traffic between two apps of one user unless either side holds `USE_LOOPBACK_INTERFACE`; `oblivios_loopback_open` = 1 switches it off. |
 | `patches/frameworks-base/0001` | `frameworks/base` | `USE_LOOPBACK_INTERFACE` becomes a runtime permission. |
 | `patches/frameworks-base/0002` | `frameworks/base` | The clipboard is readable only through a paste; a denied caller learns the same for every clip. |
 | `patches/frameworks-base/0003`, `0005`, `0006` | `frameworks/base` | An ordinary app reads 40 settings keys (the framework's in-process readers); every other key reads as unset. |

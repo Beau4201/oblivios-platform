@@ -1,5 +1,5 @@
 From 9c294273d8bba86ecd825f2683b9499ec2a53eee Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 20:56:56 +0100
 Subject: [PATCH] connectivity: let the apps that the user trusts onto the
  loopback interface without the permission
@@ -7,7 +7,7 @@ Subject: [PATCH] connectivity: let the apps that the user trusts onto the
 Setting Other apps on this phone to Can reach (the profile Trusted) granted USE_LOOPBACK_INTERFACE
 by a runtime grant, which needs the app to declare the permission: an app that does not declare
 it (almost all) stayed refused (CMP-005). The policy service of Compartments now lists the app
-ids of the Trusted apps in the global setting freeholdos_loopback_app_ids, and PermissionMonitor
+ids of the Trusted apps in the global setting oblivios_loopback_app_ids, and PermissionMonitor
 adds the loopback bit to the uid of those apps in every user, when the permission service sends
 the bits and when the setting changes. A missing, unreadable or damaged setting is an empty list.
 ---
@@ -115,11 +115,11 @@ index bf68eba..3bc8b65 100755
      private final boolean mUseBroadcastReceiveHelper;
      private final boolean mIsLoopbackPermissionEnabled;
  
-+    // FreeholdOS (ADR-208): an app that the user sets to "Other apps on this phone: Can reach" (the profile Trusted) may use the
++    // ObliviOS (ADR-208): an app that the user sets to "Other apps on this phone: Can reach" (the profile Trusted) may use the
 +    // loopback interface although it does not declare USE_LOOPBACK_INTERFACE, which a runtime grant needs. The policy service of
 +    // Compartments lists the app ids of those apps in this global setting (LoopbackAppIds), and the bit is added to the uid of
 +    // each of them in every user.
-+    private static final String LOOPBACK_APP_IDS_SETTING = "freeholdos_loopback_app_ids";
++    private static final String LOOPBACK_APP_IDS_SETTING = "oblivios_loopback_app_ids";
 +    private final Object mLoopbackLock = new Object();
 +    // Both guarded by mLoopbackLock, which is also held while the map is written, so that two writers cannot leave the older
 +    // value in it: the app ids of the setting, and the permission bits as the permission service sent them last for each uid,
@@ -135,7 +135,7 @@ index bf68eba..3bc8b65 100755
      public static final int PERMISSION_BPF_MAP_BIT_ACCESS_NETWORK_STATE = 1 << 9;
  
 +    /**
-+     * FreeholdOS (ADR-208): the permission bits of the BPF map for {@code uid}, plus the loopback bit when the user lets the app
++     * ObliviOS (ADR-208): the permission bits of the BPF map for {@code uid}, plus the loopback bit when the user lets the app
 +     * onto the loopback interface. The caller holds mLoopbackLock.
 +     */
 +    private int withLoopbackGrant(int uid, int chunkPermissions) {
@@ -159,7 +159,7 @@ index bf68eba..3bc8b65 100755
 +    }
 +
 +    /**
-+     * FreeholdOS (ADR-208): reads the list of app ids again and writes the bits of the uids whose app id entered or left it. An
++     * ObliviOS (ADR-208): reads the list of app ids again and writes the bits of the uids whose app id entered or left it. An
 +     * unreadable or damaged setting is an empty list: no app gets the bit that way.
 +     */
 +    private void onLoopbackAppIdsChanged() {
@@ -248,7 +248,7 @@ index bf68eba..3bc8b65 100755
          final Handler handler = new Handler(mThread.getLooper());
          final Context userAllContext = mContext.createContextAsUser(UserHandle.ALL, 0 /* flags */);
  
-+        // FreeholdOS (ADR-208): the apps that the user lets onto the loopback interface; read now and on every change.
++        // ObliviOS (ADR-208): the apps that the user lets onto the loopback interface; read now and on every change.
 +        mDeps.registerContentObserver(
 +                userAllContext,
 +                Settings.Global.getUriFor(LOOPBACK_APP_IDS_SETTING),

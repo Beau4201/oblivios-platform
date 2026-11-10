@@ -1,5 +1,5 @@
 From 167f8db85f9fdbc3a6e7a14ddcef7228beffc7f8 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 2 Nov 2026 13:40:04 +0100
 Subject: [PATCH] bluetooth: treat an app with a persona but no place as an app
  with a persona

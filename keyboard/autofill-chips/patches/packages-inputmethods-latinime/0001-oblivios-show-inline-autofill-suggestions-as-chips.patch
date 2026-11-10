@@ -1,0 +1,769 @@
+From 34d911de175ba574de897b6427f006754bda2625 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Thu, 29 Oct 2026 18:56:08 +0100
+Subject: [PATCH] oblivios: show inline autofill suggestions as chips in the
+ suggestion strip
+
+The keyboard now declares inline suggestion support and shows the chips of the autofill service in a new row of the suggestion strip, which has priority over the paste actions and the word suggestions. The system draws the chip in another process from the content of the service and a style that this keyboard sends in its request; the keyboard receives a surface only, sets an exact size for every chip (260 dp alone, 158 dp when several share the strip) so that the width tells nothing about the text, and never reads, logs or captures a suggestion. A typed or deleted character ends the offer for the field until the next request. The request is built without the input view, because the platform may ask before the view exists. The strip is hidden on password fields today; it is now shown while chips are there, so that the login of a password field can be offered. No supportsInlineSuggestionsWithTouchExploration: with TalkBack on, the system list is used. ADR-191.
+---
+ java/Android.bp                               |   2 +
+ .../oblivios_autofill_chip_dark.xml         |   6 +
+ .../oblivios_autofill_chip_light.xml        |   6 +
+ java/res/layout/suggestions_strip.xml         |   8 ++
+ java/res/values/oblivios_autofill_chips.xml |  22 ++++
+ java/res/xml/method.xml                       |   3 +-
+ .../android/inputmethod/latin/LatinIME.java   |  38 ++++++
+ .../suggestions/AutofillChipController.java   | 124 ++++++++++++++++++
+ .../latin/suggestions/AutofillChipPolicy.java |  62 +++++++++
+ .../latin/suggestions/AutofillChipRow.java    |  81 ++++++++++++
+ .../latin/suggestions/AutofillChipStyle.java  |  71 ++++++++++
+ .../SuggestionStripPasteController.java       |  32 ++++-
+ .../suggestions/SuggestionStripView.java      |  36 ++++-
+ 13 files changed, 484 insertions(+), 7 deletions(-)
+ create mode 100644 java/res/drawable/oblivios_autofill_chip_dark.xml
+ create mode 100644 java/res/drawable/oblivios_autofill_chip_light.xml
+ create mode 100644 java/res/values/oblivios_autofill_chips.xml
+ create mode 100644 java/src/com/android/inputmethod/latin/suggestions/AutofillChipController.java
+ create mode 100644 java/src/com/android/inputmethod/latin/suggestions/AutofillChipPolicy.java
+ create mode 100644 java/src/com/android/inputmethod/latin/suggestions/AutofillChipRow.java
+ create mode 100644 java/src/com/android/inputmethod/latin/suggestions/AutofillChipStyle.java
+
+diff --git a/java/Android.bp b/java/Android.bp
+index 33d67d5..1fb372b 100644
+--- a/java/Android.bp
++++ b/java/Android.bp
+@@ -45,6 +45,8 @@ android_app {
+         "jsr305",
+         "latinime-common",
+         "androidx.legacy_legacy-support-v4",
++        // oblivios: the style and the content of an inline suggestion (ADR-191).
++        "androidx.autofill_autofill",
+     ],
+ 
+     // Do not compress dictionary files to mmap dict data runtime
+diff --git a/java/res/drawable/oblivios_autofill_chip_dark.xml b/java/res/drawable/oblivios_autofill_chip_dark.xml
+new file mode 100644
+index 0000000..a533bb8
+--- /dev/null
++++ b/java/res/drawable/oblivios_autofill_chip_dark.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- ObliviOS autofill chip background (ADR-191), dark keyboard theme. Licensed under the Apache License, Version 2.0. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@color/oblivios_autofill_chip_fill_dark" />
++    <corners android:radius="@dimen/oblivios_autofill_chip_radius" />
++</shape>
+diff --git a/java/res/drawable/oblivios_autofill_chip_light.xml b/java/res/drawable/oblivios_autofill_chip_light.xml
+new file mode 100644
+index 0000000..07dfcd0
+--- /dev/null
++++ b/java/res/drawable/oblivios_autofill_chip_light.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- ObliviOS autofill chip background (ADR-191), light keyboard theme. Licensed under the Apache License, Version 2.0. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@color/oblivios_autofill_chip_fill_light" />
++    <corners android:radius="@dimen/oblivios_autofill_chip_radius" />
++</shape>
+diff --git a/java/res/layout/suggestions_strip.xml b/java/res/layout/suggestions_strip.xml
+index a9fc2fd..aeb8d88 100644
+--- a/java/res/layout/suggestions_strip.xml
++++ b/java/res/layout/suggestions_strip.xml
+@@ -52,6 +52,14 @@
+             android:textSize="16sp"
+             style="?attr/suggestionWordStyle" />
+     </LinearLayout>
++    <!-- oblivios: the autofill chips (ADR-191), in the same cells as the suggestions and the paste actions. -->
++    <com.android.inputmethod.latin.suggestions.AutofillChipRow
++        android:id="@+id/autofill_chips"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:layout_marginStart="@dimen/config_suggestions_strip_edge_key_width"
++        android:layout_marginEnd="@dimen/config_suggestions_strip_edge_key_width"
++        android:visibility="invisible" />
+     <HorizontalScrollView
+         android:id="@+id/paste_actions"
+         android:layout_width="match_parent"
+diff --git a/java/res/values/oblivios_autofill_chips.xml b/java/res/values/oblivios_autofill_chips.xml
+new file mode 100644
+index 0000000..386c41f
+--- /dev/null
++++ b/java/res/values/oblivios_autofill_chips.xml
+@@ -0,0 +1,22 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- ObliviOS autofill chips in the suggestion strip (ADR-191). Licensed under the Apache License, Version 2.0, as the rest of this package. -->
++<resources>
++    <!-- The system draws a chip in another process from the content of the autofill service and the style built in
++         AutofillChipStyle. The keyboard gives every chip an exact size, so the width of a chip says nothing about its text.
++         Geometry and colours: docs/design/password-manager-2026-10-20.html (chip 30 dp high, radius 15 dp). -->
++    <dimen name="oblivios_autofill_chip_height">30dp</dimen>
++    <dimen name="oblivios_autofill_chip_radius">15dp</dimen>
++    <dimen name="oblivios_autofill_chip_width_alone">260dp</dimen>
++    <dimen name="oblivios_autofill_chip_width_shared">158dp</dimen>
++    <dimen name="oblivios_autofill_chip_min_width">60dp</dimen>
++    <dimen name="oblivios_autofill_chip_gap">8dp</dimen>
++    <dimen name="oblivios_autofill_chip_padding_start">10dp</dimen>
++    <dimen name="oblivios_autofill_chip_padding_end">14dp</dimen>
++    <dimen name="oblivios_autofill_chip_icon_size">18dp</dimen>
++    <dimen name="oblivios_autofill_chip_icon_gap">6dp</dimen>
++    <dimen name="oblivios_autofill_chip_text_size">14sp</dimen>
++    <color name="oblivios_autofill_chip_fill_light">#2637474F</color>
++    <color name="oblivios_autofill_chip_text_light">#FF37474F</color>
++    <color name="oblivios_autofill_chip_fill_dark">#1AFFFFFF</color>
++    <color name="oblivios_autofill_chip_text_dark">#CCFFFFFF</color>
++</resources>
+diff --git a/java/res/xml/method.xml b/java/res/xml/method.xml
+index c663e29..df47a48 100644
+--- a/java/res/xml/method.xml
++++ b/java/res/xml/method.xml
+@@ -115,7 +115,8 @@
+ <input-method xmlns:android="http://schemas.android.com/apk/res/android"
+         android:settingsActivity="com.android.inputmethod.latin.settings.SettingsActivity"
+         android:isDefault="@bool/im_is_default"
+-        android:supportsSwitchingToNextInputMethod="true">
++        android:supportsSwitchingToNextInputMethod="true"
++        android:supportsInlineSuggestions="true">
+     <subtype android:icon="@drawable/ic_ime_switcher_dark"
+             android:label="@string/subtype_en_US"
+             android:subtypeId="0xc9194f98"
+diff --git a/java/src/com/android/inputmethod/latin/LatinIME.java b/java/src/com/android/inputmethod/latin/LatinIME.java
+index 681da39..678d812 100644
+--- a/java/src/com/android/inputmethod/latin/LatinIME.java
++++ b/java/src/com/android/inputmethod/latin/LatinIME.java
+@@ -36,6 +36,7 @@ import android.graphics.drawable.Drawable;
+ import android.inputmethodservice.InputMethodService;
+ import android.media.AudioManager;
+ import android.os.Build;
++import android.os.Bundle;
+ import android.os.Debug;
+ import android.os.IBinder;
+ import android.os.Message;
+@@ -54,6 +55,8 @@ import android.view.Window;
+ import android.view.WindowManager;
+ import android.view.inputmethod.CompletionInfo;
+ import android.view.inputmethod.EditorInfo;
++import android.view.inputmethod.InlineSuggestionsRequest;
++import android.view.inputmethod.InlineSuggestionsResponse;
+ import android.view.inputmethod.InputMethodSubtype;
+ 
+ import androidx.annotation.NonNull;
+@@ -74,6 +77,7 @@ import com.android.inputmethod.keyboard.Keyboard;
+ import com.android.inputmethod.keyboard.KeyboardActionListener;
+ import com.android.inputmethod.keyboard.KeyboardId;
+ import com.android.inputmethod.keyboard.KeyboardSwitcher;
++import com.android.inputmethod.keyboard.KeyboardTheme;
+ import com.android.inputmethod.keyboard.MainKeyboardView;
+ import com.android.inputmethod.latin.Suggest.OnGetSuggestedWordsCallback;
+ import com.android.inputmethod.latin.SuggestedWords.SuggestedWordInfo;
+@@ -88,6 +92,7 @@ import com.android.inputmethod.latin.personalization.PersonalizationHelper;
+ import com.android.inputmethod.latin.settings.Settings;
+ import com.android.inputmethod.latin.settings.SettingsActivity;
+ import com.android.inputmethod.latin.settings.SettingsValues;
++import com.android.inputmethod.latin.suggestions.AutofillChipStyle;
+ import com.android.inputmethod.latin.suggestions.SuggestionStripView;
+ import com.android.inputmethod.latin.suggestions.SuggestionStripViewAccessor;
+ import com.android.inputmethod.latin.touchinputconsumer.GestureConsumer;
+@@ -1171,6 +1176,7 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+         // Should do the following in onFinishInputInternal but until JB MR2 it's not called :(
+         mInputLogic.finishInput();
+         if (hasSuggestionStripView()) {
++            mSuggestionStripView.clearAutofillChips();
+             mSuggestionStripView.resetPasteActionState();
+         }
+     }
+@@ -1549,6 +1555,11 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+     // This method is public for testability of LatinIME, but also in the future it should
+     // completely replace #onCodeInput.
+     public void onEvent(@Nonnull final Event event) {
++        // oblivios: a typed or deleted character ends the autofill offer for this field.
++        if (hasSuggestionStripView()
++                && (!event.isFunctionalKeyEvent() || event.mKeyCode == Constants.CODE_DELETE)) {
++            mSuggestionStripView.onUserTyped();
++        }
+         if (Constants.CODE_SHORTCUT == event.mKeyCode) {
+             mRichImm.switchToShortcutIme(this);
+         }
+@@ -1582,6 +1593,9 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+     @Override
+     public void onTextInput(final String rawText) {
+         // TODO: have the keyboard pass the correct key code when we need it.
++        if (hasSuggestionStripView()) {
++            mSuggestionStripView.onUserTyped();
++        }
+         final Event event = Event.createSoftwareTextEvent(rawText, Constants.CODE_OUTPUT_TEXT);
+         final InputTransaction completeInputTransaction =
+                 mInputLogic.onTextInput(mSettings.getCurrent(), event,
+@@ -1605,6 +1619,9 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+     @Override
+     public void onStartBatchInput() {
+         mBatchInputUiActive = true;
++        if (hasSuggestionStripView()) {
++            mSuggestionStripView.onUserTyped();
++        }
+         mInputLogic.onStartBatchInput(mSettings.getCurrent(), mKeyboardSwitcher, mHandler);
+         if (hasSuggestionStripView()) {
+             updatePasteActionStateAndStripVisibility(
+@@ -1726,6 +1743,7 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+     private boolean updateSuggestionStripVisibility(final SettingsValues settingsValues,
+             final boolean shouldShowImportantNotice, final boolean hasPasteAction) {
+         final boolean shouldShow = hasPasteAction
++                || mSuggestionStripView.hasAutofillChips()
+                 || (!settingsValues.mInputAttributes.mIsPasswordField
+                         && (shouldShowImportantNotice
+                                 || settingsValues.mShowsVoiceInputKey
+@@ -1780,6 +1798,26 @@ public class LatinIME extends InputMethodService implements KeyboardActionListen
+         }
+     }
+ 
++    // oblivios: inline autofill suggestions as chips in the strip (ADR-191). The request is built without the input
++    // view, because the platform may ask before the view exists; the response is shown in the strip.
++    @Override
++    public InlineSuggestionsRequest onCreateInlineSuggestionsRequest(final Bundle uiExtras) {
++        if (hasSuggestionStripView()) {
++            mSuggestionStripView.onNewAutofillRequest();
++        }
++        return AutofillChipStyle.buildRequest(this,
++                KeyboardTheme.getKeyboardTheme(this).mThemeId == KeyboardTheme.THEME_ID_LXX_DARK);
++    }
++
++    @Override
++    public boolean onInlineSuggestionsResponse(final InlineSuggestionsResponse response) {
++        if (!hasSuggestionStripView() || !onEvaluateInputViewShown()) {
++            return false;
++        }
++        mSuggestionStripView.onInlineSuggestionsResponse(response);
++        return true;
++    }
++
+     @Override
+     public void onPasteActionAvailabilityChanged() {
+         if (!hasSuggestionStripView() || !onEvaluateInputViewShown()) {
+diff --git a/java/src/com/android/inputmethod/latin/suggestions/AutofillChipController.java b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipController.java
+new file mode 100644
+index 0000000..06779a4
+--- /dev/null
++++ b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipController.java
+@@ -0,0 +1,124 @@
++package com.android.inputmethod.latin.suggestions;
++
++import android.content.Context;
++import android.content.res.Resources;
++import android.util.Size;
++import android.view.ViewGroup;
++import android.view.inputmethod.InlineSuggestion;
++import android.view.inputmethod.InlineSuggestionsResponse;
++import android.widget.inline.InlineContentView;
++
++import com.android.inputmethod.latin.R;
++
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.List;
++import java.util.concurrent.Executor;
++import java.util.function.Consumer;
++
++/**
++ * oblivios: puts the inline suggestions of the autofill service into the suggestion strip as chips. The content of a
++ * chip is drawn by the system in another process; this class holds only the surface views it gets back. It never
++ * reads the info of a suggestion (hints, type, source, pinned), never logs a suggestion, and gives every chip an exact
++ * size so that the width of a chip tells nothing about its text.
++ */
++final class AutofillChipController {
++    interface Listener {
++        void onAutofillChipsChanged(boolean shown);
++    }
++
++    private final Context mContext;
++    private final AutofillChipRow mRow;
++    private final Listener mListener;
++    private final Executor mExecutor;
++    private final AutofillChipPolicy mPolicy = new AutofillChipPolicy();
++    private boolean mShown;
++
++    AutofillChipController(final Context context, final AutofillChipRow row, final Listener listener) {
++        mContext = context;
++        mRow = row;
++        mListener = listener;
++        mExecutor = context.getMainExecutor();
++    }
++
++    boolean hasChips() {
++        return mShown;
++    }
++
++    /** A request was made for a field that got focus: the offer starts again and the old chips go. */
++    void onNewRequest() {
++        mPolicy.onNewRequest();
++        show(Collections.<InlineContentView>emptyList());
++    }
++
++    /** A character was typed or deleted: the chips go and stay away until the next request. */
++    void onTyped() {
++        mPolicy.onTyped();
++        show(Collections.<InlineContentView>emptyList());
++    }
++
++    /** The keyboard went away or the editor changed. */
++    void clear() {
++        mPolicy.onCleared();
++        show(Collections.<InlineContentView>emptyList());
++    }
++
++    void onResponse(final InlineSuggestionsResponse response) {
++        final List<InlineSuggestion> suggestions = response.getInlineSuggestions();
++        final int shown = AutofillChipPolicy.visibleCount(suggestions.size());
++        final int token = mPolicy.begin(shown);
++        if (token == AutofillChipPolicy.NONE) {
++            show(Collections.<InlineContentView>emptyList());
++            return;
++        }
++        final InlineContentView[] views = new InlineContentView[shown];
++        final int[] pending = {shown};
++        for (int i = 0; i < shown; i++) {
++            final int index = i;
++            inflate(suggestions.get(i), shown, view -> {
++                if (!mPolicy.isCurrent(token)) {
++                    return;
++                }
++                views[index] = view;
++                if (--pending[0] == 0) {
++                    final List<InlineContentView> ready = new ArrayList<>(shown);
++                    for (final InlineContentView v : views) {
++                        if (v != null) {
++                            ready.add(v);
++                        }
++                    }
++                    show(ready);
++                }
++            });
++        }
++    }
++
++    private void inflate(final InlineSuggestion suggestion, final int shown,
++            final Consumer<InlineContentView> done) {
++        final Resources res = mContext.getResources();
++        final Size exact = new Size(
++                res.getDimensionPixelSize(AutofillChipPolicy.alone(shown)
++                        ? R.dimen.oblivios_autofill_chip_width_alone
++                        : R.dimen.oblivios_autofill_chip_width_shared),
++                res.getDimensionPixelSize(R.dimen.oblivios_autofill_chip_height));
++        try {
++            suggestion.inflate(mContext, exact, mExecutor, done);
++        } catch (final IllegalArgumentException e) {
++            // oblivios: the bounds of this provider do not allow the fixed size; its content decides then.
++            suggestion.inflate(mContext, new Size(ViewGroup.LayoutParams.WRAP_CONTENT,
++                    ViewGroup.LayoutParams.WRAP_CONTENT), mExecutor, done);
++        } catch (final IllegalStateException e) {
++            // This suggestion was inflated before; there is nothing to show for it.
++            mExecutor.execute(() -> done.accept(null));
++        }
++    }
++
++    private void show(final List<InlineContentView> chips) {
++        mRow.setChips(chips);
++        final boolean shown = !chips.isEmpty();
++        if (shown != mShown) {
++            mShown = shown;
++            mListener.onAutofillChipsChanged(shown);
++        }
++    }
++}
+diff --git a/java/src/com/android/inputmethod/latin/suggestions/AutofillChipPolicy.java b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipPolicy.java
+new file mode 100644
+index 0000000..16ae6d3
+--- /dev/null
++++ b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipPolicy.java
+@@ -0,0 +1,62 @@
++package com.android.inputmethod.latin.suggestions;
++
++/**
++ * oblivios: the rules for the autofill chips in the suggestion strip, without any Android class so that the host
++ * checks can run them. The state is two things: whether the user has typed in the field of the current request, and
++ * a generation number that identifies the response whose chips may still be put on the screen.
++ */
++final class AutofillChipPolicy {
++    /** Chips a response may show. The platform documents five as the most that is useful. */
++    static final int MAX_CHIPS = 5;
++    /** The token of a response that shows nothing. */
++    static final int NONE = -1;
++
++    private boolean mTyped;
++    private int mGeneration;
++
++    /** A new request means a field got focus: the offer starts again and what was in flight is dropped. */
++    void onNewRequest() {
++        mTyped = false;
++        mGeneration++;
++    }
++
++    /** A character was typed or deleted: the offer ends for this field until the next request. */
++    void onTyped() {
++        mTyped = true;
++        mGeneration++;
++    }
++
++    /** The chips were cleared (the keyboard went away, or the response is empty): what was in flight is dropped. */
++    void onCleared() {
++        mGeneration++;
++    }
++
++    /** True after the user typed in this field. */
++    boolean typed() {
++        return mTyped;
++    }
++
++    /** How many chips a response of {@code count} suggestions shows. */
++    static int visibleCount(final int count) {
++        return Math.min(Math.max(count, 0), MAX_CHIPS);
++    }
++
++    /** One chip alone is wider than several that share the strip. */
++    static boolean alone(final int shown) {
++        return shown == 1;
++    }
++
++    /**
++     * Starts the inflation of a response with {@code shown} chips and returns its token, or {@link #NONE} when nothing
++     * is to be shown (no chip, or the user typed). Either way, what was in flight is dropped.
++     */
++    int begin(final int shown) {
++        mGeneration++;
++        return (mTyped || shown <= 0) ? NONE : mGeneration;
++    }
++
++    /** True while {@code token} is the latest response and nothing has cleared or replaced it since. */
++    boolean isCurrent(final int token) {
++        return token == mGeneration;
++    }
++}
+diff --git a/java/src/com/android/inputmethod/latin/suggestions/AutofillChipRow.java b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipRow.java
+new file mode 100644
+index 0000000..885ef56
+--- /dev/null
++++ b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipRow.java
+@@ -0,0 +1,81 @@
++package com.android.inputmethod.latin.suggestions;
++
++import android.content.Context;
++import android.graphics.Rect;
++import android.util.AttributeSet;
++import android.view.Gravity;
++import android.view.View;
++import android.widget.HorizontalScrollView;
++import android.widget.LinearLayout;
++import android.widget.inline.InlineContentView;
++
++import com.android.inputmethod.latin.R;
++
++import java.util.List;
++
++/**
++ * oblivios: the row of autofill chips in the suggestion strip. A chip is a surface that another process draws, and
++ * such a surface is not clipped by its parent, so every chip is clipped to the visible part of this row by hand
++ * (the same approach as InlineContentClipView of the AutofillKeyboard sample of the tree).
++ */
++public final class AutofillChipRow extends HorizontalScrollView {
++    private final LinearLayout mRow;
++    private final Rect mClip = new Rect();
++    private final int mGap;
++
++    public AutofillChipRow(final Context context, final AttributeSet attrs) {
++        super(context, attrs);
++        mGap = context.getResources().getDimensionPixelSize(R.dimen.oblivios_autofill_chip_gap);
++        mRow = new LinearLayout(context);
++        mRow.setOrientation(LinearLayout.HORIZONTAL);
++        mRow.setGravity(Gravity.CENTER);
++        addView(mRow, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT));
++        setFillViewport(true);
++        setOverScrollMode(OVER_SCROLL_NEVER);
++        setHorizontalScrollBarEnabled(false);
++        setFocusable(false);
++    }
++
++    int getChipCount() {
++        return mRow.getChildCount();
++    }
++
++    /** Replaces the chips; an empty list removes them. */
++    void setChips(final List<InlineContentView> chips) {
++        if (chips.isEmpty() && mRow.getChildCount() == 0) {
++            return;
++        }
++        mRow.removeAllViews();
++        scrollTo(0, 0);
++        for (int i = 0; i < chips.size(); i++) {
++            final InlineContentView chip = chips.get(i);
++            final LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(chip.getLayoutParams());
++            if (i > 0) {
++                lp.setMarginStart(mGap);
++            }
++            mRow.addView(chip, lp);
++        }
++    }
++
++    @Override
++    protected void onLayout(final boolean changed, final int l, final int t, final int r, final int b) {
++        super.onLayout(changed, l, t, r, b);
++        clipChips();
++    }
++
++    @Override
++    protected void onScrollChanged(final int l, final int t, final int oldl, final int oldt) {
++        super.onScrollChanged(l, t, oldl, oldt);
++        clipChips();
++    }
++
++    private void clipChips() {
++        final int scrollX = getScrollX();
++        for (int i = 0; i < mRow.getChildCount(); i++) {
++            final View chip = mRow.getChildAt(i);
++            mClip.set(scrollX - chip.getLeft(), -chip.getTop(),
++                    scrollX + getWidth() - chip.getLeft(), getHeight() - chip.getTop());
++            chip.setClipBounds(mClip);
++        }
++    }
++}
+diff --git a/java/src/com/android/inputmethod/latin/suggestions/AutofillChipStyle.java b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipStyle.java
+new file mode 100644
+index 0000000..6a9687c
+--- /dev/null
++++ b/java/src/com/android/inputmethod/latin/suggestions/AutofillChipStyle.java
+@@ -0,0 +1,71 @@
++package com.android.inputmethod.latin.suggestions;
++
++import android.content.Context;
++import android.content.res.ColorStateList;
++import android.content.res.Resources;
++import android.graphics.Typeface;
++import android.graphics.drawable.Icon;
++import android.os.Bundle;
++import android.util.Size;
++import android.util.TypedValue;
++import android.view.inputmethod.InlineSuggestionsRequest;
++import android.widget.inline.InlinePresentationSpec;
++
++import androidx.autofill.inline.UiVersions;
++import androidx.autofill.inline.common.ImageViewStyle;
++import androidx.autofill.inline.common.TextViewStyle;
++import androidx.autofill.inline.common.ViewStyle;
++import androidx.autofill.inline.v1.InlineSuggestionUi;
++
++import com.android.inputmethod.latin.R;
++
++import java.util.Collections;
++
++/**
++ * oblivios: the request that asks the autofill service for chips and carries the look of a chip. The system draws
++ * the content of a chip in another process from the style built here, so this keyboard never sees the text. API 30
++ * and newer; the image that carries this keyboard is newer than that.
++ */
++public final class AutofillChipStyle {
++    private AutofillChipStyle() {}
++
++    public static InlineSuggestionsRequest buildRequest(final Context context, final boolean dark) {
++        final Resources res = context.getResources();
++        final int height = res.getDimensionPixelSize(R.dimen.oblivios_autofill_chip_height);
++        final int textColor = context.getColor(dark ? R.color.oblivios_autofill_chip_text_dark
++                : R.color.oblivios_autofill_chip_text_light);
++        final Icon background = Icon.createWithResource(context, dark
++                ? R.drawable.oblivios_autofill_chip_dark : R.drawable.oblivios_autofill_chip_light);
++        final int icon = res.getDimensionPixelSize(R.dimen.oblivios_autofill_chip_icon_size);
++        final InlineSuggestionUi.Style style = InlineSuggestionUi.newStyleBuilder()
++                .setLayoutDirection(res.getConfiguration().getLayoutDirection())
++                .setChipStyle(new ViewStyle.Builder()
++                        .setBackground(background)
++                        .setPadding(res.getDimensionPixelSize(R.dimen.oblivios_autofill_chip_padding_start), 0,
++                                res.getDimensionPixelSize(R.dimen.oblivios_autofill_chip_padding_end), 0)
++                        .build())
++                .setStartIconStyle(new ImageViewStyle.Builder()
++                        .setTintList(ColorStateList.valueOf(textColor))
++                        .setMaxWidth(icon)
++                        .setMaxHeight(icon)
++                        .setLayoutMargin(0, 0,
++                                res.getDimensionPixelSize(R.dimen.oblivios_autofill_chip_icon_gap), 0)
++                        .build())
++                .setTitleStyle(new TextViewStyle.Builder()
++                        .setTextColor(textColor)
++                        .setTextSize(TypedValue.COMPLEX_UNIT_PX,
++                                res.getDimension(R.dimen.oblivios_autofill_chip_text_size))
++                        .setTypeface("sans-serif-medium", Typeface.NORMAL)
++                        .build())
++                .build();
++        final Bundle styles = UiVersions.newStylesBuilder().addStyle(style).build();
++        final InlinePresentationSpec spec = new InlinePresentationSpec.Builder(
++                new Size(res.getDimensionPixelSize(R.dimen.oblivios_autofill_chip_min_width), height),
++                new Size(res.getDimensionPixelSize(R.dimen.oblivios_autofill_chip_width_alone), height))
++                .setStyle(styles)
++                .build();
++        return new InlineSuggestionsRequest.Builder(Collections.singletonList(spec))
++                .setMaxSuggestionCount(AutofillChipPolicy.MAX_CHIPS)
++                .build();
++    }
++}
+diff --git a/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripPasteController.java b/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripPasteController.java
+index 6aaa8fc..72e6d2a 100644
+--- a/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripPasteController.java
++++ b/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripPasteController.java
+@@ -27,12 +27,15 @@ final class SuggestionStripPasteController
+     private final View mRootView;
+     private final View mSuggestionsStrip;
+     private final View mImportantNoticeStrip;
++    // oblivios: the autofill chips (ADR-191); they come before the paste actions and the suggestions.
++    private final View mAutofillChips;
+     private final HorizontalScrollView mPasteActions;
+     private final ImageButton mPasteModeKey;
+     private final View mPasteButton;
+     private final Runnable mDismissMoreSuggestions;
+     private final ClipboardAvailabilityMonitor mClipboardMonitor;
+     private final PasteActionState mState = new PasteActionState();
++    private boolean mAutofillChipsShown;
+ 
+     private Listener mListener;
+ 
+@@ -55,7 +58,7 @@ final class SuggestionStripPasteController
+     };
+ 
+     SuggestionStripPasteController(final Context context, final View rootView,
+-            final ViewGroup suggestionsStrip, final View importantNoticeStrip,
++            final ViewGroup suggestionsStrip, final View importantNoticeStrip, final View autofillChips,
+             final HorizontalScrollView pasteActions, final ImageButton pasteModeKey,
+             final View pasteButton, final ImageView pasteButtonIcon,
+             final TextView pasteButtonText, final OnClickListener clickListener,
+@@ -63,6 +66,7 @@ final class SuggestionStripPasteController
+         mRootView = rootView;
+         mSuggestionsStrip = suggestionsStrip;
+         mImportantNoticeStrip = importantNoticeStrip;
++        mAutofillChips = autofillChips;
+         mPasteActions = pasteActions;
+         mPasteModeKey = pasteModeKey;
+         mPasteButton = pasteButton;
+@@ -92,14 +96,29 @@ final class SuggestionStripPasteController
+     }
+ 
+     void showSuggestionsStrip() {
+-        mSuggestionsStrip.setVisibility(View.VISIBLE);
++        // oblivios: chips take the cell of the suggestions while there are any.
++        mSuggestionsStrip.setVisibility(mAutofillChipsShown ? View.INVISIBLE : View.VISIBLE);
++        mAutofillChips.setVisibility(mAutofillChipsShown ? View.VISIBLE : View.INVISIBLE);
+         mImportantNoticeStrip.setVisibility(View.INVISIBLE);
+         mPasteActions.setVisibility(View.INVISIBLE);
+     }
+ 
++    /** oblivios: chips appeared or went; the caller then asks the listener to evaluate the strip again. */
++    void setAutofillChipsShown(final boolean shown) {
++        if (mAutofillChipsShown == shown) {
++            return;
++        }
++        mAutofillChipsShown = shown;
++        if (mImportantNoticeStrip.getVisibility() != View.VISIBLE
++                && mPasteActions.getVisibility() != View.VISIBLE) {
++            showSuggestionsStrip();
++        }
++    }
++
+     void showImportantNoticeStrip() {
+         mState.closeTemporaryMode();
+         mSuggestionsStrip.setVisibility(View.INVISIBLE);
++        mAutofillChips.setVisibility(View.INVISIBLE);
+         mImportantNoticeStrip.setVisibility(View.VISIBLE);
+         mPasteActions.setVisibility(View.INVISIBLE);
+         mPasteModeKey.setVisibility(View.INVISIBLE);
+@@ -114,10 +133,12 @@ final class SuggestionStripPasteController
+         refreshClipboardAvailabilityState();
+         // InputConnection queries can block the UI thread. Ask about editor text only when an
+         // available clip and visible suggestions make the answer affect presentation.
++        // oblivios: chips take priority over an automatic paste button whatever the text field holds.
+         final boolean suggestionsTakePriority = mState.shouldOfferPasteAutomatically()
+-                && suggestionsCanTakePriority
+-                && mListener != null
+-                && !mListener.isTextFieldEmpty();
++                && (mAutofillChipsShown
++                        || (suggestionsCanTakePriority
++                                && mListener != null
++                                && !mListener.isTextFieldEmpty()));
+         mState.updateContext(eligible, suggestionsTakePriority);
+         updatePresentation();
+         return mState.hasPasteAction();
+@@ -194,6 +215,7 @@ final class SuggestionStripPasteController
+             mDismissMoreSuggestions.run();
+             final boolean shouldRealign = mPasteActions.getVisibility() != View.VISIBLE;
+             mSuggestionsStrip.setVisibility(View.INVISIBLE);
++            mAutofillChips.setVisibility(View.INVISIBLE);
+             mImportantNoticeStrip.setVisibility(View.INVISIBLE);
+             mPasteActions.setVisibility(View.VISIBLE);
+             if (shouldRealign) {
+diff --git a/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripView.java b/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripView.java
+index bc12e40..efd5f03 100644
+--- a/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripView.java
++++ b/java/src/com/android/inputmethod/latin/suggestions/SuggestionStripView.java
+@@ -33,6 +33,7 @@ import android.view.View.OnLongClickListener;
+ import android.view.ViewGroup;
+ import android.view.ViewParent;
+ import android.view.accessibility.AccessibilityEvent;
++import android.view.inputmethod.InlineSuggestionsResponse;
+ import android.widget.HorizontalScrollView;
+ import android.widget.ImageButton;
+ import android.widget.ImageView;
+@@ -88,6 +89,7 @@ public final class SuggestionStripView extends RelativeLayout implements
+     private int mStartIndexOfMoreSuggestions;
+     private final SuggestionStripLayoutHelper mLayoutHelper;
+     private final SuggestionStripPasteController mPasteController;
++    private final AutofillChipController mAutofillChips;
+ 
+     /**
+      * Construct a {@link SuggestionStripView} for showing suggestions to be picked by the user.
+@@ -131,7 +133,7 @@ public final class SuggestionStripView extends RelativeLayout implements
+                 .findViewById(R.id.more_suggestions_view);
+         mMoreSuggestionsBuilder = new MoreSuggestions.Builder(context, mMoreSuggestionsView);
+         mPasteController = new SuggestionStripPasteController(context, this, mSuggestionsStrip,
+-                mImportantNoticeStrip,
++                mImportantNoticeStrip, findViewById(R.id.autofill_chips),
+                 (HorizontalScrollView)findViewById(R.id.paste_actions),
+                 (ImageButton)findViewById(R.id.suggestions_strip_paste_key),
+                 findViewById(R.id.paste_button),
+@@ -144,6 +146,17 @@ public final class SuggestionStripView extends RelativeLayout implements
+                     }
+                 });
+ 
++        mAutofillChips = new AutofillChipController(context,
++                (AutofillChipRow)findViewById(R.id.autofill_chips),
++                new AutofillChipController.Listener() {
++                    @Override
++                    public void onAutofillChipsChanged(final boolean shown) {
++                        mPasteController.setAutofillChipsShown(shown);
++                        if (mListener != null) {
++                            mListener.onPasteActionAvailabilityChanged();
++                        }
++                    }
++                });
+         final Resources res = context.getResources();
+         mMoreSuggestionsModalTolerance = res.getDimensionPixelOffset(
+                 R.dimen.config_more_suggestions_modal_tolerance);
+@@ -220,6 +233,27 @@ public final class SuggestionStripView extends RelativeLayout implements
+         return mPasteController.updateState(eligible, suggestionsTakePriority);
+     }
+ 
++    // oblivios: the autofill chips (ADR-191). The content of a chip is drawn by the system in another process.
++    public void onNewAutofillRequest() {
++        mAutofillChips.onNewRequest();
++    }
++
++    public void onInlineSuggestionsResponse(final InlineSuggestionsResponse response) {
++        mAutofillChips.onResponse(response);
++    }
++
++    public void onUserTyped() {
++        mAutofillChips.onTyped();
++    }
++
++    public void clearAutofillChips() {
++        mAutofillChips.clear();
++    }
++
++    public boolean hasAutofillChips() {
++        return mAutofillChips.hasChips();
++    }
++
+     public void closeTemporaryPasteMode() {
+         mPasteController.closeTemporaryMode();
+     }

@@ -19,10 +19,10 @@ index a44c6df..ee2d5a3 100644
 --- a/private/domain.te
 +++ b/private/domain.te
 @@ -520,6 +520,11 @@ get_prop(domain, bootloader_prop)
- # FreeholdOS (ADR-167): every domain except the apps and the app zygotes, which run app code
+ # ObliviOS (ADR-167): every domain except the apps and the app zygotes, which run app code
  # and are not appdomain; an app can tell devices apart by these.
  get_prop({ domain -appdomain -app_zygote -native_app_zygote }, unit_boot_prop)
-+# FreeholdOS (ADR-173): the device colour and the country of origin. SystemUI (platform_app) themes
++# ObliviOS (ADR-173): the device colour and the country of origin. SystemUI (platform_app) themes
 +# on the colour, the launcher (priv_app) and the wallpaper code pick the default wallpaper by it,
 +# Settings (system_app) shows the regulatory label by the country. No other app reads them.
 +get_prop({ domain -appdomain -app_zygote -native_app_zygote }, batch_trait_prop)
@@ -36,9 +36,9 @@ index a389663..279ee58 100644
 +++ b/private/property.te
 @@ -115,6 +115,9 @@ system_restricted_prop(statsd_atoms_list_version_prop)
  system_restricted_prop(trusty_coverage_prop)
- # FreeholdOS (ADR-167): ro.boot.* values that identify a unit or a production batch.
+ # ObliviOS (ADR-167): ro.boot.* values that identify a unit or a production batch.
  system_restricted_prop(unit_boot_prop)
-+# FreeholdOS (ADR-173): ro.boot.* values that take few values (device colour, country of origin)
++# ObliviOS (ADR-173): ro.boot.* values that take few values (device colour, country of origin)
 +# but that three platform apps read; see domain.te.
 +system_restricted_prop(batch_trait_prop)
  system_restricted_prop(pcc_audit_mode_client_prop)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
 /**
  * The whole test framework of the host checks: plain assertions in a `main`. A failed check throws, so `java` exits

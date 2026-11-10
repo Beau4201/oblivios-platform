@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- ADR-184, NET-001b. Userdebug-only and throwaway: one service, no activity, no INTERNET permission. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.freeholdos.exitprobe">
+    package="org.oblivios.exitprobe">
 
     <uses-permission android:name="android.permission.NETWORK_FACTORY" />
     <uses-permission android:name="android.permission.CONTROL_OEM_PAID_NETWORK_PREFERENCE" />

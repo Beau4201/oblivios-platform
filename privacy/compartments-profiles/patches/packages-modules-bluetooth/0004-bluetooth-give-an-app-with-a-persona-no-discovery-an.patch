@@ -1,5 +1,5 @@
 From 6b7c5f3c7f11512409feeb42d7ab208023a3b1f1 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sat, 31 Oct 2026 02:04:07 +0100
 Subject: [PATCH] bluetooth: give an app with a persona no discovery and no
  periodic sync
@@ -26,7 +26,7 @@ index dffa5e5..ef7caa9 100644
  
      private final Map<CallingPackage, DiscoveringPackageInfo> mDiscoveringPackages = new HashMap<>();
  
-+    /** FreeholdOS (ADR-208): an app with a persona discovers no device of the real place. */
++    /** ObliviOS (ADR-208): an app with a persona discovers no device of the real place. */
 +    private final PersonaReader mPersona = new PersonaReader();
 +
      // Used to broadcast discovered devices to new packages starting discovery.
@@ -58,7 +58,7 @@ index 03ef2ab..64f654e 100644
  
      @Volatile private var isAvailable = true
  
-+    // FreeholdOS (ADR-208): an app with a persona syncs to no periodic advertiser of the real place.
++    // ObliviOS (ADR-208): an app with a persona syncs to no periodic advertiser of the real place.
 +    private val persona = PersonaReader()
 +
      fun cleanup() {

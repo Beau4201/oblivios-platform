@@ -450,7 +450,7 @@ index 242cf41..439a74f 100644
      private final RadioInterfaceCapabilityController mRadioInterfaceCapabilities;
      private AppOpsManager mAppOps;
 +
-+    /** FreeholdOS (ADR-208): the place and the cells of an app with a persona. */
++    /** ObliviOS (ADR-208): the place and the cells of an app with a persona. */
 +    private final PersonaCells mPersonaCells = new PersonaCells();
      private PackageManager mPackageManager;
      private final int mVendorApiLevel;
@@ -459,7 +459,7 @@ index 242cf41..439a74f 100644
          enforceTelephonyFeatureWithException(callingPackage,
                  PackageManager.FEATURE_TELEPHONY_RADIO_ACCESS, "getCellLocation");
  
-+        // FreeholdOS (ADR-208): an app with a persona is told the first cell of its place
++        // ObliviOS (ADR-208): an app with a persona is told the first cell of its place
 +        int personaPlace = mPersonaCells.placeOf(Binder.getCallingUid());
 +        if (personaPlace != 0) {
 +            return mPersonaCells.location(personaPlace);
@@ -472,7 +472,7 @@ index 242cf41..439a74f 100644
                  Binder.getCallingUid(), callingPackage, callingFeatureId,
                  "getAllCellInfo reporting cell info");
  
-+        // FreeholdOS (ADR-208): an app with a persona is told the cells of its place, never the cells of the radio
++        // ObliviOS (ADR-208): an app with a persona is told the cells of its place, never the cells of the radio
 +        int personaPlace = mPersonaCells.placeOf(Binder.getCallingUid());
 +        if (personaPlace != 0) {
 +            return mPersonaCells.infos(personaPlace);
@@ -485,7 +485,7 @@ index 242cf41..439a74f 100644
          mAppOps.noteOpNoThrow(mAppOps.OP_READ_CELL_INFO, Binder.getCallingUid(),
                  callingPackage, callingFeatureId, "requestCellInfoUpdate reporting cell info");
  
-+        // FreeholdOS (ADR-208): an app with a persona is told the cells of its place, never the cells of the radio
++        // ObliviOS (ADR-208): an app with a persona is told the cells of its place, never the cells of the radio
 +        int personaPlace = mPersonaCells.placeOf(Binder.getCallingUid());
 +        if (personaPlace != 0) {
 +            try {
@@ -503,7 +503,7 @@ index 242cf41..439a74f 100644
              IBinder binder, String callingPackage, String callingFeatureId) {
          TelephonyPermissions.enforceCallingOrSelfModifyPermissionOrCarrierPrivilege(
                  mApp, subId, "requestNetworkScan");
-+        // FreeholdOS (ADR-208): the scan of an app with a persona carries no location information of the real radio
++        // ObliviOS (ADR-208): the scan of an app with a persona carries no location information of the real radio
 +        if (mPersonaCells.placeOf(Binder.getCallingUid()) != 0) {
 +            renounceFineLocationAccess = true;
 +        }
@@ -514,7 +514,7 @@ index 242cf41..439a74f 100644
              return null;
          }
  
-+        // FreeholdOS (ADR-208): the service state of an app with a persona carries no cell and no area of the real radio
++        // ObliviOS (ADR-208): the service state of an app with a persona carries no cell and no area of the real radio
 +        if (mPersonaCells.placeOf(Binder.getCallingUid()) != 0) {
 +            renounceFineLocationAccess = true;
 +            renounceCoarseLocationAccess = true;

@@ -10,10 +10,10 @@ host enables them. Pull requests are not accepted yet.
 
 ## What this repository is
 
-Isolated FreeholdOS framework and platform patches layered over pinned
+Isolated ObliviOS framework and platform patches layered over pinned
 GrapheneOS revisions. Android source trees, build output, vendor blobs, signing
 material and device logs do not belong here. The pinned upstream revisions are
-in `freeholdos-manifest`.
+in `oblivios-manifest`.
 
 ## How a package is laid out
 
@@ -31,7 +31,7 @@ Each directory with a `README.md` and a `SOURCE.md` is one package:
 ## Rules for a patch
 
 - **A decision first.** No patch is added without a decision record that names
-  it (`docs/governance/decision-log.md` in `freeholdos-docs`).
+  it (`docs/governance/decision-log.md` in `oblivios-docs`).
 - **Local first.** Author the change in a disposable local git repository that
   holds only the touched upstream files, commit it there, land it on the build
   branch with `git am`, then export the patch again with `git format-patch`
@@ -54,7 +54,7 @@ Each directory with a `README.md` and a `SOURCE.md` is one package:
 ## Licence
 
 Apache-2.0 (see `LICENSE` and `NOTICE`). Each patch keeps the licence of the
-upstream file it modifies; `NOTICE` lists them. The name FreeholdOS and its
+upstream file it modifies; `NOTICE` lists them. The name ObliviOS and its
 logo are not licensed.
 
 ## Commits

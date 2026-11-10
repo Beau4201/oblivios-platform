@@ -7,6 +7,6 @@ APP="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 # Only the two Android-free classes are compiled here; the service needs the SDK stubs (typecheck-on-server.sh).
-javac -Xlint:all -Werror -d "$OUT" "$APP"/src/org/freeholdos/exitprobe/ProbeArgs.java \
-  "$APP"/src/org/freeholdos/exitprobe/PacketSummary.java "$APP"/tests/HostChecks.java
+javac -Xlint:all -Werror -d "$OUT" "$APP"/src/org/oblivios/exitprobe/ProbeArgs.java \
+  "$APP"/src/org/oblivios/exitprobe/PacketSummary.java "$APP"/tests/HostChecks.java
 java -ea -cp "$OUT" HostChecks

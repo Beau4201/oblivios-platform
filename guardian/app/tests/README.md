@@ -7,13 +7,13 @@ pipeline. Run against a booted emulator or the physical `lynx` unit.
 
 ## `kotlin/GuardianScreenModelsTest.kt`
 
-Unit tests for `src/org/freeholdos/guardian/ui/GuardianScreenModels.kt`, the
+Unit tests for `src/org/oblivios/guardian/ui/GuardianScreenModels.kt`, the
 mapping layer between guardian-core's records and the reference screens'
 UI-state types.
 
 ## `kotlin/GuardianIncidentActionsTest.kt`
 
-Unit tests for `incidentActions()` in `src/org/freeholdos/guardian/ui/GuardianApp.kt`.
+Unit tests for `incidentActions()` in `src/org/oblivios/guardian/ui/GuardianApp.kt`.
 Two of its properties are security-relevant: a deferred detection must not be
 dropped from `GuardianApplication`'s queue, and every secondary action that
 reverses an applied change must be a `GuardianSecondaryAction.Undo`, because
@@ -48,18 +48,18 @@ from Trust to Choices in the 2026-08-14 visual-identity re-vendor.
 **There is no in-tree runner.** `guardian/app` is an `android_app` Soong
 module with no test target, and its UI depends on Jetpack Compose, so these
 cannot run under `java_test_host` either. They are written for, and were run
-against, a throwaway JVM harness built on `freeholdos-services`' own Compose
+against, a throwaway JVM harness built on `oblivios-services`' own Compose
 Desktop Gradle setup:
 
-1. Build `guardian-core.jar` from the `freeholdos-services` branch this app's
+1. Build `guardian-core.jar` from the `oblivios-services` branch this app's
    sources actually target (currently `guardian-residuals-hardening` — see
    the stale-jar note in `guardian/SOURCE.md`):
    `./gradlew :guardian-core:jar`
 2. Create a Kotlin/JVM Gradle project with the same plugin versions as
-   `freeholdos-services`' root `build.gradle.kts`, depending on that jar plus
+   `oblivios-services`' root `build.gradle.kts`, depending on that jar plus
    `compose.desktop.currentOs`, `compose.material3`, `kotlin("test")` and
    JUnit 5.
-3. Copy in `src/org/freeholdos/guardianui/**`, `GuardianScreenModels.kt`, and
+3. Copy in `src/org/oblivios/guardianui/**`, `GuardianScreenModels.kt`, and
    `guardian/core/GuardianUi{Controller,State}.kt`. Three things cannot
    compile off Android and need stand-ins for the harness only:
    - `guardianui/components/GuardianMark.kt` — use the reference module's
@@ -81,8 +81,8 @@ The composable tests are JUnit 4 (`createComposeRule`, run through the vintage
 engine); the plain ones are JUnit 5. Both engines are on the test runtime
 classpath, and a single file can hold classes of each kind.
 
-Copying `freeholdos-services`' own
-`guardian-ui-reference/src/test/kotlin/org/freeholdos/guardianui/**` tests into
+Copying `oblivios-services`' own
+`guardian-ui-reference/src/test/kotlin/org/oblivios/guardianui/**` tests into
 the same harness is worth doing at the same time: they exercise the ported
 screens directly and will catch a port deviation that changed their
 behaviour.

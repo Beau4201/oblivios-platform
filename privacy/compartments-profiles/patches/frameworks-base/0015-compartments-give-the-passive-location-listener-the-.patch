@@ -1,5 +1,5 @@
 From 231ac05f9ef3fb51d44976bfd4263d99a8b5d0d3 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 20:48:14 +0100
 Subject: [PATCH 15/16] compartments: give the passive location listener the
  minimum interval it needs

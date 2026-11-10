@@ -21,7 +21,7 @@ index 2503979890..3c1f27867d 100644
              enforceManageTestNetworksPermission();
          } else {
 -            enforceAutomotiveDevice();
-+            // FreeholdOS: the automotive-only gate is dropped. The per-app network preference is what
++            // ObliviOS: the automotive-only gate is dropped. The per-app network preference is what
 +            // routes each app to its own network on a phone (ADR-178); the permission check stays, so only
 +            // the platform component that holds CONTROL_OEM_PAID_NETWORK_PREFERENCE can set it.
              enforceOemNetworkPreferencesPermission();

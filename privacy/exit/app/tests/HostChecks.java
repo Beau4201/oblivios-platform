@@ -7,16 +7,16 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.freeholdos.exit.Choices;
-import org.freeholdos.exit.Consent;
-import org.freeholdos.exit.ControlCodec;
-import org.freeholdos.exit.CompanyNames;
-import org.freeholdos.exit.Ladder;
-import org.freeholdos.exit.Policy;
-import org.freeholdos.exit.Presenter;
-import org.freeholdos.exit.ProfileRows;
-import org.freeholdos.exit.TunNet;
-import org.freeholdos.exit.UidRanges;
+import org.oblivios.exit.Choices;
+import org.oblivios.exit.Consent;
+import org.oblivios.exit.ControlCodec;
+import org.oblivios.exit.CompanyNames;
+import org.oblivios.exit.Ladder;
+import org.oblivios.exit.Policy;
+import org.oblivios.exit.Presenter;
+import org.oblivios.exit.ProfileRows;
+import org.oblivios.exit.TunNet;
+import org.oblivios.exit.UidRanges;
 
 /** Host checks of the pure Java of the exit app (no Android class). Exits 1 on the first failure. */
 public final class HostChecks {
@@ -207,7 +207,7 @@ public final class HostChecks {
     static void policy() {
         List<Policy.App> apps = Arrays.asList(
                 app("org.a.one", 10100), app("org.a.two", 10101), app("org.a.three", 10200),
-                app("org.freeholdos.exit", 10050), app("app.seamlessupdate.client", 10060));
+                app("org.oblivios.exit", 10050), app("app.seamlessupdate.client", 10060));
         int[] users = {0};
 
         // No consent: nothing masked, no steering. Tor does not wait for the consent: it is the user's own choice.
@@ -236,7 +236,7 @@ public final class HostChecks {
         }
 
         // The exit app and the updater are never Tor or Masked, even when chosen.
-        out = Policy.compute(tor("org.freeholdos.exit", "app.seamlessupdate.client"), apps, users, Consent.ON, false, false);
+        out = Policy.compute(tor("org.oblivios.exit", "app.seamlessupdate.client"), apps, users, Consent.ON, false, false);
         check(out.guard.isEmpty() && out.oemPrefs.isEmpty(), "exempt apps are never Tor");
         for (Policy.Cls c : out.classes) {
             if (c.kind == Policy.Kind.MASKED) {
@@ -245,7 +245,7 @@ public final class HostChecks {
         }
 
         // A package that shares its uid with the exit app (a shared user id) is exempt, whatever else is chosen for it.
-        List<Policy.App> shared = Arrays.asList(app("org.freeholdos.exit", 10050), app("org.shared.tor", 10050), app("org.a.one", 10100));
+        List<Policy.App> shared = Arrays.asList(app("org.oblivios.exit", 10050), app("org.shared.tor", 10050), app("org.a.one", 10100));
         out = Policy.compute(tor("org.shared.tor", "org.a.one"), shared, users, Consent.ON, false, false);
         check(str(out.guard).equals("[10100-10100]"), "a shared uid with an exempt app is never Tor: " + str(out.guard));
 
@@ -258,7 +258,7 @@ public final class HostChecks {
         check(str(chosen.guard).equals("[10100-10100][10102-10102]"), "a chosen new package is Tor: " + str(chosen.guard));
 
         // Several users: each has its own app range, and a package on Tor is Tor in every user where it is installed.
-        List<Policy.App> two = Arrays.asList(app("org.a.one", 10100), app("org.a.one", 1010100), app("org.freeholdos.exit", 10050), app("org.freeholdos.exit", 1010050));
+        List<Policy.App> two = Arrays.asList(app("org.a.one", 10100), app("org.a.one", 1010100), app("org.oblivios.exit", 10050), app("org.oblivios.exit", 1010050));
         out = Policy.compute(tor("org.a.one"), two, new int[] {10, 0}, Consent.ON, false, false);
         check(str(out.guard).equals("[10100-10100][1010100-1010100]"), "Tor in both users: " + str(out.guard));
         check(str(out.steer).equals("[10000-10049][10051-10099][10101-19999][1010000-1010049][1010051-1010099][1010101-1019999]"), "masked in both users: " + str(out.steer));
@@ -339,7 +339,7 @@ public final class HostChecks {
     static void policyOpen() {
         List<Policy.App> apps = Arrays.asList(
                 app("org.a.one", 10100), app("org.a.two", 10101), app("org.a.three", 10200),
-                app("org.freeholdos.exit", 10050), app("app.seamlessupdate.client", 10060));
+                app("org.oblivios.exit", 10050), app("app.seamlessupdate.client", 10060));
         int[] users = {0};
         Choices c = new Choices();
         c.set("org.a.two", Choices.Choice.OPEN);
@@ -362,7 +362,7 @@ public final class HostChecks {
             next = k.end + 1;
         }
         // An open app that shares its uid with the exit app or with an app on Tor does not change that uid.
-        List<Policy.App> shared = Arrays.asList(app("org.freeholdos.exit", 10050), app("org.shared.open", 10050), app("org.b.tor", 10100), app("org.shared.open2", 10100));
+        List<Policy.App> shared = Arrays.asList(app("org.oblivios.exit", 10050), app("org.shared.open", 10050), app("org.b.tor", 10100), app("org.shared.open2", 10100));
         Choices s2 = new Choices();
         s2.set("org.shared.open", Choices.Choice.OPEN);
         s2.set("org.shared.open2", Choices.Choice.OPEN);
@@ -378,7 +378,7 @@ public final class HostChecks {
         // The limits: the open ranges are cut at the room that the system packages leave, and the table stays inside 256.
         Choices lots = new Choices();
         List<Policy.App> lotsApps = new ArrayList<>();
-        lotsApps.add(app("org.freeholdos.exit", 10050));
+        lotsApps.add(app("org.oblivios.exit", 10050));
         for (int u = 0; u < 3; u++) {
             for (int i = 0; i < 24; i++) {
                 lots.set("org.l.p" + i, Choices.Choice.OPEN);
@@ -444,7 +444,7 @@ public final class HostChecks {
         List<Policy.App> rowApps = new ArrayList<>();
         for (int u = 0; u < 3; u++) {
             int base = u * 100000;
-            rowApps.add(app("org.freeholdos.exit", base + 10050));
+            rowApps.add(app("org.oblivios.exit", base + 10050));
             for (int k = 0; k < 21; k++) {
                 int x = base + 10100 + 4 * k;
                 rows.set("org.q.t" + (2 * k), Choices.Choice.TOR);
@@ -466,7 +466,7 @@ public final class HostChecks {
         // Exactly one open range more than the room: 63 open ranges fit next to one system range, the 64th is cut and said.
         Choices cut = new Choices();
         List<Policy.App> cutApps = new ArrayList<>();
-        cutApps.add(app("org.freeholdos.exit", 10050));
+        cutApps.add(app("org.oblivios.exit", 10050));
         for (int u = 0; u < 3; u++) {
             for (int k = 0; k < 21; k++) {
                 cut.set("org.c.o" + k, Choices.Choice.OPEN);
@@ -520,7 +520,7 @@ public final class HostChecks {
     static void presenter() {
         List<Presenter.Listed> apps = Arrays.asList(
                 new Presenter.Listed("org.z.zeta", "Zeta", 10102), new Presenter.Listed("org.a.also", "alpha", 10103), new Presenter.Listed("org.a.alpha", "alpha", 10100),
-                new Presenter.Listed("org.b.beta", "Beta Reader", 10101), new Presenter.Listed("org.freeholdos.exit", "Compartments", 10050),
+                new Presenter.Listed("org.b.beta", "Beta Reader", 10101), new Presenter.Listed("org.oblivios.exit", "Compartments", 10050),
                 new Presenter.Listed("app.seamlessupdate.client", "Updater", 10060)
         );
         Choices c = new Choices();
@@ -933,7 +933,7 @@ public final class HostChecks {
         ladder();
         presenter();
         codec();
-        org.freeholdos.exit.ControllerChecks.run();
+        org.oblivios.exit.ControllerChecks.run();
         System.out.println("exit app host checks passed");
     }
 }

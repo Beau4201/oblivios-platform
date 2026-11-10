@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 FreeholdOS
+ * Copyright (C) 2026 ObliviOS
  * SPDX-License-Identifier: Apache-2.0
  */
 

@@ -1,5 +1,5 @@
 From 4c9d842106725ad2c3b84d65480374a0c39b29bc Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 1 Nov 2026 15:34:14 +0100
 Subject: [PATCH] telephony: parse the cell data without a regex
 

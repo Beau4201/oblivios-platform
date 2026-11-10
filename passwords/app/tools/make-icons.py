@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Turns the <symbol> icons of the design reference page into vector drawables.
 
-The reference page (freeholdos-foundation/docs/design/password-manager-2026-10-20.html) holds the paths of the
+The reference page (oblivios-foundation/docs/design/password-manager-2026-10-20.html) holds the paths of the
 Material Symbols Rounded icons (24 px, weight 400, Apache 2.0, github.com/google/material-design-icons) that the app
 uses. Each `<symbol id="i-NAME" viewBox="0 -960 960 960"><path d="..."/></symbol>` becomes res/drawable/ic_NAME.xml (a
 name that ends in `_f` is the filled variant and becomes ic_NAME_filled). The list of names is written to

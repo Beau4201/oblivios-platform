@@ -166,14 +166,14 @@ DEFS = f'''<defs>
 
 def mask_svg(font):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">\n'
-            f'<title>FreeholdOS boot picture: lighthouse mask</title>\n'
+            f'<title>ObliviOS boot picture: lighthouse mask</title>\n'
             f'<desc>Static full-screen picture for the built-in boot renderer. The 260 x 5 window at ({WIN["x"]},{WIN["y"]}) is transparent so the scrolling texture shows through as the loading bar.</desc>\n'
             f'{DEFS}\n<g mask="url(#win)">{scene()}{name(font)}</g>\n</svg>\n')
 
 def shine_svg():
     x, w, h, y = 0, PERIOD, SHINE_H, WIN["y"]
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{PERIOD}" height="{SHINE_H}" viewBox="0 0 {PERIOD} {SHINE_H}">\n'
-            f'<title>FreeholdOS boot picture: loading texture</title>\n'
+            f'<title>ObliviOS boot picture: loading texture</title>\n'
             f'<desc>Repeats every {PERIOD} px; the renderer scrolls it at a fixed 240 px/s (one pass every {PERIOD/240:.1f} s). Only the rows behind the mask window matter.</desc>\n'
             f'<defs><linearGradient id="seg"><stop offset="0" stop-color="{MINT}" stop-opacity="0"/><stop offset=".35" stop-color="{MINT}" stop-opacity=".9"/><stop offset=".65" stop-color="{MINT}" stop-opacity=".9"/><stop offset="1" stop-color="{MINT}" stop-opacity="0"/></linearGradient></defs>\n'
             f'<rect width="{PERIOD}" height="{SHINE_H}" fill="{EDGE}"/>\n'

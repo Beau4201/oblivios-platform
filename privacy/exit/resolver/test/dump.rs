@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// The daemon's reader and matcher, for differential.py: `masklist.rs` of freeholdos-services/exit-daemon is included
+// The daemon's reader and matcher, for differential.py: `masklist.rs` of oblivios-services/exit-daemon is included
 // as it is (it uses std only).
 //   dump LIST NAMES    one line per name: 1 when `classify` gives a company, else 0
 //   accept LIST        `ok` when `MaskList::load` accepts the file, else `err`

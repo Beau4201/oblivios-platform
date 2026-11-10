@@ -44,21 +44,21 @@ android_app {
     sdk_version: "system_current",
     privileged: true,
     required: [
-        "default-permissions-org.freeholdos.airpods.xml",
+        "default-permissions-org.oblivios.airpods.xml",
     ],
 }
 
 // The default grant of BLUETOOTH_CONNECT (the app has no screen that asks for it). Read from
 // /system/etc/default-permissions by DefaultPermissionGrantPolicy, as for PrintRecommendationService.
 prebuilt_etc {
-    name: "default-permissions-org.freeholdos.airpods.xml",
-    src: "default-permissions-org.freeholdos.airpods.xml",
+    name: "default-permissions-org.oblivios.airpods.xml",
+    src: "default-permissions-org.oblivios.airpods.xml",
     sub_dir: "default-permissions",
 }
 
 prebuilt_etc {
-    name: "privapp-permissions-org.freeholdos.airpods.xml",
-    src: "privapp-permissions-org.freeholdos.airpods.xml",
+    name: "privapp-permissions-org.oblivios.airpods.xml",
+    src: "privapp-permissions-org.oblivios.airpods.xml",
     sub_dir: "permissions",
 }
 
@@ -66,7 +66,7 @@ prebuilt_etc {
 // path is flagged by upstream for removal (b/157203468), see
 // the internal record "airpods nonsdk api exemption investigation" (not published).
 prebuilt_etc {
-    name: "hidden-api-whitelisted-app-org.freeholdos.airpods.xml",
-    src: "hidden-api-whitelisted-app-org.freeholdos.airpods.xml",
+    name: "hidden-api-whitelisted-app-org.oblivios.airpods.xml",
+    src: "hidden-api-whitelisted-app-org.oblivios.airpods.xml",
     sub_dir: "sysconfig",
 }

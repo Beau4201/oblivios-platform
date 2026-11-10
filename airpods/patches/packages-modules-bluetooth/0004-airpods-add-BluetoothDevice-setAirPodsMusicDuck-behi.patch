@@ -1,5 +1,5 @@
 From 9c12403efb1b3fd2fb71125827b92fae5eebaabb Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sat, 3 Oct 2026 21:21:51 +0200
 Subject: [PATCH 4/5] airpods: add BluetoothDevice#setAirPodsMusicDuck behind
  MANAGE_AIRPODS_IDENTITY
@@ -45,7 +45,7 @@ index aaf01b5..695a913 100644
      boolean setAirPodsAudioRoute(in BluetoothDevice device, in boolean away, in IBinder token, in AttributionSource attributionSource);
  
 +    // For the AirPods music duck (ADR-127). Also requires
-+    // org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
++    // org.oblivios.permission.MANAGE_AIRPODS_IDENTITY at runtime (enforced in
 +    // AdapterServiceBinder). The device must be bonded, registered and the active A2DP device;
 +    // percent is an integer from 10 to 90. The token is a binder of the caller: if it dies while the
 +    // volume is lowered, it is given back.
@@ -71,7 +71,7 @@ index 268b1b4..846e0c8 100644
      // cannot interleave with an active-device event.
      private final AirPodsRouteTracker mAirPodsRoute = new AirPodsRouteTracker();
  
-+    // FreeholdOS ADR-127: the music volume lowered while the owner speaks. The lock serialises
++    // ObliviOS ADR-127: the music volume lowered while the owner speaks. The lock serialises
 +    // lower and restore (a fade takes up to about 0.8 s) and is never taken while holding mLock.
 +    private static final long AIRPODS_FADE_STEP_MS = 40;
 +    private final AirPodsDuckTracker mAirPodsDuck = new AirPodsDuckTracker();
@@ -110,7 +110,7 @@ index 268b1b4..846e0c8 100644
 +    }
 +
 +    /**
-+     * FreeholdOS ADR-127: lowers the music stream to {@code percent} (10 to 90) of its
++     * ObliviOS ADR-127: lowers the music stream to {@code percent} (10 to 90) of its
 +     * current volume while {@code device} is the active A2DP device, one index at a time. Never
 +     * raises the volume and never goes below the stream minimum. The audio hardening ignores this
 +     * from an app; this runs in the Bluetooth process, which it exempts by uid.
@@ -133,7 +133,7 @@ index 268b1b4..846e0c8 100644
 +    }
 +
 +    /**
-+     * FreeholdOS ADR-127: gives the lowered music volume back, only if {@code device} is still the
++     * ObliviOS ADR-127: gives the lowered music volume back, only if {@code device} is still the
 +     * active A2DP device and the volume is still the value {@link #duckAirPodsMusic} set. Otherwise
 +     * the record is dropped and the volume is left as it is (the owner's change wins, and the
 +     * stream volume of another output is none of ours).
@@ -193,9 +193,9 @@ index 481f4d2..f33d01f 100644
  
 -    private boolean watchAirPodsRoute(BluetoothDevice device, IBinder token) {
 +    /**
-+     * FreeholdOS ADR-127: lowers ({@code duck}) or gives back the music volume of the active
++     * ObliviOS ADR-127: lowers ({@code duck}) or gives back the music volume of the active
 +     * AirPods while the owner speaks. The caller (AdapterServiceBinder) has already enforced
-+     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
++     * org.oblivios.permission.MANAGE_AIRPODS_IDENTITY. Only a bonded, registered device is
 +     * accepted. {@code percent} must be an integer from 10 to 90. If {@code token} dies while the volume is
 +     * lowered, it is given back.
 +     *
@@ -269,7 +269,7 @@ index 6b04636..d7f4177 100644
  
 +    /**
 +     * Lowers or gives back the music volume of the active AirPods (ADR-127). Scoped to the caller
-+     * holding org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY; the bond, registration, active
++     * holding org.oblivios.permission.MANAGE_AIRPODS_IDENTITY; the bond, registration, active
 +     * device and percent checks are in {@link AdapterService#setAirPodsMusicDuck}.
 +     */
 +    @Override
@@ -287,7 +287,7 @@ index 6b04636..d7f4177 100644
 +        }
 +
 +        service.enforceCallingOrSelfPermission(
-+                "org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY", null);
++                "org.oblivios.permission.MANAGE_AIRPODS_IDENTITY", null);
 +
 +        return service.setAirPodsMusicDuck(device, duck, percent, token);
 +    }
@@ -325,7 +325,7 @@ index 0000000..b85d31a
 +import java.util.Map;
 +
 +/**
-+ * FreeholdOS ADR-127: the record of a music volume that was lowered for a registered AirPods
++ * ObliviOS ADR-127: the record of a music volume that was lowered for a registered AirPods
 + * device while the owner speaks. It decides nothing about audio; {@link ActiveDeviceManager} passes
 + * in the current volume and acts on the answer. The record is what lets a restore touch only what
 + * this feature lowered, and only while the volume is still the value this feature set (an owner's
@@ -483,7 +483,7 @@ index 0000000..f7d6b79
 +import org.junit.Test;
 +import org.junit.runner.RunWith;
 +
-+/** FreeholdOS ADR-127: what the AirPods duck tracker lowers and restores. */
++/** ObliviOS ADR-127: what the AirPods duck tracker lowers and restores. */
 +@SmallTest
 +@RunWith(AndroidJUnit4.class)
 +public class AirPodsDuckTrackerTest {
@@ -631,7 +631,7 @@ index 23c1ebf..33c024c 100644
 +     * dies.
 +     *
 +     * <p>Requires {@code BLUETOOTH_CONNECT} and the signature|privileged permission {@code
-+     * org.freeholdos.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
++     * org.oblivios.permission.MANAGE_AIRPODS_IDENTITY}, enforced in the Bluetooth service. Does
 +     * not require {@code MODIFY_AUDIO_SETTINGS_PRIVILEGED} or {@code MODIFY_AUDIO_ROUTING}.
 +     *
 +     * @return true when the request was applied or there was nothing to do; false when refused or on

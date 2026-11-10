@@ -1,5 +1,5 @@
 From 01c4ab0d74074752f412ab68ee47a0138b407167 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 2 Nov 2026 13:40:04 +0100
 Subject: [PATCH] compartments: list the apps that have a persona without a
  place in the persona file

@@ -27,7 +27,7 @@ index b544a23..1c76eb5 100644
      }
  
      protected boolean shouldUseTheme() {
-+        // freeholdos: the app drawer follows the home screen's themed icons. Upstream themes only
++        // oblivios: the app drawer follows the home screen's themed icons. Upstream themes only
 +        // the workspace, folders and the taskbar, which leaves the drawer in the apps' own colours.
          return mDisplay == DISPLAY_WORKSPACE || mDisplay == DISPLAY_FOLDER
 -                || mDisplay == DISPLAY_TASKBAR;
@@ -42,7 +42,7 @@ index 0000000..b203135
 +++ b/src/com/android/launcher3/allapps/category/AppGrouper.kt
 @@ -0,0 +1,80 @@
 +/*
-+ * Copyright (C) 2026 FreeholdOS
++ * Copyright (C) 2026 ObliviOS
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
 + * you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ index 0000000..b203135
 +
 +/** Puts apps in the drawer groups. No Android state: it only maps a category to a group. */
 +object AppGrouper {
-+    // freeholdos: preinstalled apps that declare no ApplicationInfo.category. Used only when the
++    // oblivios: preinstalled apps that declare no ApplicationInfo.category. Used only when the
 +    // manifest and the installer give none, so a declared category always wins.
 +    private val UNDECLARED_OVERRIDES =
 +        mapOf(
@@ -128,7 +128,7 @@ index 0000000..43fc066
 +++ b/tests/multivalentTests/src/com/android/launcher3/allapps/category/AppGrouperTest.kt
 @@ -0,0 +1,123 @@
 +/*
-+ * Copyright (C) 2026 FreeholdOS
++ * Copyright (C) 2026 ObliviOS
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
 + * you may not use this file except in compliance with the License.

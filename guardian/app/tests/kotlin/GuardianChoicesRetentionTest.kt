@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.guardianui.screens
+package org.oblivios.guardianui.screens
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import org.freeholdos.guardianui.theme.GuardianTheme
+import org.oblivios.guardianui.theme.GuardianTheme
 import org.junit.Rule
 import org.junit.Test
 
 /**
- * FreeholdOS-specific tests for Choices' retention section — the one place on
+ * ObliviOS-specific tests for Choices' retention section — the one place on
  * this build that used to imply (on Trust, before the control moved here)
  * that the device enforces a deletion schedule it never runs.
  *

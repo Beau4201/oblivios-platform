@@ -1,0 +1,32 @@
+From d5b871d8aa32fb7873346a7c27c003407c710011 Mon Sep 17 00:00:00 2001
+From: ObliviOS Build <build@oblivios.local>
+Date: Thu, 1 Oct 2026 17:34:33 +0200
+Subject: [PATCH] oblivios: show multi-toggle labels inside the buttons when
+ the provider opts in
+
+BluetoothDetailsConfigurableFragment passes ToggleModel.labelInsideButton to
+SegmentedButtonPreference.setLabelInsideButton when every toggle of the preference opts in.
+Without the opt-in the rendering is unchanged.
+---
+ .../bluetooth/BluetoothDetailsConfigurableFragment.kt        | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/com/android/settings/bluetooth/BluetoothDetailsConfigurableFragment.kt b/src/com/android/settings/bluetooth/BluetoothDetailsConfigurableFragment.kt
+index 98356846b9a..753095fff94 100644
+--- a/src/com/android/settings/bluetooth/BluetoothDetailsConfigurableFragment.kt
++++ b/src/com/android/settings/bluetooth/BluetoothDetailsConfigurableFragment.kt
+@@ -362,6 +362,11 @@ abstract class BluetoothDetailsConfigurableFragment :
+                         existedPref as? SegmentedButtonPreference
+                             ?: SegmentedButtonPreference(requireContext())
+                     pref.apply {
++                        // ObliviOS: text inside the buttons when every toggle opts in
++                        // (DeviceSettingContract.TOGGLE_LABEL_IN_BUTTON); stock look otherwise.
++                        pref.setLabelInsideButton(
++                            model.toggles.isNotEmpty() && model.toggles.all { it.labelInsideButton }
++                        )
+                         for (idx in 0..3) {
+                             if (idx >= model.toggles.size) {
+                                 pref.setButtonVisibility(idx, false)
+-- 
+2.39.5
+

@@ -92,7 +92,7 @@ index 07aa020df254..02b45f8cb11f 100644
          }
  
          if (isHiddenFromCaller(name)) {
-+            // FreeholdOS: an app still reads its own entry of a list setting.
++            // ObliviOS: an app still reads its own entry of a list setting.
 +            final Setting own = getOwnEntrySecureSetting(name, owningUserId, deviceId);
 +            if (own != null) {
 +                return own;
@@ -105,7 +105,7 @@ index 07aa020df254..02b45f8cb11f 100644
      }
  
 +    /**
-+     * FreeholdOS: for a list setting that an app reads to learn whether it was enabled (see
++     * ObliviOS: for a list setting that an app reads to learn whether it was enabled (see
 +     * SettingsHardening#isOwnEntryKey), a copy of the real value that holds only the entries of
 +     * the calling package; null if the key is not such a list or the caller has no entry.
 +     */

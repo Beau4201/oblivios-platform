@@ -1,5 +1,5 @@
 From a1bffa4fb0163507322c1b40b508e9be77967a96 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Sat, 31 Oct 2026 21:46:43 +0100
 Subject: [PATCH] compartments: withhold the position from apps without an
  entry when no persona can be made

@@ -1,5 +1,5 @@
 From 3bb8b2e2119143dd11e8558b662e5bdf9f154684 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Tue, 20 Oct 2026 20:37:10 +0200
 Subject: [PATCH] exit: ship ExitProbe on userdebug images via device-common.mk
 
@@ -16,9 +16,9 @@ index 37fb8c9..e9b9850 100644
  PRODUCT_PACKAGES += \
      DataMapApp
 +
-+# FreeholdOS exit service (ADR-184, NET-001b): the throwaway probe that registers a network with
++# ObliviOS exit service (ADR-184, NET-001b): the throwaway probe that registers a network with
 +# NET_CAPABILITY_OEM_PRIVATE and selects it for one package. PRODUCT_PACKAGES_DEBUG is installed for userdebug and
 +# eng builds only, never for user builds, and check-required-packages.sh refuses the probe in a user build. The module
-+# is defined in vendor/freeholdos/exit; it pulls in its privapp allow-list through "required".
++# is defined in vendor/oblivios/exit; it pulls in its privapp allow-list through "required".
 +PRODUCT_PACKAGES_DEBUG += \
 +    ExitProbe

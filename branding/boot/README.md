@@ -1,4 +1,4 @@
-# FreeholdOS boot picture
+# ObliviOS boot picture
 
 The lighthouse boot picture of the built-in boot renderer (ADR-152, which
 supersedes ADR-019). Design:

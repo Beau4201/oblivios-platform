@@ -1,5 +1,5 @@
 /*
- * FreeholdOS (ADR-208): invented motion data for an app on the Isolated profile, and the single place that applies a
+ * ObliviOS (ADR-208): invented motion data for an app on the Isolated profile, and the single place that applies a
  * SensorMode to an event.
  *
  * Why this diverges from upstream: an app that demands the motion sensors must keep working and must learn nothing true. The

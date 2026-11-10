@@ -5,7 +5,7 @@
   otherwise), is not backed up, and keeps every component in its own process.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.freeholdos.passwords">
+    package="org.oblivios.passwords">
 
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
@@ -24,7 +24,7 @@
     </queries>
 
     <application
-        android:name="org.freeholdos.passwords.PasswordsApplication"
+        android:name="org.oblivios.passwords.PasswordsApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/pm_data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
@@ -33,7 +33,7 @@
         android:theme="@style/Theme.Passwords">
 
         <activity
-            android:name="org.freeholdos.passwords.MainActivity"
+            android:name="org.oblivios.passwords.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|uiMode|fontScale|density|layoutDirection|locale"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
@@ -44,19 +44,19 @@
         </activity>
 
         <activity
-            android:name="org.freeholdos.passwords.fill.FillAuthActivity"
+            android:name="org.oblivios.passwords.fill.FillAuthActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:theme="@style/Theme.Passwords.Transparent" />
 
         <activity
-            android:name="org.freeholdos.passwords.fill.SaveAuthActivity"
+            android:name="org.oblivios.passwords.fill.SaveAuthActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:theme="@style/Theme.Passwords.Transparent" />
 
         <service
-            android:name="org.freeholdos.passwords.fill.PasswordsAutofillService"
+            android:name="org.oblivios.passwords.fill.PasswordsAutofillService"
             android:exported="true"
             android:label="@string/pm_app_name"
             android:permission="android.permission.BIND_AUTOFILL_SERVICE">
@@ -69,13 +69,13 @@
         </service>
 
         <activity
-            android:name="org.freeholdos.passwords.fill.CredentialAuthActivity"
+            android:name="org.oblivios.passwords.fill.CredentialAuthActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:theme="@style/Theme.Passwords.Transparent" />
 
         <service
-            android:name="org.freeholdos.passwords.fill.PasswordsCredentialProviderService"
+            android:name="org.oblivios.passwords.fill.PasswordsCredentialProviderService"
             android:exported="true"
             android:label="@string/pm_app_name"
             android:permission="android.permission.BIND_CREDENTIAL_PROVIDER_SERVICE">

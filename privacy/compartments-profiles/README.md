@@ -1,7 +1,7 @@
 # compartments-profiles
 
 Host-checked cores of the profiles of Compartments (ADR-208, `docs/superpowers/specs/2026-10-30-compartments-profiles-design.md`
-in `freeholdos-foundation`): the policy store and its mirrors in Java, and the sensor mode table, its file source and the
+in `oblivios-foundation`): the policy store and its mirrors in Java, and the sensor mode table, its file source and the
 invented motion streams in C++. State: the cores are checked on the host and every patch of `patches/` is landed on the build server (`SOURCE.md`). The first module build found two failures that `system-sepolicy/0003` and `frameworks-base/0007` fix; the review of that build is in `frameworks-base/0008`, `frameworks-native/0005` and the three `0003` copies. Images `2026103101` and `2026110101` carry the patches up to `frameworks-base/0013`; `frameworks-base/0014` to `0018`, `frameworks-native/0006`, `packages-services-Telephony/0005` and `0006`, and `packages-modules-connectivity/0001` and `0002` are landed on the build tree and not module-built. The plan is `docs/superpowers/plans/2026-10-30-compartments-profiles.md`.
 
 | Path | Content |

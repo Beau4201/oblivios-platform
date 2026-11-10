@@ -1,5 +1,5 @@
 From 7d37c40bc665b2e98bb06d6403227d33a88ffd87 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 14:47:08 +0100
 Subject: [PATCH] sepolicy: add the Compartments policy service and its data
  file type (ADR-208)

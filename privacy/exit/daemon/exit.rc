@@ -21,7 +21,7 @@ on post-fs-data
 # only the group 3003 it succeeded [measured: NET-009, lynx image 2026102302]. exitd_route has no inet socket and gets no group.
 # The group vpn (1016) is what lets it open /dev/net/tun, which is system:vpn 0660 on the device: without it open() returns EACCES
 # before SELinux is asked and the daemon ends with `tunnel could not be created` [measured: NET-009, lynx image 2026102303].
-service exitd /system/bin/exitd --state-dir /data/misc/exitd/state --cache-dir /data/misc/exitd/cache --memory-max 67108864 --control-fd-env ANDROID_SOCKET_exitd --peer-context exit_app --mask-list /system/etc/freeholdos/exit-mask-list.tsv
+service exitd /system/bin/exitd --state-dir /data/misc/exitd/state --cache-dir /data/misc/exitd/cache --memory-max 67108864 --control-fd-env ANDROID_SOCKET_exitd --peer-context exit_app --mask-list /system/etc/oblivios/exit-mask-list.tsv
     class main
     user 2961
     group 2961 inet vpn

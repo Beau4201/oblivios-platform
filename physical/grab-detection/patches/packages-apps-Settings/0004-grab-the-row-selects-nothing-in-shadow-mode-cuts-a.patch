@@ -1,5 +1,5 @@
 From f4586fbf4d4c8bf576d23413023867c7eb54834d Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Wed, 28 Oct 2026 13:49:56 +0100
 Subject: [PATCH] grab: the row selects nothing in shadow mode, cuts a stray
  level and asks for the screen lock

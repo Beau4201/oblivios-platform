@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.freeholdos.passwords.hosttest
+package org.oblivios.passwords.hosttest
 
-import org.freeholdos.passwords.fill.Origin
-import org.freeholdos.passwords.fill.OriginPolicy
-import org.freeholdos.passwords.fill.PackageFacts
-import org.freeholdos.passwords.fill.TrustStore
+import org.oblivios.passwords.fill.Origin
+import org.oblivios.passwords.fill.OriginPolicy
+import org.oblivios.passwords.fill.PackageFacts
+import org.oblivios.passwords.fill.TrustStore
 
 private class FakeFacts : PackageFacts {
     val system = HashSet<String>()

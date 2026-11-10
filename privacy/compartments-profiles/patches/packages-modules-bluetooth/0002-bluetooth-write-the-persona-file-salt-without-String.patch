@@ -1,5 +1,5 @@
 From 3d5c8d12f66d427d7f88b13ef9bbf3de71fe5526 Mon Sep 17 00:00:00 2001
-From: FreeholdOS Build <build@freeholdos.local>
+From: ObliviOS Build <build@oblivios.local>
 Date: Fri, 30 Oct 2026 20:05:54 +0100
 Subject: [PATCH] bluetooth: write the persona file salt without String.format
 
