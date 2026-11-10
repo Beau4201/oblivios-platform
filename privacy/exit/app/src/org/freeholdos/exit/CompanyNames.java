@@ -33,11 +33,11 @@ public final class CompanyNames {
         }
         for (int i = 1; i < lines.length; i++) {
             String[] f = lines[i].split("\t", -1);
-            if (f.length != 3 || !f[1].matches("[0-9]{1,5}") || f[2].isEmpty() || f[2].length() > 64) {
+            if (f.length != 3 || !f[1].matches("[0-9]{1,9}") || f[2].isEmpty() || f[2].length() > 64) {
                 continue;
             }
             int id = Integer.parseInt(f[1]);
-            if (id >= 1 && id <= 0xffff) { // company 0 is a protected row, not a company
+            if (id >= 1) { // company 0 is a protected row, not a company
                 c.names.putIfAbsent(id, f[2].replaceAll("\\p{Cntrl}", ""));
             }
         }

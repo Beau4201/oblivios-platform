@@ -1,0 +1,88 @@
+From 68e35049b3cfb0fb61f92171b1e2bb358f93305e Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Tue, 10 Nov 2026 16:35:48 +0100
+Subject: [PATCH] resolver: read company ids of 32 bits and a list of 262144
+ rows
+
+The mask list grows from 3,699 rows to about 91,500 (ADR-223) and its company
+ids from 16 to 32 bits, as in the exit daemon's masklist.rs. ExitMaskList reads
+an id up to 4294967295 (the sum is 64 bits wide, so no digit string wraps),
+keeps it in a uint32_t, and takes up to 262144 rows and 16 MiB, the limits of
+the daemon's reader. Every file the daemon accepts is still accepted.
+---
+ ExitMaskList.cpp | 16 ++++++++--------
+ ExitMaskList.h   |  6 +++---
+ 2 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/ExitMaskList.cpp b/ExitMaskList.cpp
+index 47c22e0..6c44969 100644
+--- a/ExitMaskList.cpp
++++ b/ExitMaskList.cpp
+@@ -35,16 +35,16 @@ bool isValidDomain(std::string_view d) {
+     }
+ }
+ 
+-// A company id: digits only, at most 65535.
+-bool parseCompany(std::string_view s, uint16_t* out) {
++// A company id: digits only, at most 4294967295 (32 bits, ADR-223). The sum is 64 bits wide so that no digit string wraps.
++bool parseCompany(std::string_view s, uint32_t* out) {
+     if (s.empty()) return false;
+-    uint32_t v = 0;
++    uint64_t v = 0;
+     for (char c : s) {
+         if (c < '0' || c > '9') return false;
+-        v = v * 10 + static_cast<uint32_t>(c - '0');
+-        if (v > 65535) return false;
++        v = v * 10 + static_cast<uint64_t>(c - '0');
++        if (v > 0xffffffffULL) return false;
+     }
+-    *out = static_cast<uint16_t>(v);
++    *out = static_cast<uint32_t>(v);
+     return true;
+ }
+ 
+@@ -62,7 +62,7 @@ bool ExitMaskList::parse(std::string_view text, std::string* error) {
+     if (text.substr(0, pos) != kHeader) return fail("not a mask list (header)");
+     pos = pos == std::string_view::npos ? text.size() : pos + 1;
+ 
+-    std::vector<std::pair<std::string_view, uint16_t>> rows;
++    std::vector<std::pair<std::string_view, uint32_t>> rows;
+     while (pos < text.size()) {
+         size_t end = text.find('\n', pos);
+         if (end == std::string_view::npos) end = text.size();
+@@ -75,7 +75,7 @@ bool ExitMaskList::parse(std::string_view text, std::string* error) {
+         const std::string_view domain = line.substr(0, tab);
+         std::string_view id = line.substr(tab + 1);
+         id = id.substr(0, id.find('\t'));  // the company name that follows is not read
+-        uint16_t company;
++        uint32_t company;
+         if (!isValidDomain(domain)) return fail("a row with a domain that is not valid");
+         if (!parseCompany(id, &company)) return fail("a row with a company id that is not valid");
+         if (rows.size() >= kMaxRows) return fail("too many rows");
+diff --git a/ExitMaskList.h b/ExitMaskList.h
+index 3f68719..91ca001 100644
+--- a/ExitMaskList.h
++++ b/ExitMaskList.h
+@@ -27,8 +27,8 @@ class ExitMaskList {
+   public:
+     static constexpr const char* kPath = "/system/etc/freeholdos/exit-mask-list.tsv";
+     // The limits of the daemon's reader (`masklist.rs`): rows and bytes of the file.
+-    static constexpr size_t kMaxRows = 8192;
+-    static constexpr size_t kMaxFile = 4 * 1024 * 1024;
++    static constexpr size_t kMaxRows = 262144;
++    static constexpr size_t kMaxFile = 16 * 1024 * 1024;
+ 
+     // Parses the text of a list file. On success the list holds its rows; on failure it is empty and `error` (when not
+     // null) says why. Every file that the daemon accepts is accepted; the name field of a row is not read.
+@@ -51,7 +51,7 @@ class ExitMaskList {
+     struct Row {
+         uint32_t offset;  // of the domain in mDomains
+         uint16_t length;
+-        uint16_t company;  // 0: protected
++        uint32_t company;  // 0: protected
+     };
+ 
+     std::string_view domainOf(const Row& row) const {
+-- 
+2.47.3
+

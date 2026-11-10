@@ -97,9 +97,9 @@ public final class Choices {
         return s != null && s.contains(company);
     }
 
-    /** False when the choice was not taken (bad package name, company out of 1..65535, or the table is full). */
+    /** False when the choice was not taken (bad package name, company below 1, or the table is full). */
     public boolean setShowsAddress(String pkg, int company, boolean show) {
-        if (!validPackage(pkg) || company < 1 || company > 0xffff) {
+        if (!validPackage(pkg) || company < 1) {
             return false;
         }
         if (!show) {
@@ -195,7 +195,7 @@ public final class Choices {
                 ok = c.choiceOf(f[1]) != Choice.OPEN && c.set(f[1], Choice.TOR);
             } else if (f.length == 2 && f[0].equals("open")) {
                 ok = c.choiceOf(f[1]) != Choice.TOR && c.set(f[1], Choice.OPEN);
-            } else if (f.length == 3 && f[0].equals("show") && f[2].matches("[0-9]{1,5}")) {
+            } else if (f.length == 3 && f[0].equals("show") && f[2].matches("[0-9]{1,9}")) {
                 ok = c.setShowsAddress(f[1], Integer.parseInt(f[2]), true);
             }
             if (!ok) {

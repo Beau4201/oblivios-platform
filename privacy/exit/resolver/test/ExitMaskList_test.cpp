@@ -119,8 +119,13 @@ static void lists() {
     CHECK(!l.parse("exit-mask-list\t1\na.com\t1\tA\nA.com\t1\tA\n") && l.size() == 0 && !l.masksName("a.com"));
     CHECK(!l.parse("exit-mask-list\t1\na.com\t1\tA\nb.com\tx\tB\n"));
     CHECK(!l.parse("exit-mask-list\t1\na.com\t\tA\n"));
-    CHECK(!l.parse("exit-mask-list\t1\na.com\t65536\tA\n"));
+    // ids are 32 bits (ADR-223): 2^32 is refused and so is a digit string that would wrap a 32-bit sum
+    CHECK(!l.parse("exit-mask-list\t1\na.com\t4294967296\tA\n"));
+    CHECK(!l.parse("exit-mask-list\t1\na.com\t42949672960\tA\n"));
     CHECK(l.parse("exit-mask-list\t1\na.com\t65535\tA\n"));
+    CHECK(l.parse("exit-mask-list\t1\na.com\t65536\tA\n") && l.masksName("a.com"));
+    CHECK(l.parse("exit-mask-list\t1\na.com\t4294967295\tA\n") && l.masksName("a.com"));
+    CHECK(l.parse("exit-mask-list\t1\na.com\t0000000000000000005\tA\n") && l.masksName("a.com"));
     CHECK(!l.parse("exit-mask-list\t1\na.com\t99999999999\tA\n"));
     CHECK(!l.parse("exit-mask-list\t1\na.com\n"));
     CHECK(!l.parse("exit-mask-list\t1\na.com\t1\tA\na.com\t2\tB\n"));  // a domain twice

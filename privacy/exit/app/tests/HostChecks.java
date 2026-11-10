@@ -92,7 +92,7 @@ public final class HostChecks {
         check(c.setShowsAddress("org.example.app", 7, true) && c.setShowsAddress("org.example.app", 300, true), "show taken");
         check(Arrays.equals(c.shownCompanies("org.example.app"), new int[] {7, 300}), "companies sorted");
         check(c.showsAddress("org.example.app", 7) && !c.showsAddress("org.example.app", 8), "showsAddress");
-        check(!c.setShowsAddress("org.example.app", 0, true) && !c.setShowsAddress("org.example.app", 65536, true), "company range");
+        check(!c.setShowsAddress("org.example.app", 0, true) && !c.setShowsAddress("org.example.app", -1, true), "company range");
         check(!c.set("not a package", Choices.Choice.TOR) && !c.set("single", Choices.Choice.TOR) && !c.set("1a.b", Choices.Choice.TOR), "bad names refused");
         check(!c.set(null, Choices.Choice.TOR), "null name refused");
 
@@ -494,11 +494,13 @@ public final class HostChecks {
         check(l.shouldNotify(10100, 7, 1000), "the first report notifies");
         check(!l.shouldNotify(10100, 7, 2000), "the second inside the window does not");
         check(l.shouldNotify(10100, 8, 2000), "another company does");
+        // ADR-223: 65543 is 7 plus 2^16, and (10100, 65543) is the key of (10101, 7) when the uid is shifted by 16 only.
+        check(l.shouldNotify(10100, 65543, 2000), "a company that differs above 16 bits is another company");
         check(l.shouldNotify(10101, 7, 2000), "another app does");
         check(!l.shouldNotify(10100, 7, 1000 + Ladder.WINDOW_MS), "exactly at the end of the window it is still the same window");
         check(l.shouldNotify(10100, 7, 1000 + Ladder.WINDOW_MS + 1), "after the window it notifies again");
         check(!l.shouldNotify(10100, 7, 1000 + Ladder.WINDOW_MS + 2), "and the new window holds");
-        check(l.size() == 3, "keys of an old window are forgotten: " + l.size());
+        check(l.size() == 4, "keys of an old window are forgotten: " + l.size());
         check(Ladder.WINDOW_MS == 6 * 60 * 60 * 1000L && Ladder.MAX_KEYS == 4096,
                 "the window of the app is 6 hours (the daemon's is 10 minutes), the table size is that of ladder.rs");
         // A flood of keys cannot grow the table, and the oldest key goes first.
@@ -572,11 +574,13 @@ public final class HostChecks {
 
         // The hosts that see the address.
         CompanyNames names = CompanyNames.parse("exit-mask-list\t1\nads.example.com\t7\tExample Ads\nx.example\t0\tprotected\nbad\tx\tN\nlong.example\t9\t" + "n".repeat(65) + "\ny.example\t300\tTwo\tcolumns\ne.example\t11\t\nbig.example\t70000\tBig\nd.example\t4\tFirst\nd2.example\t4\tSecond\n");
-        check("Example Ads".equals(names.nameOf(7)) && names.nameOf(0) == null && names.nameOf(9) == null && names.nameOf(11) == null && names.nameOf(70000) == null && "First".equals(names.nameOf(4)) && names.size() == 2, "company names: " + names.size());
+        check("Example Ads".equals(names.nameOf(7)) && names.nameOf(0) == null && names.nameOf(9) == null && names.nameOf(11) == null && "Big".equals(names.nameOf(70000)) && "First".equals(names.nameOf(4)) && names.size() == 3, "company names: " + names.size());
         check(CompanyNames.parse("a.example\t7\tName\n").size() == 0 && CompanyNames.parse("not a header\na.example\t7\tName\n").size() == 0,
                 "rows without the header are not read");
         check(CompanyNames.parse("not a list\n").size() == 0 && CompanyNames.parse(null).size() == 0, "not a list: no names");
-        check(CompanyNames.parse("exit-mask-list\t1\na.example\t70000\tBig\nb.example\t5\tA\u0001B\n").nameOf(5).equals("AB"), "control characters are dropped, ids past 16 bits are not names");
+        check(CompanyNames.parse("exit-mask-list\t1\na.example\t70000\tBig\nb.example\t5\tA\u0001B\n").nameOf(5).equals("AB"), "control characters are dropped, ids past 16 bits are names (ADR-223)");
+        check(CompanyNames.parse("exit-mask-list\t1\na.example\t1234567890\tBig\nb.example\t999999999\tEdge\n").size() == 1,
+                "an id of ten digits is not read, one of nine is");
         c.setShowsAddress("org.b.beta", 7, true);
         c.setShowsAddress("org.b.beta", 8, true);
         c.setShowsAddress("org.a.alpha", 7, true);
@@ -656,8 +660,8 @@ public final class HostChecks {
         same(v, "to_daemon.shutdown", ControlCodec.shutdown(5));
         same(v, "to_daemon.get_state", ControlCodec.getState(9));
         same(v, "to_daemon.set_policy", ControlCodec.setPolicy(1, classes));
-        same(v, "to_daemon.set_overrides", ControlCodec.setOverrides(2, 10123, new int[] {7, 300}));
-        same(v, "to_daemon.release", ControlCodec.release(11, 10123, 300));
+        same(v, "to_daemon.set_overrides", ControlCodec.setOverrides(2, 10123, new int[] {7, 70000}));
+        same(v, "to_daemon.release", ControlCodec.release(11, 10123, 70000));
         same(v, "to_daemon.set_country", ControlCodec.setCountry(12, 10123, "ES"));
         same(v, "to_daemon.clear_country", ControlCodec.setCountry(13, 10123, null));
         check(Arrays.equals(ControlCodec.setCountry(13, 10123, ""), v.get("to_daemon.clear_country")), "an empty country is no choice");
@@ -670,24 +674,26 @@ public final class HostChecks {
         same(v, "route.get_applied", ControlCodec.routeGetApplied(4));
 
         ControlCodec.Reply r = daemon(v, "from_daemon.ready");
-        check(r.type == ControlCodec.Type.READY && r.version == 4 && "exit0".equals(r.iface), "ready");
+        check(r.type == ControlCodec.Type.READY && r.version == 5 && "exit0".equals(r.iface), "ready");
         r = daemon(v, "from_daemon.state_up");
         check(r.type == ControlCodec.Type.STATE && r.state == ControlCodec.STATE_UP, "state");
         r = daemon(v, "from_daemon.failures");
-        check(r.type == ControlCodec.Type.FAILURES && r.uid == 10123 && r.company == 7 && r.count == 3, "failures");
+        check(r.type == ControlCodec.Type.FAILURES && r.uid == 10123 && r.company == 70000 && r.count == 3, "failures");
         r = daemon(v, "from_daemon.promoted");
         check(r.type == ControlCodec.Type.PROMOTED && r.uid == 10123 && r.company == 7 && r.fresh, "promoted");
-        // The fresh flag is zero or one; a promotion of a company above 255 keeps both bytes of its id.
-        r = ControlCodec.decodeDaemon(new byte[] {0, 0, 0, 8, (byte) 0x86, 0, 0, 0x27, (byte) 0xf7, 1, 0x2c, 0}, 12);
-        check(r != null && r.type == ControlCodec.Type.PROMOTED && r.company == 300 && !r.fresh && r.uid == 10231, "promoted, not fresh, company 300");
-        refuses(true, new byte[] {0, 0, 0, 8, (byte) 0x86, 0, 0, 0, 1, 0, 7, 2}, "a fresh flag of 2");
-        refuses(true, new byte[] {0, 0, 0, 7, (byte) 0x86, 0, 0, 0, 1, 0, 7}, "a Promoted without the flag");
-        refuses(true, new byte[] {0, 0, 0, 9, (byte) 0x86, 0, 0, 0, 1, 0, 7, 1, 1}, "a Promoted with a trailing byte");
+        // The fresh flag is zero or one; a promotion of a company above 65535 keeps all four bytes of its id (ADR-223).
+        r = ControlCodec.decodeDaemon(new byte[] {0, 0, 0, 10, (byte) 0x86, 0, 0, 0x27, (byte) 0xf7, 0, 1, 0x11, 0x70, 0}, 14);
+        check(r != null && r.type == ControlCodec.Type.PROMOTED && r.company == 70000 && !r.fresh && r.uid == 10231, "promoted, not fresh, company 70000");
+        refuses(true, new byte[] {0, 0, 0, 10, (byte) 0x86, 0, 0, 0, 1, 0, 0, 0, 7, 2}, "a fresh flag of 2");
+        refuses(true, new byte[] {0, 0, 0, 9, (byte) 0x86, 0, 0, 0, 1, 0, 0, 0, 7}, "a Promoted without the flag");
+        refuses(true, new byte[] {0, 0, 0, 11, (byte) 0x86, 0, 0, 0, 1, 0, 0, 0, 7, 1, 1}, "a Promoted with a trailing byte");
+        refuses(true, new byte[] {0, 0, 0, 10, (byte) 0x86, 0, 0, 0, 1, (byte) 0x80, 0, 0, 0, 1}, "a Promoted with a company past 31 bits");
+        refuses(true, new byte[] {0, 0, 0, 13, (byte) 0x83, 0, 0, 0, 1, (byte) 0x80, 0, 0, 0, 0, 0, 0, 3}, "a Failures with a company past 31 bits");
         refuses(false, v.get("from_daemon.promoted"), "a Promoted from the helper");
         throwsIae(() -> ControlCodec.release(1, 10123, 0), "a release of company 0");
-        throwsIae(() -> ControlCodec.release(1, 10123, 65536), "a release of company 65536");
+        throwsIae(() -> ControlCodec.release(1, 10123, -1), "a release of company -1");
         throwsIae(() -> ControlCodec.release(256, 10123, 7), "a release with a sequence number of two bytes");
-        check(ControlCodec.release(1, 10123, 65535).length == 4 + 1 + 7, "company 65535 is written");
+        check(ControlCodec.release(1, 10123, Integer.MAX_VALUE).length == 4 + 1 + 9, "company 2147483647 is written");
         r = daemon(v, "from_daemon.ack");
         check(r.type == ControlCodec.Type.ACK && r.seq == 9, "ack");
         r = daemon(v, "from_daemon.error");
@@ -700,7 +706,7 @@ public final class HostChecks {
         check(r.type == ControlCodec.Type.ERROR && r.seq == 9 && r.code == ControlCodec.ERR_FAILED, "route error");
 
         // The numbers that the vectors do not reach.
-        check(ControlCodec.DAEMON_PROTOCOL == 4 && ControlCodec.ROUTE_PROTOCOL == 1 && ControlCodec.MAX_FRAME == 4096 && ControlCodec.IFNAME_MAX == 15,
+        check(ControlCodec.DAEMON_PROTOCOL == 5 && ControlCodec.ROUTE_PROTOCOL == 1 && ControlCodec.MAX_FRAME == 4096 && ControlCodec.IFNAME_MAX == 15,
                 "the numbers of the protocols");
         check(ControlCodec.STATE_BOOTSTRAPPING == 0 && ControlCodec.STATE_UP == 1 && ControlCodec.STATE_FAILED == 2, "state values");
         check(ControlCodec.ERR_BAD_VALUE == 1 && ControlCodec.ERR_TOO_MANY == 2 && ControlCodec.ERR_BUSY == 3
@@ -745,7 +751,7 @@ public final class HostChecks {
         check(Policy.MAX_CLASSES == 255, "the count is one byte on the wire");
         max.add(new Policy.Cls(10000 + 2 * 255, 10000 + 2 * 255, Policy.Kind.TOR));
         throwsIae(() -> ControlCodec.setPolicy(1, max), "256 classes cannot be written");
-        check(ControlCodec.setOverrides(1, 1, new int[32]).length == 4 + 1 + 1 + 4 + 1 + 64, "32 companies");
+        check(ControlCodec.setOverrides(1, 1, new int[32]).length == 4 + 1 + 1 + 4 + 1 + 128, "32 companies");
         List<int[]> r128 = Collections129();
         r128.remove(128);
         check(ControlCodec.routeApply(1, "exit0", 0, r128, r128).length == 4 + 1 + 1 + 1 + 5 + 4 + 2 * (1 + 128 * 8), "128 ranges in each list");

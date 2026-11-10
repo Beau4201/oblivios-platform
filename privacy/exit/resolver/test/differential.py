@@ -82,7 +82,7 @@ def run(cmd, **kw):
 
 
 def fixtures(rows):
-    big = HEADER + "".join(f"d{i}.com\t1\tx\n" for i in range(8192))
+    big = HEADER + "".join(f"d{i}.com\t1\tx\n" for i in range(262144))
     body = "".join(f"{d}\t{c}\t{d}\n" for d, c in rows)
     sample = HEADER + "ads.example.com\t7\tA\nexample.net\t8\tB\ncdn.example.net\t0\tprotected\n"
     return {
@@ -107,10 +107,14 @@ def fixtures(rows):
         "id 0": HEADER + "a.com\t0\tprotected\nb.a.com\t3\tB\n",
         "id 65535": HEADER + "a.com\t65535\tA\n",
         "id 65536": HEADER + "a.com\t65536\tA\n",
+        "id 4294967295": HEADER + "a.com\t4294967295\tA\n",
+        "id 4294967296": HEADER + "a.com\t4294967296\tA\n",
+        "id 42949672960": HEADER + "a.com\t42949672960\tA\n",
+        "id leading zeros": HEADER + "a.com\t0000000000000000005\tA\n",
         "id signed": HEADER + "a.com\t+1\tA\n",
         "id spaced": HEADER + "a.com\t 1\tA\n",
-        "8192 rows": big,
-        "8193 rows": big + "over.com\t1\tx\n",
+        "262144 rows": big,
+        "262145 rows": big + "over.com\t1\tx\n",
         "wrong version": "exit-mask-list\t2\n" + body,
         "no header": body,
         "crlf": HEADER.replace("\n", "\r\n") + "a.com\t1\tA\r\n",

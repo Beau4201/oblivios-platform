@@ -27,8 +27,8 @@ class ExitMaskList {
   public:
     static constexpr const char* kPath = "/system/etc/freeholdos/exit-mask-list.tsv";
     // The limits of the daemon's reader (`masklist.rs`): rows and bytes of the file.
-    static constexpr size_t kMaxRows = 8192;
-    static constexpr size_t kMaxFile = 4 * 1024 * 1024;
+    static constexpr size_t kMaxRows = 262144;
+    static constexpr size_t kMaxFile = 16 * 1024 * 1024;
 
     // Parses the text of a list file. On success the list holds its rows; on failure it is empty and `error` (when not
     // null) says why. Every file that the daemon accepts is accepted; the name field of a row is not read.
@@ -51,7 +51,7 @@ class ExitMaskList {
     struct Row {
         uint32_t offset;  // of the domain in mDomains
         uint16_t length;
-        uint16_t company;  // 0: protected
+        uint32_t company;  // 0: protected
     };
 
     std::string_view domainOf(const Row& row) const {

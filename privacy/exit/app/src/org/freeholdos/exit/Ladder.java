@@ -20,7 +20,7 @@ public final class Ladder {
     private final Map<Long, Long> firstSeen = new HashMap<>();
 
     private static long key(int uid, int company) {
-        return ((long) uid << 16) | (company & 0xffffL);
+        return ((long) uid << 32) | (company & 0xffffffffL);
     }
 
     /**

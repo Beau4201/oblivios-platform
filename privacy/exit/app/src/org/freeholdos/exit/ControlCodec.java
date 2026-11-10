@@ -6,14 +6,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * The Java twin of the two control protocols: the daemon's ({@code control.rs}, version 4) and the route helper's
+ * The Java twin of the two control protocols: the daemon's ({@code control.rs}, version 5) and the route helper's
  * ({@code routes/proto.rs}, version 1). A frame is a u32 big-endian length of tag plus payload, the tag byte, the
  * payload. The golden vectors in {@code tests/vectors.txt} are loaded by the Rust tests as well, so that the two codecs
  * cannot drift. A decoder checks the claimed length first and never allocates from it. Pure Java.
  */
 public final class ControlCodec {
     public static final int MAX_FRAME = 4096;
-    public static final int DAEMON_PROTOCOL = 4;
+    public static final int DAEMON_PROTOCOL = 5;
     public static final int ROUTE_PROTOCOL = 1;
     public static final int IFNAME_MAX = 15;
 
@@ -119,11 +119,6 @@ public final class ControlCodec {
         o.write((int) v & 0xff);
     }
 
-    private static void putU16(ByteArrayOutputStream o, int v) {
-        o.write((v >>> 8) & 0xff);
-        o.write(v & 0xff);
-    }
-
     private static byte[] one(int b) {
         return new byte[] {(byte) b};
     }
@@ -196,7 +191,7 @@ public final class ControlCodec {
         putU32(o, uid);
         o.write(companies.length);
         for (int c : companies) {
-            putU16(o, c);
+            putU32(o, c);
         }
         return frame(TAG_SET_OVERRIDES, o.toByteArray());
     }
@@ -204,13 +199,13 @@ public final class ControlCodec {
     /** "Hide again": ends the speed guard's promotion of {@code company} for {@code uid} (ADR-188). */
     public static byte[] release(int seq, long uid, int company) {
         seq(seq);
-        if (company < 1 || company > 0xffff) {
-            throw new IllegalArgumentException("company id is 1 to 65535");
+        if (company < 1) {
+            throw new IllegalArgumentException("company id is 1 to 2147483647");
         }
         ByteArrayOutputStream o = new ByteArrayOutputStream();
         o.write(seq);
         putU32(o, uid);
-        putU16(o, company);
+        putU32(o, company);
         return frame(TAG_RELEASE, o.toByteArray());
     }
 
@@ -292,6 +287,18 @@ public final class ControlCodec {
         return ((b[at] & 0xffL) << 24) | ((b[at + 1] & 0xffL) << 16) | ((b[at + 2] & 0xffL) << 8) | (b[at + 3] & 0xffL);
     }
 
+    /**
+     * A company id of the daemon (32 bits on the wire, ADR-223). The app holds it in an int, so an id past 31 bits is refused as
+     * a malformed frame; the ids of the generator stop at 262144.
+     */
+    private static int company(byte[] b, int at) throws CodecException {
+        long id = u32(b, at);
+        if (id > Integer.MAX_VALUE) {
+            throw new CodecException("company id past 31 bits");
+        }
+        return (int) id;
+    }
+
     private static boolean validIface(byte[] b, int from, int to) {
         int n = to - from;
         if (n < 1 || n > IFNAME_MAX) {
@@ -368,9 +375,8 @@ public final class ControlCodec {
                 if (!daemon) {
                     throw new CodecException("unknown tag");
                 }
-                exact(n, 10);
-                return new Reply(Type.FAILURES, 0, null, 0, 0, 0, u32(buf, p), ((buf[p + 4] & 0xff) << 8) | (buf[p + 5] & 0xff),
-                        u32(buf, p + 6), 0, end);
+                exact(n, 12);
+                return new Reply(Type.FAILURES, 0, null, 0, 0, 0, u32(buf, p), company(buf, p + 4), u32(buf, p + 8), 0, end);
             case TAG_ACK:
                 exact(n, 1);
                 return new Reply(Type.ACK, 0, null, 0, buf[p] & 0xff, 0, 0, 0, 0, 0, end);
@@ -385,13 +391,12 @@ public final class ControlCodec {
             case TAG_APPLIED:
                 if (daemon) {
                     // A Promoted: the speed guard passes a company on to an app (ADR-188).
-                    exact(n, 7);
-                    int fresh = buf[p + 6] & 0xff;
+                    exact(n, 9);
+                    int fresh = buf[p + 8] & 0xff;
                     if (fresh > 1) {
                         throw new CodecException("bad fresh flag");
                     }
-                    return new Reply(Type.PROMOTED, 0, null, 0, 0, 0, u32(buf, p),
-                            ((buf[p + 4] & 0xff) << 8) | (buf[p + 5] & 0xff), 0, 0, fresh == 1, end);
+                    return new Reply(Type.PROMOTED, 0, null, 0, 0, 0, u32(buf, p), company(buf, p + 4), 0, 0, fresh == 1, end);
                 }
                 exact(n, 3);
                 return new Reply(Type.APPLIED, 0, null, 0, buf[p] & 0xff, 0, 0, 0, 0,

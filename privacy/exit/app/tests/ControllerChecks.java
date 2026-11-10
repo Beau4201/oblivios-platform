@@ -1036,8 +1036,8 @@ public final class ControllerChecks {
     private static void daemonClient() throws IOException {
         List<Policy.Cls> classes = Arrays.asList(new Policy.Cls(10000, 19999, Policy.Kind.MASKED));
         // Hello, a policy, overrides and a poll with reports after the state; each request carries the next sequence number.
-        Script s = new Script().reply(ready(4, "exit0"), frame(0x84, 1), frame(0x84, 2), frame(0x84, 3),
-                frame(0x82, 1), cat(frame(0x83, 0, 0, 0x27, 0x8b, 0, 7, 0, 0, 0, 3)), cat(frame(0x83, 0, 0, 0x27, 0x8c, 0, 8, 0, 0, 0, 4)));
+        Script s = new Script().reply(ready(5, "exit0"), frame(0x84, 1), frame(0x84, 2), frame(0x84, 3),
+                frame(0x82, 1), cat(frame(0x83, 0, 0, 0x27, 0x8b, 0, 0, 0, 7, 0, 0, 0, 3)), cat(frame(0x83, 0, 0, 0x27, 0x8c, 0, 0, 0, 8, 0, 0, 0, 4)));
         DaemonClient c = new DaemonClient(s);
         check("exit0".equals(c.connect()), "interface name");
         c.setPolicy(classes);
@@ -1051,20 +1051,20 @@ public final class ControllerChecks {
         check(Arrays.equals(s.sent.toByteArray(), want), "the requests, byte for byte");
 
         // Shutdown is a request like the others.
-        s = new Script().reply(ready(4, "exit0"), frame(0x84, 1));
+        s = new Script().reply(ready(5, "exit0"), frame(0x84, 1));
         c = new DaemonClient(s);
         c.connect();
         c.shutdown();
         check(Arrays.equals(s.sent.toByteArray(), cat(ControlCodec.hello(), ControlCodec.shutdown(1))), "shutdown request");
 
         // A shutdown that is not acknowledged is a failure.
-        c = new DaemonClient(new Script().reply(ready(4, "exit0")));
+        c = new DaemonClient(new Script().reply(ready(5, "exit0")));
         c.connect();
         DaemonClient noAck = c;
         expectIo(noAck::shutdown, "a shutdown without an Ack");
 
         // A refusal carries its code and is an IOException.
-        s = new Script().reply(ready(4, "exit0"), frame(0x85, 1, 2));
+        s = new Script().reply(ready(5, "exit0"), frame(0x85, 1, 2));
         c = new DaemonClient(s);
         c.connect();
         try {
@@ -1075,10 +1075,10 @@ public final class ControllerChecks {
         }
         // A wrong sequence number, a reply of the wrong kind, a wrong version, a closed link and garbage.
         for (Script bad : new Script[] {
-                new Script().reply(ready(4, "exit0"), frame(0x84, 9)),
-                new Script().reply(ready(4, "exit0"), frame(0x82, 1)),
-                new Script().reply(ready(4, "exit0")),
-                new Script().reply(ready(4, "exit0"), new byte[] {0, 0, 0, 2, 0x7f, 1})}) {
+                new Script().reply(ready(5, "exit0"), frame(0x84, 9)),
+                new Script().reply(ready(5, "exit0"), frame(0x82, 1)),
+                new Script().reply(ready(5, "exit0")),
+                new Script().reply(ready(5, "exit0"), new byte[] {0, 0, 0, 2, 0x7f, 1})}) {
             DaemonClient d = new DaemonClient(bad);
             d.connect();
             expectIo(() -> d.setPolicy(classes), "a bad answer to a request");
@@ -1088,20 +1088,20 @@ public final class ControllerChecks {
             expectIo(d::connect, "a bad answer to hello");
         }
         // Reports that arrive before an Ack are kept for the next poll.
-        s = new Script().reply(ready(4, "exit0"), frame(0x83, 0, 0, 0x27, 0x8b, 0, 7, 0, 0, 0, 3), frame(0x84, 1), frame(0x82, 1));
+        s = new Script().reply(ready(5, "exit0"), frame(0x83, 0, 0, 0x27, 0x8b, 0, 0, 0, 7, 0, 0, 0, 3), frame(0x84, 1), frame(0x82, 1));
         c = new DaemonClient(s);
         c.connect();
         c.setPolicy(classes);
         p = c.poll();
         check(p.failures.size() == 1 && p.failures.get(0).company == 7, "a report before an Ack is not lost");
         // After a poll the queue is empty.
-        s = new Script().reply(ready(4, "exit0")).then().reply(frame(0x83, 0, 0, 0x27, 0x8b, 0, 7, 0, 0, 0, 3), frame(0x82, 1)).then().reply(frame(0x82, 0));
+        s = new Script().reply(ready(5, "exit0")).then().reply(frame(0x83, 0, 0, 0x27, 0x8b, 0, 0, 0, 7, 0, 0, 0, 3), frame(0x82, 1)).then().reply(frame(0x82, 0));
         c = new DaemonClient(s);
         c.connect();
         check(c.poll().failures.size() == 1, "a report before the state is returned with it");
         check(c.poll().failures.isEmpty(), "and is not returned again");
         // The sequence number wraps after 255 and never becomes 0.
-        Script many = new Script().reply(ready(4, "exit0"));
+        Script many = new Script().reply(ready(5, "exit0"));
         for (int i = 1; i <= 256; i++) {
             many.reply(frame(0x84, i % 255 == 0 ? 255 : i % 255));
         }
@@ -1137,9 +1137,9 @@ public final class ControllerChecks {
 
     private static void daemonClientPromotions() throws IOException {
         // What the old connection queued is forgotten with it: a new connection starts without it.
-        byte[] promotedFrame = frame(0x86, 0, 0, 0x27, 0x8b, 0, 7, 1);
-        Script first = new Script().reply(ready(4, "exit0")).then().reply(promotedFrame, frame(0x84, 1));
-        Script later = new Script().reply(ready(4, "exit0")).then().reply(frame(0x82, 1));
+        byte[] promotedFrame = frame(0x86, 0, 0, 0x27, 0x8b, 0, 0, 0, 7, 1);
+        Script first = new Script().reply(ready(5, "exit0")).then().reply(promotedFrame, frame(0x84, 1));
+        Script later = new Script().reply(ready(5, "exit0")).then().reply(frame(0x82, 1));
         DaemonClient fresh = new DaemonClient(twice(first, later));
         fresh.connect();
         fresh.setPolicy(Arrays.asList(new Policy.Cls(10000, 19999, Policy.Kind.MASKED)));
@@ -1147,9 +1147,9 @@ public final class ControllerChecks {
         check(fresh.poll().promotions.isEmpty(), "a promotion queued on the old connection is not carried to the new one");
 
         // Promotions ride on the reply to GetState, after the state; a frame that has not arrived yet comes with the next reply.
-        byte[] promoted = frame(0x86, 0, 0, 0x27, 0x8b, 0, 7, 1);
-        byte[] again = frame(0x86, 0, 0, 0x27, 0x8b, 0, 7, 0);
-        Script s = new Script().reply(ready(4, "exit0")).then().reply(frame(0x82, 1), promoted).then().reply(frame(0x82, 1), again);
+        byte[] promoted = frame(0x86, 0, 0, 0x27, 0x8b, 0, 0, 0, 7, 1);
+        byte[] again = frame(0x86, 0, 0, 0x27, 0x8b, 0, 0, 0, 7, 0);
+        Script s = new Script().reply(ready(5, "exit0")).then().reply(frame(0x82, 1), promoted).then().reply(frame(0x82, 1), again);
         DaemonClient c = new DaemonClient(s);
         c.connect();
         DaemonApi.Poll p = c.poll();
@@ -1157,26 +1157,26 @@ public final class ControllerChecks {
         p = c.poll();
         check(p.promotions.size() == 1 && !p.promotions.get(0).fresh, "a listed promotion is not fresh");
         // A promotion that arrives while a request waits for its Ack is kept for the next poll.
-        s = new Script().reply(ready(4, "exit0"), promoted, frame(0x84, 1), frame(0x82, 1));
+        s = new Script().reply(ready(5, "exit0"), promoted, frame(0x84, 1), frame(0x82, 1));
         c = new DaemonClient(s);
         c.connect();
         c.setPolicy(Arrays.asList(new Policy.Cls(10000, 19999, Policy.Kind.MASKED)));
         p = c.poll();
         check(p.promotions.size() == 1 && p.promotions.get(0).company == 7, "a promotion before an Ack is not lost");
         // The queue is empty after a poll and after a new connection.
-        s = new Script().reply(ready(4, "exit0")).then().reply(frame(0x82, 1), promoted).then().reply(frame(0x82, 1));
+        s = new Script().reply(ready(5, "exit0")).then().reply(frame(0x82, 1), promoted).then().reply(frame(0x82, 1));
         c = new DaemonClient(s);
         c.connect();
         c.poll();
         check(c.poll().promotions.isEmpty(), "not returned again");
         // A release is a request like the others and is acknowledged.
-        s = new Script().reply(ready(4, "exit0"), frame(0x84, 1));
+        s = new Script().reply(ready(5, "exit0"), frame(0x84, 1));
         c = new DaemonClient(s);
         c.connect();
         c.release(10123, 7);
         check(Arrays.equals(s.sent.toByteArray(), cat(ControlCodec.hello(), ControlCodec.release(1, 10123, 7))), "release request, byte for byte");
         // A refused release carries its code; an unacknowledged one is a failure.
-        s = new Script().reply(ready(4, "exit0"), frame(0x85, 1, 1));
+        s = new Script().reply(ready(5, "exit0"), frame(0x85, 1, 1));
         c = new DaemonClient(s);
         c.connect();
         try {
@@ -1185,7 +1185,7 @@ public final class ControllerChecks {
         } catch (Link.ProtocolException e) {
             check(e.code == ControlCodec.ERR_BAD_VALUE, "the code of the refusal");
         }
-        DaemonClient noAck = new DaemonClient(new Script().reply(ready(4, "exit0")));
+        DaemonClient noAck = new DaemonClient(new Script().reply(ready(5, "exit0")));
         noAck.connect();
         expectIo(() -> noAck.release(10123, 7), "a release without an Ack");
     }

@@ -35,16 +35,16 @@ bool isValidDomain(std::string_view d) {
     }
 }
 
-// A company id: digits only, at most 65535.
-bool parseCompany(std::string_view s, uint16_t* out) {
+// A company id: digits only, at most 4294967295 (32 bits, ADR-223). The sum is 64 bits wide so that no digit string wraps.
+bool parseCompany(std::string_view s, uint32_t* out) {
     if (s.empty()) return false;
-    uint32_t v = 0;
+    uint64_t v = 0;
     for (char c : s) {
         if (c < '0' || c > '9') return false;
-        v = v * 10 + static_cast<uint32_t>(c - '0');
-        if (v > 65535) return false;
+        v = v * 10 + static_cast<uint64_t>(c - '0');
+        if (v > 0xffffffffULL) return false;
     }
-    *out = static_cast<uint16_t>(v);
+    *out = static_cast<uint32_t>(v);
     return true;
 }
 
@@ -62,7 +62,7 @@ bool ExitMaskList::parse(std::string_view text, std::string* error) {
     if (text.substr(0, pos) != kHeader) return fail("not a mask list (header)");
     pos = pos == std::string_view::npos ? text.size() : pos + 1;
 
-    std::vector<std::pair<std::string_view, uint16_t>> rows;
+    std::vector<std::pair<std::string_view, uint32_t>> rows;
     while (pos < text.size()) {
         size_t end = text.find('\n', pos);
         if (end == std::string_view::npos) end = text.size();
@@ -75,7 +75,7 @@ bool ExitMaskList::parse(std::string_view text, std::string* error) {
         const std::string_view domain = line.substr(0, tab);
         std::string_view id = line.substr(tab + 1);
         id = id.substr(0, id.find('\t'));  // the company name that follows is not read
-        uint16_t company;
+        uint32_t company;
         if (!isValidDomain(domain)) return fail("a row with a domain that is not valid");
         if (!parseCompany(id, &company)) return fail("a row with a company id that is not valid");
         if (rows.size() >= kMaxRows) return fail("too many rows");
