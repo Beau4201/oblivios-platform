@@ -161,6 +161,10 @@ def build_with_ids(classifier_text, deny_text, allow_text, ids_text, easylist_te
         else:
             n = key[2:]
         n = "".join(ch for ch in n if ch.isprintable() and ch != "\t").strip() or key[2:]
+        if key.startswith("d:") and len(n.encode()) > MAX_NAME:
+            # a host names its owner at the right: keep that end and cut at the left, so that "login.bank.example.xxxxx..."
+            # cannot show as "login.bank.example" (a host is ASCII, so the cut is on a character)
+            return "…" + n[-(MAX_NAME - 3):]
         while len(n.encode()) > MAX_NAME:
             n = n[:-1]
         return n

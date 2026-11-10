@@ -113,6 +113,10 @@ r4 = rows(mml.build(CLASSIFIER, DENY, ALLOW, els))
 check("tracker.example" in r4 and r4["tracker.example"][0] > 0 and r4["tracker.example"][1] == "tracker.example", "an easylist host is masked")
 check("a.t.example" not in r4 and "b.t.example" not in r4 and r4["t.example"][0] > 0, "a parent host makes its subhosts redundant")
 check(r4["ads.foo.co.uk"][1] == "ads.foo.co.uk" and r4["k.l.m.example"][1] == "k.l.m.example", "the company is the host itself")
+longhost = "login.bank.example." + "x" * 60 + ".evil.net"
+r5 = rows(mml.build(CLASSIFIER, DENY, ALLOW, EL + f"{longhost}\tEP\nshort.example.net\tEP\n"))
+check(len(r5[longhost][1].encode()) <= 64 and r5[longhost][1].startswith("…") and r5[longhost][1].endswith(".evil.net"), "a long host name is cut at the left")
+check(r5["short.example.net"][1] == "short.example.net", "a short host name is kept whole")
 two = mml.build_with_ids(CLASSIFIER, DENY, ALLOW, "", EL + "a.shared.dev\tEP\nb.shared.dev\tEP\n")[1]
 check(mml.read_ids(two)["d:a.shared.dev"] != mml.read_ids(two)["d:b.shared.dev"], "two tenants of one suffix are two companies")
 check("m.metrics.adnet.example" not in r4, "a host under a masked row is not repeated")
