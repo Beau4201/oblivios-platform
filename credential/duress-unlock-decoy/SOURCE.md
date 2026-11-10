@@ -1,5 +1,30 @@
 # Source record
 
+## Fix 2026-11-10: decoy memory while locked and the FallbackHome route (`frameworks-base/0012`, `frameworks-base/0013`)
+
+Owner requirement (2026-11-10): the decoy may not hold much memory, and the duress unlock must take as long as an
+ordinary one. Measured on `lynx` `2026110502` the same day (logcat and `dumpsys meminfo`, charging, battery 3-4%, so
+diagnostic and not a `DUR-019` result): with the device locked the decoy ran 38 processes, 2.0 GB PSS; about 30 of them
+came from its `BOOT_COMPLETED`, one every 0.45 s for 14 s after the lock.
+
+- `frameworks-base/0012`: `UserController.finishUserUnlockedCompleted` holds `BOOT_COMPLETED` back for a decoy-type user
+  that is neither current nor the switch target (`UserState.bootCompletedDeferred`); `finishUserSwitch` sends it once the
+  decoy is in the foreground and its home screen went idle. A stop discards the mark with its `UserState`.
+- `frameworks-base/0013`: `DecoyProfileHelper` stops the warm decoy whenever the keyguard reports unlocked in the owner's
+  own session with no switch pending (`getCurrentAndTargetUserIds`), so a finger unlock no longer leaves it running; and
+  `awaitDecoyUnlocked` starts the decoy in the background and waits (bounded, 5 s) until it is unlocked before the
+  switch, before OK for a typed credential and on the handler for the finger. Without it a switch to a decoy that is not
+  yet unlocked resolves Settings' `FallbackHome` and unlocks the decoy only when that placeholder goes idle.
+- Base: the public GrapheneOS `platform_frameworks_base` tag `2026110200` (`ad133394d443`) with the 83 tracked
+  `frameworks-base` patches of all packages applied in author-date order with `git am -C1`, as `rebase-branches.sh`
+  does; the build server was not reachable (no VPN), so the files were not compared with the live branch
+  `freeholdos-2026110200`. Authored in `.worktrees/duress-ram-timing`; the exported series re-applied from the tag gives
+  the authored tree (`d2169c091944`).
+- Not landed on the build server, not compiled (a parse-only pass over the three files reports no error; it is not a
+  type-check), no unit test (no `UserControllerTest` case reaches `BOOT_COMPLETED`), not run on a device. Checks on the
+  device: `Deferring BOOT_COMPLETED of background user` in logcat and the decoy's process count and PSS while locked;
+  no `FallbackHome` in a duress unlock; `am get-started-user-state` of the decoy after a finger unlock.
+
 ## Fix 2026-11-04: review of the finger work (`frameworks-base/0009`, `frameworks-base/0010`)
 
 Found by the independent review of `docs/reviews/2026-11-unreviewed-code-review.md` (B18) and by the automated review of the commit.
