@@ -215,7 +215,8 @@ Developed on a branch from `datamap-atlas-run` (`f409646`), 2026-10-13, changed 
 2026-10-22, on `main` as `fb73a0f`; landed in `vendor/freeholdos/datamap` of the build server (tree clean before) as `d7155d2` on 2026-10-23: five files (`ic_export.xml`, `ExportTsv.java`, `strings.xml`, `MainActivity.java`, `SettingsPage.java`), copied with `rsync -c` and compared again with 0 differences. The Settings row "Export the services your apps contact" opens a dialog, then the document picker (`ACTION_CREATE_DOCUMENT`), then writes one tab-separated file of the snapshot (`model/ExportTsv.java`: package, service key, company, category, counts, first and last seen, via DNS). The app gets no permission and no component; the SELinux domain is an untrusted-app domain that may use the picker.
 
 - Checks: host checks pass (`ExportTsvCheck`), `check-static.sh` and `check-resources.py` pass, the server type-check passes (58 files), and the mutation run kills 190 of 190 (13 are for the exporter). The icon comes from the design page (`make-icons.py`, `export` added to its list; the other 27 icons are unchanged).
-- Not checked: the picker and the write on a device (`MAP-041`); a module build of `DataMapApp` since the change.
+- Device (2026-11-10, `MAP-041` `PARTIAL`): the picker and the write ran on `stallion` image `2026110503`; the file was read back over `adb`.
+- Not checked: the cancel path, the decoy session, a read-only picker, `dumpsys package` and the `logcat` search for service keys (`MAP-041`).
 
 ## Images 2026101401 and 2026101402 (ADR-165)
 
