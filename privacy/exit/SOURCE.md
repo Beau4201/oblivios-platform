@@ -142,6 +142,14 @@ Conflict surface on a new upstream release: the two hooks in `resolv_cache_looku
 - Type-check with the tree's own clang and the exact flags of the module build (`resolver/tools/typecheck-on-server.sh`; the command that `ninja -t commands` prints for `res_cache.o` of the `libnetd_resolv` variant `static_cfi_apex31`: `-Werror`, `-std=gnu++2b`, `-fsanitize=cfi`): the unpatched and the patched `res_cache.cpp` and `ExitMaskList.cpp` give no diagnostic; the control (a call of a method that does not exist) gives exactly one error, `no member named 'noSuchMethod' in 'android::net::ExitMaskList'`.
 - Not done: a module build, a boot and any run on the phone. The behaviour on the phone is `NET-014`: with the module in an image, the run with the real answers cached first must pass.
 
+### Company ids of 32 bits (ADR-223, `Proposed`, 2026-11-10)
+
+`patches/packages-modules-DnsResolver/0002` applies on top of 0001 (made in a scratch repository from the two files of 0001 and checked with `git apply --check` on the result of 0001, whose files equal the committed `resolver/src/` of before). `ExitMaskList` reads a company id up to 4294967295 (the sum is 64 bits wide, so no digit string wraps), keeps it in a `uint32_t` and takes 262144 rows and 16 MiB, like `masklist.rs` of the daemon (control protocol version 5). `resolver/src/` is now the result of 0001 and 0002 (sha256 `31262d475e4f...` and `c7801ea7d0c5...`); the files landed on the build server are those of 0001 until 0002 is landed.
+
+- Checks (2026-11-10): the host test passes (g++, `-Wall -Wextra -Werror`, AddressSanitizer and UBSan); the differential check against the changed `masklist.rs` gives 79228 names, 26964 masked, 0 mismatches, 70469 as wire queries, 0 mismatches, and daemon and resolver agree on the boundaries (ids 65535, 65536 and 4294967295 accepted, 4294967296, 42949672960 refused, leading zeros accepted, 262144 rows accepted, 262145 refused); the mutation check gives 62 of 62 mutants killed (4 equivalent, 0 survived, 0 invalid), among them the sum wrapped at 32 bits and the limit moved by one.
+- Cost: `Row` grows from 8 to 12 bytes (a 4-byte company after a 2-byte length); at 91,573 rows that is about 1.1 MB of rows plus the domains. Computed from the layout, not measured on a device or in `netd`.
+- Not done: landing (`git am` of 0002 after 0001 on `freeholdos-2026100600`), the type-check with the tree's clang (`resolver/tools/typecheck-on-server.sh`), a module build, and a run on a phone with the full list (`NET-014`, `MSK-013`, `MSK-014`).
+
 ### Apply
 
-On the build server, with no build running: `cd packages/modules/DnsResolver && git switch -c freeholdos-2026100600 && git am <path>/privacy/exit/patches/packages-modules-DnsResolver/0001-*.patch`.
+On the build server, with no build running: `cd packages/modules/DnsResolver && git switch -c freeholdos-2026100600 && git am <path>/privacy/exit/patches/packages-modules-DnsResolver/0001-*.patch`, then, once ADR-223 is accepted, `git am <path>/privacy/exit/patches/packages-modules-DnsResolver/0002-*.patch`.
