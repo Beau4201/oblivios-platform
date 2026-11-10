@@ -4,7 +4,9 @@
 import importlib.util
 import os
 import re
+import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location("mml", os.path.join(HERE, "make-mask-list.py"))
@@ -153,18 +155,36 @@ if os.path.exists(real):
     deny = open(os.path.join(HERE, "..", "mask-denylist.txt"), encoding="utf-8").read()
     allow = open(os.path.join(HERE, "..", "mask-allow-platform.txt"), encoding="utf-8").read()
     ids_file = os.path.join(HERE, "..", "mask-company-ids.tsv")
-    out, ids_out = mml.build_with_ids(text, deny, allow, open(ids_file, encoding="utf-8").read())
-    check(ids_out == open(ids_file, encoding="utf-8").read(), "the committed company ids are complete for the real classifier")
+    ids_text = open(ids_file, encoding="utf-8").read()
+    out, ids_out = mml.build_with_ids(text, deny, allow, ids_text)
     shipped = os.path.join(HERE, "..", "daemon", "exit-mask-list.tsv")
-    check(out == open(shipped, encoding="utf-8").read(), "the shipped mask list is what the generator makes from the real files")
+    shipped_text = open(shipped, encoding="utf-8").read()
+    # The shipped list holds the rows of the classifier and, since ADR-223, the hosts of EasyPrivacy and EasyList. Their input
+    # files are archived by hash and are not in the repository: without them the classifier part is compared row by row,
+    # with EASYLIST_DIR (a directory that holds easyprivacy.txt and easylist.txt) the whole file is compared.
+    cls_rows = rows(out)
+    cls_masked = {d for d, (i, _) in cls_rows.items() if i > 0}
+    check(0 < len(cls_masked) <= 3367, f"masked count of the classifier part {len(cls_masked)}")
+    shipped_rows = rows(shipped_text)
+    check(all(shipped_rows.get(d) == v for d, v in cls_rows.items()), "every row of the classifier part is in the shipped list, unchanged")
+    el_dir = os.environ.get("EASYLIST_DIR")
+    if el_dir:
+        hosts = os.path.join(tempfile.mkdtemp(), "easylist-hosts.txt")
+        subprocess.run([sys.executable, "-I", os.path.join(HERE, "import-easylist.py"), os.path.join(el_dir, "easyprivacy.txt"),
+                        os.path.join(el_dir, "easylist.txt"), hosts], check=True)
+        out, ids_out = mml.build_with_ids(text, deny, allow, ids_text, open(hosts, encoding="utf-8").read())
+        check(out == shipped_text, "the shipped mask list is what the generator makes from the real files and the archived lists")
+    else:
+        print("EASYLIST_DIR is not set: the EasyPrivacy and EasyList part of the shipped list is not compared")
+    check(ids_out == ids_text, "the committed company ids are complete for the real inputs")
     rr = rows(out)
     masked = {d for d, (i, _) in rr.items() if i > 0}
-    check(0 < len(masked) <= 3367, f"masked count {len(masked)}")
-    check(len(rr) <= mml.MAX_ENTRIES, "row count")
+    check(len(shipped_rows) <= mml.MAX_ENTRIES, "row count")
     # The domains that must never be masked, wherever they come from.
     for must_not in ["google.com", "android.com", "facebook.com", "bing.com", "fcm.googleapis.com", "firebaseremoteconfig.googleapis.com",
                      "firebaseinstallations.googleapis.com", "auth0.com", "datadome.co", "adobe.com", "scene7.com", "amazon.com",
-                     "apple.com", "wordpress.com", "cybersource.com", "turner.com", "agnss.goog", "connectivitycheck.gstatic.com"]:
+                     "apple.com", "wordpress.com", "cybersource.com", "turner.com", "agnss.goog", "connectivitycheck.gstatic.com",
+                     "adj.st", "app.link", "onelink.me"]:
         check(must_not not in masked, f"{must_not} must not be masked")
     for must in ["doubleclick.net", "google-analytics.com", "googlesyndication.com", "adnxs.com", "clarity.ms", "demdex.net"]:
         check(must in masked, f"{must} must be masked")

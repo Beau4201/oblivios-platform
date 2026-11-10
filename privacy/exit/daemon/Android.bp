@@ -43,8 +43,9 @@ prebuilt_etc {
     sub_dir: "init",
 }
 
-// The hosts the masked tier hides the address from (ADR-181), made from the Data Map classifier by
-// ../tools/make-mask-list.py; SOURCE.md holds the hashes of the inputs.
+// The hosts the masked tier hides the address from (ADR-181), made from the Data Map classifier and the host rules of
+// EasyPrivacy and EasyList (ADR-223) by ../tools/make-mask-list.py; SOURCE.md holds the hashes of the inputs and NOTICE the
+// attribution.
 prebuilt_etc {
     name: "exit-mask-list.tsv",
     src: "exit-mask-list.tsv",

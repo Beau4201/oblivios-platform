@@ -1,0 +1,13 @@
+exit-mask-list.tsv (the mask list of the Compartments exit service) is made by ../tools/make-mask-list.py from the sources
+below, and is licensed under the Creative Commons Attribution-ShareAlike 4.0 International licence (CC BY-SA 4.0,
+https://creativecommons.org/licenses/by-sa/4.0/):
+
+- The Data Map classifier (../../datamap/classifier/classifier.tsv, CC BY-SA 4.0): the domains of the services that it files
+  under advertising, analytics, social and cdn, and the company of each. Its own sources are named in
+  ../../datamap/classifier/NOTICE.
+- EasyPrivacy and EasyList, https://easylist.to/ (attribution: The EasyList authors), offered under the GNU General Public
+  License version 3 or later or the Creative Commons Attribution-ShareAlike 3.0 licence or later
+  (https://easylist.to/pages/licence.html). Changes: only the host names of whole-host blocking rules (a rule of the form
+  ||host^ with no condition) were taken; the rules themselves, their options and every other rule shape were left out, and a
+  host that an exception rule clears was dropped. The version and the SHA-256 of the two input files are in SOURCE.md.
+- The deny list and the allow list (../mask-denylist.txt and ../mask-allow-platform.txt): written for this project.

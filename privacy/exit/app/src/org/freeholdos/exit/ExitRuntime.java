@@ -31,7 +31,8 @@ final class ExitRuntime {
     private static final long TICK_MS = 1000;
     /** The list that the daemon masks by, which also names the companies. */
     private static final String MASK_LIST = "/system/etc/freeholdos/exit-mask-list.tsv";
-    private static final int MAX_LIST_BYTES = 4 * 1024 * 1024;
+    /** The limit of the daemon's reader (masklist.rs MAX_FILE, ADR-223); a larger file gives no company names. */
+    private static final int MAX_LIST_BYTES = 16 * 1024 * 1024;
 
     private static ExitRuntime instance;
 

@@ -265,6 +265,7 @@ cpx.to	page the user opens
 iljmp.com	page the user opens
 ity.im	page the user opens
 linkbucks.com	page the user opens
+onelink.me	page the user opens (deep-link host, as adj.st and app.link; the list of EasyList would mask it, ADR-223)
 anrdoezrs.net	affiliate redirect the user clicks
 avantlink.com	affiliate redirect the user clicks
 awin1.com	affiliate redirect the user clicks
