@@ -112,7 +112,9 @@ els = EL + "".join(f"{h}\tEP\n" for h in el_rows)
 r4 = rows(mml.build(CLASSIFIER, DENY, ALLOW, els))
 check("tracker.example" in r4 and r4["tracker.example"][0] > 0 and r4["tracker.example"][1] == "tracker.example", "an easylist host is masked")
 check("a.t.example" not in r4 and "b.t.example" not in r4 and r4["t.example"][0] > 0, "a parent host makes its subhosts redundant")
-check(r4["ads.foo.co.uk"][1] == "foo.co.uk" and r4["k.l.m.example"][1] == "m.example", "the company is the registrable domain")
+check(r4["ads.foo.co.uk"][1] == "ads.foo.co.uk" and r4["k.l.m.example"][1] == "k.l.m.example", "the company is the host itself")
+two = mml.build_with_ids(CLASSIFIER, DENY, ALLOW, "", EL + "a.shared.dev\tEP\nb.shared.dev\tEP\n")[1]
+check(mml.read_ids(two)["d:a.shared.dev"] != mml.read_ids(two)["d:b.shared.dev"], "two tenants of one suffix are two companies")
 check("m.metrics.adnet.example" not in r4, "a host under a masked row is not repeated")
 check("ev.accounts.google.com" not in r4 and "x.google.com" not in r4 and "sub.auth.example" not in r4 and "new.news.example" not in r4,
       "a protected row shields the hosts below it: platform owner, identity, deny list, social")

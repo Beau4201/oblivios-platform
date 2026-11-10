@@ -19,7 +19,7 @@ made with three rules, and every row of the output says which one applies:
 3. Every domain of the DENYLIST, and every domain of the categories core, cdn, social and identity, is *protected* (company
    id 0): no name under it is masked, even when a less specific row would mask it.
 4. A host of EasyPrivacy or EasyList (EASYLIST_HOSTS: whole hosts only, see import-easylist.py) is masked, its company the
-   registrable domain, unless a row of rules 1 to 3 is at or above it: a protected row shields it, a masked row already masks it.
+   host itself, unless a row of rules 1 to 3 is at or above it: a protected row shields it, a masked row already masks it.
 
 Output format: see exit-daemon/src/masklist.rs. The output is deterministic (sorted; a company keeps the id that IDS holds, a new company gets the next free id in the order of its name).
 """
@@ -35,11 +35,7 @@ EASYLIST_HEADER = "easylist-hosts\t1"
 MAX_ENTRIES = 262144
 MAX_ID = 4294967295
 MAX_NAME = 64
-# shortcut: a short list of two-level public suffixes instead of the Public Suffix List; a host under another one gets the
-# company of its last two labels, which only groups its rows differently. Upgrade if the grouping is ever shown to a user.
-TWO_LEVEL = {"co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.jp", "ne.jp", "or.jp", "com.br", "com.cn",
-             "net.cn", "org.cn", "co.in", "net.in", "co.kr", "or.kr", "com.tr", "com.mx", "co.za", "com.tw", "co.nz", "com.ar",
-             "com.sg", "com.hk", "co.id", "co.il", "com.ua", "com.ru", "com.pl", "com.es", "com.de", "co.th", "com.vn", "com.ph"}
+
 _LABEL = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
@@ -78,11 +74,6 @@ def read_list(text):
                 raise SystemExit(f"line {n}: not a domain: {key!r}")
             exact.add(key)
     return exact, prefixes
-
-
-def registrable(host):
-    p = host.split(".")
-    return ".".join(p[-3:]) if len(p) >= 3 and ".".join(p[-2:]) in TWO_LEVEL else ".".join(p[-2:])
 
 
 def read_easylist(text):
@@ -155,12 +146,14 @@ def build_with_ids(classifier_text, deny_text, allow_text, ids_text, easylist_te
         rows[d] = None
     # Rule 4: a host of EasyPrivacy or EasyList is masked unless a row at or above it exists. A protected row above it shields it
     # (no host of google.com, a platform owner or a protected domain is masked because a list names it, the allow list decides
-    # those); a masked row above it already masks it. The company is the registrable domain of the host.
+    # those); a masked row above it already masks it. The company is the host itself: the user's choice ("show my address to
+    # this company") then never covers more than the host that the notification named, and no two tenants of a shared suffix
+    # (pages.dev, b-cdn.net, github.io, blob.core.windows.net) are one company.
     if easylist_text:
         for h in sorted(read_easylist(easylist_text), key=lambda x: (x.count("."), x)):  # a parent first: its subhosts are then redundant
             labels = h.split(".")
             if not any(".".join(labels[i:]) in rows for i in range(len(labels) - 1)):
-                rows[h] = "d:" + registrable(h)
+                rows[h] = "d:" + h
 
     def name_of(key):
         if key.startswith("o:"):
