@@ -14,8 +14,11 @@
   runtime dependencies — confirmed via `guardian-core/build.gradle.kts`).
   Reproduced via `:guardian-core:clean :guardian-core:jar --offline` to rule
   out a stale Gradle cache; hash matched both times.
-- SHA-256 (current, after the `org.sovereignos` -> `org.freeholdos` package rename, ADR-170,
-  re-vendored 2026-10-15): `6c676f1071804015224727ffa79fcde49d4439d73ef495fc31437d464eed80e0`,
+- SHA-256 (current, after the `org.freeholdos` -> `org.oblivios` package rename, ADR-224,
+  re-vendored 2026-11-10): `fcabf19fa5542764665f1fa081afa1e20ad671d4740f6a74f4e79940669af047`, built at
+  `oblivios-services` `b5e73ab` with `./gradlew :guardian-core:clean :guardian-core:jar --offline`, twice with
+  the same hash; the tests of `./gradlew :guardian-core:test --offline` pass.
+- SHA-256 (superseded 2026-11-10, `org.freeholdos` prefix, re-vendored 2026-10-15): `6c676f1071804015224727ffa79fcde49d4439d73ef495fc31437d464eed80e0`,
   built at `freeholdos-services` `615caf8` with `./gradlew :guardian-core:clean :guardian-core:jar
   --offline`, twice with the same hash. The entries equal those of the jar below with the prefix
   mapped. The 154 tests of `./gradlew test --offline` pass.

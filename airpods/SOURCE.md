@@ -8,8 +8,11 @@
   lists only test dependencies). Output `airpods-core-0.1.0-SNAPSHOT.jar`,
   vendored under the name `airpods-core.jar`.
 - Tests at that commit: 57 tests, 0 failures (`AapCodecControlsTest` added: the frames of `AIR-180` and `AIR-182`, the ranges, the identifiers, an out-of-range report that stays unrecognised); three mutations of the new code each failed the suite (Task 3 step 5 of the Plan 9 plan).
-- SHA-256 (current, after the `org.sovereignos` -> `org.freeholdos` package rename, ADR-170, re-vendored
-  2026-10-15): `e64df90ea02c567c8df6e71180575bac8254cf441cb34045230603ff9c011d92`, built at
+- SHA-256 (current, after the `org.freeholdos` -> `org.oblivios` package rename, ADR-224, re-vendored
+  2026-11-10): `8658fb35e5c03f4c8741704886a1446e661a2b5abb253b02945aa59e4002f2f8`, built at
+  `oblivios-services` `b5e73ab` with the command above, twice with the same hash; same entries as the
+  jar below with the prefix mapped; the tests of `./gradlew :airpods-core:test --offline` pass.
+- SHA-256 (superseded 2026-11-10, `org.freeholdos` prefix, re-vendored 2026-10-15): `e64df90ea02c567c8df6e71180575bac8254cf441cb34045230603ff9c011d92`, built at
   `freeholdos-services` `615caf8` with the command above, twice with the same hash; same entries as the
   jar below with the prefix mapped; the tests of `./gradlew test --offline` pass.
 - SHA-256 of the jar of 2026-10-07 (`org.sovereignos` prefix, superseded): `edd9a799ba7fcf86a9800bf92add1dab17819b0668d09954e3dec9907b08739b` (2026-10-07; the jar of `f1dee3f` was `64f391a2...`).
