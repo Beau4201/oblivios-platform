@@ -41,8 +41,10 @@ STMT_FILE=$(grep -l 'ExitApp/android_common/javac/ExitApp.jar \$' "$OBJ"/soong/b
 if [ -n "$STMT_FILE" ]; then
   L=$(grep -n 'ExitApp/android_common/javac/ExitApp.jar \$' "$STMT_FILE" | head -1 | cut -d: -f1)
   STMT=$(sed -n "${L},$((L+400))p" "$STMT_FILE")
-  BOOT=$(printf '%s\n' "$STMT" | grep -m1 -E '^    bootClasspath = ' | sed 's/^    bootClasspath = //')
-  CPOPT=$(printf '%s\n' "$STMT" | grep -m1 -E '^    classpath = ' | sed 's/^    classpath = //')
+  # `|| true`: grep -m1 stops early, printf of a long statement then gets SIGPIPE and pipefail would end the script (exit 141);
+  # the test below is the guard.
+  BOOT=$(printf '%s\n' "$STMT" | grep -m1 -E '^    bootClasspath = ' | sed 's/^    bootClasspath = //' || true)
+  CPOPT=$(printf '%s\n' "$STMT" | grep -m1 -E '^    classpath = ' | sed 's/^    classpath = //' || true)
   test -n "$BOOT" -a -n "$CPOPT" || { echo "no class path in the javac statement of ExitApp" >&2; exit 2; }
   SRCS=$(find "$A/src" "$OUT/gen" -name '*.java' | sort)
   # the options hold paths relative to the tree

@@ -4,14 +4,14 @@
 
 | Item | Value |
 | --- | --- |
-| Source | `freeholdos-services`, directory `exit-daemon`, commit `8603139` (`master`) |
+| Source | `freeholdos-services`, directory `exit-daemon`, commit `7beab16` (branch `masklist-easylist`, not pushed, not merged) |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `cargo build --release --locked --offline`, `panic = "abort"`, `lto`, `opt-level = "z"`, the AOSP clang as linker (`tools/env.sh`) |
 | Build command | `exit-daemon/tools/build-android.sh` (copies the tree to the build server, builds, then checks the binary itself) |
-| SHA-256 | `1583618148c8c7d2b06cb2073c4c72e1c6f25327ab5910894426a76d37da197c` |
-| Size | 19 379 336 bytes |
-| Control protocol | 4 |
-| Built | 2026-10-30, for the exit country of an Isolated app (ADR-208): control protocol 4 adds `SetCountry`, which the exit app sends for each app whose persona place is in another country; the daemon picks the Tor exit country of that app from it. Before this build: 2026-10-29, after `NET-009` and `IMG-018` of `lynx` `2026102303`, the route helper reads an interface index by `RTM_GETLINK` on its netlink socket and not by `if_nametoindex`, which opened an `AF_INET` socket in a domain that has none (ADR-199); `strace` of that binary on the phone showed no `AF_INET` socket in an apply. The Tor exit country of this build is not run on a phone yet (a device row). |
-| Reproduced | built twice from the files of the commit above, from the committed tree, into two cargo target directories: same SHA-256 and size (`15836181…`, 19 379 336 bytes, `cmp` identical) |
+| SHA-256 | `ddf5ddd43db9eb443e27089184bec86c00b18857e92ad8d32c834638228188aa` |
+| Size | 19 369 744 bytes |
+| Control protocol | 5 |
+| Built | 2026-11-10, for the company ids of 32 bits and a mask list of up to 262144 rows (ADR-223, `Proposed`): control protocol 5 writes the company in `SetOverrides`, `Release`, `Failures` and `Promoted` as four bytes, `masklist.rs` reads ids up to 4294967295, `MAX_ENTRIES` is 262144 and `MAX_FILE` 16 MiB. The shipped list is still the 3699-row file below, so the behaviour with a list of about 91,500 rows (memory of `exitd`, start-up time) is not measured; not run on a phone. Host tests on the build server: 293 + 7 + 1 passed, 93 of 93 mutations of `control` and the mask list killed. Before this build: 2026-10-30, for the exit country of an Isolated app (ADR-208): control protocol 4 adds `SetCountry`, which the exit app sends for each app whose persona place is in another country; the daemon picks the Tor exit country of that app from it. Before this build: 2026-10-29, after `NET-009` and `IMG-018` of `lynx` `2026102303`, the route helper reads an interface index by `RTM_GETLINK` on its netlink socket and not by `if_nametoindex`, which opened an `AF_INET` socket in a domain that has none (ADR-199); `strace` of that binary on the phone showed no `AF_INET` socket in an apply. The Tor exit country of this build is not run on a phone yet (a device row). |
+| Reproduced | built twice from the files of the commit above, from the committed tree, into two cargo target directories: same SHA-256 and size (`ddf5ddd4…`, 19 369 744 bytes, `cmp` identical; 2026-11-10, targets `target-android` and `target-android-2`) |
 | Needed libraries | `libc.so`, `libdl.so`, `libm.so`, interpreter `/system/bin/linker64` (`llvm-readelf`, read by the build script) |
 | Contents | the Tor client (`tor-proto`), the packet layer (`smoltcp`), `aws_lc` and the daemon itself; no build-machine path (the build script reads the binary for each) |
 | Dependencies | `exit-daemon/Cargo.lock`; versions, checksums and licences in `exit-daemon/NOTICE` and `RISKS.md` |
