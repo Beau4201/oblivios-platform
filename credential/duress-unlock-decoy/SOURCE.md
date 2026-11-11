@@ -1,16 +1,31 @@
 # Source record
 
-## Fix 2026-11-10: decoy memory while locked and the FallbackHome route (`frameworks-base/0012`, `frameworks-base/0013`)
+## Fix 2026-11-05, exported 2026-11-11: choosing the finger and the owner check (`frameworks-base/0012`, `frameworks-base/0013`)
+
+Two commits of the build tree that were built into `lynx` `2026110502` and never exported (found 2026-11-11 while landing the two
+patches below, which had taken these numbers). Exported from the branch `oblivios-2026110200` as `ef65610d1f1b` (`0012`, choosing the
+duress finger works for every biometric id: `DecoyFingerPolicy.isUsableFingerId`, a copy of the owner credential in
+`DecoyFingerHelper.set`; row `DUR-027`) and `afc9ac07440e` (`0013`, the decoy administration accepts only the owner's own credential:
+`LockSettingsService.isOwnerCredential`; the "DUR-032" of its message is the proof row of that time, since reassigned). Their
+commit subjects on the branch still read `freeholdos:`; the files carry `oblivios:`, and no other text differs (the mapping of the
+rename on the subject only). Proof that the files are the branch: on a temporary index of the server at `8b4fad9bb49b` (the head
+before the two patches below) both applied in reverse and then forward again, and the tree equals `8b4fad9bb49b` again. Not
+compiled by this export, and not run on a device beyond the build of `2026110502`.
+
+## Fix 2026-11-10: decoy memory while locked and the FallbackHome route (`frameworks-base/0014`, `frameworks-base/0015`)
+
+Numbered `0012` and `0013` until 2026-11-11, when the two patches above were found missing from the package and took those numbers
+(the files were renamed and their `[PATCH 12/13]` marks reset; the commits on the branch are unchanged).
 
 Owner requirement (2026-11-10): the decoy may not hold much memory, and the duress unlock must take as long as an
 ordinary one. Measured on `lynx` `2026110502` the same day (logcat and `dumpsys meminfo`, charging, battery 3-4%, so
 diagnostic and not a `DUR-019` result): with the device locked the decoy ran 38 processes, 2.0 GB PSS; about 30 of them
 came from its `BOOT_COMPLETED`, one every 0.45 s for 14 s after the lock.
 
-- `frameworks-base/0012`: `UserController.finishUserUnlockedCompleted` holds `BOOT_COMPLETED` back for a decoy-type user
+- `frameworks-base/0014`: `UserController.finishUserUnlockedCompleted` holds `BOOT_COMPLETED` back for a decoy-type user
   that is neither current nor the switch target (`UserState.bootCompletedDeferred`); `finishUserSwitch` sends it once the
   decoy is in the foreground and its home screen went idle. A stop discards the mark with its `UserState`.
-- `frameworks-base/0013`: `DecoyProfileHelper` stops the warm decoy whenever the keyguard reports unlocked in the owner's
+- `frameworks-base/0015`: `DecoyProfileHelper` stops the warm decoy whenever the keyguard reports unlocked in the owner's
   own session with no switch pending (`getCurrentAndTargetUserIds`), so a finger unlock no longer leaves it running; and
   `awaitDecoyUnlocked` starts the decoy in the background and waits (bounded, 5 s) until it is unlocked before the
   switch, before OK for a typed credential and on the handler for the finger. Without it a switch to a decoy that is not
@@ -21,7 +36,7 @@ came from its `BOOT_COMPLETED`, one every 0.45 s for 14 s after the lock.
   then; on 2026-11-11 they applied to its `oblivios-2026110200` without change (see the landing below). Authored in `.worktrees/duress-ram-timing`; the exported series re-applied from the tag gives
   the authored tree (`d2169c091944`).
 - Landed 2026-11-11 on the build server, branch `oblivios-2026110200` of `/srv/oblivios/platform-primary/frameworks/base`
-  (tree clean, no build running, `git apply --check` clean first, then `git am -C1`): `0012` as `788c1f1fdd6c` and `0013` as
+  (tree clean, no build running, `git apply --check` clean first, then `git am -C1`): `0014` as `788c1f1fdd6c` and `0015` as
   `02bd4ccabea5` on top of `8b4fad9bb49b`; the `git patch-id --stable` of both landed commits equals that of the files in
   `patches/frameworks-base/`, so the files and the live branch agree. Not compiled (a parse-only pass over the three files reports no
   error; it is not a type-check), no unit test (no `UserControllerTest` case reaches `BOOT_COMPLETED`), not run on a device. Checks on the
