@@ -17,11 +17,14 @@ came from its `BOOT_COMPLETED`, one every 0.45 s for 14 s after the lock.
   yet unlocked resolves Settings' `FallbackHome` and unlocks the decoy only when that placeholder goes idle.
 - Base: the public GrapheneOS `platform_frameworks_base` tag `2026110200` (`ad133394d443`) with the 83 tracked
   `frameworks-base` patches of all packages applied in author-date order with `git am -C1`, as `rebase-branches.sh`
-  does; the build server was not reachable (no VPN), so the files were not compared with the live branch
-  `freeholdos-2026110200`. Authored in `.worktrees/duress-ram-timing`; the exported series re-applied from the tag gives
+  does; the build server was not reachable (no VPN) when the files were authored, so they were not compared with the live branch
+  then; on 2026-11-11 they applied to its `oblivios-2026110200` without change (see the landing below). Authored in `.worktrees/duress-ram-timing`; the exported series re-applied from the tag gives
   the authored tree (`d2169c091944`).
-- Not landed on the build server, not compiled (a parse-only pass over the three files reports no error; it is not a
-  type-check), no unit test (no `UserControllerTest` case reaches `BOOT_COMPLETED`), not run on a device. Checks on the
+- Landed 2026-11-11 on the build server, branch `oblivios-2026110200` of `/srv/oblivios/platform-primary/frameworks/base`
+  (tree clean, no build running, `git apply --check` clean first, then `git am -C1`): `0012` as `788c1f1fdd6c` and `0013` as
+  `02bd4ccabea5` on top of `8b4fad9bb49b`; the `git patch-id --stable` of both landed commits equals that of the files in
+  `patches/frameworks-base/`, so the files and the live branch agree. Not compiled (a parse-only pass over the three files reports no
+  error; it is not a type-check), no unit test (no `UserControllerTest` case reaches `BOOT_COMPLETED`), not run on a device. Checks on the
   device: `Deferring BOOT_COMPLETED of background user` in logcat and the decoy's process count and PSS while locked;
   no `FallbackHome` in a duress unlock; `am get-started-user-state` of the decoy after a finger unlock.
 
