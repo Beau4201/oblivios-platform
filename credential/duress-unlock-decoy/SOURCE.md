@@ -1,5 +1,16 @@
 # Source record
 
+## Fix 2026-11-11: the API listing after the rename (`frameworks-base/0016`)
+
+The first build after the rename (`lynx` `2026111101`, started 14:49) ran 2 h 18 min and stopped at 99 % with one failed target,
+`check_current_api` of `system-api-stubs-docs-non-updatable`: the rename of `USER_TYPE_FULL_FREEHOLDOS_DECOY` to
+`USER_TYPE_FULL_OBLIVIOS_DECOY` moves the constant behind `USER_TYPE_FULL_GUEST` in the generated listing, and
+`core/api/system-current.txt` still had the old order (the only occurrence in any API file). `0016` swaps the two lines, no code
+change. Authored in a scratch repository from the server's file, landed 2026-11-11 with `git am -C1` on `02bd4ccabea5` as
+`a9cbbaac5325` (tree clean, no build running); the `git patch-id --stable` of the landed commit equals that of the file. The build was
+started again at 17:11 and continues incrementally. Other renamed names that sort differently in a generated list are not
+searched for; the build shows them.
+
 ## Fix 2026-11-05, exported 2026-11-11: choosing the finger and the owner check (`frameworks-base/0012`, `frameworks-base/0013`)
 
 Two commits of the build tree that were built into `lynx` `2026110502` and never exported (found 2026-11-11 while landing the two
