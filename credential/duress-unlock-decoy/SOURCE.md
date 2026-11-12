@@ -1,5 +1,18 @@
 # Source record
 
+## Spike 2026-11-12: the decoy launcher process while the decoy is locked (`frameworks-base/0021`, throwaway)
+
+Design B of `docs/superpowers/specs/2026-11-12-duress-unlock-timing-design.md` in the foundation repository. The owner did not
+accept the resident decoy key of `0017`, so `0017` is not to be landed. The spike series is `0018`, `0019`, `0020` and `0021`
+(checked with `git am` onto the file of `026043e8`: the result is identical to the spike branch `duress-spike` in the scratch
+repository, commits `dbd7105a`, `3d4eb67c`, `1dae54ec`, `e9ccee49`). `0021` requests the decoy's Launcher3 process through
+`ActivityManagerInternal.startProcess` when the keyguard locks, with the decoy's CE key still evicted; it logs under `SpikeWarm`.
+Verified in the source: the signature of `startProcess` (9 arguments), `IPackageManager.getApplicationInfo(String, long, int)`,
+`AppGlobals.getPackageManager`, and that `ProcessList.startProcessLocked` has no locked-user check before the process
+is requested. Not compiled, not run. What the device has to show: the process exists after the lock
+(`ps -A | grep u12_`), it is alive 30 s later, no `FATAL EXCEPTION` of `com.android.launcher3` for user 12 in `logcat`, the
+decoy launcher's `Displayed` line after a duress credential is short, and the stage times of `DUR-019`.
+
 ## Fix 2026-11-12: a warm decoy that is really warm, and the screen settings of the owner (`frameworks-base/0017` to `0020`)
 
 Measured on `lynx` `2026111101` (`DUR-019`, `docs/superpowers/specs/2026-11-12-duress-unlock-timing-design.md` in the
