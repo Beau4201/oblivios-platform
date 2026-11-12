@@ -1,6 +1,6 @@
 # Source record
 
-## Fix 2026-11-12: a warm decoy that is really warm, and the screen settings at the switch (`frameworks-base/0017`, `frameworks-base/0018`)
+## Fix 2026-11-12: a warm decoy that is really warm, and the screen settings of the owner (`frameworks-base/0017` to `0019`)
 
 Measured on `lynx` `2026111101` (`DUR-019`, `docs/superpowers/specs/2026-11-12-duress-unlock-timing-design.md` in the
 foundation repository): the duress unlock took 2.75 and 2.96 s after an owner unlock (3 s of black screen) against 0.79 s for the
@@ -11,10 +11,17 @@ ordinary one. vold evicts the decoy's CE key 0.2 s after every owner unlock beca
   decoy user type opts in, `0001`). The CE key stays resident, so the next warm start unlocks at once. Security trade-off, decided by
   ADR-222 and the timing requirement: while the device is locked the decoy's storage is open without the decoy credential; it holds
   decoy data only. Removing the decoy removes the user and its key.
-- `0018`: `DecoySettingsMirror` (JVM-testable, `DecoySettingsMirrorTest`, 7 tests, 4 mutations killed) copies the owner's brightness,
-  screen timeout, rotation and lock-screen settings to the decoy before `switchToUserSilently`; the owner's values are only read.
+- `0018`: `DecoySettingsMirror` (JVM-testable, `DecoySettingsMirrorTest`) copies the owner's brightness, screen timeout, rotation
+  and lock-screen settings to the decoy; the owner's values are only read.
+- `0019`: two findings of the automated security review of `0017` and `0018`. The quick-settings tile list holds
+  `custom(package/service)` entries that name the owner's apps, so only built-in tiles are copied (a decoy must not learn the
+  owner's apps); and the copy moved from before `switchToUserSilently` to the moment the keyguard locks (after the decoy is
+  started), so it adds nothing to the duress unlock time. Residual gap: brightness changed from the lock screen's quick settings
+  after the lock is not copied (measured in `DUR-037`). 9 mirror tests; five mutations were run and each was killed by a test (four
+  before `0019`, the tile filter after it); with the 24 existing decoy finger tests 33 of 33 pass on the JVM. The wiring in
+  `DecoyProfileHelper` is not compiled and not run.
 
-Authored in `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-timing`, `edad7c44` and `1b326ccf`), exported with
+Authored in `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-timing`, `edad7c44`, `1b326ccf`, `112d9572`), exported with
 `git format-patch`, checked with `git am` onto the file of `026043e8` (result identical to the worktree file). Not landed on the
 build server, not module-built, not on a device: landing needs the owner's word.
 
