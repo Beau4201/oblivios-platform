@@ -1,5 +1,23 @@
 # Source record
 
+## Fix 2026-11-12: a warm decoy that is really warm, and the screen settings at the switch (`frameworks-base/0017`, `frameworks-base/0018`)
+
+Measured on `lynx` `2026111101` (`DUR-019`, `docs/superpowers/specs/2026-11-12-duress-unlock-timing-design.md` in the
+foundation repository): the duress unlock took 2.75 and 2.96 s after an owner unlock (3 s of black screen) against 0.79 s for the
+ordinary one. vold evicts the decoy's CE key 0.2 s after every owner unlock because `0015` stopped the decoy with
+`stopUserWithCallback`, so the lock-time start stayed `RUNNING_LOCKED` and the launcher started after the duress credential.
+
+- `0017`: `maybeStopUnusedWarmDecoy` stops with `stopUserWithDelayedLocking` (verified in `ActivityManagerService.java:17424`; the
+  decoy user type opts in, `0001`). The CE key stays resident, so the next warm start unlocks at once. Security trade-off, decided by
+  ADR-222 and the timing requirement: while the device is locked the decoy's storage is open without the decoy credential; it holds
+  decoy data only. Removing the decoy removes the user and its key.
+- `0018`: `DecoySettingsMirror` (JVM-testable, `DecoySettingsMirrorTest`, 7 tests, 4 mutations killed) copies the owner's brightness,
+  screen timeout, rotation and lock-screen settings to the decoy before `switchToUserSilently`; the owner's values are only read.
+
+Authored in `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-timing`, `edad7c44` and `1b326ccf`), exported with
+`git format-patch`, checked with `git am` onto the file of `026043e8` (result identical to the worktree file). Not landed on the
+build server, not module-built, not on a device: landing needs the owner's word.
+
 ## Fix 2026-11-11: the API listing after the rename (`frameworks-base/0016`)
 
 The first build after the rename (`lynx` `2026111101`, started 14:49) ran 2 h 18 min and stopped at 99 % with one failed target,
