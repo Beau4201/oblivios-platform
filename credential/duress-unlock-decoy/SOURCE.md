@@ -3,7 +3,7 @@
 ## Spike 2026-11-12: the decoy launcher process while the decoy is locked (`frameworks-base/0021`, throwaway)
 
 Design B of `docs/superpowers/specs/2026-11-12-duress-unlock-timing-design.md` in the foundation repository. The owner did not
-accept the resident decoy key of `0017`, so `0017` is not to be landed. The spike series is `0018`, `0019`, `0020` and `0021`
+accept the resident decoy key of `0017` (withdrawn, ADR-228). The spike series is `0018`, `0019`, `0020` and `0021`
 (checked with `git am` onto the file of `026043e8`: the result is identical to the spike branch `duress-spike` in the scratch
 repository, commits `dbd7105a`, `3d4eb67c`, `1dae54ec`, `e9ccee49`). `0021` requests the decoy's Launcher3 process through
 `ActivityManagerInternal.startProcess` when the keyguard locks, with the decoy's CE key still evicted; it logs under `SpikeWarm`.
@@ -16,17 +16,17 @@ the previous build (0 errors, with a control of 1 error), compiled into `lynx` `
 (`ps -A | grep u12_`), it is alive 30 s later, no `FATAL EXCEPTION` of `com.android.launcher3` for user 12 in `logcat`, the
 decoy launcher's `Displayed` line after a duress credential is short, and the stage times of `DUR-019`.
 
-## Fix 2026-11-12: a warm decoy that is really warm, and the screen settings of the owner (`frameworks-base/0017` to `0020`)
+## Fix 2026-11-12: the screen settings of the owner for the decoy (`frameworks-base/0018` to `0020`; `0017` withdrawn)
 
 Measured on `lynx` `2026111101` (`DUR-019`, `docs/superpowers/specs/2026-11-12-duress-unlock-timing-design.md` in the
-foundation repository): the duress unlock took 2.75 and 2.96 s after an owner unlock (3 s of black screen) against 0.79 s for the
-ordinary one. vold evicts the decoy's CE key 0.2 s after every owner unlock because `0015` stopped the decoy with
-`stopUserWithCallback`, so the lock-time start stayed `RUNNING_LOCKED` and the launcher started after the duress credential.
+foundation repository): the duress unlock took 2.57 to 2.96 s after an owner unlock (3 s of black screen) against 0.79 s for the
+ordinary one. vold evicts the decoy's CE key 0.2 s after every owner unlock because `0015` stops the decoy with
+`stopUserWithCallback`, so the lock-time start stays `RUNNING_LOCKED` and the launcher starts after the duress credential.
 
-- `0017`: `maybeStopUnusedWarmDecoy` stops with `stopUserWithDelayedLocking` (verified in `ActivityManagerService.java:17424`; the
-  decoy user type opts in, `0001`). The CE key stays resident, so the next warm start unlocks at once. Security trade-off, decided by
-  ADR-222 and the timing requirement: while the device is locked the decoy's storage is open without the decoy credential; it holds
-  decoy data only. Removing the decoy removes the user and its key.
+- `0017` (withdrawn): `maybeStopUnusedWarmDecoy` would have stopped with `stopUserWithDelayedLocking` (verified in
+  `ActivityManagerService.java:17424`), keeping the decoy's CE key resident so that the next warm start unlocks at once. The owner
+  declined an open decoy storage while the device is locked (ADR-228); the file is removed, commit `2ef1f74` of this repository
+  holds it. The spike `0021` takes its place.
 - `0018`: `DecoySettingsMirror` (JVM-testable, `DecoySettingsMirrorTest`) copies the owner's brightness, screen timeout, rotation
   and lock-screen settings to the decoy; the owner's values are only read.
 - `0019`: two findings of the automated security review of `0017` and `0018`. The quick-settings tile list holds
@@ -42,7 +42,7 @@ ordinary one. vold evicts the decoy's CE key 0.2 s after every owner unlock beca
 
 Authored in `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-timing`, `edad7c44`, `1b326ccf`, `112d9572`, `c7208946`), exported with
 `git format-patch`, checked with `git am` onto the file of `026043e8` (result identical to the worktree file). `0018` to `0020`
-were landed with `0021` (see the spike section); `0017` was not landed and is not to be.
+were landed with `0021` (see the spike section); `0017` was never landed.
 
 ## Fix 2026-11-11: the API listing after the rename (`frameworks-base/0016`)
 
