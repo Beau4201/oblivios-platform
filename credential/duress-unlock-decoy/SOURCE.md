@@ -9,7 +9,10 @@ repository, commits `dbd7105a`, `3d4eb67c`, `1dae54ec`, `e9ccee49`). `0021` requ
 `ActivityManagerInternal.startProcess` when the keyguard locks, with the decoy's CE key still evicted; it logs under `SpikeWarm`.
 Verified in the source: the signature of `startProcess` (9 arguments), `IPackageManager.getApplicationInfo(String, long, int)`,
 `AppGlobals.getPackageManager`, and that `ProcessList.startProcessLocked` has no locked-user check before the process
-is requested. Not compiled, not run. What the device has to show: the process exists after the lock
+is requested. Landed 2026-11-12 with `git am -C1` on the build tree (`6cf16c743972`, `6b0fdd75fc8d`, `565288fd2c7b`,
+`291321d970d3`, tree clean first, sha256 of the three touched files equal to the scratch repository), type-checked against the jars of
+the previous build (0 errors, with a control of 1 error), compiled into `lynx` `2026111201` (build 16:13, markers `SpikeWarm` and
+`DecoySettingsMirror` in `services.jar`), not signed, not flashed, not run. What the device has to show: the process exists after the lock
 (`ps -A | grep u12_`), it is alive 30 s later, no `FATAL EXCEPTION` of `com.android.launcher3` for user 12 in `logcat`, the
 decoy launcher's `Displayed` line after a duress credential is short, and the stage times of `DUR-019`.
 
@@ -38,8 +41,8 @@ ordinary one. vold evicts the decoy's CE key 0.2 s after every owner unlock beca
   killed by a test. The wiring in `DecoyProfileHelper` is not compiled and not run.
 
 Authored in `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-timing`, `edad7c44`, `1b326ccf`, `112d9572`, `c7208946`), exported with
-`git format-patch`, checked with `git am` onto the file of `026043e8` (result identical to the worktree file). Not landed on the
-build server, not module-built, not on a device: landing needs the owner's word.
+`git format-patch`, checked with `git am` onto the file of `026043e8` (result identical to the worktree file). `0018` to `0020`
+were landed with `0021` (see the spike section); `0017` was not landed and is not to be.
 
 ## Fix 2026-11-11: the API listing after the rename (`frameworks-base/0016`)
 
