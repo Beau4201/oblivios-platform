@@ -1,5 +1,32 @@
 # Source record
 
+## Fix 2026-11-14: the cold duress unlock at about 0.90 s (`frameworks-base/0022` to `0034`)
+
+ADR-229 of the foundation repository (design: `docs/superpowers/specs/2026-11-12-duress-unlock-timing-design.md`, plan:
+`docs/superpowers/plans/2026-11-12-duress-unlock-timing.md`). The cold unlock was five serial waits (measured on `lynx` `2026111201`);
+the thirteen commits remove them and the differences a second person could see at the switch.
+
+- `0022` copies `ui_night_mode` and the dark-theme times (the display configuration changed at the switch); `0024` copies the
+  volumes, refresh rate, theme setting and lock-screen and status-bar values by an allowlist; `0025` copies the owner's wallpaper
+  at the lock, on the handler; `0031` copies the owner's Auto confirm unlock when both PINs have the same known length.
+- `0023` binds the decoy's `KeyChain` on its own thread (the bind blocked the shared SystemUI thread for 1.4 s).
+- `0026` starts the decoy's home after the keyguard has gone away and holds the going-away until the window manager has applied
+  the user change; `0027` requests the exit as soon as the switch is released and keeps the ordinary unlock animation; `0028`
+  does not wait for the decoy's unlock to end and starts its home 150 ms after the going-away; `0029` adds the global setting
+  `oblivios_duress_fast` (0 turns 0026 to 0028 off without a build); `0030` posts the deferred home start only when one waits.
+- `0032` keeps the notification stack hidden at the end of the bouncer-to-gone transition during an authorized switch
+  (the cause of the card that showed for a few frames and stuck: the transition ended before the held exit started).
+- `0033` and `0034` are stage logs for the timing rows (`Exit held`, `Exit released after N ms`, `Home start deferred`), on
+  debuggable builds only.
+
+Authored in `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-v2`, base `291321d9`), exported with
+`git format-patch --start-number 22`, checked on the build server with `git apply --cached` onto a temporary index (all thirteen
+apply), landed 2026-11-14 with `git am` on `291321d970d3` (tree clean, no build running); head `f26cefc13b00`; the
+`git patch-id --stable` of each landed commit equals that of its file. Type-checked with `tools/build-vm/typecheck-duress-frameworks.sh`
+(Java and Kotlin against the jars of the previous build, a control on the base, planted errors found), 16 JVM tests of
+`DecoySettingsMirror` pass, a mutation of the Auto confirm rule fails one. Built into `lynx` `2026111401`; SystemUI tests and the
+module build are the first compile of the tests. What the device has to show: `DUR-019`, `DUR-035`, `DUR-036`, `DUR-038` to `DUR-040`.
+
 ## Spike 2026-11-12: the decoy launcher process while the decoy is locked (`frameworks-base/0021`, throwaway)
 
 Design B of `docs/superpowers/specs/2026-11-12-duress-unlock-timing-design.md` in the foundation repository. The owner did not
