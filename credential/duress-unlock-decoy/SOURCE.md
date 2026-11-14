@@ -1,5 +1,26 @@
 # Source record
 
+## Fix 2026-11-14 (round of `lynx` `2026111401`): the decoy wallpaper and the early stop at the switch back (`frameworks-base/0035`, `0036`)
+
+Measured on `2026111401` (`DUR-038`, `DUR-035`, `DUR-036`, `DUR-039`, `DUR-040`; foundation `duress-engineering-notes.md`, "Round of
+2026-11-14").
+
+- `0035` copies the owner's wallpaper as files (`wallpaper_orig`, `wallpaper`, the lock pair, `wallpaper_info.xml` last) to the
+  decoy's system directory at the lock, instead of `WallpaperManager#setStream`: the wallpaper service finishes a static set in a file
+  observer that exists only for the current and the unlocked user, so the decoy kept a source image, no crop and no colours, and its
+  home and lock screen were black. New class `DecoyWallpaperFiles`; 8 JVM tests pass, 4 of 4 mutations fail them. Seen on the device:
+  user 12 holds a crop of 265563 bytes and a `wallpaper_info.xml` of 8127 bytes (759 before), `dumpsys wallpaper` lists `mBindSource=SET_STATIC` for both users.
+- `0036` does not kill the decoy's packages at the start of the switch back (`UserController#isEarlyPackageKillEnabledForUserSwitch`
+  is false when the outgoing user is the decoy): `stopPreviousUserApps` killed the decoy launcher 0.18 s into the exit and the
+  stage of the animation went with it. The stop of the switch still ends the decoy about 1.6 s after the return. One test in
+  `UserControllerTest`, written, not run (it needs the Android test environment).
+
+Authored in `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-v3`, base `83b9a7a2`, the `duress-v2` head), exported with
+`git format-patch --start-number 35`, landed 2026-11-14 with `git am --3way` on `f26cefc13b00` as `f83ebf636926` and `de89c21728ad`;
+the `git patch-id --stable` of each landed commit equals that of its file. Type-checked with `tools/build-vm/typecheck-duress-frameworks.sh`
+(no error beyond the three of the base). Module-built (`services`, `SystemUI`, 14 min) and pushed to the phone as `services.jar`
+with its `oat` files after `adb disable-verity` (owner, 2026-11-14); not part of an image yet.
+
 ## Fix 2026-11-14: the cold duress unlock at about 0.90 s (`frameworks-base/0022` to `0034`)
 
 ADR-229 of the foundation repository (design: `docs/superpowers/specs/2026-11-12-duress-unlock-timing-design.md`, plan:
