@@ -1,5 +1,44 @@
 # Source record
 
+## Patch series squashed (2026-11-15, ADR-234) — read this before using any `frameworks-base` patch number
+
+The 53 exported `frameworks-base` patches were regrouped into seven (`0017` had been withdrawn). Only
+neighbouring patches were joined, so the order is unchanged. Every `frameworks-base` number in this
+file, in `HISTORY.md`, in `README.md` and in the records that cite them (ADR-233, the rows `DUR-0xx`
+of the foundation repository) is a number of the series as it stood on 2026-11-15 before this
+squash; the table maps those to the exported patches. `packages-apps-settings`, `build-release` and
+`packages-apps-multiuser` are unchanged.
+
+| Exported patch | Former patches |
+| --- | --- |
+| `frameworks-base/0001` the decoy user type, its routing, the switch authorization and the hiding of the real user | `0001` to `0007` |
+| `frameworks-base/0002` the finger link, the decoy administration and the hold on the decoy's boot and warm start | `0008` to `0016` |
+| `frameworks-base/0003` mirror the owner's settings and wallpaper to the decoy at the lock | `0018` to `0025` |
+| `frameworks-base/0004` the cold duress unlock at about 0.90 s, its start order, home start and exit | `0026` to `0036` |
+| `frameworks-base/0005` the stage of an authorized switch, the decoy's launcher look and theme colours | `0037` to `0045` |
+| `frameworks-base/0006` the life of the stage, the zoom hand-over and the length and end of the keyguard exit | `0046` to `0049` |
+| `frameworks-base/0007` the findings D1 to D9 of the read of 2026-11-15 | `0050` to `0054` |
+
+Each exported commit message lists its former patches. Base: `frameworks/base` `ef50701b0b59` (the
+`duress-unlock-dummy` patch as landed), the parent of the first landed commit of the series on the
+build server branch `oblivios-2026110200`. Checked on 2026-11-15:
+
+- In a disposable repository (`.worktrees/squash-2611`, seeded from the repository of the second
+  module build, whose history equals the build server's) the 53 old files applied with `git am
+  --3way` on that base give the tree `fa01387781327a24568674296788d07182177b66`; the seven new
+  files exported from the squashed commits and applied again from scratch give the same tree.
+- 73 of the 78 files the series changes have the same blob as on the build server branch tip
+  (`7bc79c21e815`); the other five are also changed by other packages, so they differ there by
+  design.
+- The seven files apply with plain `git am` on a tree that already holds the `frameworks-base`
+  series of `memory/cached-process-cap`, `privacy/screenshot-detection`, `branding/boot`,
+  `datamap`, `physical/grab-detection`, `privacy/linkability`, `passwords` and `airpods`
+  (`privacy/compartments-profiles` does not apply there: its `0011` expects the import list of an
+  older upstream in `LoadedApk.java`; not caused by this squash).
+
+Not built, not run on a device. The build server branch was not rewritten, so its SHAs differ from
+anything this package records.
+
 ## Fix 2026-11-15, read of all Duress Unlock code: D1 to D9 (`frameworks-base/0050` to `0054`, `packages-apps-settings/0005`)
 
 ADR-233 of the foundation repository; findings and evidence in foundation `docs/reviews/2026-11-duress-unlock-code-review.md`
