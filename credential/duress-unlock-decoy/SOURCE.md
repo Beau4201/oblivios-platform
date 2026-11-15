@@ -23,6 +23,26 @@ Exported with `git format-patch --start-number=46`:
   their 0.5 s as in an ordinary unlock (logcat: "Keyguard exit without a corresponding app to show" 17 ms after the start, shade
   gone after 0.2 s). 450 ms is the ordinary exit of 447 ms (ADR-229); the ordinary unlock is not yet measured on this build.
 
+Measured on the module build of `0046` to `0048` (5 duress unlocks, 4 returns, 4 ordinary unlocks; foundation `DUR-045`,
+`DUR-019`): no black frame after the stage in duress unlocks 2 to 5 (`0046` works); the stage picture against the real home
+wallpaper fits at scale 1.00 with a normalised error of 0.01 to 0.08 (`0047` works); the owner reported the unlock as much
+slower and the blur as flashing. Cause of the slowness, from the logcat: the home was displayed 1.29 to 1.48 s after the
+credential check (1.06 s on average before) because `onKeyguardExitFinished` carries the call that tells the window manager the
+keyguard is gone (`setLockScreenShown(false)` through `updateActivityLockScreenState`), and the hold of `0048` delayed it by 450
+ms, so the incoming home could not draw behind the keyguard's views. Cause of the flashing: the held hide came 37 ms before the
+bouncer to gone transition finished (0.525 s from the going-away), so the scrim stayed at a random brightness (51 to 76 percent of
+the final one in 4 unlocks) that jumped to full when the shade went.
+
+- `0049` (squash of six commits, landed as `5dc70852`, `12c70e26`, `48470242`, `9bca330f`, `7de7e950`, `8cf59de6` of the
+  disposable repository): the window manager is told at once that the keyguard is gone
+  (`updateActivityLockScreenState(false, ...)`, flag `mAuthorizedExitWmNotified`, the one call that would follow is skipped); a
+  held exit that does not finish (locked again, a new switch, a canceled exit, a canceled fade) calls
+  `restoreWmKeyguardShownAfterHeldExit`, which tells the window manager that the keyguard is shown again and restores the alpha of
+  the shade (an automated security review of 2026-11-15 named the desync as a fail-open risk); the views are held 500 ms from the
+  going-away, until the transition has finished, then the root view of the shade fades out in 250 ms and the hide runs, so the
+  scrim does not jump. The hold is a constant, not the end of the transition (`shortcut`: no `KeyguardTransitionInteractor` in
+  the mediator; replace it by that signal if the constant ever hides too early or too late).
+
 ## Fix 2026-11-15: the stage of an authorized switch, the decoy's look and theme colours (`frameworks-base/0037` to `0045`)
 
 ADR-230 and ADR-231 of the foundation repository (measurements: foundation `duress-engineering-notes.md`, "Round of 2026-11-15";
