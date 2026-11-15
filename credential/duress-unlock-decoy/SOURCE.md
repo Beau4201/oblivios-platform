@@ -1,5 +1,43 @@
 # Source record
 
+## Fix 2026-11-15, read of all Duress Unlock code: D1 to D9 (`frameworks-base/0050` to `0054`, `packages-apps-settings/0005`)
+
+ADR-233 of the foundation repository; findings and evidence in foundation `docs/reviews/2026-11-duress-unlock-code-review.md`
+(ids D1 to D9). Six commits of two disposable repositories (`.worktrees/duress-ram-timing`, branch `duress-v4` from `8cf59de6`:
+`0f8264db`, `5bcab0bf`, `41e536c0`, `2d6947af`, `51a8932d`; `.worktrees/duress-settings`, branch `duress-settings-v1`: `51a1ac3`),
+landed on the build tree with `git am` (frameworks/base branch `oblivios-2026110200` from `e6ef77cba8cd`: `7477bc952ea4`,
+`1844964e5604`, `6a0f670e4fe6`, `ff3aa1d987dd`, `7bc79c21e815`; Settings branch `oblivios-2026110200` from `20aaf50818e`:
+`69945953b93`; both trees clean afterwards, no build running) and exported from the landed history with `git format-patch`
+(`--start-number=50` and `--start-number=5`). Not built, not module-built, not run on a device.
+
+- `0050` (D1, D4): `DecoyProfileHelper#onKeyguardLockedStateChanged` returns unless the current user is user 0, so the warm start, the
+  three lock-time mirrors and the read of the launcher look run only in the owner's session (they wrote the owner's values over the
+  decoy's live ones while the decoy was on screen and called the frozen launcher of user 0); `awaitDecoyUnlocked` sleeps 20 ms
+  when its latch has fired and the user is still not unlocking, instead of spinning to the deadline.
+- `0051` (D7): `DecoyFingerHelper` zeroizes the key of `deriveDecoyFingerKey()` in `set` and in the restore, and a generation counter
+  (advanced by every `setCache` and `clearState`) makes a restore that read the link before a change drop its result.
+- `0052` (D5, D6): `AuthorizedSwitchStage#show` catches a failure of `registerReceiver` (the fallback timer then removes the window
+  and SystemUI does not end on the main thread); `preload` decodes the wallpaper once at a time (`AtomicBoolean`).
+- `0053` (D2): `DuressPasswordHelper#setDuressCredentials` refuses a wipe PIN or password that unlocks the registered decoy
+  (`unlockSyntheticPasswordWithCredential` against the decoy's protector, `IllegalArgumentException`, which
+  `DuressPasswordSetupActivity` shows in its error dialog). One hardware attempt on the decoy per candidate of the decoy's own type
+  (the other type is refused before the hardware); the attempts reset at the next decoy unlock. A pair that is already equal is not
+  changed. `shortcut`: not a software comparison, because the decoy credential is stored only behind its protector; replace it if the
+  decoy credential ever gets a software-verifiable form. A rule "the wipe wins over the decoy" in the routing was rejected: it
+  would wipe the phone silently for an owner who has both equal today.
+- `0054` (D8, third part): `RootWindowContainer#startHomeOnTaskDisplayArea` does not hold back a start that comes from the Home key.
+- Settings `0005` (D3, D9): `DuressUnlockMainActivity` says so when Auto confirm unlock is on and the decoy PIN has another length
+  than the owner's PIN (`duress_unlock_length_changed`); the owner credential is no longer in the saved instance state (it survives
+  a configuration change through `onRetainNonConfigurationInstance`, after a process death the screen asks again) and the main,
+  set-up and finger screens zeroize their copy in `onDestroy`, queued behind the work that uses it.
+
+Verified: the type check of `tools/build-vm/typecheck-duress-frameworks.sh` on the changed files of `frameworks/base` (4 services
+files, 1 SystemUI file, base `8cf59de6`): no error added, "typecheck: OK". Not verified: Settings (parse check only: the syntax is
+valid, symbols were not resolved, the server has no type check of Settings); no host test (the changed code uses Android types);
+no build, no device (rows `DUR-048` to `DUR-051`). Not done: D8 first part (the mint that outlives a failed switch) and second part
+(the silent switch queued behind a running one): both need a new method of `ActivityManagerInternal` or a coupling between
+`locksettings` and `am`, which ADR-231 rejected for the module build; they need their own ADR.
+
 ## Fix 2026-11-15, second module build: the life of the stage, the zoom hand-over and the length of the exit (`frameworks-base/0046` to `0048`)
 
 Measured on the module build of `0045` (foundation `duress-engineering-notes.md`, rows `DUR-045`, `DUR-019`): black for 0.6 s after
