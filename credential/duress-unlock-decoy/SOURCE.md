@@ -2,7 +2,7 @@
 
 ## Fix 2026-11-15: the stage of an authorized switch, the decoy's look and theme colours (`frameworks-base/0037` to `0045`)
 
-ADR-230 and ADR-231 of the foundation repository (measurements: foundation `duress-engineering-notes.md`, \"Round of 2026-11-15\";
+ADR-230 and ADR-231 of the foundation repository (measurements: foundation `duress-engineering-notes.md`, "Round of 2026-11-15";
 rows `DUR-019`, `DUR-036`, `DUR-038`, `DUR-043`, `DUR-044`). Module-built and pushed to the phone, not built into an image; the
 rows of the last build are not run. Nine commits of `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-v3`, from
 `ae91efc3`), landed on the build tree with `git am` and exported with `git format-patch --start-number=37`:
@@ -14,7 +14,7 @@ rows of the last build are not run. Nine commits of `oblivios-platform/.worktree
   unlocked and before its home starts; the window manager holds the deferred home start while that is pending (at most 1.5 s).
   Removes the lock-time launcher warm start (`0021`). System_server cannot edit the launcher's prefs file (mode 660, owner is the
   app, no DAC override), which is why the provider is used.
-- `0039` reads the shape row `is_default` as a string (the provider's `MatrixCursor` holds a Boolean, which arrives as \"true\";
+- `0039` reads the shape row `is_default` as a string (the provider's `MatrixCursor` holds a Boolean, which arrives as "true";
   `getInt` of it is 0, so the shape would never have been written), gates the warnings to debuggable builds, and reads the owner's
   look off the lock settings handler. `DecoySettingsMirror#launcherLookParts` has 1 JVM test, the class 17 tests, 1 mutation fails it.
 - `0040` replaces the two methods that `0038` had added to `ActivityManagerInternal` by a static, `DecoyLookGate` in `services.jar`.
