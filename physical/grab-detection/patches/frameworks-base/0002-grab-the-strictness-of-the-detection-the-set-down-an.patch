@@ -1,29 +1,35 @@
-From da29edc7c371d084d65dfa17151d1d06bf61d8d0 Mon Sep 17 00:00:00 2001
-From: ObliviOS Build <build@oblivios.local>
-Date: Mon, 26 Oct 2026 16:31:19 +0100
-Subject: [PATCH] grab: an impact after a short free fall is a set-down and
- does not lock, with a strictness setting
+From 93d72eaa50ab0e04f12db2cb1fb20a5a1aa70284 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Sun, 18 Oct 2026 17:58:07 +0200
+Subject: [PATCH] grab: the strictness of the detection, the set-down and the
+ pulse of an impact
 
-The impact route locked on every acceleration peak of 30 m/s^2 or more, so a set-down of about 3 cm locked the phone (GRB-018). A phone that is set down falls freely for a moment before it lands and a grab has no free fall: 12 staged grabs had none, 29 set-downs from 3 cm to a hard push had one of 16 to 163 ms (GRB-019, replayed through this code at 50 Hz in five phases).
+Squash of former patches:
 
-GrabDetector tracks the runs of samples with a magnitude below 4 m/s^2 and, at an impact, takes the longest one that ended within 400 ms before it. An impact after no free fall, or after one of at least freeFallLongMs, locks; after a shorter one it does not, and the rest of its pulse is not judged again for 250 ms (the pull rule still sees it). A limit of zero keeps the old behaviour.
-
-The new setting grab_impact_level has three values: 0 every impact locks, 1 (default) a set-down does not lock (limit 250 ms, a fall of about 30 cm), 2 as 1 with twice the impact peak, for running. The impact log line now names the free fall, the verdict and the level.
+- 0009 grab: lock at once on a hard impact, with or without touch
+- 0010 grab: an impact after a short free fall is a set-down and does not lock, with a strictness setting
+- 0011 grab: an impact with no free fall locks only after a pulse of 120 ms
+- 0012 grab: the pulse of an impact is measured in sensor time, not in the time the callback ran
 ---
- .../android/ext/settings/ExtSettings.java     |   8 ++
- core/java/android/provider/Settings.java      |   8 ++
- .../server/grab/GrabDetectionService.java     |  29 ++++-
- .../com/android/server/grab/GrabDetector.java | 110 ++++++++++++++++--
- 4 files changed, 144 insertions(+), 11 deletions(-)
+ .../android/ext/settings/ExtSettings.java     |  13 +
+ core/java/android/provider/Settings.java      |  15 ++
+ .../server/grab/GrabDetectionService.java     |  47 +++-
+ .../com/android/server/grab/GrabDetector.java | 224 +++++++++++++++++-
+ 4 files changed, 289 insertions(+), 10 deletions(-)
 
 diff --git a/core/java/android/ext/settings/ExtSettings.java b/core/java/android/ext/settings/ExtSettings.java
-index 60e0f65..c76bf0b 100644
+index f53ff8e0..aed93442 100644
 --- a/core/java/android/ext/settings/ExtSettings.java
 +++ b/core/java/android/ext/settings/ExtSettings.java
-@@ -69,6 +69,14 @@ public class ExtSettings {
-     public static final IntSetting GRAB_IMPACT_PEAK = new IntSetting(
-             Setting.Scope.GLOBAL, Settings.Global.GRAB_IMPACT_PEAK_DMS2, 300);
+@@ -64,6 +64,19 @@ public class ExtSettings {
+     public static final IntSetting GRAB_SUSTAIN_ENERGY = new IntSetting(
+             Setting.Scope.GLOBAL, Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2, 15);
  
++    // 30 m/s^2: above the hardest handling peak measured on lynx on 2026-10-18 (27.0), below the
++    // grabs with a hand on the screen (31 to 124) and a drop on a bed (33 to 114)
++    public static final IntSetting GRAB_IMPACT_PEAK = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_IMPACT_PEAK_DMS2, 300);
++
 +    // 0 strictest (every impact locks), 1 default (an impact after a short free fall, the
 +    // set-down of a phone, does not lock), 2 relaxed (as 1 with twice the impact peak, for running)
 +    public static final int GRAB_IMPACT_LEVEL_STRICT = 0;
@@ -36,13 +42,20 @@ index 60e0f65..c76bf0b 100644
              Setting.Scope.PER_USER, Settings.Secure.SCREENSHOT_TIMESTAMP_EXIF, false);
  
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index 4db7f5a..677b194 100644
+index 385eb08d..cc6d878a 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
-@@ -14509,6 +14509,14 @@ public final class Settings {
+@@ -14502,6 +14502,21 @@ public final class Settings {
           */
-         public static final String GRAB_IMPACT_PEAK_DMS2 = "grab_impact_peak_dms2";
+         public static final String GRAB_SUSTAIN_ENERGY_DMS2 = "grab_sustain_energy_dms2";
  
++        /**
++         * Deviation of the acceleration from gravity that locks the phone at once, with or without
++         * touch and whatever the phone does afterwards, in 0.1 m/s^2; 0 turns it off
++         * @hide
++         */
++        public static final String GRAB_IMPACT_PEAK_DMS2 = "grab_impact_peak_dms2";
++
 +        /**
 +         * How strict the impact route is: 0 locks on every hard impact, 1 (default) does not lock
 +         * on an impact after a short free fall (a set-down) and does after none or a long one, 2 is
@@ -55,10 +68,10 @@ index 4db7f5a..677b194 100644
           * 1 from a grab lock until the next unlock; read by the message above the PIN entry
           * @hide
 diff --git a/services/core/java/com/android/server/grab/GrabDetectionService.java b/services/core/java/com/android/server/grab/GrabDetectionService.java
-index 054ca5c..7faa24c 100644
+index ff9da147..1524c5d0 100644
 --- a/services/core/java/com/android/server/grab/GrabDetectionService.java
 +++ b/services/core/java/com/android/server/grab/GrabDetectionService.java
-@@ -63,6 +63,12 @@ public class GrabDetectionService extends SystemService {
+@@ -63,6 +63,15 @@ public class GrabDetectionService extends SystemService {
      private static final String AUTO_REBOOT_CANCEL = "on_device_unlocked";
  
      private static final long COOLDOWN_MS = 2000;
@@ -66,12 +79,15 @@ index 054ca5c..7faa24c 100644
 +    // 2). 250 ms is a fall of about 30 cm. Measured set-downs: 16 to 163 ms at 50 Hz, 3 cm to a hard
 +    // push (2026-10-25); a fall from above 30 cm locks.
 +    private static final long FREE_FALL_LONG_MS = 250;
++    // an impact with no free fall locks only after a pulse this long (GrabDetector.Params.minPulseMs): a pickup from a table is a
++    // spike of 4 to 13 ms, a grab pulls for 171 ms and more; halfway between the longest pickup (84 ms) and the shortest grab
++    private static final long MIN_PULSE_MS = 120;
 +    // level 2: the impact peak is this many times the setting, for running (not measured)
 +    private static final float RELAXED_PEAK_FACTOR = 2f;
      private static final long VIBRATION_MS = 400;
      // lockNow() only posts the lock; if the keyguard has not shown by then, the timer is cancelled
      private static final long KEYGUARD_CHECK_MS = 5000;
-@@ -83,6 +89,7 @@ public class GrabDetectionService extends SystemService {
+@@ -83,6 +92,7 @@ public class GrabDetectionService extends SystemService {
      private boolean mInteractive;
      private boolean mArmed;
      private GrabDetector mDetector;
@@ -79,17 +95,17 @@ index 054ca5c..7faa24c 100644
  
      public GrabDetectionService(Context context, WindowManagerService wm) {
          super(context);
-@@ -140,7 +147,8 @@ public class GrabDetectionService extends SystemService {
+@@ -140,7 +150,8 @@ public class GrabDetectionService extends SystemService {
                  Settings.Global.GRAB_DETECTION_MODE, Settings.Global.GRAB_PEAK_DMS2,
                  Settings.Global.GRAB_TOUCH_WINDOW_MS, Settings.Global.GRAB_TOUCH_LOSS_MS,
                  Settings.Global.GRAB_SETTLE_MS, Settings.Global.GRAB_SUSTAIN_MS,
--                Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2, Settings.Global.GRAB_IMPACT_PEAK_DMS2}) {
+-                Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2}) {
 +                Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2, Settings.Global.GRAB_IMPACT_PEAK_DMS2,
 +                Settings.Global.GRAB_IMPACT_LEVEL}) {
              ctx.getContentResolver().registerContentObserver(
                      Settings.Global.getUriFor(key), false, observer);
          }
-@@ -189,6 +197,17 @@ public class GrabDetectionService extends SystemService {
+@@ -189,6 +200,17 @@ public class GrabDetectionService extends SystemService {
  
      private void arm(int mode) {
          final Context c = getContext();
@@ -107,33 +123,60 @@ index 054ca5c..7faa24c 100644
          mDetector = new GrabDetector(new GrabDetector.Params(
                  ExtSettings.GRAB_PEAK.get(c) / 10f,
                  ExtSettings.GRAB_TOUCH_WINDOW_MS.get(c),
-@@ -197,7 +216,8 @@ public class GrabDetectionService extends SystemService {
+@@ -196,7 +218,10 @@ public class GrabDetectionService extends SystemService {
+                 ExtSettings.GRAB_SETTLE_MS.get(c),
                  ExtSettings.GRAB_SUSTAIN_MS.get(c),
                  ExtSettings.GRAB_SUSTAIN_ENERGY.get(c) / 10f,
-                 COOLDOWN_MS,
--                ExtSettings.GRAB_IMPACT_PEAK.get(c) / 10f));
+-                COOLDOWN_MS));
++                COOLDOWN_MS,
 +                impactPeak,
-+                freeFallLongMs));
++                freeFallLongMs,
++                MIN_PULSE_MS));
          if (!mSensorManager.registerListener(mSensorListener, mAccelerometer,
                  SensorManager.SENSOR_DELAY_GAME, mHandler)) {
              Slog.w(TAG, "accelerometer not registered, not armed");
-@@ -272,8 +292,9 @@ public class GrabDetectionService extends SystemService {
+@@ -249,9 +274,10 @@ public class GrabDetectionService extends SystemService {
+             if (d == null) {
+                 return;
+             }
+-            // both clocks of the detector are uptimeMillis: the touch event time and this one
++            // both clocks of the detector are uptimeMillis: the touch event time and the time of the sample itself
+             try {
+-                final GrabDetector.Decision x = d.onAccel(SystemClock.uptimeMillis(),
++                final GrabDetector.Decision x = d.onAccel(GrabDetector.sensorUptimeMs(event.timestamp,
++                        SystemClock.elapsedRealtime(), SystemClock.uptimeMillis()),
+                         event.values[0], event.values[1], event.values[2]);
+                 if (x != null) {
+                     onDecision(x);
+@@ -270,14 +296,19 @@ public class GrabDetectionService extends SystemService {
+         final int mode = ExtSettings.GRAB_DETECTION_MODE.get(getContext());
          // the shadow log: sensor magnitudes and intervals only, no coordinates, no location;
          // values in m/s^2, the settings keys take tenths of them
-         if (x.impact) {
--            Slog.i(TAG, String.format(Locale.ROOT, "impact peak=%.1f touched=%b mode=%d",
--                    x.peak, x.touched, mode));
+-        if (!x.touched) {
++        if (x.impact) {
 +            Slog.i(TAG, String.format(Locale.ROOT,
-+                    "impact peak=%.1f touched=%b fallMs=%d locks=%b level=%d mode=%d",
-+                    x.peak, x.touched, x.freeFallMs, x.trigger, mImpactLevel, mode));
-         } else if (!x.touched) {
++                    "impact peak=%.1f touched=%b fallMs=%d pulseMs=%d locks=%b level=%d mode=%d",
++                    x.peak, x.touched, x.freeFallMs, x.pulseMs, x.trigger, mImpactLevel, mode));
++        } else if (!x.touched) {
              Slog.i(TAG, String.format(Locale.ROOT, "peak without touch peak=%.1f mode=%d",
                      x.peak, mode));
+             return;
++        } else {
++            Slog.i(TAG, String.format(Locale.ROOT, "candidate trigger=%b peak=%.1f released=%b "
++                    + "releaseDeltaMs=%d energy=%.2f mode=%d",
++                    x.trigger, x.peak, x.released, x.releaseDeltaMs, x.energy, mode));
+         }
+-        Slog.i(TAG, String.format(Locale.ROOT,
+-                "candidate trigger=%b peak=%.1f released=%b releaseDeltaMs=%d energy=%.2f mode=%d",
+-                x.trigger, x.peak, x.released, x.releaseDeltaMs, x.energy, mode));
+         if (x.trigger && mode == ExtSettings.GRAB_DETECTION_ACTIVE) {
+             try {
+                 lockAndArmRestart();
 diff --git a/services/core/java/com/android/server/grab/GrabDetector.java b/services/core/java/com/android/server/grab/GrabDetector.java
-index d42ac7d..b3c70b6 100644
+index 8bbb236d..83620fab 100644
 --- a/services/core/java/com/android/server/grab/GrabDetector.java
 +++ b/services/core/java/com/android/server/grab/GrabDetector.java
-@@ -22,6 +22,13 @@ public final class GrabDetector {
+@@ -22,7 +22,18 @@ public final class GrabDetector {
      /** Standard gravity in m/s^2. */
      public static final float GRAVITY = 9.80665f;
  
@@ -145,12 +188,22 @@ index d42ac7d..b3c70b6 100644
 +    private static final long IMPACT_QUIET_MS = 250;
 +
      private static final long NEVER = Long.MIN_VALUE;
++    /** The pulse of an impact is the time the magnitude stays at or above this (m/s^2). */
++    public static final float PULSE_MAG = 15f;
++    /** An impact that has not shown its minimum pulse within this long after its first sample is no grab. */
++    public static final long PULSE_WINDOW_MS = 400;
  
      /** Tunable thresholds. Accelerations are in m/s^2, times in milliseconds. */
-@@ -45,6 +52,13 @@ public final class GrabDetector {
-          * phone does afterwards. Zero or less turns this route off.
-          */
-         public final float impactPeak;
+     public static final class Params {
+@@ -40,9 +51,54 @@ public final class GrabDetector {
+         public final float sustainEnergy;
+         /** After a decision, new peaks are ignored for this long. */
+         public final long cooldownMs;
++        /**
++         * Deviation from gravity that triggers at once, with or without touch and whatever the
++         * phone does afterwards. Zero or less turns this route off.
++         */
++        public final float impactPeak;
 +        /**
 +         * An impact after a free fall shorter than this does not lock: a phone that is set down
 +         * falls freely for a moment, a grab has no free fall (measured on lynx, 2026-10-25). An
@@ -158,13 +211,25 @@ index d42ac7d..b3c70b6 100644
 +         * less turns the rule off: every impact locks.
 +         */
 +        public final long freeFallLongMs;
++        /**
++         * An impact that came with no free fall locks only when the magnitude has been at or above
++         * {@link #PULSE_MAG} for this long: the rise before the first sample over impactPeak counts,
++         * and the time after it is summed within {@link #PULSE_WINDOW_MS}. A grab pulls the phone for
++         * 171 to 310 ms; a pickup from a table or a bump is a spike of 4 to 13 ms (12 grabs and 8 pickups
++         * and bumps recorded on lynx, 2026-10-18 to 2026-10-25; the owner's pickup locked the phone in
++         * active mode on 2026-10-29). An impact after a real fall locks at once. Zero or less turns the
++         * rule off.
++         */
++        public final long minPulseMs;
  
          public Params(float peak, long touchWindowMs, long touchLossMs, long settleMs,
                  long sustainMs, float sustainEnergy, long cooldownMs) {
-@@ -54,6 +68,14 @@ public final class GrabDetector {
- 
-         public Params(float peak, long touchWindowMs, long touchLossMs, long settleMs,
-                 long sustainMs, float sustainEnergy, long cooldownMs, float impactPeak) {
++            this(peak, touchWindowMs, touchLossMs, settleMs, sustainMs, sustainEnergy, cooldownMs,
++                    0f);
++        }
++
++        public Params(float peak, long touchWindowMs, long touchLossMs, long settleMs,
++                long sustainMs, float sustainEnergy, long cooldownMs, float impactPeak) {
 +            this(peak, touchWindowMs, touchLossMs, settleMs, sustainMs, sustainEnergy, cooldownMs,
 +                    impactPeak, 0L);
 +        }
@@ -172,37 +237,67 @@ index d42ac7d..b3c70b6 100644
 +        public Params(float peak, long touchWindowMs, long touchLossMs, long settleMs,
 +                long sustainMs, float sustainEnergy, long cooldownMs, float impactPeak,
 +                long freeFallLongMs) {
++            this(peak, touchWindowMs, touchLossMs, settleMs, sustainMs, sustainEnergy, cooldownMs,
++                    impactPeak, freeFallLongMs, 0L);
++        }
++
++        public Params(float peak, long touchWindowMs, long touchLossMs, long settleMs,
++                long sustainMs, float sustainEnergy, long cooldownMs, float impactPeak,
++                long freeFallLongMs, long minPulseMs) {
++            this.minPulseMs = minPulseMs;
 +            this.freeFallLongMs = freeFallLongMs;
-             this.impactPeak = impactPeak;
++            this.impactPeak = impactPeak;
              this.peak = peak;
              this.touchWindowMs = touchWindowMs;
-@@ -79,6 +101,8 @@ public final class GrabDetector {
+             this.touchLossMs = touchLossMs;
+@@ -65,9 +121,33 @@ public final class GrabDetector {
+         public final boolean released;
+         public final long releaseDeltaMs;
          public final float energy;
-         /** True when the verdict came from {@code impactPeak} alone, not from the pull rule. */
-         public final boolean impact;
++        /** True when the verdict came from {@code impactPeak} alone, not from the pull rule. */
++        public final boolean impact;
 +        /** For an impact: the longest free fall that ended within the window before it, in ms. */
 +        public final long freeFallMs;
++        /** For an impact that waited for its pulse: how long the magnitude was at or above PULSE_MAG, in ms. */
++        public final long pulseMs;
  
          Decision(boolean trigger, boolean touched, float peak, boolean released,
                  long releaseDeltaMs, float energy) {
-@@ -87,6 +111,12 @@ public final class GrabDetector {
- 
-         Decision(boolean trigger, boolean touched, float peak, boolean released,
-                 long releaseDeltaMs, float energy, boolean impact) {
++            this(trigger, touched, peak, released, releaseDeltaMs, energy, false);
++        }
++
++        Decision(boolean trigger, boolean touched, float peak, boolean released,
++                long releaseDeltaMs, float energy, boolean impact) {
 +            this(trigger, touched, peak, released, releaseDeltaMs, energy, impact, 0L);
 +        }
 +
 +        Decision(boolean trigger, boolean touched, float peak, boolean released,
 +                long releaseDeltaMs, float energy, boolean impact, long freeFallMs) {
++            this(trigger, touched, peak, released, releaseDeltaMs, energy, impact, freeFallMs, 0L);
++        }
++
++        Decision(boolean trigger, boolean touched, float peak, boolean released,
++                long releaseDeltaMs, float energy, boolean impact, long freeFallMs, long pulseMs) {
++            this.pulseMs = pulseMs;
 +            this.freeFallMs = freeFallMs;
-             this.impact = impact;
++            this.impact = impact;
              this.trigger = trigger;
              this.touched = touched;
-@@ -112,6 +142,17 @@ public final class GrabDetector {
+             this.peak = peak;
+@@ -92,6 +172,26 @@ public final class GrabDetector {
      private int mCount;
      private long mIgnoreUntilMs = NEVER;
      private long mNoTouchReportUntilMs = NEVER;
 +    private long mImpactQuietUntilMs = NEVER;
++
++    // an impact with no free fall that waits for its minimum pulse (Params.minPulseMs)
++    private boolean mPulseWait;
++    private long mPulseStartMs;
++    private long mPulseLastMs;
++    private long mPulseSumMs;
++    private double mPulsePeak;
++    /** How long the magnitude has been at or above PULSE_MAG without a sample below it, up to the last sample. */
++    private long mAboveRunMs;
 +
 +    // free fall: the run of samples below FREE_FALL_MAX that is going on (mFall*), and the longest
 +    // finished run that ended inside the window (mBest*)
@@ -216,11 +311,13 @@ index d42ac7d..b3c70b6 100644
  
      public GrabDetector(Params params) {
          mParams = params;
-@@ -125,6 +166,11 @@ public final class GrabDetector {
+@@ -105,6 +205,13 @@ public final class GrabDetector {
          mPending = false;
          mIgnoreUntilMs = NEVER;
          mNoTouchReportUntilMs = NEVER;
 +        mImpactQuietUntilMs = NEVER;
++        mPulseWait = false;
++        mAboveRunMs = 0;
 +        mLastSampleMs = NEVER;
 +        mInFall = false;
 +        mBestEndMs = NEVER;
@@ -228,27 +325,25 @@ index d42ac7d..b3c70b6 100644
      }
  
      /** {@code contact} is true while a finger is on the screen, false when none is left. */
-@@ -156,19 +202,34 @@ public final class GrabDetector {
+@@ -136,11 +243,49 @@ public final class GrabDetector {
       *         finished; or, at most once per cool-down, the report of a peak with no recent touch
       */
      public Decision onAccel(long tMs, float x, float y, float z) {
 +        final double mag = Math.sqrt((double) x * x + (double) y * y + (double) z * z);
 +        // before the cool-down check: a fall that ends inside a cool-down still counts for the next impact
 +        trackFreeFall(tMs, mag);
++        if (mPulseWait) {
++            return pulseSample(tMs, mag);
++        }
          if (mIgnoreUntilMs != NEVER && tMs < mIgnoreUntilMs) {
              return null;
          }
 -        final double dev = Math.abs(
 -                Math.sqrt((double) x * x + (double) y * y + (double) z * z) - (double) GRAVITY);
 +        final double dev = Math.abs(mag - (double) GRAVITY);
- 
-         // A hard impact while the phone is in use triggers at once. A grab that ends with the
-         // thief standing still, or without a finger on the screen, never meets the pull rule below
--        // (measured on lynx, 2026-10-18); locking after a drop or a hard set-down is accepted.
--        if (mParams.impactPeak > 0 && dev >= mParams.impactPeak) {
--            mPending = false;
--            mIgnoreUntilMs = tMs + mParams.cooldownMs;
--            return new Decision(true, touchedRecently(tMs), (float) dev, false, 0, 0f, true);
++
++        // A hard impact while the phone is in use triggers at once. A grab that ends with the
++        // thief standing still, or without a finger on the screen, never meets the pull rule below
 +        // (measured on lynx, 2026-10-18). A phone that is set down falls freely for a moment first
 +        // and a grab does not (12 grabs, 29 set-downs, 2026-10-25): an impact after a free fall
 +        // shorter than freeFallLongMs is a set-down and does not lock.
@@ -257,6 +352,17 @@ index d42ac7d..b3c70b6 100644
 +            final long fall = freeFallBefore(tMs);
 +            // freeFallLongMs of zero or less: every fall is long enough, so every impact locks
 +            final boolean lock = fall == 0 || fall >= mParams.freeFallLongMs;
++            // fall == 0 is always a lock: freeFallLongMs only holds back an impact after a short fall
++            if (fall == 0 && mParams.minPulseMs > 0) {
++                // a grab has a pulse of 100 ms and more, a pickup or a bump is over in a few: the verdict waits for it
++                mPulseWait = true;
++                mPulseStartMs = tMs;
++                mPulseLastMs = tMs;
++                // the pulse began before the first sample over impactPeak: the rise counts
++                mPulseSumMs = mAboveRunMs;
++                mPulsePeak = dev;
++                return mPulseSumMs >= mParams.minPulseMs ? pulseSample(tMs, mag) : null;
++            }
 +            if (lock) {
 +                mPending = false;
 +                mIgnoreUntilMs = tMs + mParams.cooldownMs;
@@ -267,16 +373,57 @@ index d42ac7d..b3c70b6 100644
 +                mNoTouchReportUntilMs = tMs + IMPACT_QUIET_MS;
 +            }
 +            return new Decision(lock, touchedRecently(tMs), (float) dev, false, 0, 0f, true, fall);
-         }
++        }
  
          if (!mPending) {
-@@ -206,6 +267,41 @@ public final class GrabDetector {
+             if (dev < mParams.peak) {
+@@ -177,6 +322,81 @@ public final class GrabDetector {
                  (float) energy);
      }
  
++    /**
++     * The time of a sensor sample on the uptime clock of the touch events: its own timestamp, which is elapsed-realtime
++     * nanoseconds, moved by the time the phone slept. The moment the callback runs is not the sample time: a stalled or
++     * batched delivery would stretch a pulse, or squeeze a real one to nothing. A missing timestamp falls back to the
++     * callback time.
++     */
++    public static long sensorUptimeMs(long eventTimeNs, long elapsedMs, long uptimeMs) {
++        return eventTimeNs > 0 ? eventTimeNs / 1_000_000L - (elapsedMs - uptimeMs) : uptimeMs;
++    }
++
++    /**
++     * One sample while an impact waits for its pulse (also the one that started the wait): lock when
++     * the pulse is long enough, give up when the window ends. The sample that started the wait adds
++     * nothing, its time is in the run before it.
++     */
++    private Decision pulseSample(long tMs, double mag) {
++        final long dt = tMs - mPulseLastMs;
++        mPulseLastMs = tMs;
++        mPulsePeak = Math.max(mPulsePeak, Math.abs(mag - (double) GRAVITY));
++        if (mag >= PULSE_MAG) {
++            mPulseSumMs += dt;
++        }
++        final boolean longEnough = mPulseSumMs >= mParams.minPulseMs;
++        if (!longEnough && tMs - mPulseStartMs < PULSE_WINDOW_MS) {
++            return null;
++        }
++        mPulseWait = false;
++        if (longEnough) {
++            mPending = false;
++            mIgnoreUntilMs = tMs + mParams.cooldownMs;
++        } else {
++            // as a set-down: not a cool-down, and the rest of the pulse is not reported again
++            mImpactQuietUntilMs = tMs + IMPACT_QUIET_MS;
++            mNoTouchReportUntilMs = tMs + IMPACT_QUIET_MS;
++        }
++        return new Decision(longEnough, touchedRecently(tMs), (float) mPulsePeak, false, 0, 0f, true,
++                0L, mPulseSumMs);
++    }
++
 +    private void trackFreeFall(long tMs, double mag) {
 +        final long dt = mLastSampleMs == NEVER ? 0 : tMs - mLastSampleMs;
 +        mLastSampleMs = tMs;
++        mAboveRunMs = mag >= PULSE_MAG ? mAboveRunMs + dt : 0;
 +        if (mag < FREE_FALL_MAX) {
 +            if (!mInFall) {
 +                mInFall = true;
@@ -312,6 +459,3 @@ index d42ac7d..b3c70b6 100644
      private boolean touchedRecently(long tMs) {
          return mInContact
                  || (mLastContactMs != NEVER && tMs - mLastContactMs <= mParams.touchWindowMs);
--- 
-2.56.0
-

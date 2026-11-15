@@ -1,24 +1,21 @@
-From 8e999692e710bff98fa4e50bdbee404ab24316c4 Mon Sep 17 00:00:00 2001
+From cd5aacfbcc635616209e3543fdab16b7cf27fcc0 Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
 Date: Sun, 18 Oct 2026 04:17:40 +0200
-Subject: [PATCH 2/5] Clipboard: read only through a paste, and answer a denied
- caller the same for every clip
+Subject: [PATCH] Clipboard: read only through a paste, and let the owner and a
+ paste-grant holder hear a clip change
 
-The default of the per-app clipboard read switch becomes off, so an app
-reads a clip it did not set only during a user paste or when the user
-enables the app. A caller that may not read now gets one fixed description
-(no label, time 0, a fixed set of MIME types), a constant answer to
-hasPrimaryClip and hasClipboardText, and no change notification; the label,
-time, MIME types, presence and the moment of a change were all ways for
-the app that set the clip to pass a message to a focused app.
+Squash of former patches:
+
+- 0002 Clipboard: read only through a paste, and answer a denied caller the same for every clip
+- 0007 Clipboard: let the owner and a paste-grant holder hear a clip change
 ---
  core/res/res/values/config_ext.xml            |  2 +-
  .../server/clipboard/ClipboardAccess.java     | 49 +++++++++++++------
- .../server/clipboard/ClipboardService.java    | 15 ++++--
- 3 files changed, 48 insertions(+), 18 deletions(-)
+ .../server/clipboard/ClipboardService.java    | 20 ++++++--
+ 3 files changed, 53 insertions(+), 18 deletions(-)
 
 diff --git a/core/res/res/values/config_ext.xml b/core/res/res/values/config_ext.xml
-index bd323af..f445554 100644
+index bd323af7..f4455547 100644
 --- a/core/res/res/values/config_ext.xml
 +++ b/core/res/res/values/config_ext.xml
 @@ -55,7 +55,7 @@
@@ -31,7 +28,7 @@ index bd323af..f445554 100644
  
  </resources>
 diff --git a/services/core/java/com/android/server/clipboard/ClipboardAccess.java b/services/core/java/com/android/server/clipboard/ClipboardAccess.java
-index e987884..0d5353f 100644
+index e9878844..d2967eb6 100644
 --- a/services/core/java/com/android/server/clipboard/ClipboardAccess.java
 +++ b/services/core/java/com/android/server/clipboard/ClipboardAccess.java
 @@ -179,19 +179,39 @@ final class ClipboardAccess {
@@ -107,7 +104,7 @@ index e987884..0d5353f 100644
          return text != null && text.length() > 0;
      }
 diff --git a/services/core/java/com/android/server/clipboard/ClipboardService.java b/services/core/java/com/android/server/clipboard/ClipboardService.java
-index f89f3b1..1eec110 100644
+index f89f3b16..49d65c79 100644
 --- a/services/core/java/com/android/server/clipboard/ClipboardService.java
 +++ b/services/core/java/com/android/server/clipboard/ClipboardService.java
 @@ -801,9 +801,12 @@ public class ClipboardService extends SystemService {
@@ -125,13 +122,14 @@ index f89f3b1..1eec110 100644
              }
          }
  
-@@ -1169,13 +1172,19 @@ public class ClipboardService extends SystemService {
+@@ -1169,13 +1172,24 @@ public class ClipboardService extends SystemService {
                      ListenerInfo li = (ListenerInfo)
                              clipboard.primaryClipListeners.getBroadcastCookie(i);
  
 +                    // ObliviOS: a listener hears that a clip changed only if it may read the
-+                    // clip. The moment a clip is set is otherwise a message from the app that
-+                    // set it to any focused app that listens.
++                    // clip: the app that set it, an app holding a paste grant or an app with the
++                    // read switch on. The moment a clip is set is otherwise a message from the
++                    // app that set it to any focused app that listens.
                      if (clipboardAccessAllowed(
                              AppOpsManager.OP_READ_CLIPBOARD,
                              li.mPackageName,
@@ -140,12 +138,13 @@ index f89f3b1..1eec110 100644
                              UserHandle.getUserId(li.mUid),
 -                            clipboard.deviceId)) {
 +                            clipboard.deviceId)
-+                            && mAccess.clipboardReadAllowedForPackage(li.mPackageName, li.mUid,
-+                                    UserHandle.getUserId(li.mUid),
-+                                    isDefaultIme(UserHandle.getUserId(li.mUid), li.mPackageName))) {
++                            && mAccess.getPayloadReadAccessLocked(
++                                    mAccess.clipboardReadAllowedForPackage(li.mPackageName,
++                                            li.mUid, UserHandle.getUserId(li.mUid),
++                                            isDefaultIme(UserHandle.getUserId(li.mUid),
++                                                    li.mPackageName)),
++                                    li.mUid, UserHandle.getUserId(li.mUid), clipboard.deviceId)
++                                    != ClipboardAccess.PayloadReadAccess.DENIED) {
                          clipboard.primaryClipListeners.getBroadcastItem(i)
                                  .dispatchPrimaryClipChanged();
                      }
--- 
-2.56.0
-

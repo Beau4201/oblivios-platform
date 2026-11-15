@@ -1,0 +1,852 @@
+From 36d507042e219500cc61fbf66fe2f74adf7ad053 Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Thu, 15 Oct 2026 04:25:34 +0200
+Subject: [PATCH] grab: detect a phone pulled out of a hand in use, lock it and
+ tell the owner
+
+Squash of former patches:
+
+- 0001 grab: decide whether the phone was pulled out of a hand in use
+- 0002 grab: settings keys of the grab detection (mode, thresholds, triggered flag)
+- 0003 grab: lock the phone and arm the restart timer when it is pulled out of a hand in use
+- 0004 grab: tell the owner above the PIN entry why the phone locked and when it restarts
+- 0005 grab: a new touch voids the release before it, and report a peak without touch
+- 0006 grab: keep exceptions off the handler thread, log untouched peaks, cancel the timer if the keyguard does not show
+- 0007 grab: @hide tags on their own line, one message text for every credential type
+- 0008 grab: pass the settings to BouncerMessageInteractor in the SystemUI test fixture
+---
+ .../android/ext/settings/ExtSettings.java     |  29 ++
+ core/java/android/provider/Settings.java      |  51 +++
+ .../SystemUI/res-keyguard/values/strings.xml  |   3 +
+ .../interactor/BouncerMessageInteractor.kt    |   9 +
+ .../shared/model/BouncerMessageStrings.kt     |   9 +
+ .../BouncerMessageInteractorKosmos.kt         |   2 +
+ .../server/grab/GrabDetectionService.java     | 363 ++++++++++++++++++
+ .../com/android/server/grab/GrabDetector.java | 195 ++++++++++
+ .../keyguard/KeyguardServiceDelegate.java     |   7 +
+ .../java/com/android/server/SystemServer.java |   4 +
+ 10 files changed, 672 insertions(+)
+ create mode 100644 services/core/java/com/android/server/grab/GrabDetectionService.java
+ create mode 100644 services/core/java/com/android/server/grab/GrabDetector.java
+
+diff --git a/core/java/android/ext/settings/ExtSettings.java b/core/java/android/ext/settings/ExtSettings.java
+index b0eb63aa..f53ff8e0 100644
+--- a/core/java/android/ext/settings/ExtSettings.java
++++ b/core/java/android/ext/settings/ExtSettings.java
+@@ -35,6 +35,35 @@ public class ExtSettings {
+             // default value: 18 hours
+             (int) TimeUnit.HOURS.toMillis(18));
+ 
++    // ObliviOS grab detection (ADR-169)
++    public static final int GRAB_DETECTION_OFF = 0;
++    public static final int GRAB_DETECTION_SHADOW = 1;
++    public static final int GRAB_DETECTION_ACTIVE = 2;
++
++    public static final IntSetting GRAB_DETECTION_MODE = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_DETECTION_MODE,
++            // the first build only logs; the default becomes active when the shadow phase ends
++            GRAB_DETECTION_SHADOW,
++            GRAB_DETECTION_OFF, GRAB_DETECTION_SHADOW, GRAB_DETECTION_ACTIVE);
++
++    public static final IntSetting GRAB_PEAK = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_PEAK_DMS2, 150);
++
++    public static final IntSetting GRAB_TOUCH_WINDOW_MS = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_TOUCH_WINDOW_MS, 400);
++
++    public static final IntSetting GRAB_TOUCH_LOSS_MS = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_TOUCH_LOSS_MS, 150);
++
++    public static final IntSetting GRAB_SETTLE_MS = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_SETTLE_MS, 200);
++
++    public static final IntSetting GRAB_SUSTAIN_MS = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_SUSTAIN_MS, 800);
++
++    public static final IntSetting GRAB_SUSTAIN_ENERGY = new IntSetting(
++            Setting.Scope.GLOBAL, Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2, 15);
++
+     public static final BoolSetting SCREENSHOT_TIMESTAMP_EXIF = new BoolSetting(
+             Setting.Scope.PER_USER, Settings.Secure.SCREENSHOT_TIMESTAMP_EXIF, false);
+ 
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 99595a9d..385eb08d 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -14457,6 +14457,57 @@ public final class Settings {
+         @Protected(readWrite = KnownSystemPackage.SETTINGS)
+         public static final String AUTO_REBOOT_TIMEOUT = "settings_reboot_after_timeout";
+ 
++        // ObliviOS grab detection (ADR-169). Not @Protected on purpose: `adb shell settings
++        // put global` must work on a user build to tune the shadow mode and to switch back to it.
++
++        /**
++         * 0 off, 1 shadow (log only), 2 active
++         * @hide
++         */
++        public static final String GRAB_DETECTION_MODE = "grab_detection_mode";
++
++        /**
++         * Deviation of the acceleration from gravity that counts as a pull, in 0.1 m/s^2
++         * @hide
++         */
++        public static final String GRAB_PEAK_DMS2 = "grab_peak_dms2";
++
++        /**
++         * The screen must have been touched at most this long before the pull
++         * @hide
++         */
++        public static final String GRAB_TOUCH_WINDOW_MS = "grab_touch_window_ms";
++
++        /**
++         * The touch must end within this long before or after the pull
++         * @hide
++         */
++        public static final String GRAB_TOUCH_LOSS_MS = "grab_touch_loss_ms";
++
++        /**
++         * Time after the pull that is not measured
++         * @hide
++         */
++        public static final String GRAB_SETTLE_MS = "grab_settle_ms";
++
++        /**
++         * Length of the window in which the movement after the pull is measured
++         * @hide
++         */
++        public static final String GRAB_SUSTAIN_MS = "grab_sustain_ms";
++
++        /**
++         * Mean deviation in that window that counts as continued movement, in 0.1 m/s^2
++         * @hide
++         */
++        public static final String GRAB_SUSTAIN_ENERGY_DMS2 = "grab_sustain_energy_dms2";
++
++        /**
++         * 1 from a grab lock until the next unlock; read by the message above the PIN entry
++         * @hide
++         */
++        public static final String GRAB_DETECTION_TRIGGERED = "grab_detection_triggered";
++
+         /** @hide */
+         @Protected(restrictReads = false, readWrite = KnownSystemPackage.SETTINGS)
+         public static final String GNSS_SUPL = "force_disable_supl"; // historical name
+diff --git a/packages/SystemUI/res-keyguard/values/strings.xml b/packages/SystemUI/res-keyguard/values/strings.xml
+index 9efbb587..4c0adc67 100644
+--- a/packages/SystemUI/res-keyguard/values/strings.xml
++++ b/packages/SystemUI/res-keyguard/values/strings.xml
+@@ -200,6 +200,9 @@
+ 
+     <!-- Message shown for pin/pattern/password when we are on bouncer after user triggered lockdown.  [CHAR LIMIT=70] -->
+     <string name="kg_prompt_after_user_lockdown_pin">PIN is required after lockdown</string>
++    <!-- ObliviOS grab detection (ADR-169): shown above the PIN entry after the phone locked
++         itself because it was pulled out of a hand. 60 matches the restart timer of the service. -->
++    <string name="kg_prompt_after_grab">Sudden movement detected. Unlock within 60 seconds or the phone restarts</string>
+ 
+     <!-- Message shown for pin/pattern/password when we are on bouncer after user triggered lockdown.  [CHAR LIMIT=70] -->
+     <string name="kg_prompt_after_user_lockdown_password">Password is required after lockdown</string>
+diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractor.kt b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractor.kt
+index 125f0563..877015c3 100644
+--- a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractor.kt
+@@ -20,6 +20,7 @@ import android.content.res.Resources
+ import android.hardware.biometrics.BiometricFaceConstants
+ import android.hardware.biometrics.BiometricSourceType
+ import android.os.CountDownTimer
++import android.provider.Settings
+ import android.security.Flags.secureLockDevice
+ import com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_AUTH_NOT_REQUIRED
+ import com.android.keyguard.KeyguardSecurityModel
+@@ -48,6 +49,7 @@ import com.android.systemui.shade.ShadeDisplayAware
+ import com.android.systemui.user.data.repository.UserRepository
+ import com.android.systemui.util.kotlin.Nonuple
+ import com.android.systemui.util.kotlin.combine
++import com.android.systemui.util.settings.GlobalSettings
+ import dagger.Lazy
+ import javax.inject.Inject
+ import kotlin.math.roundToLong
+@@ -89,6 +91,7 @@ constructor(
+     deviceEntryBiometricsAllowedInteractor: DeviceEntryBiometricsAllowedInteractor,
+     private val secureLockDeviceInteractor: Lazy<SecureLockDeviceInteractor>,
+     @ShadeDisplayAware private val resources: Resources,
++    private val globalSettings: GlobalSettings,
+ ) {
+     private val isFaceAuthCurrentlyAllowedOnBouncer =
+         deviceEntryBiometricsAllowedInteractor.isFaceCurrentlyAllowedOnBouncer.stateIn(
+@@ -117,6 +120,9 @@ constructor(
+     private val currentUserId
+         get() = userRepository.getSelectedUserInfo().id
+ 
++    private fun grabDetectionTriggered(): Boolean =
++        globalSettings.getInt(Settings.Global.GRAB_DETECTION_TRIGGERED, 0) != 0
++
+     private val kumCallback =
+         object : KeyguardUpdateMonitorCallback() {
+             override fun onBiometricAuthFailed(biometricSourceType: BiometricSourceType?) {
+@@ -323,6 +329,9 @@ constructor(
+                             isFingerprintAuthCurrentlyAllowedOnBouncer,
+                         )
+                         .toMessage()
++                } else if (flags.isInUserLockdown && grabDetectionTriggered()) {
++                    BouncerMessageStrings.authRequiredAfterGrab(currentSecurityMode.toAuthModel())
++                        .toMessage()
+                 } else if (trustOrBiometricsAvailable && flags.isInUserLockdown) {
+                     BouncerMessageStrings.authRequiredAfterUserLockdown(
+                             currentSecurityMode.toAuthModel()
+diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/shared/model/BouncerMessageStrings.kt b/packages/SystemUI/src/com/android/systemui/bouncer/shared/model/BouncerMessageStrings.kt
+index 9fbf081e..daf23be8 100644
+--- a/packages/SystemUI/src/com/android/systemui/bouncer/shared/model/BouncerMessageStrings.kt
++++ b/packages/SystemUI/src/com/android/systemui/bouncer/shared/model/BouncerMessageStrings.kt
+@@ -248,6 +248,15 @@ object BouncerMessageStrings {
+         }
+     }
+ 
++    fun authRequiredAfterGrab(securityMode: AuthenticationMethodModel): BouncerMessagePair {
++        return when (securityMode) {
++            Pattern -> Pair(patternDefaultMessage(false), R.string.kg_prompt_after_grab)
++            Password -> Pair(passwordDefaultMessage(false), R.string.kg_prompt_after_grab)
++            Pin -> Pair(pinDefaultMessage(false), R.string.kg_prompt_after_grab)
++            else -> EmptyMessage
++        }
++    }
++
+     fun authRequiredForSecureLockDevicePrimaryAuth(
+         securityMode: AuthenticationMethodModel
+     ): BouncerMessagePair {
+diff --git a/packages/SystemUI/tests/utils/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorKosmos.kt b/packages/SystemUI/tests/utils/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorKosmos.kt
+index 6429aac7..ba7fa810 100644
+--- a/packages/SystemUI/tests/utils/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorKosmos.kt
++++ b/packages/SystemUI/tests/utils/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorKosmos.kt
+@@ -31,6 +31,7 @@ import com.android.systemui.kosmos.backgroundScope
+ import com.android.systemui.kosmos.testScope
+ import com.android.systemui.securelockdevice.domain.interactor.secureLockDeviceInteractor
+ import com.android.systemui.user.data.repository.fakeUserRepository
++import com.android.systemui.util.settings.fakeGlobalSettings
+ import org.mockito.kotlin.mock
+ 
+ val Kosmos.bouncerMessageInteractor by Fixture {
+@@ -50,6 +51,7 @@ val Kosmos.bouncerMessageInteractor by Fixture {
+         deviceEntryBiometricsAllowedInteractor = deviceEntryBiometricsAllowedInteractor,
+         secureLockDeviceInteractor = { secureLockDeviceInteractor },
+         resources = mainResources,
++        globalSettings = fakeGlobalSettings,
+     )
+ }
+ val Kosmos.countDownTimerUtil by Fixture { mock<CountDownTimerUtil>() }
+diff --git a/services/core/java/com/android/server/grab/GrabDetectionService.java b/services/core/java/com/android/server/grab/GrabDetectionService.java
+new file mode 100644
+index 00000000..ff9da147
+--- /dev/null
++++ b/services/core/java/com/android/server/grab/GrabDetectionService.java
+@@ -0,0 +1,363 @@
++/*
++ * Copyright (C) 2026 ObliviOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.server.grab;
++
++import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_USER_LOCKDOWN;
++
++import android.app.ActivityManager;
++import android.content.BroadcastReceiver;
++import android.content.ContentResolver;
++import android.content.Context;
++import android.content.Intent;
++import android.content.IntentFilter;
++import android.database.ContentObserver;
++import android.ext.settings.ExtSettings;
++import android.hardware.Sensor;
++import android.hardware.SensorEvent;
++import android.hardware.SensorEventListener;
++import android.hardware.SensorManager;
++import android.os.Handler;
++import android.os.HandlerThread;
++import android.os.PowerManager;
++import android.os.SystemClock;
++import android.os.SystemProperties;
++import android.os.UserHandle;
++import android.os.VibrationAttributes;
++import android.os.VibrationEffect;
++import android.os.Vibrator;
++import android.provider.Settings;
++import android.util.Slog;
++import android.view.Display;
++import android.view.InputDevice;
++import android.view.MotionEvent;
++import android.view.WindowManagerPolicyConstants.PointerEventListener;
++
++import com.android.internal.widget.LockPatternUtils;
++import com.android.server.LocalServices;
++import com.android.server.SystemService;
++import com.android.server.wm.WindowManagerInternal;
++import com.android.server.wm.WindowManagerService;
++
++import java.util.Locale;
++
++/**
++ * Locks the phone when it is pulled out of the owner's hand while in use, and lets the existing
++ * auto-reboot timer of init restart it when the owner does not unlock within a minute (ADR-169).
++ *
++ * Armed only while the device is unlocked and interactive. The decision is made by
++ * {@link GrabDetector}; this class feeds it and acts on the verdict. It has no Binder interface and
++ * no permission of its own; it is controlled only through Settings.Global (see ExtSettings).
++ *
++ * @hide
++ */
++public class GrabDetectionService extends SystemService {
++    private static final String TAG = "GrabDetection";
++
++    // Same property as policy/keyguard/AutoReboot.java; init owns the timer behind it.
++    private static final String AUTO_REBOOT_CTL = "sys.auto_reboot_ctl";
++    // init raises anything under 20 seconds to 20 seconds
++    private static final int REBOOT_TIMER_SECONDS = 60;
++    private static final String AUTO_REBOOT_CANCEL = "on_device_unlocked";
++
++    private static final long COOLDOWN_MS = 2000;
++    private static final long VIBRATION_MS = 400;
++    // lockNow() only posts the lock; if the keyguard has not shown by then, the timer is cancelled
++    private static final long KEYGUARD_CHECK_MS = 5000;
++
++    private final WindowManagerService mWm;
++    private final HandlerThread mThread = new HandlerThread(TAG);
++
++    // set by the keyguard callback on any thread; read on mHandler
++    private volatile boolean mKeyguardShowing = true;
++
++    // used on mHandler only, after PHASE_BOOT_COMPLETED
++    private volatile Handler mHandler;
++    private LockPatternUtils mLockPatternUtils;
++    private WindowManagerInternal mWindowManagerInternal;
++    private SensorManager mSensorManager;
++    private Sensor mAccelerometer;
++    private Vibrator mVibrator;
++    private boolean mInteractive;
++    private boolean mArmed;
++    private GrabDetector mDetector;
++
++    public GrabDetectionService(Context context, WindowManagerService wm) {
++        super(context);
++        mWm = wm;
++    }
++
++    @Override
++    public void onStart() {
++        LocalServices.addService(GrabDetectionService.class, this);
++    }
++
++    @Override
++    public void onBootPhase(int phase) {
++        if (phase != PHASE_BOOT_COMPLETED) {
++            return;
++        }
++        try {
++            start();
++        } catch (RuntimeException e) {
++            // an exception here would fail the boot; without the feature the phone still works
++            Slog.e(TAG, "could not start grab detection", e);
++        }
++    }
++
++    private void start() {
++        final Context ctx = getContext();
++        mThread.start();
++        final Handler handler = new Handler(mThread.getLooper());
++        mLockPatternUtils = new LockPatternUtils(ctx);
++        mWindowManagerInternal = LocalServices.getService(WindowManagerInternal.class);
++        mSensorManager = ctx.getSystemService(SensorManager.class);
++        mAccelerometer = mSensorManager == null
++                ? null : mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
++        mVibrator = ctx.getSystemService(Vibrator.class);
++        mInteractive = ctx.getSystemService(PowerManager.class).isInteractive();
++
++        final IntentFilter screen = new IntentFilter();
++        screen.addAction(Intent.ACTION_SCREEN_ON);
++        screen.addAction(Intent.ACTION_SCREEN_OFF);
++        ctx.registerReceiver(new BroadcastReceiver() {
++            @Override
++            public void onReceive(Context c, Intent intent) {
++                mInteractive = Intent.ACTION_SCREEN_ON.equals(intent.getAction());
++                refresh(false);
++            }
++        }, screen, null, handler);
++
++        final ContentObserver observer = new ContentObserver(handler) {
++            @Override
++            public void onChange(boolean selfChange) {
++                refresh(false);
++            }
++        };
++        for (String key : new String[] {
++                Settings.Global.GRAB_DETECTION_MODE, Settings.Global.GRAB_PEAK_DMS2,
++                Settings.Global.GRAB_TOUCH_WINDOW_MS, Settings.Global.GRAB_TOUCH_LOSS_MS,
++                Settings.Global.GRAB_SETTLE_MS, Settings.Global.GRAB_SUSTAIN_MS,
++                Settings.Global.GRAB_SUSTAIN_ENERGY_DMS2}) {
++            ctx.getContentResolver().registerContentObserver(
++                    Settings.Global.getUriFor(key), false, observer);
++        }
++
++        mHandler = handler;
++        // a flag left over from before a restart must not outlive it
++        handler.post(() -> refresh(true));
++    }
++
++    /** Called by KeyguardServiceDelegate when the keyguard starts or stops showing. */
++    public void onKeyguardShowingChanged(boolean showing) {
++        mKeyguardShowing = showing;
++        final Handler handler = mHandler;
++        if (handler == null) {
++            return;
++        }
++        handler.post(() -> refresh(!showing));
++    }
++
++    // Every entry on the handler thread comes through here: an exception that leaves that thread
++    // would take system_server down.
++    private void refresh(boolean clearFlag) {
++        try {
++            if (clearFlag) {
++                clearTriggered();
++            }
++            updateArmed();
++        } catch (RuntimeException e) {
++            Slog.e(TAG, "refresh failed", e);
++        }
++    }
++
++    private void updateArmed() {
++        final int mode = ExtSettings.GRAB_DETECTION_MODE.get(getContext());
++        final boolean want = mode != ExtSettings.GRAB_DETECTION_OFF && !mKeyguardShowing
++                && mInteractive && mAccelerometer != null;
++        // ponytail: disarm and arm again on every change, so new thresholds are read; the changes
++        // are rare (screen on/off, keyguard, a setting)
++        if (mArmed) {
++            disarm();
++        }
++        if (want) {
++            arm(mode);
++        }
++    }
++
++    private void arm(int mode) {
++        final Context c = getContext();
++        mDetector = new GrabDetector(new GrabDetector.Params(
++                ExtSettings.GRAB_PEAK.get(c) / 10f,
++                ExtSettings.GRAB_TOUCH_WINDOW_MS.get(c),
++                ExtSettings.GRAB_TOUCH_LOSS_MS.get(c),
++                ExtSettings.GRAB_SETTLE_MS.get(c),
++                ExtSettings.GRAB_SUSTAIN_MS.get(c),
++                ExtSettings.GRAB_SUSTAIN_ENERGY.get(c) / 10f,
++                COOLDOWN_MS));
++        if (!mSensorManager.registerListener(mSensorListener, mAccelerometer,
++                SensorManager.SENSOR_DELAY_GAME, mHandler)) {
++            Slog.w(TAG, "accelerometer not registered, not armed");
++            mDetector = null;
++            return;
++        }
++        mWm.registerPointerEventListener(mPointerListener, Display.DEFAULT_DISPLAY);
++        mArmed = true;
++        Slog.i(TAG, "armed, mode=" + mode);
++    }
++
++    private void disarm() {
++        mDetector = null;
++        mArmed = false;
++        mSensorManager.unregisterListener(mSensorListener);
++        try {
++            mWm.unregisterPointerEventListener(mPointerListener, Display.DEFAULT_DISPLAY);
++        } catch (RuntimeException e) {
++            // thrown when the register did nothing (no such display)
++            Slog.w(TAG, "pointer listener was not registered", e);
++        }
++        Slog.i(TAG, "disarmed");
++    }
++
++    // Runs on the UI thread of the window manager. Only a boolean and a time leave this method;
++    // the event is never kept, and no coordinate or pressure is read.
++    private final PointerEventListener mPointerListener = ev -> {
++        if (!ev.isFromSource(InputDevice.SOURCE_TOUCHSCREEN)) {
++            return;
++        }
++        final int action = ev.getActionMasked();
++        final boolean contact = action != MotionEvent.ACTION_UP
++                && action != MotionEvent.ACTION_CANCEL;
++        final long t = ev.getEventTime();
++        final Handler handler = mHandler;
++        if (handler != null) {
++            handler.post(() -> {
++                final GrabDetector d = mDetector;
++                if (d != null) {
++                    d.onTouch(t, contact);
++                }
++            });
++        }
++    };
++
++    private final SensorEventListener mSensorListener = new SensorEventListener() {
++        @Override
++        public void onSensorChanged(SensorEvent event) {
++            final GrabDetector d = mDetector;
++            if (d == null) {
++                return;
++            }
++            // both clocks of the detector are uptimeMillis: the touch event time and this one
++            try {
++                final GrabDetector.Decision x = d.onAccel(SystemClock.uptimeMillis(),
++                        event.values[0], event.values[1], event.values[2]);
++                if (x != null) {
++                    onDecision(x);
++                }
++            } catch (RuntimeException e) {
++                Slog.e(TAG, "sensor callback failed", e);
++            }
++        }
++
++        @Override
++        public void onAccuracyChanged(Sensor sensor, int accuracy) {
++        }
++    };
++
++    private void onDecision(GrabDetector.Decision x) {
++        final int mode = ExtSettings.GRAB_DETECTION_MODE.get(getContext());
++        // the shadow log: sensor magnitudes and intervals only, no coordinates, no location;
++        // values in m/s^2, the settings keys take tenths of them
++        if (!x.touched) {
++            Slog.i(TAG, String.format(Locale.ROOT, "peak without touch peak=%.1f mode=%d",
++                    x.peak, mode));
++            return;
++        }
++        Slog.i(TAG, String.format(Locale.ROOT,
++                "candidate trigger=%b peak=%.1f released=%b releaseDeltaMs=%d energy=%.2f mode=%d",
++                x.trigger, x.peak, x.released, x.releaseDeltaMs, x.energy, mode));
++        if (x.trigger && mode == ExtSettings.GRAB_DETECTION_ACTIVE) {
++            try {
++                lockAndArmRestart();
++            } catch (RuntimeException e) {
++                // an exception that leaves the handler thread would take system_server down
++                Slog.e(TAG, "grab action failed", e);
++            }
++        }
++    }
++
++    // The order matters. The timer comes first: init ignores a request while a timer runs, and the
++    // keyguard callback of the lock requests 18 hours. If the lock then fails, the timer is
++    // cancelled, or it would restart an unlocked phone that is in use.
++    private void lockAndArmRestart() {
++        final Context ctx = getContext();
++        final int userId = ActivityManager.getCurrentUser();
++        if (!mLockPatternUtils.isSecure(userId)) {
++            Slog.w(TAG, "no secure lock screen, not locking");
++            return;
++        }
++        try {
++            SystemProperties.set(AUTO_REBOOT_CTL, Integer.toString(REBOOT_TIMER_SECONDS));
++        } catch (RuntimeException e) {
++            // a lock without a restart timer is better than no lock
++            Slog.e(TAG, "could not arm the restart timer", e);
++        }
++        try {
++            // before the strong-auth requirement, so the message is ready when the bouncer shows;
++            // it is only the text above the PIN entry and must not stop the lock
++            Settings.Global.putInt(ctx.getContentResolver(),
++                    Settings.Global.GRAB_DETECTION_TRIGGERED, 1);
++        } catch (RuntimeException e) {
++            Slog.e(TAG, "could not set the triggered flag", e);
++        }
++        boolean locked = false;
++        try {
++            mLockPatternUtils.requireStrongAuth(STRONG_AUTH_REQUIRED_AFTER_USER_LOCKDOWN,
++                    UserHandle.USER_ALL);
++            mWindowManagerInternal.lockNow();
++            locked = true;
++        } catch (RuntimeException e) {
++            Slog.e(TAG, "could not lock", e);
++        } finally {
++            if (!locked) {
++                try {
++                    SystemProperties.set(AUTO_REBOOT_CTL, AUTO_REBOOT_CANCEL);
++                    clearTriggered();
++                } catch (RuntimeException e) {
++                    Slog.e(TAG, "could not cancel the restart timer", e);
++                }
++            }
++        }
++        if (locked) {
++            // lockNow() only posts the lock. If the keyguard never shows (for example in lock task
++            // mode) the timer would restart a phone that is still in use.
++            mHandler.postDelayed(this::cancelIfKeyguardDidNotShow, KEYGUARD_CHECK_MS);
++        }
++        if (locked && mVibrator != null) {
++            mVibrator.vibrate(
++                    VibrationEffect.createOneShot(VIBRATION_MS, VibrationEffect.DEFAULT_AMPLITUDE),
++                    VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM));
++        }
++    }
++
++    private void cancelIfKeyguardDidNotShow() {
++        try {
++            if (!mKeyguardShowing) {
++                Slog.e(TAG, "keyguard did not show after the lock, cancelling the restart timer");
++                SystemProperties.set(AUTO_REBOOT_CTL, AUTO_REBOOT_CANCEL);
++                clearTriggered();
++            }
++        } catch (RuntimeException e) {
++            Slog.e(TAG, "could not cancel the restart timer", e);
++        }
++    }
++
++    private void clearTriggered() {
++        final ContentResolver cr = getContext().getContentResolver();
++        if (Settings.Global.getInt(cr, Settings.Global.GRAB_DETECTION_TRIGGERED, 0) != 0) {
++            Settings.Global.putInt(cr, Settings.Global.GRAB_DETECTION_TRIGGERED, 0);
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/grab/GrabDetector.java b/services/core/java/com/android/server/grab/GrabDetector.java
+new file mode 100644
+index 00000000..8bbb236d
+--- /dev/null
++++ b/services/core/java/com/android/server/grab/GrabDetector.java
+@@ -0,0 +1,195 @@
++/*
++ * Copyright (C) 2026 ObliviOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.server.grab;
++
++/**
++ * Decides whether the phone was pulled out of the owner's hand while in use.
++ *
++ * A pull is: a sharp acceleration peak while the screen was being touched, the touch contact
++ * ending within a short interval of the peak, and movement that continues afterwards. A phone
++ * that is dropped comes to rest, so its movement afterwards is small.
++ *
++ * No Android dependency. All times are milliseconds from one monotonic clock. Not thread-safe:
++ * the caller serialises every call on one thread. Touch input is reduced to "contact or no
++ * contact"; no coordinate, pressure or touch pattern is accepted, kept or reported.
++ *
++ * @hide
++ */
++public final class GrabDetector {
++    /** Standard gravity in m/s^2. */
++    public static final float GRAVITY = 9.80665f;
++
++    private static final long NEVER = Long.MIN_VALUE;
++
++    /** Tunable thresholds. Accelerations are in m/s^2, times in milliseconds. */
++    public static final class Params {
++        /** Deviation of the acceleration magnitude from gravity that counts as a pull. */
++        public final float peak;
++        /** The screen must have been touched at most this long before the peak. */
++        public final long touchWindowMs;
++        /** The touch contact must end within this long before or after the peak. */
++        public final long touchLossMs;
++        /** Time after the peak that is not measured (the pull itself). */
++        public final long settleMs;
++        /** Length of the window after the settle time in which movement is measured. */
++        public final long sustainMs;
++        /** Mean deviation from gravity in that window that counts as continued movement. */
++        public final float sustainEnergy;
++        /** After a decision, new peaks are ignored for this long. */
++        public final long cooldownMs;
++
++        public Params(float peak, long touchWindowMs, long touchLossMs, long settleMs,
++                long sustainMs, float sustainEnergy, long cooldownMs) {
++            this.peak = peak;
++            this.touchWindowMs = touchWindowMs;
++            this.touchLossMs = touchLossMs;
++            this.settleMs = settleMs;
++            this.sustainMs = sustainMs;
++            this.sustainEnergy = sustainEnergy;
++            this.cooldownMs = cooldownMs;
++        }
++    }
++
++    /**
++     * The outcome for one candidate pull, or the report of a peak that was no candidate because
++     * the screen was not being touched ({@code touched} false, {@code trigger} false). {@code
++     * trigger} is the verdict, the rest explains it.
++     */
++    public static final class Decision {
++        public final boolean trigger;
++        public final boolean touched;
++        public final float peak;
++        public final boolean released;
++        public final long releaseDeltaMs;
++        public final float energy;
++
++        Decision(boolean trigger, boolean touched, float peak, boolean released,
++                long releaseDeltaMs, float energy) {
++            this.trigger = trigger;
++            this.touched = touched;
++            this.peak = peak;
++            this.released = released;
++            this.releaseDeltaMs = releaseDeltaMs;
++            this.energy = energy;
++        }
++    }
++
++    private final Params mParams;
++
++    private boolean mInContact;
++    private long mLastContactMs = NEVER;
++    private long mLastReleaseMs = NEVER;
++
++    private boolean mPending;
++    private long mPeakMs;
++    private double mPeakDev;
++    private boolean mReleased;
++    private long mReleaseDeltaMs;
++    private double mSumDev;
++    private int mCount;
++    private long mIgnoreUntilMs = NEVER;
++    private long mNoTouchReportUntilMs = NEVER;
++
++    public GrabDetector(Params params) {
++        mParams = params;
++    }
++
++    /** Forgets all state. Call when the detector is armed. */
++    public void reset() {
++        mInContact = false;
++        mLastContactMs = NEVER;
++        mLastReleaseMs = NEVER;
++        mPending = false;
++        mIgnoreUntilMs = NEVER;
++        mNoTouchReportUntilMs = NEVER;
++    }
++
++    /** {@code contact} is true while a finger is on the screen, false when none is left. */
++    public void onTouch(long tMs, boolean contact) {
++        if (contact) {
++            if (!mInContact) {
++                // a new touch voids the release before it: the finger is on the screen again
++                mLastReleaseMs = NEVER;
++            }
++            mInContact = true;
++            mLastContactMs = tMs;
++            return;
++        }
++        if (!mInContact) {
++            return;
++        }
++        mInContact = false;
++        mLastReleaseMs = tMs;
++        if (mPending && Math.abs(tMs - mPeakMs) <= mParams.touchLossMs) {
++            mReleased = true;
++            mReleaseDeltaMs = tMs - mPeakMs;
++        }
++    }
++
++    /**
++     * Feeds one accelerometer sample (m/s^2, including gravity).
++     *
++     * @return null while nothing was decided; the decision for the candidate that just
++     *         finished; or, at most once per cool-down, the report of a peak with no recent touch
++     */
++    public Decision onAccel(long tMs, float x, float y, float z) {
++        if (mIgnoreUntilMs != NEVER && tMs < mIgnoreUntilMs) {
++            return null;
++        }
++        final double dev = Math.abs(
++                Math.sqrt((double) x * x + (double) y * y + (double) z * z) - (double) GRAVITY);
++
++        if (!mPending) {
++            if (dev < mParams.peak) {
++                return null;
++            }
++            if (touchedRecently(tMs)) {
++                startCandidate(tMs, dev);
++                return null;
++            }
++            // no candidate, but the shadow log must be able to measure a pull without touch
++            if (tMs >= mNoTouchReportUntilMs) {
++                mNoTouchReportUntilMs = tMs + mParams.cooldownMs;
++                return new Decision(false, false, (float) dev, false, 0, 0f);
++            }
++            return null;
++        }
++
++        final long since = tMs - mPeakMs;
++        if (since < mParams.settleMs) {
++            mPeakDev = Math.max(mPeakDev, dev);
++        } else if (since < mParams.settleMs + mParams.sustainMs) {
++            mSumDev += dev;
++            mCount++;
++        }
++        if (since < mParams.settleMs + mParams.sustainMs) {
++            return null;
++        }
++
++        mPending = false;
++        mIgnoreUntilMs = tMs + mParams.cooldownMs;
++        final double energy = mCount > 0 ? mSumDev / mCount : 0;
++        final boolean trigger = mReleased && energy >= mParams.sustainEnergy;
++        return new Decision(trigger, true, (float) mPeakDev, mReleased, mReleaseDeltaMs,
++                (float) energy);
++    }
++
++    private boolean touchedRecently(long tMs) {
++        return mInContact
++                || (mLastContactMs != NEVER && tMs - mLastContactMs <= mParams.touchWindowMs);
++    }
++
++    private void startCandidate(long tMs, double dev) {
++        mPending = true;
++        mPeakMs = tMs;
++        mPeakDev = dev;
++        mSumDev = 0;
++        mCount = 0;
++        // a release just before the peak counts: the fingers can leave before the sensor sees it
++        mReleased = mLastReleaseMs != NEVER && tMs - mLastReleaseMs <= mParams.touchLossMs;
++        mReleaseDeltaMs = mReleased ? mLastReleaseMs - tMs : 0;
++    }
++}
+diff --git a/services/core/java/com/android/server/policy/keyguard/KeyguardServiceDelegate.java b/services/core/java/com/android/server/policy/keyguard/KeyguardServiceDelegate.java
+index 81c072be..e139d30a 100644
+--- a/services/core/java/com/android/server/policy/keyguard/KeyguardServiceDelegate.java
++++ b/services/core/java/com/android/server/policy/keyguard/KeyguardServiceDelegate.java
+@@ -46,6 +46,7 @@ import com.android.internal.policy.IKeyguardStateCallback;
+ import com.android.internal.policy.KeyguardState;
+ import com.android.internal.widget.LockPatternUtils;
+ import com.android.server.LocalServices;
++import com.android.server.grab.GrabDetectionService;
+ import com.android.server.wm.EventLogTags;
+ 
+ import java.io.PrintWriter;
+@@ -226,6 +227,12 @@ public class KeyguardServiceDelegate {
+ 
+         AutoReboot.onKeyguardShowingStateChanged(mContext, showing, userId);
+ 
++        final GrabDetectionService grabDetection =
++                LocalServices.getService(GrabDetectionService.class);
++        if (grabDetection != null) {
++            grabDetection.onKeyguardShowingChanged(showing);
++        }
++
+         final long token = Binder.clearCallingIdentity();
+         try {
+             UsbPortSecurityHooks.onKeyguardShowingStateChanged(mContext, showing, userId);
+diff --git a/services/java/com/android/server/SystemServer.java b/services/java/com/android/server/SystemServer.java
+index 59fe56bc..c03e3d80 100644
+--- a/services/java/com/android/server/SystemServer.java
++++ b/services/java/com/android/server/SystemServer.java
+@@ -185,6 +185,7 @@ import com.android.server.emergency.EmergencyAffordanceService;
+ import com.android.server.files.FileService;
+ import com.android.server.flags.FeatureFlagsService;
+ import com.android.server.gpu.GpuService;
++import com.android.server.grab.GrabDetectionService;
+ import com.android.server.grammaticalinflection.GrammaticalInflectionService;
+ import com.android.server.graphics.fonts.FontManagerService;
+ import com.android.server.hdmi.HdmiControlService;
+@@ -2628,6 +2629,9 @@ public final class SystemServer implements Dumpable {
+                 mSystemServiceManager.startService(GestureLauncherService.class);
+                 t.traceEnd();
+             }
++            t.traceBegin("StartGrabDetection");
++            mSystemServiceManager.startService(new GrabDetectionService(context, wm));
++            t.traceEnd();
+             t.traceBegin("StartSensorNotification");
+             mSystemServiceManager.startService(SensorNotificationService.class);
+             t.traceEnd();

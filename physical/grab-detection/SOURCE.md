@@ -11,6 +11,25 @@ GrapheneOS tag `2026100600` (ADR-166), read on the build server 2026-10-15 with 
 
 Authored in the disposable repositories `.worktrees/grab-detection-fwb` and `.worktrees/grab-detection-settings`.
 
+## Patch series squashed (2026-11-15, ADR-234) — read this before using any `frameworks-base` patch number
+
+The twelve `frameworks-base` patches were regrouped into two; only neighbouring patches were joined,
+so the order is unchanged. The table under "Patches" and every record that cites it use the numbers
+of the series before this squash. The `packages-apps-Settings` patches are unchanged.
+
+| Exported patch | Former patches |
+| --- | --- |
+| `frameworks-base/0001` detect a phone pulled out of a hand in use, lock it and tell the owner | `0001` to `0008` |
+| `frameworks-base/0002` the strictness of the detection, the set-down and the pulse of an impact | `0009` to `0012` |
+
+Each exported commit message lists its former patches. Checked on 2026-11-15: the twelve old and the
+two new files give the same tree (`b37bb2f0fac6dafc7ef61bd9e4428d9c63512420`) on `frameworks/base`
+`3d302c8d` (the parent of the first landed grab commit on the build server branch
+`oblivios-2026110200`); the two new files also apply, read from the build server, to the files of
+`7320e4e97e5d` named under "Base"; the 9 files that only this series changes have the blob of the
+build server branch tip (the tenth, a file other packages change too, is not compared); they apply with plain
+`git am` on a tree that holds the other `frameworks-base` series. Not built, not run on a device.
+
 ## Patches
 
 | Patch | Subject | Why it diverges from upstream |

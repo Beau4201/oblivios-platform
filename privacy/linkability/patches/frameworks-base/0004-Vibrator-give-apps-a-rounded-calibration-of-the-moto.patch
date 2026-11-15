@@ -1,22 +1,78 @@
-From 4abb0c19d417f154cbd80a110c446d1110f3db48 Mon Sep 17 00:00:00 2001
+From 0fb4ccbf006a2da60a1f45f133f3eaf67a289147 Mon Sep 17 00:00:00 2001
 From: beau4201 <beau.ten.berge@gmail.com>
 Date: Sun, 18 Oct 2026 04:17:40 +0200
-Subject: [PATCH 4/5] Vibrator: give apps a rounded calibration of the motor
+Subject: [PATCH] Vibrator: give apps a rounded calibration of the motor, for
+ every app uid, with a valid frequency profile
 
-The resonant frequency and Q factor are measured per unit, and the
-frequency to acceleration curve too. An app now gets the resonant
-frequency to 10 Hz, the Q factor to 0.5 and no curve; the system gets the
-measured values.
+Squash of former patches:
+
+- 0004 Vibrator: give apps a rounded calibration of the motor
+- 0008 Vibrator: round the calibration for every app uid, not only ids 10000 to 19999
+- 0009 Vibrator: keep a valid frequency profile in the rounded calibration
 ---
- core/java/android/os/VibratorInfo.java        | 26 +++++++++++++++++++
- .../vibrator/VibratorManagerService.java      | 12 +++++++++
- 2 files changed, 38 insertions(+)
+ core/java/android/os/VibratorCoarse.java      | 46 +++++++++++++++++++
+ core/java/android/os/VibratorInfo.java        | 40 ++++++++++++++++
+ .../vibrator/VibratorManagerService.java      | 16 +++++++
+ 3 files changed, 102 insertions(+)
+ create mode 100644 core/java/android/os/VibratorCoarse.java
 
+diff --git a/core/java/android/os/VibratorCoarse.java b/core/java/android/os/VibratorCoarse.java
+new file mode 100644
+index 00000000..74ec7e1d
+--- /dev/null
++++ b/core/java/android/os/VibratorCoarse.java
+@@ -0,0 +1,46 @@
++/*
++ * Copyright (C) 2026 The ObliviOS Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package android.os;
++
++/**
++ * ObliviOS (ADR-173): the rounding that {@link VibratorInfo#withCoarseCalibration} applies to the
++ * measured calibration of the motor, apart from VibratorInfo so that a host test can run it.
++ */
++final class VibratorCoarse {
++    private VibratorCoarse() {}
++
++    /**
++     * Rounds to a multiple of step. NaN and the infinities stay as they are:
++     * Math.round(Infinity) is Integer.MAX_VALUE and would turn an infinite value into a large
++     * finite one.
++     */
++    static float coarse(float value, float step) {
++        if (Float.isNaN(value) || Float.isInfinite(value)) {
++            return value;
++        }
++        return Math.round(value / step) * step;
++    }
++
++    /**
++     * The resonant frequency an app gets: rounded to 10 Hz, or NaN when the rounded value is not
++     * positive (a frequency profile with a resonant frequency of zero or less is invalid).
++     */
++    static float resonant(float resonantHz) {
++        final float rounded = coarse(resonantHz, 10f);
++        return rounded > 0f ? rounded : Float.NaN;
++    }
++}
 diff --git a/core/java/android/os/VibratorInfo.java b/core/java/android/os/VibratorInfo.java
-index 8e10dd7..acf7bd8 100644
+index 8e10dd75..100b087c 100644
 --- a/core/java/android/os/VibratorInfo.java
 +++ b/core/java/android/os/VibratorInfo.java
-@@ -146,6 +146,32 @@ public class VibratorInfo implements Parcelable {
+@@ -146,6 +146,27 @@ public class VibratorInfo implements Parcelable {
                  maxEnvelopeEffectControlPointDurationMillis;
      }
  
@@ -25,32 +81,53 @@ index 8e10dd7..acf7bd8 100644
 +     * the Q factor are measured per unit at the factory, to many decimals, and the frequency to
 +     * acceleration curve is measured the same way, so together they identify the phone to every
 +     * app that reads them. The copy keeps the resonant frequency to 10 Hz and the Q factor to 0.5,
-+     * which is enough to pick a haptic waveform, and drops the curve.
++     * which is enough to pick a haptic waveform, and replaces the curve by a flat one.
 +     *
 +     * @hide
 +     */
 +    @NonNull
 +    public VibratorInfo withCoarseCalibration() {
 +        return new VibratorInfo(mId, mCapabilities, mSupportedEffects, mSupportedPrimitives,
-+                mPrimitiveDelayMax, mCompositionSizeMax, coarse(mQFactor, 0.5f),
++                mPrimitiveDelayMax, mCompositionSizeMax, VibratorCoarse.coarse(mQFactor, 0.5f),
 +                new FrequencyProfileLegacy(
-+                        coarse(mFrequencyProfileLegacy.mResonantFrequencyHz, 10f),
++                        VibratorCoarse.resonant(mFrequencyProfileLegacy.mResonantFrequencyHz),
 +                        Float.NaN, Float.NaN, null),
-+                new FrequencyProfile(coarse(mFrequencyProfile.mResonantFrequencyHz, 10f),
-+                        null, null),
++                mFrequencyProfile.withCoarseCalibration(),
 +                mMaxEnvelopeEffectSize, mMinEnvelopeEffectControlPointDurationMillis,
 +                mMaxEnvelopeEffectControlPointDurationMillis);
-+    }
-+
-+    private static float coarse(float value, float step) {
-+        return Float.isNaN(value) ? value : Math.round(value / step) * step;
 +    }
 +
      @Override
      public void writeToParcel(Parcel dest, int flags) {
          dest.writeInt(mId);
+@@ -640,6 +661,25 @@ public class VibratorInfo implements Parcelable {
+             return mFrequenciesHz == null;
+         }
+ 
++        /**
++         * ObliviOS (ADR-173): a copy that keeps the range an app can use (the lowest and highest
++         * frequency to 10 Hz, the resonant frequency to 10 Hz) and replaces the measured curve of
++         * the unit by a flat one at the maximum acceleration to 0.5 G. An empty profile has no
++         * per-unit data and is returned as it is.
++         *
++         * @hide
++         */
++        FrequencyProfile withCoarseCalibration() {
++            if (isEmpty()) {
++                return this;
++            }
++            final float acceleration = VibratorCoarse.coarse(mMaxOutputAccelerationGs, 0.5f);
++            return new FrequencyProfile(VibratorCoarse.resonant(mResonantFrequencyHz),
++                    new float[] {VibratorCoarse.coarse(mMinFrequencyHz, 10f),
++                            VibratorCoarse.coarse(mMaxFrequencyHz, 10f)},
++                    new float[] {acceleration, acceleration});
++        }
++
+         /**
+          * Returns a list of available frequencies.
+          */
 diff --git a/services/core/java/com/android/server/vibrator/VibratorManagerService.java b/services/core/java/com/android/server/vibrator/VibratorManagerService.java
-index 3ac6a03..caf3230 100644
+index 3ac6a03f..9fe776f9 100644
 --- a/services/core/java/com/android/server/vibrator/VibratorManagerService.java
 +++ b/services/core/java/com/android/server/vibrator/VibratorManagerService.java
 @@ -63,6 +63,7 @@ import android.os.ShellCallback;
@@ -61,14 +138,18 @@ index 3ac6a03..caf3230 100644
  import android.os.VibrationAttributes;
  import android.os.VibrationEffect;
  import android.os.VibratorInfo;
-@@ -450,6 +451,17 @@ public class VibratorManagerService extends IVibratorManagerService.Stub {
+@@ -450,6 +451,21 @@ public class VibratorManagerService extends IVibratorManagerService.Stub {
      @Override // Binder call
      @Nullable
      public VibratorInfo getVibratorInfo(int vibratorId) {
 +        final VibratorInfo info = getVibratorInfoInternal(vibratorId);
 +        // ObliviOS (ADR-173): the calibration of the motor identifies the unit; an app gets it
 +        // rounded (see VibratorInfo#withCoarseCalibration), the system gets it as measured.
-+        if (info != null && UserHandle.isApp(Binder.getCallingUid())) {
++        // Every uid from the first application id up is an app: UserHandle.isApp() stops at the
++        // application range (10000 to 19999) and would hand the measured values to SDK-sandbox
++        // (20000 to 29999) and isolated (90000 and up) processes.
++        if (info != null
++                && UserHandle.getAppId(Binder.getCallingUid()) >= Process.FIRST_APPLICATION_UID) {
 +            return info.withCoarseCalibration();
 +        }
 +        return info;
@@ -79,6 +160,3 @@ index 3ac6a03..caf3230 100644
          final HalVibrator vibrator = mVibratorManager.getVibrator(vibratorId);
          if (vibrator == null) {
              return null;
--- 
-2.56.0
-

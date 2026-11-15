@@ -14,6 +14,29 @@ Files read read-only from the build server on 2026-10-18, trees clean:
 | `frameworks/base`, review fixes (after the five commits above, `f6e5f89482b9`) | `f6e5f89482b9` | `SettingsHardening.java`, `ClipboardService.java` | `c848deda3ff7` to `66a2d00650cc`; `1eec110f5d98` to `b35778abb95d` |
 | `packages/providers/MediaProvider` (detached at the tag, new branch) | `db0779586e` | `src/com/android/providers/media/MediaProvider.java` | `f259f9c572ce` to `24f5db481012` |
 
+## Patch series squashed (2026-11-15, ADR-234) — read this before using any `frameworks-base` patch number
+
+The ten `frameworks-base` patches were regrouped into four, one per concern. The groups are not all
+neighbours (the Clipboard, SettingsProvider and Vibrator patches were interleaved); they touch
+different files, and the tree comparison below is what makes the new order safe. The table under
+"Patches" and every record that cites it use the numbers of the series before this squash. The
+patches of the other trees are unchanged.
+
+| Exported patch | Former patches |
+| --- | --- |
+| `frameworks-base/0001` Permissions: make `USE_LOOPBACK_INTERFACE` a runtime permission | `0001` |
+| `frameworks-base/0002` Clipboard: read only through a paste, and let the owner and a paste-grant holder hear a clip change | `0002`, `0007` |
+| `frameworks-base/0003` SettingsProvider: an ordinary app reads only the settings it needs, and the settings the framework reads in-process | `0003`, `0005`, `0006`, `0010` |
+| `frameworks-base/0004` Vibrator: a rounded calibration of the motor, for every app uid, with a valid frequency profile | `0004`, `0008`, `0009` |
+
+Each exported commit message lists its former patches. Checked on 2026-11-15: the ten old and the
+four new files give the same tree (`373227c915df9281997f6586d6820587611a5925`) on `frameworks/base`
+`4b9958bd^` (the parent of the first landed commit of the series on the build server branch
+`oblivios-2026110200`); the four new files also apply, read from the build server, to the files of
+`e9f0c1e67143` named under "Base"; the 8 files the series changes alone have the blob of the build
+server branch tip; they apply with plain `git am` on a tree that holds the other `frameworks-base`
+series. Not built, not run on a device.
+
 ## Patches
 
 | Patch | Subject | Why it diverges from upstream |
