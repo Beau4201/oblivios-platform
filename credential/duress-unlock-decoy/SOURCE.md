@@ -1,5 +1,28 @@
 # Source record
 
+## Fix 2026-11-15, second module build: the life of the stage, the zoom hand-over and the length of the exit (`frameworks-base/0046` to `0048`)
+
+Measured on the module build of `0045` (foundation `duress-engineering-notes.md`, rows `DUR-045`, `DUR-019`): black for 0.6 s after
+the stage in 3 of 5 duress unlocks; the home wallpaper is the stage picture scaled by 1.10; the exit of a switch ends after 17 ms.
+Three commits of the same disposable repository, landed on the build tree with `git am` (`a040c3feae56`, `9d986535460f`,
+`542a4928546a`), module-built together and pushed to the phone, not built into an image; not measured yet when this was written.
+Exported with `git format-patch --start-number=46`:
+
+- `0046` gives the stage window a window token of its own (`createWindowContext` of type `TYPE_STATUS_BAR_ADDITIONAL`). With the
+  keyguard's context the stage layer was "hidden by parent or layer flag" in the layer sample in which the shade layer left,
+  0.45 to 0.55 s after it was added and before the home had drawn; the gap was filled by a `transition snapshot: Display` layer
+  that was black when taken after the stage had left. Cause of the layer hierarchy (child of the shade or hidden by policy) is
+  not proven; the next measurement shows it.
+- `0047` makes the stage follow the wallpaper zoom: `NotificationShadeDepthController#onZoomOutChanged` calls
+  `AuthorizedSwitchStage.onZoomOut`, and the stage scales by `lerp(min, max, 1 - zoomOut) / min` with the window manager's own
+  `config_wallpaperMinScale` and `config_wallpaperMaxScale` (`WallpaperController#zoomOutToScale`). The measured ratio home to
+  stage was 1.10 (mean error 7.1 against 1.2 after scaling); the values of min and max are derived from that ratio, not read.
+- `0048` holds the end of the keyguard exit of an authorized switch for 450 ms when there is no app behind it
+  (`KeyguardViewMediator#handleStartKeyguardExitAnimationInner`, the "remote animation disabled" branch): the window manager's
+  callback still goes out at once, `hide` and `onKeyguardExitFinished` wait, so the pad, the scrim, the blur and the zoom run
+  their 0.5 s as in an ordinary unlock (logcat: "Keyguard exit without a corresponding app to show" 17 ms after the start, shade
+  gone after 0.2 s). 450 ms is the ordinary exit of 447 ms (ADR-229); the ordinary unlock is not yet measured on this build.
+
 ## Fix 2026-11-15: the stage of an authorized switch, the decoy's look and theme colours (`frameworks-base/0037` to `0045`)
 
 ADR-230 and ADR-231 of the foundation repository (measurements: foundation `duress-engineering-notes.md`, "Round of 2026-11-15";
