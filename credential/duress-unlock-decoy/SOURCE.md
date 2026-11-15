@@ -1,5 +1,43 @@
 # Source record
 
+## Fix 2026-11-15: the stage of an authorized switch, the decoy's look and theme colours (`frameworks-base/0037` to `0045`)
+
+ADR-230 and ADR-231 of the foundation repository (measurements: foundation `duress-engineering-notes.md`, \"Round of 2026-11-15\";
+rows `DUR-019`, `DUR-036`, `DUR-038`, `DUR-043`, `DUR-044`). Module-built and pushed to the phone, not built into an image; the
+rows of the last build are not run. Nine commits of `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-v3`, from
+`ae91efc3`), landed on the build tree with `git am` and exported with `git format-patch --start-number=37`:
+
+- `0037` adds `AuthorizedSwitchStage` to SystemUI and shows it from the before-switch callback of an authorized switch (first form:
+  an empty window that asks for the wallpaper). Replaced by `0042` and `0044`.
+- `0038` writes the owner's Launcher3 look (themed icons, icon shape, labels hidden) to the decoy through the launcher's own
+  `grid_control` provider (`DecoyLauncherLook`): read at the lock on a thread of its own, written after the decoy's storage is
+  unlocked and before its home starts; the window manager holds the deferred home start while that is pending (at most 1.5 s).
+  Removes the lock-time launcher warm start (`0021`). System_server cannot edit the launcher's prefs file (mode 660, owner is the
+  app, no DAC override), which is why the provider is used.
+- `0039` reads the shape row `is_default` as a string (the provider's `MatrixCursor` holds a Boolean, which arrives as \"true\";
+  `getInt` of it is 0, so the shape would never have been written), gates the warnings to debuggable builds, and reads the owner's
+  look off the lock settings handler. `DecoySettingsMirror#launcherLookParts` has 1 JVM test, the class 17 tests, 1 mutation fails it.
+- `0040` replaces the two methods that `0038` had added to `ActivityManagerInternal` by a static, `DecoyLookGate` in `services.jar`.
+  `ActivityManagerInternal` is in `framework.jar`, which a module build of `services` does not replace: the phone had the new
+  `services.jar` against the old `framework.jar` and the duress PIN ended system_server with `NoSuchMethodError`.
+- `0041` gives the decoy the outgoing user's wallpaper colours in `ThemeOverlayController#onUserChanged` when it has none: the
+  service keeps the colours from the copied `wallpaper_info.xml`, so the engine's report equals what it has and is not sent on,
+  `mCurrentColors[decoy]` stays empty and the theme was built from no colours (the default blue).
+- `0042` adds `DecoyWallpaperHold` (static, services.jar): while an authorized switch is under way `WallpaperController#hideWallpapers`
+  does not hide the wallpaper because a window that is not an activity went off screen (the stage was counted as not drawn after
+  SystemUI redrew it, and the wallpaper was hidden until the home drew, 0.2 to 0.7 s of black); it ends when an activity window
+  becomes the wallpaper target.
+- `0043` keeps the stage window shown while WindowManager counts it as not drawn (`WindowStateAnimator#prepareSurfaceLocked`).
+- `0044` makes the stage draw the wallpaper bitmap itself (`getBitmapAsUser` with `FLAG_SYSTEM`, the engine's own call; `FLAG_LOCK`
+  with `returnDefault` returned the empty default image and the first try was black), full screen, no insets, at the layer of the
+  additional status bar (above the status bar, below the shade); preloaded when the keyguard is shown; kept until the home has drawn.
+- `0045` signals that moment by a broadcast to the SystemUI package, received by a receiver that is not exported. A persisted
+  setting (the first form of `0044`) was refused by the security review: its presence in the secure settings proves a duress
+  switch. Warnings of the stage are debuggable builds only.
+
+Open: the pad over black while the wallpaper service rebinds at the switch (0.10 to 0.16 s) is covered by the stage but not
+removed; the home draws about 0.9 to 1.0 s after the credential check, behind the stage.
+
 ## Fix 2026-11-14 (round of `lynx` `2026111401`): the decoy wallpaper and the early stop at the switch back (`frameworks-base/0035`, `0036`)
 
 Measured on `2026111401` (`DUR-038`, `DUR-035`, `DUR-036`, `DUR-039`, `DUR-040`; foundation `duress-engineering-notes.md`, "Round of
