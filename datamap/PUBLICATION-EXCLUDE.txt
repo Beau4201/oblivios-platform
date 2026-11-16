@@ -1,4 +1,0 @@
-# Paths that stay out of the public source until the trademark review of the logo files has passed (ADR-159).
-# The scripts that publish the source read this list (work package 7 of the publication design).
-datamap/logos/
-datamap/app/res/drawable/logo_*.xml

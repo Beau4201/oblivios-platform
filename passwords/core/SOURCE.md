@@ -4,7 +4,7 @@
 
 | Item | Value |
 | --- | --- |
-| Source | `oblivios-services`, directory `vault-core`, tree of commit `b5e73ab` (the last commit that touches `vault-core`; the services working tree was clean when it was copied to the build server, `master` `b5e73ab`) |
+| Source | `oblivios-services`, directory `vault-core`, tree of commit `b5e73ab` (`master`; the services working tree was clean when it was copied to the build server). Since then `vault-core` changed only in its `README.md` (checked 2026-11-16, `git diff b5e73ab HEAD -- vault-core`) |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `cargo build --release --locked --offline`, `panic = "abort"`, `lto`, `opt-level = "z"`, the AOSP clang as linker (`vault-core/tools/env.sh`) |
 | Build command | `vault-core/tools/build-android.sh` (copies the tree to the build server, builds, then checks the library itself) |
 | SHA-256 | `2f5d7f2f19c643211df3700b9af8e4ad74c10341914fc8a38199fdb5c5f525a3` |

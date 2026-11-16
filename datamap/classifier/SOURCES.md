@@ -37,12 +37,11 @@ The licence of the result is CC-BY-SA-4.0 (ShareAlike of layer 1); `NOTICE` carr
 
 The licence texts were read in the README or `LICENSE` of each source on the day above. The sentences are not copied here.
 
-## Flags (decision D4)
+## Flags
 
-The flag of a country is the emoji of the system font (two regional indicator symbols of the country code,
-`app/src/.../model/FlagEmoji.java`). No flag artwork is shipped, so there is no licence to carry and no country can
-lack its flag; the `--flags` option of `build-classifier.py` is therefore not used. The cost: the look of a flag is
-the look of the font, and a device without an emoji font shows two letters.
+The classifier carries no flag and the `--flags` option of `build-classifier.py` is not used. The Data Map app shows a
+country flag as artwork of its own package, made from flag-icons (MIT): see `../app/SOURCES.md` and the `NOTICE` of this
+repository. (The first decision, D4, was the emoji of the system font; the artwork replaced it on 2026-10-14.)
 
 ## Rules for a record
 

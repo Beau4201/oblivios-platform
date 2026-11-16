@@ -4,7 +4,7 @@
 
 | Item | Value |
 | --- | --- |
-| Source | `freeholdos-services`, directory `exit-daemon`, commit `7beab16` (branch `masklist-easylist`, not pushed, not merged) |
+| Source | `oblivios-services` (then named `freeholdos-services`), directory `exit-daemon`, commit `7beab16`; the commit is on the published `master` of `oblivios-services` |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `cargo build --release --locked --offline`, `panic = "abort"`, `lto`, `opt-level = "z"`, the AOSP clang as linker (`tools/env.sh`) |
 | Build command | `exit-daemon/tools/build-android.sh` (copies the tree to the build server, builds, then checks the binary itself) |
 | SHA-256 | `ddf5ddd43db9eb443e27089184bec86c00b18857e92ad8d32c834638228188aa` |
@@ -17,7 +17,7 @@
 | Dependencies | `exit-daemon/Cargo.lock`; versions, checksums and licences in `exit-daemon/NOTICE` and `RISKS.md` |
 
 `check-prebuilt.sh` compares the file with the hash above and fails on a mismatch, so the binary cannot change without this
-record changing. A new `exitd` is made only by `build-android.sh` from a commit of `freeholdos-services`; this file then gets
+record changing. A new `exitd` is made only by `build-android.sh` from a commit of `oblivios-services`; this file then gets
 the new commit, hash and size, and the comparison of two builds is repeated.
 
 ## exit-mask-list.tsv
