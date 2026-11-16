@@ -18,7 +18,7 @@
 - SHA-256 of the jar of 2026-10-07 (`org.sovereignos` prefix, superseded): `edd9a799ba7fcf86a9800bf92add1dab17819b0668d09954e3dec9907b08739b` (2026-10-07; the jar of `f1dee3f` was `64f391a2...`).
   Rebuilt from clean a second time with the same command: same hash. 57 tests, 0 failures; the old `AapCodec` fails the new assertions of `AapCodecPlan7bTest.acceptsOnlyReasonableNames`.
 - 31 classes in `org/sovereignos/airpods/{contracts,platform,state,validation}`;
-  class-file major version 65, the same as the vendored `guardian-core.jar`.
+  class-file major version 65.
 - Replaces the jar of 2026-09-29 (`324091f9...`), whose parser decoded an invented format that no AirPods sends.
   Vendored 2026-10-02. Re-vendor whenever `airpods-core` changes, and record the new commit and hash here.
 
@@ -44,8 +44,7 @@ single AOSP rebuild follows all planned AirPods work.
   (no default-grant policy exists for it yet).
 - `PRODUCT_PACKAGES` wiring is `patches/vendor-adevtool/0001` (table below). The
   build resolves `AirPodsApp` only if this package is present on the build
-  server at `vendor/sovereignos/airpods` (its own git repo, like
-  `vendor/sovereignos/guardian`). Deployed 2026-09-29 (commit `c61330f` there):
+  server at `vendor/sovereignos/airpods` (its own git repo). Deployed 2026-09-29 (commit `c61330f` there):
   a byte-for-byte copy of `app/`, `core/`, `README.md`, `SOURCE.md`, 9 of 9
   files verified by sha256. Any later change here must be copied over the same
   way and re-verified before a build.
@@ -132,7 +131,7 @@ on the build server (not from the disposable worktree's own local commit,
 whose SHA differs from what was actually built and verified — see
 the note on this in `docs/research/build-and-signing-engineering-notes.md` in `sovereignos-docs`), author identity rewritten to the generic
 `SovereignOS Build <build@sovereignos.local>` identity before committing
-here (same convention as `guardian/SOURCE.md`). Real, dated commit on the
+here. Real, dated commit on the
 build server's `platform-primary` checkout.
 
 The exported series were squashed on 2026-10-13. On the base of each tree the squashed patches
@@ -370,3 +369,7 @@ Full investigation and authoring trail:
 the internal record "airpods bluetooth stack investigation" (not published),
 the internal record "airpods nonsdk api exemption investigation" (not published), and
 ADR-107/ADR-108/ADR-109 in `docs/governance/decision-log.md` in `sovereignos-docs`.
+
+## Regenerated without Guardian (2026-11-16, ADR-240)
+
+`vendor-adevtool/0001` was regenerated when Guardian left the product: the block that shipped Guardian and every mention of it left `device-common.mk`, so the context of the patch changed. The change is textual. The `index` lines of the changed hunks were removed, because the blob hashes of the new chain exist only after it is landed. The twelve `vendor-adevtool` patches that touch that file apply in landed order with `git am` on an offline skeleton of the file, and the final file equals the old final file minus the Guardian block (checked 2026-11-16). The hashes and landing commits recorded above describe the earlier landing. Not done: landing on a build-server tree, which needs the new blob hashes and the pin update of `adevtool-version-check.mk`.

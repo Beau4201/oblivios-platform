@@ -21,9 +21,6 @@ and device logs do not belong in this repository.
   (decoy match, freeze, suppression, return path, wipe-PIN non-confusion);
   two items remain open (dynamic call/media test, post-wipe reboot timing).
   Physical `lynx` hardware validation and findings not started.
-- [`guardian`](guardian/README.md) — Guardian's real Android integration
-  (app + core) plus the AOSP-side patches that wire it into the emulator
-  and `lynx` product builds (ADR-033/ADR-035/ADR-051).
 - [`privacy/screenshot-detection`](privacy/screenshot-detection/README.md) — apps are not
   told when the user takes a screenshot (one `frameworks/base` patch).
 - [`privacy/identity-surface`](privacy/identity-surface/README.md) — apps cannot read the

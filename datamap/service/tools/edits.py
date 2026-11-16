@@ -94,8 +94,8 @@ EDITS = [
      "PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%\n"
      "\n"
      "# ObliviOS Data Map (ADR-157): the read-only classifier file that the Data Map service reads from\n"
-     "# /system/etc/datamap. The module is defined in vendor/oblivios/datamap. Kept in the common file like\n"
-     "# Guardian and AirPods, so every Pixel target carries it.\n"
+     "# /system/etc/datamap. The module is defined in vendor/oblivios/datamap. Kept in the common file like AirPods, so every\n"
+     "# Pixel target carries it.\n"
      "PRODUCT_PACKAGES += \\\n"
      "    datamap-classifier.tsv\n"),
 ]

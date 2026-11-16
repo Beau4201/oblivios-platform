@@ -1,4 +1,4 @@
-From e523cad58557d608265aacdc2be1eb9f08782fbc Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ObliviOS Build <build@oblivios.local>
 Date: Mon, 16 Nov 2026 03:26:40 +0100
 Subject: [PATCH] memory: drop fw.stop_bg_users_on_switch, the decoy is stopped
@@ -12,7 +12,6 @@ user, so the property goes.
  1 file changed, 10 deletions(-)
 
 diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
-index d9286f1..74e3161 100644
 --- a/config/mk/google_devices/common/device-common.mk
 +++ b/config/mk/google_devices/common/device-common.mk
 @@ -68,16 +68,6 @@ PRODUCT_PACKAGES += restrict-pixel-health-association
@@ -29,9 +28,9 @@ index d9286f1..74e3161 100644
 -# stopped by it, and the guest user is already stopped on switch by stock code.
 -PRODUCT_PRODUCT_PROPERTIES += fw.stop_bg_users_on_switch=1
 -
- # ObliviOS: Guardian REVOKE_BACKGROUND_LOCATION ships on every Pixel target
- # (real hardware, no test fixture). Kept here, not per device: the per-device
- # entry for lynx silently left stallion without Guardian (2026-09-28).
+ # ObliviOS: AirPods compatibility app (ADR-118). Kept in the
+ # common file so every Pixel target ships it. The two XML modules are the privapp
+ # allow-list and the single-package hidden-API entry; the app needs both.
 -- 
 2.47.3
 

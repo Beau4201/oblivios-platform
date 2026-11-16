@@ -1,4 +1,4 @@
-From 3fbc3a783cf3e415a28649cf32cc28cc93ca537d Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 18 Oct 2026 15:53:51 +0200
 Subject: [PATCH] memory: give the vendor zram size property its 100% default
@@ -19,10 +19,9 @@ measurements contradict.
  1 file changed, 9 insertions(+), 3 deletions(-)
 
 diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
-index 37fb8c9..0071a92 100644
 --- a/config/mk/google_devices/common/device-common.mk
 +++ b/config/mk/google_devices/common/device-common.mk
-@@ -96,9 +96,8 @@ PRODUCT_PACKAGES_DEBUG += \
+@@ -99,9 +99,8 @@ PRODUCT_PACKAGES_DEBUG += \
  # Secure app spawning makes every app process about 43 MB larger and not shareable with
  # the zygote, so with 50% the swap is full about 30 s after unlock and lmkd kills apps.
  # zram is compressed RAM that is used only when filled (about 4.5x measured), so the
@@ -32,9 +31,9 @@ index 37fb8c9..0071a92 100644
 +# raise costs no memory until it is needed. Whether the larger swap writes more to flash
 +# is not measured (MEM-005). The stock value is dropped from
  # sysprop-inclusion.yml because a second assignment with a different value fails
- # post_process_props.py. Kept in the common file like Guardian and AirPods.
+ # post_process_props.py. Kept in the common file like AirPods.
  # 100% and not 80%: lmkd treats free swap below 10% of the total as low, which is 90% of the
-@@ -106,6 +105,13 @@ PRODUCT_PACKAGES_DEBUG += \
+@@ -109,6 +108,13 @@ PRODUCT_PACKAGES_DEBUG += \
  # 55% of the time and 100% never, at the same physical zram (docs/research/
  # stallion-memory-pressure-investigation.md, "Zram capacity").
  PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%
@@ -47,7 +46,7 @@ index 37fb8c9..0071a92 100644
 +PRODUCT_PRODUCT_PROPERTIES += persist.vendor.zram_swap_size_v2=100%
  
  # ObliviOS Data Map (ADR-157): the read-only classifier file that the Data Map service reads from
- # /system/etc/datamap. The module is defined in vendor/oblivios/datamap. Kept in the common file like
+ # /system/etc/datamap. The module is defined in vendor/oblivios/datamap. Kept in the common file like AirPods, so every
 -- 
 2.56.0
 

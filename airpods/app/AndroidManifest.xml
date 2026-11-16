@@ -7,7 +7,7 @@
     <!-- Every permission here is justified in
          the internal record "airpods platform api verification" (not published).
          Deliberately absent: BLUETOOTH_PRIVILEGED (ADR-117), any network
-         permission, and every Guardian permission. -->
+         permission. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="org.oblivios.permission.MANAGE_AIRPODS_IDENTITY" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

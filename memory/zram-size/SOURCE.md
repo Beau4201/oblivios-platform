@@ -156,3 +156,7 @@ read `false` before.
   measured there, only the swap-low state that triggers them.
 - Not run: a `stallion` build and boot with `0002`, the daily kill rate, and how much swap
   `stallion` needs over a day (the plateau of `SwapFree` decides whether 100% is enough).
+
+## Regenerated without Guardian (2026-11-16, ADR-240)
+
+`vendor-adevtool/0001` and `0003` were regenerated when Guardian left the product: the block that shipped Guardian and every mention of it left `device-common.mk`, so the context of the patches changed (`0001` keeps its `sysprop-inclusion.yml` hunk byte for byte). The change is textual. The `index` lines of the changed hunks were removed, because the blob hashes of the new chain exist only after it is landed. The twelve `vendor-adevtool` patches that touch that file apply in landed order with `git am` on an offline skeleton of the file, and the final file equals the old final file minus the Guardian block (checked 2026-11-16). The hashes and landing commits recorded above describe the earlier landing. Not done: landing on a build-server tree, which needs the new blob hashes and the pin update of `adevtool-version-check.mk`.

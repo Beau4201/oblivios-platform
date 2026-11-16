@@ -68,8 +68,9 @@ Natural Earth (land outlines and country borders of the Data Map app, datamap/ap
 Simple Icons (company logos of the Data Map app, datamap/logos and datamap/app/res/drawable/logo_*.xml)
   The icon files of the Simple Icons project are released under CC0-1.0. The logos are trademarks of their
   owners; the licence covers the file only. Each logo has a record (source, licence, date, checksum) in
-  datamap/logos/logos.tsv, and the files stay out of the public source until the trademark review has passed
-  (datamap/PUBLICATION-EXCLUDE.txt).
+  datamap/logos/logos.tsv. The logos are in this repository, in its history and in the apps because the apps show
+  which company a connection or a website belongs to; they name that company and imply no endorsement. A trademark
+  holder who objects to a logo can ask for its removal through the contact in SECURITY.md.
 
 flag-icons (country flags of the Data Map app, datamap/app/res/drawable-nodpi/flag_*.webp)
   Release v7.5.0 of github.com/lipis/flag-icons, 4 by 3 drawings, made into 120 by 90 pixel images by
@@ -96,6 +97,34 @@ flag-icons (country flags of the Data Map app, datamap/app/res/drawable-nodpi/fl
   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
+
+DATA FILES
+
+These data files are not Apache-2.0. Each directory names its sources and licences in its own NOTICE and
+SOURCES.md; the table summarises them.
+
+| File | Licence | Record |
+| ---- | ------- | ------ |
+| datamap/classifier/classifier.tsv | CC BY-SA 4.0 (AdGuard Companies DB, whotracks.me, Wikidata) | datamap/classifier/NOTICE, SOURCES.md |
+| datamap/ipmap (ipmap.bin and its sources) | CC BY 4.0 (DB-IP Lite) and the public-domain terms named there | datamap/ipmap/NOTICE, SOURCES.md |
+| privacy/compartments-profiles/data/places.tsv | CC BY 4.0 (GeoNames) | privacy/compartments-profiles/data/NOTICE, SOURCES.md |
+| privacy/compartments-profiles/data/cells.tsv | CC BY-SA 4.0 (OpenCelliD, adapted) | privacy/compartments-profiles/data/NOTICE, SOURCES.md |
+| privacy/exit/daemon/exit-mask-list.tsv | CC BY-SA 4.0 (the classifier, EasyList, EasyPrivacy) | privacy/exit/daemon/NOTICE, SOURCE.md |
+| passwords/app/assets/logos (domains.tsv, icons.tsv) | CC0-1.0 icon data (Simple Icons); the logos are trademarks | passwords/logos/NOTICE, SOURCES.md |
+
+PREBUILT BINARIES
+
+Three files are built from other repositories and committed as binaries, because the AOSP build does not
+build them. Each has a record with its source commit, toolchain, build command and SHA-256.
+
+| File | Built from | Record |
+| ---- | ---------- | ------ |
+| airpods/core/airpods-core.jar | `airpods-core` in oblivios-services | airpods/SOURCE.md |
+| passwords/core/arm64/libvault_core.so | `vault-core` in oblivios-services (Rust, 73 crates linked in) | passwords/core/SOURCE.md; licences of the crates in oblivios-services `vault-core/SOURCE.md` |
+| datamap/app/res/raw/land.bin | Natural Earth, see above | datamap/app/SOURCES.md |
+
+passwords/core/check-prebuilt.sh compares the library with its recorded hash. The aggregated licence text of the
+linked Rust crates has not been generated; it has to exist before an image carries the library.
 
 TRADEMARKS
 

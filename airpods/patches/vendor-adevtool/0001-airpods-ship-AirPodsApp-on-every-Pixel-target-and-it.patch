@@ -1,4 +1,4 @@
-From e2cf1c7dc7cf7be073d674c32469c0d33cd82b64 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ObliviOS Build <build@oblivios.local>
 Date: Tue, 29 Sep 2026 17:19:37 +0200
 Subject: [PATCH] airpods: ship AirPodsApp on every Pixel target and its
@@ -7,7 +7,7 @@ Subject: [PATCH] airpods: ship AirPodsApp on every Pixel target and its
 airpods: ship AirPodsApp on every Pixel target via device-common.mk
 
 Adds AirPodsApp and its two sysconfig modules (privapp allow-list and the
-single-package hidden-API entry) to PRODUCT_PACKAGES next to Guardian, so
+single-package hidden-API entry) to PRODUCT_PACKAGES, so
 every Pixel platform carries them.
 
 airpods: install the validation harness in userdebug and eng builds only
@@ -20,15 +20,14 @@ apps' own required: lists.
  1 file changed, 17 insertions(+)
 
 diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
-index 3ad9544..30d2fc1 100644
 --- a/config/mk/google_devices/common/device-common.mk
 +++ b/config/mk/google_devices/common/device-common.mk
-@@ -72,3 +72,20 @@ PRODUCT_PACKAGES += restrict-pixel-health-association
- PRODUCT_PACKAGES += \
-     GuardianApp \
-     privapp-permissions-org.oblivios.guardian.xml
+@@ -67,3 +67,20 @@ endif
+ PRODUCT_PACKAGES += restrict-pixel-health-association
+ 
+ PRODUCT_PRODUCT_PROPERTIES += persist.vendor.intelligence=off
 +
-+# ObliviOS: AirPods compatibility app (ADR-118). Kept next to Guardian in the
++# ObliviOS: AirPods compatibility app (ADR-118). Kept in the
 +# common file so every Pixel target ships it. The two XML modules are the privapp
 +# allow-list and the single-package hidden-API entry; the app needs both.
 +PRODUCT_PACKAGES += \

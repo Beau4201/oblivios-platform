@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<permissions>
-    <privapp-permissions package="org.oblivios.guardian">
-        <permission name="android.permission.WATCH_APPOPS"/>
-        <permission name="android.permission.GET_APP_OPS_STATS"/>
-        <permission name="android.permission.PACKAGE_USAGE_STATS"/>
-    </privapp-permissions>
-</permissions>

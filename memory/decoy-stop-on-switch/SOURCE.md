@@ -62,3 +62,7 @@ Not run on a build. Required before the package is marked `Accepted`:
 
 A runtime check without a build: `cmd activity set-stop-user-on-switch true` sets the same
 behaviour in memory until the next reboot.
+
+## Regenerated without Guardian (2026-11-16, ADR-240)
+
+`vendor-adevtool/0001` and `0002` were regenerated when Guardian left the product: the block that shipped Guardian and every mention of it left `device-common.mk`, so the context of the patches changed (they insert and remove a block that sat in front of Guardian's). The change is textual. The `index` lines of the changed hunks were removed, because the blob hashes of the new chain exist only after it is landed. The twelve `vendor-adevtool` patches that touch that file apply in landed order with `git am` on an offline skeleton of the file, and the final file equals the old final file minus the Guardian block (checked 2026-11-16). The hashes and landing commits recorded above describe the earlier landing. Not done: landing on a build-server tree, which needs the new blob hashes and the pin update of `adevtool-version-check.mk`.

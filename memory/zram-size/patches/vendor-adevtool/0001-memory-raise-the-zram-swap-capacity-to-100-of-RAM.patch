@@ -1,4 +1,4 @@
-From 94292a727c04d3fb0b914cee7d60e4bb3892ec8d Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ObliviOS Build <build@oblivios.local>
 Date: Thu, 8 Oct 2026 17:47:27 +0200
 Subject: [PATCH] memory: raise the zram swap capacity to 100% of RAM
@@ -41,10 +41,9 @@ index b01fc41..ab73e1e 100644
    - mmd.zram.writeback.device_size = 2147483648
    - mmd.zram.writeback.enabled = true
 diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
-index 30d2fc1..2e94e04 100644
 --- a/config/mk/google_devices/common/device-common.mk
 +++ b/config/mk/google_devices/common/device-common.mk
-@@ -89,3 +89,18 @@ PRODUCT_PACKAGES_DEBUG += \
+@@ -84,3 +84,18 @@ PRODUCT_PACKAGES_DEBUG += \
      AirPodsDebugHarness \
      AirPodsProbeNoPerm \
      AirPodsProbeBtPriv
@@ -57,7 +56,7 @@ index 30d2fc1..2e94e04 100644
 +# with it: mmd's idle writeback limit scales with used/total zram and is capped by
 +# mmd.zram.writeback.max_bytes and device_size. The stock value is dropped from
 +# sysprop-inclusion.yml because a second assignment with a different value fails
-+# post_process_props.py. Kept in the common file like Guardian and AirPods.
++# post_process_props.py. Kept in the common file like AirPods.
 +# 100% and not 80%: lmkd treats free swap below 10% of the total as low, which is 90% of the
 +# capacity usable. With a cold swap demand of 4 GB on top of the apps, 80% sat below that line
 +# 55% of the time and 100% never, at the same physical zram (docs/research/

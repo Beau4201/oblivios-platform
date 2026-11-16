@@ -1,4 +1,4 @@
-From 98f6c56460b5d446d3f8303f6c3446469d9c2a6a Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 11 Oct 2026 15:35:45 +0200
 Subject: [PATCH] datamap: ship the Data Map classifier file on every Pixel
@@ -9,16 +9,15 @@ Subject: [PATCH] datamap: ship the Data Map classifier file on every Pixel
  1 file changed, 6 insertions(+)
 
 diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
-index 2e94e04..067c7d1 100644
 --- a/config/mk/google_devices/common/device-common.mk
 +++ b/config/mk/google_devices/common/device-common.mk
-@@ -104,3 +104,9 @@ PRODUCT_PACKAGES_DEBUG += \
+@@ -99,3 +99,9 @@ PRODUCT_PACKAGES_DEBUG += \
  # 55% of the time and 100% never, at the same physical zram (docs/research/
  # stallion-memory-pressure-investigation.md, "Zram capacity").
  PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%
 +
 +# ObliviOS Data Map (ADR-157): the read-only classifier file that the Data Map service reads from
-+# /system/etc/datamap. The module is defined in vendor/oblivios/datamap. Kept in the common file like
-+# Guardian and AirPods, so every Pixel target carries it.
++# /system/etc/datamap. The module is defined in vendor/oblivios/datamap. Kept in the common file like AirPods, so every
++# Pixel target carries it.
 +PRODUCT_PACKAGES += \
 +    datamap-classifier.tsv

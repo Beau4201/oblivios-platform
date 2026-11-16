@@ -1,4 +1,4 @@
-From b0a73e22091e033cc29c6107e359603e3466ae31 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ObliviOS Build <build@oblivios.local>
 Date: Sun, 11 Oct 2026 18:52:44 +0200
 Subject: [PATCH] datamap: ship DataMapApp on every Pixel target via
@@ -9,11 +9,10 @@ Subject: [PATCH] datamap: ship DataMapApp on every Pixel target via
  1 file changed, 5 insertions(+)
 
 diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
-index 067c7d1..1992526 100644
 --- a/config/mk/google_devices/common/device-common.mk
 +++ b/config/mk/google_devices/common/device-common.mk
-@@ -110,3 +110,8 @@ PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%
- # Guardian and AirPods, so every Pixel target carries it.
+@@ -105,3 +105,8 @@ PRODUCT_PRODUCT_PROPERTIES += mmd.zram.size=100%
+ # Pixel target carries it.
  PRODUCT_PACKAGES += \
      datamap-classifier.tsv
 +

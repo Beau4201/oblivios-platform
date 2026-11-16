@@ -13,10 +13,9 @@ corresponding ADR naming this exact patch set
 (`CONTRIBUTING.md`'s hard rule). That ADR is **ADR-052**
 (2026-08-26, amending ADR-045).
 
-## Why this is under `release/`, not `credential/` or `guardian/`
+## Why this is under `release/`, not `credential/`
 
-This concerns the update channel, not a device-security feature or
-Guardian. the internal record "repository topology" (not published) designates a
+This concerns the update channel, not a device-security feature. The internal record "repository topology" (not published) designates a
 separate `oblivios-release` repository for this class of concern, but that
 repository does not yet exist despite its own creation-order rule saying it
 should (before any signed alpha artifact — one has already shipped). This

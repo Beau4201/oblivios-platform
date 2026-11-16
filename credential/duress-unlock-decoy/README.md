@@ -141,9 +141,9 @@ candidate carrying all eleven fixes (the ten original plus `0007`) was
 built, signed, and flashed by the owner, and the QS footer's "Select
 user" dialog (this exact ADR-066 leak) and Settings ▸ Users are now
 both **directly confirmed fixed on physical hardware** — screenshot
-and full UI-text-dump evidence, not inference. Six narrower items
+and full UI-text-dump evidence, not inference. Five narrower items
 (Wi-Fi shared badge/dialog, uninstall dialogs, the status-bar icon,
-the Multiuser widget, Guardian's cross-user AppOps check, and `0007`
+the Multiuser widget, and `0007`
 itself) remain honestly UNCHECKED, not forced into a pass — no valid
 trigger fixture existed for any of them during this validation round.
 

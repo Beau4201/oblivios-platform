@@ -33,7 +33,7 @@
 
         <!-- The main page of Compartments. The row "Compartments" under Network & internet is a preference of the Settings app
              itself (the patch packages-apps-Settings/0002 of privacy/exit), not an injected tile, because Settings search does not
-             index the tiles that other apps inject (an injected "Compartments", "Atlas" or "Guardian" found nothing on lynx image
+             index the tiles that other apps inject (an injected "Compartments" or "Atlas" found nothing on lynx image
              2026102304); a preference in the XML of that page is found by its title and keywords. The row starts this activity by
              its component, so it needs the permission that only Settings holds, like the page of one app. It is built with the
              theme and widgets of SettingsLib and stays out of the recents list like the pages of Settings, so that it is not

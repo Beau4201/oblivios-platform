@@ -5,7 +5,7 @@ Subject: [PATCH] Settings: Compartments is a row of the Network & internet
  page that search finds
 
 The entry of Compartments used to be a tile that the exit app injected through IA_SETTINGS. The Settings search does not
-index injected tiles (a search for Compartments, Atlas or Guardian found nothing on lynx image 2026102304), so the entry is
+index injected tiles (a search for Compartments or Atlas found nothing on lynx image 2026102304), so the entry is
 now a preference in network_provider_internet.xml, with a title, a summary and keywords, that starts the main page of the
 exit app by its component. The icon is a copy of the exit app's vector, which the row needs in the Settings resources.
 ---
