@@ -1,0 +1,32 @@
+From db44ff0f7c64360506fbb36737a034b9913d39ca Mon Sep 17 00:00:00 2001
+From: ObliviOS Build <build@oblivios.local>
+Date: Mon, 16 Nov 2026 03:03:59 +0100
+Subject: [PATCH] compartments: the header of ICompartmentsPolicy names every
+ method that needs MANAGE
+
+The header said the first eight methods need MANAGE_COMPARTMENTS, but the
+place methods (searchPlaces, getPlace, setPlace, getPlaceId,
+getPersonaPlaceId) enforce it too. Only getProfile and getIdentity also
+accept READ_COMPARTMENT_PROFILE (enforceManageOrReadProfile). Comment only.
+---
+ .../android/internal/compartments/ICompartmentsPolicy.aidl    | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+index 77ec25d..812e2e5 100644
+--- a/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
++++ b/core/java/com/android/internal/compartments/ICompartmentsPolicy.aidl
+@@ -9,8 +9,8 @@ import com.android.internal.compartments.CompartmentsPlace;
+ 
+ /**
+  * The Binder interface of the Compartments policy service (ADR-208). Every call acts on the owner
+- * user's store. The first eight methods need org.oblivios.permission.MANAGE_COMPARTMENTS, which
+- * only the exit app holds; getProfile and getIdentity also accept
++ * user's store. Every method needs org.oblivios.permission.MANAGE_COMPARTMENTS, which only the exit
++ * app holds, except getProfile and getIdentity, which also accept
+  * org.oblivios.permission.READ_COMPARTMENT_PROFILE, which only the Settings app holds.
+  *
+  * <p>The transaction order is part of the contract with the app, which compiles its own copy of
+-- 
+2.47.3
+

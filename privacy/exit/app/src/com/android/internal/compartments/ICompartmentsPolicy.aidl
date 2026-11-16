@@ -9,8 +9,8 @@ import com.android.internal.compartments.CompartmentsPlace;
 
 /**
  * The Binder interface of the Compartments policy service (ADR-208). Every call acts on the owner
- * user's store. The first eight methods need org.oblivios.permission.MANAGE_COMPARTMENTS, which
- * only the exit app holds; getProfile and getIdentity also accept
+ * user's store. Every method needs org.oblivios.permission.MANAGE_COMPARTMENTS, which only the exit
+ * app holds, except getProfile and getIdentity, which also accept
  * org.oblivios.permission.READ_COMPARTMENT_PROFILE, which only the Settings app holds.
  *
  * <p>The transaction order is part of the contract with the app, which compiles its own copy of
