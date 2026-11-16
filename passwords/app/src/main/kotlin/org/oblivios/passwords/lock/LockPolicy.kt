@@ -75,11 +75,12 @@ class LockPolicy(private val clock: Clock, private val store: PolicyStore, priva
 
     /**
      * The vault opened. Only a passphrase unlock renews the 7 days and the boot count. When the app is not in front
-     * (the autofill service opened it), the minute of background time starts now.
+     * (the autofill service opened it), the minute of background time starts now, and the confirmation grace does not:
+     * an unlock for one autofill, save or credential request is not the user's own confirmation in the app (B10).
      */
     fun onUnlocked(viaPassphrase: Boolean, inForeground: Boolean = true) {
         backgroundedAtMs = if (inForeground) -1L else clock.elapsedMs()
-        onAuthenticated()
+        if (inForeground) onAuthenticated()
         store.biometricFailures = 0
         if (viaPassphrase) {
             store.lastPassphraseMs = clock.nowMs()

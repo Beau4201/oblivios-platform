@@ -68,6 +68,7 @@ fun main() {
     passphraseFailuresStartOverAfterASuccess()
     forgettingStartsOver()
     theConfirmationGraceIsAMinuteFromTheLastAuthentication()
+    anUnlockForOneRequestDoesNotStartTheGrace()
     everyLockEndsTheConfirmationGrace()
     Check.done("LockPolicyTest")
 }
@@ -89,6 +90,21 @@ private fun theConfirmationGraceIsAMinuteFromTheLastAuthentication() {
     Check.that("so it ends a minute after the confirmation", !w.policy.confirmedRecently())
     w.policy.onUnlocked(viaPassphrase = false)
     Check.that("a fingerprint unlock starts it too", w.policy.confirmedRecently())
+}
+
+/** B10: an unlock made for one autofill, save or credential request (the app is not in front) is not the user's own confirmation. */
+private fun anUnlockForOneRequestDoesNotStartTheGrace() {
+    val w = World()
+    w.policy.onUnlocked(viaPassphrase = true, inForeground = false)
+    Check.that("a passphrase unlock for a request starts no grace", !w.policy.confirmedRecently())
+    w.policy.onDeviceLocked()
+    w.policy.onUnlocked(viaPassphrase = false, inForeground = false)
+    Check.that("a fingerprint unlock for a request starts none either", !w.policy.confirmedRecently())
+    w.policy.onAuthenticated()
+    Check.that("a confirmation in the app still starts it", w.policy.confirmedRecently())
+    w.policy.onDeviceLocked()
+    w.policy.onUnlocked(viaPassphrase = true, inForeground = true)
+    Check.that("an unlock with the app in front starts it", w.policy.confirmedRecently())
 }
 
 private fun everyLockEndsTheConfirmationGrace() {
