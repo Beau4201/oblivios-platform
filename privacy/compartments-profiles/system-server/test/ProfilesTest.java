@@ -394,7 +394,7 @@ public final class ProfilesTest {
         return out;
     }
 
-    /** The bytes of sample() as it stood at commit 5aeb09a, when the store was version 1 (three classes, no place). */
+    /** The bytes of sample() as it stood at commit 29d6c46, when the store was version 1 (three classes, no place). */
     private static final String VERSION_1_SAMPLE = "434d5031010203ffffff00000002000c636f6d2e62616e6b2e6170700003ffffff"
             + "000c636f6d2e67616d652e617070010302ffff";
 

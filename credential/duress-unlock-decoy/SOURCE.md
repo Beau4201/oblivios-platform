@@ -244,7 +244,7 @@ ordinary one. vold evicts the decoy's CE key 0.2 s after every owner unlock beca
 
 - `0017` (withdrawn): `maybeStopUnusedWarmDecoy` would have stopped with `stopUserWithDelayedLocking` (verified in
   `ActivityManagerService.java:17424`), keeping the decoy's CE key resident so that the next warm start unlocks at once. The owner
-  declined an open decoy storage while the device is locked (ADR-228); the file is removed, commit `2ef1f74` of this repository
+  declined an open decoy storage while the device is locked (ADR-228); the file is removed, commit `89f0160` of this repository
   holds it. The spike `0021` takes its place.
 - `0018`: `DecoySettingsMirror` (JVM-testable, `DecoySettingsMirrorTest`) copies the owner's brightness, screen timeout, rotation
   and lock-screen settings to the decoy; the owner's values are only read.
