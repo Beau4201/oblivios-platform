@@ -1,0 +1,39 @@
+From 030bcc09223140eaa782270e6bd6cb9b0da4702a Mon Sep 17 00:00:00 2001
+From: ObliviOS Build <build@oblivios.local>
+Date: Mon, 16 Nov 2026 03:26:40 +0100
+Subject: [PATCH] memory: stop only the Duress decoy user when the device
+ switches away from it
+
+Review A3. fw.stop_bg_users_on_switch=1 stopped every secondary user on a user
+switch, not only the decoy. stopUserOnSwitchIfEnforced now stops the old user
+when it is of the decoy user type, besides the stock rules; the property is
+removed by the vendor-adevtool patch 0002 of this package.
+---
+ .../java/com/android/server/am/UserController.java     | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/am/UserController.java b/services/core/java/com/android/server/am/UserController.java
+index 1725742..3b3836b 100644
+--- a/services/core/java/com/android/server/am/UserController.java
++++ b/services/core/java/com/android/server/am/UserController.java
+@@ -3270,9 +3270,15 @@ class UserController implements Handler.Callback {
+         }
+         boolean hasRestriction =
+                 hasUserRestriction(UserManager.DISALLOW_RUN_IN_BACKGROUND, oldUserId);
++        // ObliviOS: the Duress decoy user always stops when the device leaves it, so that it does not
++        // stay resident (about 0.6 GB on stallion). Another secondary user follows the stock rules
++        // (review A3: fw.stop_bg_users_on_switch=1 used to stop every one of them).
++        final UserInfo oldUser = getUserInfo(oldUserId);
++        final boolean isDecoy = oldUser != null
++                && UserManager.USER_TYPE_FULL_OBLIVIOS_DECOY.equals(oldUser.userType);
+         synchronized (mLock) {
+-            // If running in background is disabled or mStopUserOnSwitch mode, stop the user.
+-            if (hasRestriction || isStopUserOnSwitchEnabled()) {
++            // If running in background is disabled, the user is the decoy or mStopUserOnSwitch mode, stop the user.
++            if (hasRestriction || isDecoy || isStopUserOnSwitchEnabled()) {
+                 Slogf.i(TAG, "Stopping user %d and its profiles on user switch", oldUserId);
+                 stopUsersLU(oldUserId, /* allowDelayedLocking= */ !hasRestriction, null, null);
+                 return;
+-- 
+2.47.3
+

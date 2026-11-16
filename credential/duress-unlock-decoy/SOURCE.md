@@ -39,6 +39,19 @@ build server branch `oblivios-2026110200`. Checked on 2026-11-15:
 Not built, not run on a device. The build server branch was not rewritten, so its SHAs differ from
 anything this package records.
 
+## Fix 2026-11-16: D10, the routing failure marker is cleared at the next real unlock (`frameworks-base/0008`)
+
+ADR-239 of the foundation repository; finding D10 in `docs/reviews/2026-11-duress-unlock-code-review.md`. The owner chose
+\"clear at the next real unlock\" on 2026-11-16. `DecoyRoutingFailureMarker.clear` (new) removes the key; `LockSettingsService`
+calls it where the real owner's credential just matched for user 0 on the primary domain, after
+`decoyFingerHelper.onOwnerSyntheticPasswordUnlocked`. The patch applies after the exported `0002` (it needs the
+`REASON_FINGER_ROUTE_FAILED` marker and the finger helper call) and was authored in a scratch repository on the two files as they
+are on the build server branch tip (`frameworks/base` `7bc79c21e815`, tree clean). Checked: a plain-JVM harness with stubs of
+`LockSettingsStorage`, `UserHandle` and `Slog` fails to compile before the change and passes after it; two mutants (wrong user id,
+no removal) are killed; `typecheck-duress-frameworks.sh`: `typecheck: OK` (0 errors in base and head). The call site in
+`LockSettingsService` is covered by the type check only. Not landed, not built, not on a device. A finger unlock of the owner does not
+clear it (it is not a credential check); the first unlock after a boot always is one.
+
 ## Fix 2026-11-15, read of all Duress Unlock code: D1 to D9 (`frameworks-base/0050` to `0054`, `packages-apps-settings/0005`)
 
 ADR-233 of the foundation repository; findings and evidence in foundation `docs/reviews/2026-11-duress-unlock-code-review.md`

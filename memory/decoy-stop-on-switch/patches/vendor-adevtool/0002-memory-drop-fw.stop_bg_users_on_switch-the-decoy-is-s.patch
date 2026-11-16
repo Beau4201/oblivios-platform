@@ -1,0 +1,37 @@
+From e523cad58557d608265aacdc2be1eb9f08782fbc Mon Sep 17 00:00:00 2001
+From: ObliviOS Build <build@oblivios.local>
+Date: Mon, 16 Nov 2026 03:26:40 +0100
+Subject: [PATCH] memory: drop fw.stop_bg_users_on_switch, the decoy is stopped
+ by code
+
+Review A3. The property stopped every secondary user on a user switch. The
+frameworks-base patch 0001 of decoy-stop-on-switch stops only the Duress decoy
+user, so the property goes.
+---
+ config/mk/google_devices/common/device-common.mk | 10 ----------
+ 1 file changed, 10 deletions(-)
+
+diff --git a/config/mk/google_devices/common/device-common.mk b/config/mk/google_devices/common/device-common.mk
+index d9286f1..74e3161 100644
+--- a/config/mk/google_devices/common/device-common.mk
++++ b/config/mk/google_devices/common/device-common.mk
+@@ -68,16 +68,6 @@ PRODUCT_PACKAGES += restrict-pixel-health-association
+ 
+ PRODUCT_PRODUCT_PROPERTIES += persist.vendor.intelligence=off
+ 
+-# ObliviOS: stop a background user when the device switches away from it. The Duress decoy
+-# user is meant to stay stopped between uses (docs/superpowers/specs/2026-08-21-duress-decoy-
+-# user-switch-design.md), but the return path (ReturnToRealUserHelper) only switches back, and
+-# stock UserController.stopUserOnSwitchIfEnforced is off unless this property or
+-# config_multiuserDelayUserDataLocking says otherwise. Left running, the decoy keeps about 0.6 GB
+-# of anon memory (8 processes, restarted by every broadcast) until the next reboot, measured on
+-# stallion. This sets the stock property UserController already reads; the system user is never
+-# stopped by it, and the guest user is already stopped on switch by stock code.
+-PRODUCT_PRODUCT_PROPERTIES += fw.stop_bg_users_on_switch=1
+-
+ # ObliviOS: Guardian REVOKE_BACKGROUND_LOCATION ships on every Pixel target
+ # (real hardware, no test fixture). Kept here, not per device: the per-device
+ # entry for lynx silently left stallion without Guardian (2026-09-28).
+-- 
+2.47.3
+
