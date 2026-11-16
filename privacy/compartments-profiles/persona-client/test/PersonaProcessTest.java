@@ -6,7 +6,7 @@ import android.os.Bundle;
 
 import java.util.TimeZone;
 
-/** Host test of PersonaProcess: one scenario per JVM, because a process is bound once. Usage: PersonaProcessTest SCENARIO */
+/** Host test of PersonaProcess: one scenario per JVM, because a process is bound once. Usage: PersonaProcessTest SCENARIO [PACKAGE] */
 public final class PersonaProcessTest {
     private static void check(boolean cond, String what) {
         if (!cond) {
@@ -77,6 +77,24 @@ public final class PersonaProcessTest {
                 b.putString(PersonaProcess.KEY_COUNTRY, "es");
                 PersonaProcess.setFrom(b);
                 check(PersonaProcess.country() == null && PersonaProcess.timeZone() == null, "a bundle with one key");
+                break;
+            case "realzone": // A13: a clock app keeps the phone's time zone but still has the network country and operator
+                PersonaProcess.setFrom(persona("Europe/Madrid"), args[1]);
+                check(PersonaProcess.timeZone() == null && "es".equals(PersonaProcess.country()) && "21407".equals(PersonaProcess.operator()),
+                        "no zone, the country and the operator stay");
+                check(PersonaProcess.property("persist.sys.timezone") == null, "the zone property is the real one");
+                check("21407".equals(PersonaProcess.property("gsm.operator.numeric")) && "false".equals(PersonaProcess.property("gsm.operator.isroaming")),
+                        "the operator properties are the persona's");
+                PersonaProcess.applyTimeZone();
+                check(TimeZone.getDefault().getID().equals("America/Los_Angeles"), "the default time zone is left alone");
+                Intent tzChanged = new Intent(Intent.ACTION_TIMEZONE_CHANGED).putExtra(Intent.EXTRA_TIMEZONE, "Asia/Tokyo");
+                PersonaProcess.timeZoneChanged(tzChanged);
+                check("Asia/Tokyo".equals(tzChanged.getStringExtra(Intent.EXTRA_TIMEZONE)), "the broadcast is left alone");
+                break;
+            case "otherpackage": // a package that is not on the list gets the zone as before
+                PersonaProcess.setFrom(persona("Europe/Madrid"), "com.example.app");
+                PersonaProcess.applyTimeZone();
+                check(TimeZone.getDefault().getID().equals("Europe/Madrid") && "Europe/Madrid".equals(PersonaProcess.timeZone()), "the persona zone");
                 break;
             case "twice": // a second push of the core settings does not replace the values
                 PersonaProcess.setFrom(persona("Europe/Madrid"));

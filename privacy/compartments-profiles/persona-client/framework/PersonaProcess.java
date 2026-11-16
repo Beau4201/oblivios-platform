@@ -26,6 +26,15 @@ public final class PersonaProcess {
     public static final String KEY_COUNTRY = "oblivios_persona_country";
     public static final String KEY_OPERATOR = "oblivios_persona_operator";
 
+    /**
+     * Apps that schedule by the clock on the wall and so must keep the real time zone of the phone under a persona: an alarm
+     * set for 07:00 in the zone of a persona would ring at another real time (A13). Updater and Auditor are not
+     * platform-signed either and sit under the Isolated default with them; the persona position, country and operator stay.
+     * shortcut: a fixed list of three packages, replace it by a setting when the owner wants to choose such apps.
+     */
+    static final Set<String> REAL_ZONE_PACKAGES = new HashSet<>(Arrays.asList(
+            "com.android.deskclock", "app.seamlessupdate.client", "app.attestation.auditor"));
+
     private static final Object LOCK = new Object();
     private static boolean sSet;
     private static volatile String sTimeZone;
@@ -46,14 +55,22 @@ public final class PersonaProcess {
      * second call throws: a process is bound once.
      */
     public static void setFrom(Bundle coreSettings) {
+        setFrom(coreSettings, null);
+    }
+
+    /**
+     * As {@link #setFrom(Bundle)}, for the package that the process runs. A package of {@link #REAL_ZONE_PACKAGES} keeps the
+     * time zone of the phone and is given the network country and the operator of its persona all the same (A13).
+     */
+    public static void setFrom(Bundle coreSettings, String packageName) {
         String timeZone = coreSettings == null ? null : coreSettings.getString(KEY_TIME_ZONE);
         String country = coreSettings == null ? null : coreSettings.getString(KEY_COUNTRY);
         String operator = coreSettings == null ? null : coreSettings.getString(KEY_OPERATOR);
-        set(timeZone, country, operator);
+        set(timeZone, country, operator, packageName);
     }
 
     /** One time only; null for all three means no persona. */
-    static void set(String timeZone, String country, String operator) {
+    static void set(String timeZone, String country, String operator, String packageName) {
         synchronized (LOCK) {
             if (sSet) {
                 throw new IllegalStateException("the persona of a process is set once");
@@ -62,7 +79,7 @@ public final class PersonaProcess {
             if (timeZone == null || country == null || operator == null) {
                 return;
             }
-            sTimeZone = timeZone;
+            sTimeZone = REAL_ZONE_PACKAGES.contains(packageName) ? null : timeZone;
             sCountry = country;
             sOperator = operator;
         }
@@ -90,13 +107,12 @@ public final class PersonaProcess {
      * Native reads (bionic, a shell) do not pass here; they stay a residual channel.
      */
     public static String property(String key) {
-        String zone = sTimeZone;
-        if (zone == null || key == null) {
+        if (sOperator == null || key == null) {  // the operator is set exactly when the process has a persona
             return null;
         }
         switch (key) {
             case "persist.sys.timezone":
-                return zone;
+                return sTimeZone;  // null for a package that keeps the real zone: the read goes on to the real property
             case "gsm.operator.numeric":
                 return sOperator;
             case "gsm.operator.iso-country":

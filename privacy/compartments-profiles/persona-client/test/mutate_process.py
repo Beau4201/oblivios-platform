@@ -4,18 +4,25 @@ Usage: mutate_process.py   (run from anywhere; reads the sources next to this fi
 import pathlib, shutil, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SCENARIOS = ("none", "null", "full", "badzone", "partial", "twice")
+SCENARIOS = ("none", "null", "full", "badzone", "partial", "twice", "otherpackage",
+             "realzone com.android.deskclock", "realzone app.seamlessupdate.client", "realzone app.attestation.auditor")
 MUTANTS = [
-    ("the zone property is not the persona zone", 'return zone;', 'return null;'),
+    ("the zone property is not the persona zone", 'return sTimeZone;  //', 'return null;  //'),
+    ("a package on the list gets the persona zone", "REAL_ZONE_PACKAGES.contains(packageName) ? null : timeZone", "timeZone"),
+    ("every package keeps the real zone", "REAL_ZONE_PACKAGES.contains(packageName) ? null : timeZone", "null"),
+    ("a package on the list loses the operator", "sTimeZone = REAL_ZONE_PACKAGES.contains(packageName) ? null : timeZone;", "sTimeZone = timeZone;\n            if (REAL_ZONE_PACKAGES.contains(packageName)) {\n                return;\n            }"),
+    ("the clock app is off the list", '"com.android.deskclock", ', ""),
+    ("the updater is off the list", '"app.seamlessupdate.client", ', ""),
+    ("the auditor is off the list", ', "app.attestation.auditor"', ""),
     ("the operator property is the country", 'case "gsm.operator.numeric":\n                return sOperator;', 'case "gsm.operator.numeric":\n                return sCountry;'),
     ("the country property is the operator", 'case "gsm.operator.iso-country":\n                return sCountry;', 'case "gsm.operator.iso-country":\n                return sOperator;'),
     ("the operator name is not emptied", 'case "gsm.operator.alpha":\n                return "";', 'case "gsm.operator.alpha":\n                return null;'),
     ("roaming is not false", 'return "false";', 'return "true";'),
     ("the SIM operator is touched", 'case "gsm.operator.isroaming":', 'case "gsm.sim.operator.numeric":\n                return sOperator;\n            case "gsm.operator.isroaming":'),
-    ("a process without a persona answers", 'if (zone == null || key == null) {', 'if (key == null) {'),
+    ("a process without a persona answers", 'if (sOperator == null || key == null) {', 'if (key == null) {'),
     ("a second call is accepted", "if (sSet) {", "if (false) {"),
     ("a bundle with one key is a persona", "if (timeZone == null || country == null || operator == null) {", "if (timeZone == null && country == null && operator == null) {"),
-    ("the time zone is not stored", "sTimeZone = timeZone;", ""),
+    ("the time zone is not stored", "sTimeZone = REAL_ZONE_PACKAGES.contains(packageName) ? null : timeZone;", ""),
     ("the country is not stored", "sCountry = country;", ""),
     ("the operator is not stored", "sOperator = operator;", ""),
     ("an unknown time zone is applied", "if (known.contains(id)) {", "if (true) {"),
@@ -36,7 +43,7 @@ def run(d):
     c = subprocess.run(["javac", "-d", str(out), str(d / "PersonaProcess.java"), str(d / "PersonaProcessTest.java"), str(d / "Bundle.java"), str(d / "Intent.java")], capture_output=True, text=True)
     if c.returncode != 0:
         return c
-    runs = [subprocess.run(["java", "-ea", "-cp", str(out), "com.android.internal.compartments.PersonaProcessTest", s], capture_output=True, text=True) for s in SCENARIOS]
+    runs = [subprocess.run(["java", "-ea", "-cp", str(out), "com.android.internal.compartments.PersonaProcessTest", *s.split()], capture_output=True, text=True) for s in SCENARIOS]
     return max(runs, key=lambda x: x.returncode)
 
 
