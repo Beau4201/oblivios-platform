@@ -1,4 +1,9 @@
-# Duress Unlock — decoy mechanism, hardware-validated
+# Duress Unlock — decoy mechanism, partly hardware-validated
+
+> This file is a dated narrative of the first implementation (August to September 2026). Where it says
+> "not yet", "open" or "future", read it as of that date: `SOURCE.md` and the decision log in `oblivios-docs`
+> hold the current state. Nothing here is a promise that a decoy session cannot be told from a real one; the
+> threat model lists what the feature does not hide.
 
 Implements the full Duress Unlock decoy mechanism across three plans:
 Tasks 1-6 of the internal record "duress decoy user switch" (not published)
@@ -26,9 +31,10 @@ the internal record "duress decoy session indistinguishability design" (not publ
 registered decoy credential typed at the primary keyguard silently switches
 to the decoy user (real user quiesced, notifications suppressed), the real
 owner's credential typed at the decoy's own keyguard silently switches back
-(real user unquiesced, notifications resume), and every UI surface that
-lists device users is scoped so the decoy session never sees the real
-owner's identity.
+(real user unquiesced, notifications resume), and the UI surfaces that
+list device users, as far as the audits of this package found them, are scoped so the decoy session does not show the real
+owner's identity. The package does not claim that no such surface remains; the open ones are named under
+"What this is not".
 
 > **Patch numbering:** the series was squashed from 107 to 13 patches on
 > 2026-09-25. Old patch numbers cited in this package and in ADR-053

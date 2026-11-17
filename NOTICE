@@ -29,7 +29,7 @@ of the modified upstream files.
 | -------------------------------- | ------------------------ | ----- |
 | build/make                       | Apache-2.0               | no licence file in the project root; header on 1 of 2 modified files |
 | build/release                    | Not established          | no licence file in the project root; the patches modify no upstream file, they only create files (ObliviOS work, Apache-2.0) |
-| frameworks/base                  | Apache-2.0               | MODULE_LICENSE_APACHE2 and NOTICE in the project root; header on 89 of 100 modified files |
+| frameworks/base                  | Apache-2.0               | MODULE_LICENSE_APACHE2 and NOTICE in the project root; header on 90 of 100 modified files |
 | frameworks/native                | Apache-2.0               | MODULE_LICENSE_APACHE2 and NOTICE in the project root; header on 2 of 2 modified files |
 | packages/apps/Launcher3          | Apache-2.0               | no licence file in the project root; header on 7 of 8 modified files |
 | packages/apps/Multiuser          | Apache-2.0               | NOTICE in the project root; header on 2 of 2 modified files |
@@ -51,8 +51,10 @@ publisher of those projects. A project without a licence file in its root takes 
 licence of the headers of its files. A modified upstream file without a header takes
 the licence of its project; the files concerned are the ones marked "no header" in
 sbom/evidence/upstream-licences.json. Two modified files of frameworks/base are
-binary images and one (ReferenceGlobalRootComponent.kt in SystemUI) is not in the
-project at the pinned revision; the licence of the project applies to them.
+binary images, and the licence of the project applies to them. One more
+(ReferenceGlobalRootComponent.kt in SystemUI) is the rename of
+ReferenceGlobalRootComponent.java, which exists at the pinned revision with an
+Apache-2.0 header; the evidence reads that header from the .java file.
 
 The patches create 157 files in these projects; the rule under "LICENCE" applies to
 them.
@@ -137,14 +139,17 @@ AOSP build does not build them. Each has a record with its source, toolchain, bu
 | File | Built from | Record |
 | ---- | ---------- | ------ |
 | airpods/core/airpods-core.jar | `airpods-core` in oblivios-services | airpods/SOURCE.md |
-| passwords/core/arm64/libvault_core.so | `vault-core` in oblivios-services (Rust; its Cargo.lock lists 72 packages from crates.io) | passwords/core/SOURCE.md; licences of the crates in oblivios-services `vault-core/SOURCE.md` |
-| privacy/exit/daemon/arm64/exitd | `exit-daemon` in oblivios-services (Rust; its Cargo.lock lists 548 packages from crates.io and 4 in-tree packages) | privacy/exit/daemon/SOURCE.md; licences of the packages in oblivios-services `exit-daemon/NOTICE` |
+| passwords/core/arm64/libvault_core.so | `vault-core` in oblivios-services (Rust; its Cargo.lock lists 72 packages from crates.io) | passwords/core/SOURCE.md; licence texts of the 72 packages in passwords/core/THIRD-PARTY-LICENSES.txt; licences of the crates in oblivios-services `vault-core/SOURCE.md` |
+| privacy/exit/daemon/arm64/exitd | `exit-daemon` in oblivios-services (Rust; its Cargo.lock lists 548 packages from crates.io and 4 in-tree packages) | privacy/exit/daemon/SOURCE.md; licence texts of the 548 packages in privacy/exit/daemon/THIRD-PARTY-LICENSES.txt; licences of the packages in oblivios-services `exit-daemon/NOTICE` |
 | datamap/app/res/raw/land.bin | Natural Earth, see above | datamap/app/SOURCES.md |
 
 Cargo.lock lists every package that any target or configuration may resolve; which of them a binary links
 has not been computed. passwords/core/check-prebuilt.sh and privacy/exit/daemon/check-prebuilt.sh compare each
-binary with its recorded hash. The aggregated licence text of the listed Rust packages has not been generated;
-it has to exist before an image carries either library or the daemon. The SBOM in oblivios-docs (sbom/) lists
+binary with its recorded hash. The two THIRD-PARTY-LICENSES.txt files hold the licence files of the crates of each lock, made
+by oblivios-services `exit-daemon/tools/third-party-licences.py` on 2026-11-17: they list every package of the
+lock, so more than a binary links, and a package whose crate has no licence file is listed with the licence
+and authors that its Cargo.toml declares. Whether that is enough notice for each of those licences is
+not a legal opinion. The SBOM in oblivios-docs (sbom/) lists
 the packages, their licences and the advisories that OSV names for them.
 
 TRADEMARKS

@@ -1,7 +1,8 @@
 # OTA server URL (ObliviOS platform integration)
 
 Points GrapheneOS's real Updater app at ObliviOS's own private lynx OTA
-server (`update.beautenberge.dev`) instead of the upstream default
+server (host not published; the patch carries the reserved placeholder
+`ota.example.invalid`) instead of the upstream default
 (`releases.grapheneos.org`), per
 the internal record "lynx ota update server" (not published) (Task 5) and
 the internal record "lynx ota update server design" (not published).

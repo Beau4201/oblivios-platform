@@ -1,7 +1,7 @@
 # linkability
 
-Fourteen patches that close channels through which two apps of one user link themselves to one device or fingerprint it
-(ADR-174, amended by ADR-175 and ADR-179). The design is `docs/superpowers/specs/2026-10-18-linkability-kills-design.md` in `oblivios-foundation`. Landed on the build server
+Fourteen patches that close the channels listed below, through which two apps of one user can link themselves to one device
+or fingerprint it; other channels may remain (ADR-174, amended by ADR-175 and ADR-179). The design is `docs/superpowers/specs/2026-10-18-linkability-kills-design.md` in `oblivios-foundation`. Landed on the build server
 and module-built (2026-10-18); the `lynx` image `2026101802` carries the first ten (`IMG-009`, `IMG-010`) and `2026102101` the four of ADR-179 (`IMG-011`, `IMG-012`). `SOURCE.md` holds the base revisions, the reason for each
 patch and the checks.
 

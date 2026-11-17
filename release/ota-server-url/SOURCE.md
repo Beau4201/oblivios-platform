@@ -17,7 +17,13 @@ commit in a disposable worktree before being trusted.
 ## What the change does
 
 Single-line change to `res/values/config.xml`:
-`https://releases.grapheneos.org/` -> `https://update.beautenberge.dev/`.
+`https://releases.grapheneos.org/` -> the URL of the private OTA server.
+
+The published patch differs from the commit above in two places: the host is the reserved placeholder
+`https://ota.example.invalid/` (the real host is not published), and the `index` line is left out
+because the blob of the real change is not the blob of this text. A build that wants the private channel
+sets the real URL in that one line before `git am`; the commit above is the landed one and is not reproduced
+by the published text.
 
 ## Apply
 

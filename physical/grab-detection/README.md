@@ -1,7 +1,8 @@
 # grab-detection
 
-Fourteen patches that lock the phone when it is pulled out of a hand in use and restart it after
-60 seconds without a PIN (ADR-169). The design is
+Fourteen patches that are meant to lock the phone when it is pulled out of a hand in use and to restart it after
+60 seconds without a PIN (ADR-169). The detector is tuned on a few recorded grabs and pickups on one device; it can miss a
+grab and can lock on something that is not one. The design is
 `docs/superpowers/specs/2026-10-15-grab-detection-design.md` in `oblivios-foundation`.
 
 | Patch | Project | Effect |

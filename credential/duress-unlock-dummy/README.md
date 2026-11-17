@@ -25,9 +25,10 @@ the internal record "phase 1 emulator baseline review" (not published).
 
 This is only the dummy-cost primitive — a prerequisite, not the feature.
 `verifySpecialUserCredential(USER_DURESS_DUMMY, ...)` is provisioned at boot
-but is **not called from any real code path yet**. Wiring it into the real
+but, in this package, is **not called from any real code path**. Wiring it into the real
 keyguard failure path (`doVerifyCredentialInner`), the freeze orchestrator,
-and the Settings setup UI is Stage 2 — not started, not part of this package.
+and the Settings setup UI was Stage 2, which is not part of this package. This file records Stage 1 as
+it was written; it says nothing about what a later package does with the primitive.
 
 ## Provenance
 

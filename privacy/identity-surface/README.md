@@ -1,6 +1,7 @@
 # identity-surface
 
-Five patches that stop apps from reading device-specific values or deriving them (ADR-167, ADR-173). The design is
+Five patches that reduce the device-specific values that apps can read or derive: the ones listed below, not every such
+value (ADR-167, ADR-173). The design is
 `docs/superpowers/specs/2026-10-14-identity-surface-hardening-design.md` in `oblivios-foundation`.
 
 | Patch | Project | Effect |
