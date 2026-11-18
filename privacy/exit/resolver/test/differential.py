@@ -23,9 +23,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PLATFORM = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
-SERVER_DIR = "/srv/oblivios/scratch/dnsresolver-cache"
-RUSTC = "/srv/oblivios/platform-primary/prebuilts/rust-toolchain/linux-x86/1.93.1/bin/rustc"
-LINKER = "/srv/oblivios/exit-daemon-work/toolchain/host-clang"
+SERVER_DIR = os.environ["DNSRESOLVER_SCRATCH"]
+RUSTC = os.path.join(os.environ["AOSP_TREE"], "prebuilts/rust-toolchain/linux-x86/1.93.1/bin/rustc")
+LINKER = os.path.join(os.environ["EXIT_WORK"], "toolchain/host-clang")
 
 HEADER = "exit-mask-list\t1\n"
 

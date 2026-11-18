@@ -9,7 +9,7 @@
 set -o errexit -o nounset -o pipefail
 : "${PWM_BUILD_SSH:?set PWM_BUILD_SSH=user@host}"
 HERE="${PWM_SRC:-$(cd "$(dirname "$0")/.." && pwd)}"
-WORK="${PWM_WORK:-/srv/oblivios/scratch/pwapp}"
+WORK="${PWM_WORK:?set PWM_WORK}"
 cmd="$1"; shift
 ssh -o BatchMode=yes "$PWM_BUILD_SSH" "mkdir -p $WORK"
 rsync -rlpt --delete --exclude 'tests/test-checks.sh' -e "ssh -o BatchMode=yes" "$HERE"/ "$PWM_BUILD_SSH:$WORK/app/"

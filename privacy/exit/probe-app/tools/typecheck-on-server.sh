@@ -5,7 +5,7 @@
 #   typecheck-on-server.sh SCRATCH_DIR     SCRATCH_DIR holds a copy of the app directory as SCRATCH_DIR/app
 set -o errexit -o nounset -o pipefail
 W="$(cd "$1" && pwd)"
-T="${AOSP_TREE:-/srv/oblivios/platform-primary}"
+T="${AOSP_TREE:?set AOSP_TREE}"
 OBJ="${AOSP_OUT:-$T/out-lynx}"
 API="$(ls "$T/prebuilts/sdk" | grep -E '^[0-9]+$' | sort -n | tail -1)"
 ML="$T/prebuilts/sdk/$API/module-lib"

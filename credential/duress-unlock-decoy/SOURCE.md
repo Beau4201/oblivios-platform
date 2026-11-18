@@ -83,7 +83,7 @@ landed on the build tree with `git am` (frameworks/base branch `oblivios-2026110
   a configuration change through `onRetainNonConfigurationInstance`, after a process death the screen asks again) and the main,
   set-up and finger screens zeroize their copy in `onDestroy`, queued behind the work that uses it.
 
-Verified: the type check of `tools/build-vm/typecheck-duress-frameworks.sh` on the changed files of `frameworks/base` (4 services
+Verified: the type check of `tools/build/typecheck-duress-frameworks.sh` on the changed files of `frameworks/base` (4 services
 files, 1 SystemUI file, base `8cf59de6`): no error added, "typecheck: OK". Not verified: Settings (parse check only: the syntax is
 valid, symbols were not resolved, the server has no type check of Settings); no host test (the changed code uses Android types);
 no build, no device (rows `DUR-048` to `DUR-051`). Not done: D8 first part (the mint that outlives a failed switch) and second part
@@ -188,7 +188,7 @@ Measured on `2026111401` (`DUR-038`, `DUR-035`, `DUR-036`, `DUR-039`, `DUR-040`;
 
 Authored in `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-v3`, base `83b9a7a2`, the `duress-v2` head), exported with
 `git format-patch --start-number 35`, landed 2026-11-14 with `git am --3way` on `f26cefc13b00` as `f83ebf636926` and `de89c21728ad`;
-the `git patch-id --stable` of each landed commit equals that of its file. Type-checked with `tools/build-vm/typecheck-duress-frameworks.sh`
+the `git patch-id --stable` of each landed commit equals that of its file. Type-checked with `tools/build/typecheck-duress-frameworks.sh`
 (no error beyond the three of the base). Module-built (`services`, `SystemUI`, 14 min) and pushed to the phone as `services.jar`
 with its `oat` files after `adb disable-verity` (owner, 2026-11-14); not part of an image yet.
 
@@ -214,7 +214,7 @@ the thirteen commits remove them and the differences a second person could see a
 Authored in `oblivios-platform/.worktrees/duress-ram-timing` (branch `duress-v2`, base `291321d9`), exported with
 `git format-patch --start-number 22`, checked on the build server with `git apply --cached` onto a temporary index (all thirteen
 apply), landed 2026-11-14 with `git am` on `291321d970d3` (tree clean, no build running); head `f26cefc13b00`; the
-`git patch-id --stable` of each landed commit equals that of its file. Type-checked with `tools/build-vm/typecheck-duress-frameworks.sh`
+`git patch-id --stable` of each landed commit equals that of its file. Type-checked with `tools/build/typecheck-duress-frameworks.sh`
 (Java and Kotlin against the jars of the previous build, a control on the base, planted errors found), 16 JVM tests of
 `DecoySettingsMirror` pass, a mutation of the Auto confirm rule fails one. Built into `lynx` `2026111401`; SystemUI tests and the
 module build are the first compile of the tests. What the device has to show: `DUR-019`, `DUR-035`, `DUR-036`, `DUR-038` to `DUR-040`.
@@ -309,7 +309,7 @@ came from its `BOOT_COMPLETED`, one every 0.45 s for 14 s after the lock.
   does; the build server was not reachable (no VPN) when the files were authored, so they were not compared with the live branch
   then; on 2026-11-11 they applied to its `oblivios-2026110200` without change (see the landing below). Authored in `.worktrees/duress-ram-timing`; the exported series re-applied from the tag gives
   the authored tree (`d2169c091944`).
-- Landed 2026-11-11 on the build server, branch `oblivios-2026110200` of `/srv/oblivios/platform-primary/frameworks/base`
+- Landed 2026-11-11 on the build server, branch `oblivios-2026110200` of `<build-root>/platform-primary/frameworks/base`
   (tree clean, no build running, `git apply --check` clean first, then `git am -C1`): `0014` as `788c1f1fdd6c` and `0015` as
   `02bd4ccabea5` on top of `8b4fad9bb49b`; the `git patch-id --stable` of both landed commits equals that of the files in
   `patches/frameworks-base/`, so the files and the live branch agree. Not compiled (a parse-only pass over the three files reports no

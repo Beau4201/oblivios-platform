@@ -7,7 +7,7 @@
 # The Compose libraries (Task 14) are added to CLASSPATH_EXTRA by tools/compose-classpath.sh when it exists.
 set -o errexit -o nounset -o pipefail
 W="$(cd "$1" && pwd)"
-T="${AOSP_TREE:-/srv/oblivios/platform-primary}"
+T="${AOSP_TREE:?set AOSP_TREE}"
 OBJ="${AOSP_OUT:-$T/out-lynx}"
 ANDROID_JAR="${ANDROID_JAR:-$T/prebuilts/sdk/current/system/android.jar}"
 AAPT2="$OBJ/host/linux-x86/bin/aapt2"

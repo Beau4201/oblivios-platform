@@ -347,7 +347,7 @@ def main() -> int:
         print(f"all {len(muts)} mutations apply")
         shutil.rmtree(work, ignore_errors=True)
         return 0
-    env = dict(os.environ, PWM_SRC=copy, PWM_WORK="/srv/oblivios/scratch/pwapp-mut")
+    env = dict(os.environ, PWM_SRC=copy, PWM_WORK=os.environ["PWM_WORK"] + "-mut")
     remote = os.path.join(ROOT, "tools", "remote.sh")
     base = subprocess.run(["bash", remote, "host-checks"], env=env, capture_output=True, text=True)
     if base.returncode != 0:

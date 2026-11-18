@@ -8,7 +8,7 @@
 set -o errexit -o nounset -o pipefail
 WT="$1"
 SSH_TARGET="${BUILD_SSH:?set BUILD_SSH to the build server login (see the private local server notes)}"
-TREE="${AOSP_TREE:-/srv/oblivios/platform-primary}"
+TREE="${AOSP_TREE:?set AOSP_TREE}"
 FILES=(
   "frameworks/base core/java/android/net/INetdEventCallback.aidl"
   "frameworks/base services/core/java/com/android/server/connectivity/NetdEventListenerService.java"

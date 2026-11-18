@@ -9,9 +9,9 @@
 # Data Map's `neverallow ... datamap_service` (shell.te; fixed by `datamap/system-sepolicy/0004`), which is why this script
 # once kept only the statements that name an exit domain or the Data Map service. On the policy of image 2026102303 the
 # compile with every neverallow passes (2026-10-29), and a deliberately violated statement fails it.
-#   check-neverallows.sh [PRODUCT_OUT]     default: /srv/oblivios/platform-primary/out-lynx/target/product/lynx
+#   check-neverallows.sh [PRODUCT_OUT]     default: $AOSP_TREE/out-lynx/target/product/lynx
 set -o errexit -o nounset -o pipefail
-OUT="${1:-/srv/oblivios/platform-primary/out-lynx/target/product/lynx}"
+OUT="${1:-${AOSP_TREE:?set AOSP_TREE or pass PRODUCT_OUT}/out-lynx/target/product/lynx}"
 BIN="${OUT%/target/product/*}/host/linux-x86/bin"
 CIL="$OUT/system/etc/selinux/plat_sepolicy.cil"
 [[ -f "$CIL" && -x "$BIN/secilc" ]] || { echo "no plat_sepolicy.cil or secilc under $OUT" >&2; exit 2; }

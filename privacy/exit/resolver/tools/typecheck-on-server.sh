@@ -14,7 +14,7 @@ set -euo pipefail
 dir=${1:?directory of the patched files}
 ssh_to=${EXIT_BUILD_SSH:?EXIT_BUILD_SSH=user@host (read it from the local server memory)}
 here=$(cd "$(dirname "$0")" && pwd)
-scratch=/srv/oblivios/scratch/dnsresolver-cache/tc
+scratch="${DNSRESOLVER_SCRATCH:?set DNSRESOLVER_SCRATCH}/tc"
 ssh -n "$ssh_to" "mkdir -p $scratch/patched $scratch/control"
 scp -q "$dir/res_cache.cpp" "$dir/ExitMaskList.h" "$dir/ExitMaskList.cpp" "$ssh_to:$scratch/patched/"
 scp -q "$here/typecheck-remote.sh" "$ssh_to:$scratch/typecheck-remote.sh"
