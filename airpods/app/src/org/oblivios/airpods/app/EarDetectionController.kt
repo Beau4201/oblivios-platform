@@ -128,6 +128,7 @@ internal class EarDetectionController(
     private fun drain() {
         val count = latest.getAndSet(NONE)
         if (count == NONE) return
+        Log.i(TAG, "pods in ears: $count")
         execute(policy.onEars(count))
         try {
             Thread.sleep(MIN_GAP_MS)
@@ -138,7 +139,9 @@ internal class EarDetectionController(
 
     private fun execute(actions: List<Action>) {
         if (actions.isEmpty()) return
-        if (isDebuggableBuild()) Log.d(TAG, "actions $actions")
+        // Logged on every build (no address, only what was decided): the defects of this controller come rarely and
+        // cannot be reproduced on demand, so a user build has to keep the evidence (AIR-205 to AIR-207).
+        Log.i(TAG, "actions $actions")
         for (action in actions) {
             when (action) {
                 Action.PAUSE_RESUMABLE -> if (pauseIfPlaying()) policy.notePaused()
