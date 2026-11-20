@@ -19,9 +19,9 @@ UPSTREAM PROJECTS MODIFIED BY THE PATCHES
 
 Licences were read from the upstream sources at the revisions pinned in
 oblivios-manifest (manifest/upstream-2026100600.xml, tag 2026100600, the baseline
-the patches apply to), for every file that a patch modifies (218 files in 18
+the patches apply to), for every file that a patch modifies (219 files in 18
 projects). The licence files at the root of each project and the top of each
-modified file were read on 2026-11-16; the answers are in oblivios-docs,
+modified file were read on 2026-11-20; the answers are in oblivios-docs,
 sbom/evidence/upstream-licences.json. "Header" means the licence header at the top
 of the modified upstream files.
 
@@ -29,7 +29,7 @@ of the modified upstream files.
 | -------------------------------- | ------------------------ | ----- |
 | build/make                       | Apache-2.0               | no licence file in the project root; header on 1 of 2 modified files |
 | build/release                    | Not established          | no licence file in the project root; the patches modify no upstream file, they only create files (ObliviOS work, Apache-2.0) |
-| frameworks/base                  | Apache-2.0               | MODULE_LICENSE_APACHE2 and NOTICE in the project root; header on 90 of 100 modified files |
+| frameworks/base                  | Apache-2.0               | MODULE_LICENSE_APACHE2 and NOTICE in the project root; header on 91 of 101 modified files |
 | frameworks/native                | Apache-2.0               | MODULE_LICENSE_APACHE2 and NOTICE in the project root; header on 2 of 2 modified files |
 | packages/apps/Launcher3          | Apache-2.0               | no licence file in the project root; header on 7 of 8 modified files |
 | packages/apps/Multiuser          | Apache-2.0               | NOTICE in the project root; header on 2 of 2 modified files |
