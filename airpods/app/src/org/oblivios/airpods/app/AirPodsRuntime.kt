@@ -37,7 +37,8 @@ object AirPodsRuntime {
         val app = context.applicationContext
         writer = AirPodsMetadataWriter(app).also { AirPodsStateStore.addListener(it) }
         AirPodsStateStore.addListener(CaseBatteryRecorder(app))
-        AirPodsStateStore.addListener(ConnectionSheetTrigger(app))
+        // ADR-277: no connection sheet. A new task over the app in use sent a fullscreen video to picture-in-picture;
+        // ConnectionSheetTrigger and ConnectionSheetActivity stay in the tree, unregistered.
         registerBondReceiver(app)
         if (isDebuggableBuild()) DebugStateObserver(app).start()
         // A process that starts while the AirPods are connected (it was killed, or Settings bound us)
