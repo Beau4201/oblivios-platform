@@ -1,0 +1,39 @@
+From 93191c174bab791ca820d15fee59001e6335d6df Mon Sep 17 00:00:00 2001
+From: beau4201 <beau.ten.berge@gmail.com>
+Date: Fri, 20 Nov 2026 02:14:25 +0100
+Subject: [PATCH] wm: tell no app that the screen is being recorded
+
+Upstream registers the callback of WindowManager.addScreenRecordingCallback and
+calls it whenever one of the app's visible activities enters or leaves a screen
+recording. Nothing is registered now and the app is told it is not recorded, so
+no app can learn that the user records the screen. FLAG_SECURE is unaffected.
+---
+ .../server/wm/ScreenRecordingCallbackController.java  | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/services/core/java/com/android/server/wm/ScreenRecordingCallbackController.java b/services/core/java/com/android/server/wm/ScreenRecordingCallbackController.java
+index 00e1c01..c32f874 100644
+--- a/services/core/java/com/android/server/wm/ScreenRecordingCallbackController.java
++++ b/services/core/java/com/android/server/wm/ScreenRecordingCallbackController.java
+@@ -135,7 +135,18 @@ public class ScreenRecordingCallbackController {
+         }
+     }
+ 
++    // oblivios: see register().
++    private static final boolean NOTIFY_APPS = false;
++
+     boolean register(IScreenRecordingCallback callback) {
++        // oblivios: no app learns that the screen is being recorded. Upstream registers the callback of
++        // WindowManager.addScreenRecordingCallback and calls it whenever one of the app's visible
++        // activities enters or leaves a recording. Nothing is registered now and the app is told "not
++        // recorded"; with no callback registered nothing is dispatched and the MediaProjection watcher
++        // is never added. FLAG_SECURE is unaffected: it blocks the capture itself.
++        if (!NOTIFY_APPS) {
++            return false;
++        }
+         synchronized (mWms.mGlobalLock) {
+             ensureMediaProjectionWatcherCallbackRegistered();
+ 
+-- 
+2.47.3
+
